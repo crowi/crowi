@@ -5027,6 +5027,184 @@ components:
         - collab
         - collab:redis
         - link-card
+    PageHistoryResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageHistoryEntry'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+        tracking:
+          $ref: '#/components/schemas/PageHistoryTracking'
+      required:
+        - entries
+        - nextCursor
+        - tracking
+    PageHistoryEntry:
+      oneOf:
+        - $ref: '#/components/schemas/PageHistoryContentRow'
+        - $ref: '#/components/schemas/PageHistoryEventRow'
+      discriminator:
+        propertyName: type
+        mapping:
+          content_revision: '#/components/schemas/PageHistoryContentRow'
+          page_event: '#/components/schemas/PageHistoryEventRow'
+    PageHistoryContentRow:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 66a1f2c3d4e5f60718293a4b
+        sequence:
+          type:
+            - integer
+            - 'null'
+        occurredAt:
+          type: string
+          format: date-time
+        actor:
+          type:
+            - object
+            - 'null'
+          properties:
+            _id:
+              type: string
+            id:
+              type: string
+            username:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+            image:
+              type:
+                - string
+                - 'null'
+            createdAt:
+              type: string
+          required:
+            - _id
+            - username
+            - name
+            - email
+            - createdAt
+        type:
+          type: string
+          enum:
+            - content_revision
+        revisionId:
+          type: string
+        pending:
+          type: boolean
+      required:
+        - id
+        - sequence
+        - occurredAt
+        - actor
+        - type
+        - revisionId
+    PageHistoryEventRow:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 66a1f2c3d4e5f60718293a4b
+        sequence:
+          type:
+            - integer
+            - 'null'
+        occurredAt:
+          type: string
+          format: date-time
+        actor:
+          type:
+            - object
+            - 'null'
+          properties:
+            _id:
+              type: string
+            id:
+              type: string
+            username:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+            image:
+              type:
+                - string
+                - 'null'
+            createdAt:
+              type: string
+          required:
+            - _id
+            - username
+            - name
+            - email
+            - createdAt
+        type:
+          type: string
+          enum:
+            - page_event
+        kind:
+          type: string
+          enum:
+            - page_created
+            - page_renamed
+            - visibility_changed
+            - page_trashed
+            - page_restored
+            - draft_published
+        payload:
+          type: object
+          additionalProperties: {}
+        operationId:
+          type:
+            - string
+            - 'null'
+        subtree:
+          type: boolean
+        pending:
+          type: boolean
+      required:
+        - id
+        - sequence
+        - occurredAt
+        - actor
+        - type
+        - kind
+        - payload
+        - operationId
+    PageHistoryTracking:
+      oneOf:
+        - type: object
+          properties:
+            state:
+              type: string
+              enum:
+                - ready
+            trackingStartedAt:
+              type: string
+              format: date-time
+          required:
+            - state
+            - trackingStartedAt
+        - type: object
+          properties:
+            state:
+              type: string
+              enum:
+                - untracked
+          required:
+            - state
   parameters: {}
 paths:
   /app/info:
@@ -14324,6 +14502,133 @@ paths:
                         type: string
                         enum:
                           - Page not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /pages/{pageId}/history:
+    get:
+      tags:
+        - page
+      security:
+        - bearerAuth: []
+      summary: >-
+        A page's content revisions and metadata events as one timeline, newest
+        first
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[0-9a-fA-F]{24}$
+            example: 66a1f2c3d4e5f60718293a4b
+          required: true
+          name: pageId
+          in: path
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          required: false
+          name: limit
+          in: query
+      responses:
+        '200':
+          description: One page of the timeline, plus a cursor when more remains
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageHistoryResponse'
+        '400':
+          description: Malformed page id, cursor, or query
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: Page not found (also covers grant-denied)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - PAGE_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - Page not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: >-
+            The timeline could not be read — includes the page identifier so an
+            operator can run the repair
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      pageId:
+                        type: string
                     required:
                       - code
                       - message

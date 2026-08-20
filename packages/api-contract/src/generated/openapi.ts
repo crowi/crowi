@@ -5930,6 +5930,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pages/{pageId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page's content revisions and metadata events as one timeline, newest first */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    pageId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the timeline, plus a cursor when more remains */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PageHistoryResponse"];
+                    };
+                };
+                /** @description Malformed page id, cursor, or query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Page not found (also covers grant-denied) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description The timeline could not be read — includes the page identifier so an operator can run the repair */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                pageId?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pages": {
         parameters: {
             query?: never;
@@ -17089,6 +17192,75 @@ export interface components {
         };
         /** @enum {string} */
         Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis" | "link-card";
+        PageHistoryResponse: {
+            entries: components["schemas"]["PageHistoryEntry"][];
+            nextCursor: string | null;
+            tracking: components["schemas"]["PageHistoryTracking"];
+        };
+        PageHistoryEntry: components["schemas"]["PageHistoryContentRow"] | components["schemas"]["PageHistoryEventRow"];
+        PageHistoryContentRow: {
+            /** @example 66a1f2c3d4e5f60718293a4b */
+            id: string;
+            sequence: number | null;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            } | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "content_revision";
+            revisionId: string;
+            pending?: boolean;
+        };
+        PageHistoryEventRow: {
+            /** @example 66a1f2c3d4e5f60718293a4b */
+            id: string;
+            sequence: number | null;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            } | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "page_event";
+            /** @enum {string} */
+            kind: "page_created" | "page_renamed" | "visibility_changed" | "page_trashed" | "page_restored" | "draft_published";
+            payload: {
+                [key: string]: unknown;
+            };
+            operationId: string | null;
+            subtree?: boolean;
+            pending?: boolean;
+        };
+        PageHistoryTracking: {
+            /** @enum {string} */
+            state: "ready";
+            /** Format: date-time */
+            trackingStartedAt: string;
+        } | {
+            /** @enum {string} */
+            state: "untracked";
+        };
     };
     responses: never;
     parameters: never;

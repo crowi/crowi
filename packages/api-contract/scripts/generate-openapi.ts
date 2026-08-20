@@ -64,6 +64,8 @@ import {
   pageRoutes,
   presenceRoutes,
   revisionRoutes,
+  // RFC-0021 Phase 3 — the merged timeline; a page-scoped read like revisions.
+  pageHistoryRoutes,
   searchRoutes,
   tokenAuthRoutes,
   userRoutes,
@@ -337,6 +339,9 @@ const routeGroups = [
   backlinkRoutes,
   commentRoutes,
   revisionRoutes,
+  // RFC-0021 Phase 3 — the merged timeline, a page-scoped read registered
+  // alongside revisions.
+  pageHistoryRoutes,
   // page registers AFTER revision so the spec `paths{}` ordering
   // matches the runtime handler chain (revision -> page -> page-preview
   // -> pageCollab -> presence -> notification — see
