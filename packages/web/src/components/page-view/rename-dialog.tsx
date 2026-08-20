@@ -193,6 +193,7 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
           old_path: basePath,
           new_path: newPath,
           create_redirect: true,
+          idempotencyKey: crypto.randomUUID().replaceAll('-', ''),
         });
         onOpenChange(false);
         notify.info(m['page.rename.success_tree']({ count }));

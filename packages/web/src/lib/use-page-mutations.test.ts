@@ -321,10 +321,14 @@ describe('useRenameSubtree — subpages invalidation via onSettled (feature-user
 
     const { result } = renderHook(() => useRenameSubtree(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ old_path: '/old', new_path: '/new' });
+      await result.current.mutateAsync({ old_path: '/old', new_path: '/new', idempotencyKey: 'test-idem-key-0008' });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    expect(renameSubtree).toHaveBeenCalledWith({
+      json: { old_path: '/old', new_path: '/new' },
+      header: { 'idempotency-key': 'test-idem-key-0008' },
+    });
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
     expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
@@ -340,7 +344,7 @@ describe('useRenameSubtree — subpages invalidation via onSettled (feature-user
     const { result } = renderHook(() => useRenameSubtree(), { wrapper });
     await act(async () => {
       try {
-        await result.current.mutateAsync({ old_path: '/old', new_path: '/new' });
+        await result.current.mutateAsync({ old_path: '/old', new_path: '/new', idempotencyKey: 'test-idem-key-0009' });
       } catch {
         // expected — the mutation rejects with RenameTreeConflictError
       }

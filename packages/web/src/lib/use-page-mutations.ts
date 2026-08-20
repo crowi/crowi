@@ -347,6 +347,7 @@ export function useRevertToRevision() {
  * operation and defeat the point.
  */
 export type RenamePageVariables = RenamePageRequest & { idempotencyKey: string };
+export type RenameSubtreeVariables = RenameSubtreeRequest & { idempotencyKey: string };
 
 /**
  * Rename (move) a page to a new path. May also unlink an existing redirect
@@ -397,12 +398,9 @@ export function useRenamePage() {
     },
     // `onSettled` (not `onSuccess`): `renameTree` (subtree rename) has no
     // transaction and moves pages individually with limited concurrency, so
-    // a mid-way failure can leave SOME pages already moved while the
-    // mutation still rejects with a structured 400 (`partial: true` via
-    // `RenameTreeConflictError`). A mounted Subpages tab must refetch and
-    // converge on the true (partially-moved) membership/order even in that
-    // failure case — `onSuccess` alone would leave it showing the pre-rename
-    // state until the next 60s staleTime lapse.
+    // a mid-way failure can leave some pages already moved while the mutation
+    // rejects with a structured 400 (`partial: true`). Mounted subtree and
+    // history views must refetch and converge in that case.
     onSettled: () => {
       invalidateUserSubpagesQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
@@ -419,8 +417,8 @@ export function useRenameSubtree() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RenameSubtreeRequest): Promise<number> => {
-      const response = await apiClient.pages['rename-subtree'].$post({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: RenameSubtreeVariables): Promise<number> => {
+      const response = await apiClient.pages['rename-subtree'].$post({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return body.renamed_count;
@@ -436,9 +434,9 @@ export function useRenameSubtree() {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
     },
-    // `onSettled`, not `onSuccess` — see `useRenamePage`'s comment: a
-    // subtree rename can partially move pages before failing, and the
-    // mounted Subpages tab must refetch to converge either way.
+    // `onSettled`, not `onSuccess` — a structured partial failure can arrive
+    // after some members moved, so mounted subtree and history views must
+    // refetch either way.
     onSettled: () => {
       invalidateUserSubpagesQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
