@@ -4,12 +4,12 @@ import type { UsePageListParams } from './use-page-list';
 
 /**
  * Single registry for every react-query key that touches page content
- * (single page / list / children / revisions) and user-page pagination.
+ * (single page / list / children / merged history) and user-page pagination.
  *
  * Follows the `{ all, detail(...) }` shape already used by `bookmarkKeys`
  * (`use-bookmark.ts`), `seenKeys` (`use-seen.ts`), `watchKeys`
  * (`use-watch.ts`) and `draftsKeys` (`use-drafts.ts`) — this file brings the
- * page/list/children/revisions/user-page families up to the same standard
+ * page/list/children/history/user-page families up to the same standard
  * so their root strings and shapes have exactly one owner each.
  *
  * `pageListKeys` and `pageChildrenKeys` intentionally share
@@ -42,18 +42,8 @@ export const pageChildrenKeys = {
   detail: (path: string) => [...PAGE_LIST_FAMILY_ROOT, 'children', path] as const,
 };
 
-export const revisionsKeys = {
-  all: ['revisions'] as const,
-  list: (pageId: string, params: { limit?: number; offset?: number }) =>
-    ['revisions', { pageId, limit: params.limit ?? null, offset: params.offset ?? null }] as const,
-};
-
 /**
  * RFC-0021 Phase 3 — the merged timeline (revisions AND metadata events).
- *
- * A separate family from `revisionsKeys`: that one still backs the revision
- * list endpoint, and a save has to refresh BOTH — the merged view would
- * otherwise keep serving a timeline that predates the save.
  */
 export const pageHistoryKeys = {
   all: ['page-history'] as const,

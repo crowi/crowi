@@ -5100,6 +5100,68 @@ components:
             - content_revision
         revisionId:
           type: string
+        savedBy:
+          type:
+            - object
+            - 'null'
+          properties:
+            _id:
+              type: string
+            id:
+              type: string
+            username:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+            image:
+              type:
+                - string
+                - 'null'
+            createdAt:
+              type: string
+          required:
+            - _id
+            - username
+            - name
+            - email
+            - createdAt
+        contributors:
+          type: array
+          items:
+            type: object
+            properties:
+              _id:
+                type: string
+              id:
+                type: string
+              username:
+                type: string
+              name:
+                type: string
+              email:
+                type: string
+                format: email
+              image:
+                type:
+                  - string
+                  - 'null'
+              createdAt:
+                type: string
+            required:
+              - _id
+              - username
+              - name
+              - email
+              - createdAt
+        editVia:
+          type: string
+          enum:
+            - web
+            - oauth
+            - pat
         pending:
           type: boolean
       required:

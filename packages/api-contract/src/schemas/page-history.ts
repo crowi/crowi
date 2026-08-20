@@ -35,6 +35,9 @@ export const PageHistoryContentRowSchema = z
     ...rowBase,
     type: z.literal('content_revision'),
     revisionId: z.string(),
+    savedBy: PageUserSchema.nullable().optional(),
+    contributors: z.array(PageUserSchema).optional(),
+    editVia: z.enum(['web', 'oauth', 'pat']).optional(),
     /** Present only while the row is still in the page's outbox — it has no durable revision yet. */
     pending: z.boolean().optional(),
   })

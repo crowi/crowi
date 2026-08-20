@@ -1,6 +1,7 @@
 'use client';
 
 import type { PageHistoryEntry, PageHistoryTracking } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { apiClient } from './api-client';
@@ -36,7 +37,7 @@ export function usePageHistory(pageId: string | null | undefined): UsePageHistor
         param: { pageId },
         query: pageParam == null ? {} : { cursor: pageParam },
       });
-      if (!response.ok) throw new Error('Failed to fetch page history');
+      if (!response.ok) throw new Error(m['page_history.history_fetch_failed']());
       const body = await response.json();
       return { entries: body.entries as PageHistoryEntry[], nextCursor: body.nextCursor, tracking: body.tracking as PageHistoryTracking };
     },

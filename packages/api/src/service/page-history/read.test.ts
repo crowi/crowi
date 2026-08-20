@@ -228,15 +228,23 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
       expect(event.actor).toBeNull();
     });
 
-    test('AC-12: actors resolve in one query, not one per row', async () => {
+    test('AC-12: actors and content attribution resolve in one query, not one per row', async () => {
       const page = await createReadyPage('/history-read/ac12');
+      const [collaborator] = await Fixture.generate('User', [
+        { name: 'History Collaborator', username: 'history-collaborator', email: 'history-collaborator@example.com' },
+      ]);
       await addEvent(page, 'visibility_changed', { fromGrant: 1, toGrant: 2 });
       await addEvent(page, 'page_renamed', { fromPath: '/a', toPath: '/b', redirectCreated: false, subtree: false });
+      await Revision.updateOne(
+        { page: page._id, historySequence: 1 },
+        { $set: { savedBy: collaborator._id, contributors: [user._id, collaborator._id], editVia: 'oauth' } },
+      );
 
       const findSpy = jest.spyOn(crowi.model('User'), 'find');
       let calls: number;
+      let result;
       try {
-        await read(page);
+        result = await read(page);
       } finally {
         // Read the count BEFORE restoring: `mockRestore` also clears the
         // recorded calls, so asserting afterwards always sees zero.
@@ -245,6 +253,15 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
       }
 
       expect(calls).toBe(1);
+      const content = result.entries.find((entry) => entry.type === 'content_revision');
+      expect(content).toMatchObject({
+        savedBy: { _id: String(collaborator._id), name: 'History Collaborator' },
+        contributors: [
+          { _id: String(user._id), name: 'History Reader' },
+          { _id: String(collaborator._id), name: 'History Collaborator' },
+        ],
+        editVia: 'oauth',
+      });
     });
   });
 

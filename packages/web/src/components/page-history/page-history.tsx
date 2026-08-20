@@ -2,12 +2,14 @@
 
 import type { PageHistoryContentRow } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { GitCompare, History as HistoryIcon, Loader2 } from 'lucide-react';
+import { getLocale } from '@paraglide/runtime.js';
+import { GitCompare, History as HistoryIcon, Loader2, Terminal } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { usePageHistory } from '@/lib/use-page-history';
@@ -20,40 +22,61 @@ interface PageHistoryProps {
   pagePath: string;
 }
 
+function ApiEditChip() {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase leading-none text-muted-foreground"
+            aria-label={m['page_history.api_update_tooltip']()}
+          >
+            <Terminal className="h-3 w-3" aria-hidden="true" />
+            {m['page_history.api_chip_label']()}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{m['page_history.api_update_tooltip']()}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
-  const { entries, isLoading, isError, error, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = usePageHistory(pageId);
+  const { entries, tracking, isLoading, isError, error, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = usePageHistory(pageId);
   const contentRows = useMemo(() => entries.filter((entry): entry is PageHistoryContentRow => entry.type === 'content_revision'), [entries]);
+  const contentIndexById = useMemo(() => new Map(contentRows.map((row, index) => [row.id, index])), [contentRows]);
+  const trackingBoundaryIndex = useMemo(() => (tracking?.state === 'ready' ? entries.findIndex((entry) => entry.sequence === null) : -1), [entries, tracking]);
+  const listFormatter = useMemo(() => {
+    const locale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
+    return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+  }, []);
 
   const [pendingFrom, setPendingFrom] = useState<string | null>(null);
   const [pendingTo, setPendingTo] = useState<string | null>(null);
   const [activePair, setActivePair] = useState<{ from: string; to: string } | null>(null);
-  const [initializedFor, setInitializedFor] = useState('');
+  const [selectionPageId, setSelectionPageId] = useState(pageId);
+  const [defaultPairInitialized, setDefaultPairInitialized] = useState(false);
 
-  const contentSetKey = contentRows.map((row) => row.id).join('\u0000');
-  if (contentSetKey !== initializedFor) {
-    const latest = contentRows[0] ?? null;
-    const previous = contentRows[1] ?? null;
-    setInitializedFor(contentSetKey);
-    if (latest && previous) {
-      setPendingFrom(previous.id);
-      setPendingTo(latest.id);
-      setActivePair({ from: previous.revisionId, to: latest.revisionId });
-    } else if (latest) {
-      setPendingFrom(null);
-      setPendingTo(latest.id);
-      setActivePair(null);
-    } else {
-      setPendingFrom(null);
-      setPendingTo(null);
-      setActivePair(null);
-    }
+  if (selectionPageId !== pageId) {
+    setSelectionPageId(pageId);
+    setDefaultPairInitialized(false);
+    setPendingFrom(null);
+    setPendingTo(null);
+    setActivePair(null);
+  } else if (!defaultPairInitialized && contentRows.length >= 2) {
+    const latest = contentRows[0];
+    const previous = contentRows[1];
+    setDefaultPairInitialized(true);
+    setPendingFrom(previous.id);
+    setPendingTo(latest.id);
+    setActivePair({ from: previous.revisionId, to: latest.revisionId });
   }
 
   const canCompare = Boolean(pendingFrom && pendingTo && pendingFrom !== pendingTo);
   const pendingFromRow = pendingFrom ? contentRows.find((row) => row.id === pendingFrom) : null;
   const pendingToRow = pendingTo ? contentRows.find((row) => row.id === pendingTo) : null;
-  const fromIndex = pendingFrom ? contentRows.findIndex((row) => row.id === pendingFrom) : -1;
-  const toIndex = pendingTo ? contentRows.findIndex((row) => row.id === pendingTo) : -1;
+  const fromIndex = pendingFrom ? (contentIndexById.get(pendingFrom) ?? -1) : -1;
+  const toIndex = pendingTo ? (contentIndexById.get(pendingTo) ?? -1) : -1;
   const isPairDirty = canCompare && (!activePair || activePair.from !== pendingFromRow?.revisionId || activePair.to !== pendingToRow?.revisionId);
 
   const handleCompare = () => {
@@ -74,13 +97,13 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
       {isLoading && (
         <div className="flex items-center gap-2 text-muted-foreground py-6" role="status">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">{m['page_history.revisions_loading']()}</span>
+          <span className="text-sm">{m['page_history.history_loading']()}</span>
         </div>
       )}
 
       {isError && (
         <Alert variant="destructive">
-          <AlertTitle>{m['page_history.revisions_failed']()}</AlertTitle>
+          <AlertTitle>{m['page_history.history_failed']()}</AlertTitle>
           <AlertDescription>
             {error?.message ?? m['common.try_again_later']()}
             <div className="mt-3">
@@ -94,8 +117,8 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
 
       {!isLoading && !isError && entries.length === 0 && (
         <Alert>
-          <AlertTitle>{m['page_history.no_revisions_title']()}</AlertTitle>
-          <AlertDescription>{m['page_history.no_revisions_body']()}</AlertDescription>
+          <AlertTitle>{m['page_history.no_history_title']()}</AlertTitle>
+          <AlertDescription>{m['page_history.no_history_body']()}</AlertDescription>
         </Alert>
       )}
 
@@ -123,61 +146,86 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => {
-                  if (entry.type === 'page_event') return <PageEventRow key={entry.id} event={entry} />;
+                {entries.map((entry, entryIndex) => {
+                  const boundary = entryIndex === trackingBoundaryIndex && (
+                    <tr className="border-t bg-muted/40">
+                      <td colSpan={5} className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+                        {m['page_history.tracking_boundary']()}
+                      </td>
+                    </tr>
+                  );
+                  if (entry.type === 'page_event') {
+                    return (
+                      <Fragment key={entry.id}>
+                        {boundary}
+                        <PageEventRow event={entry} />
+                      </Fragment>
+                    );
+                  }
 
-                  const contentIndex = contentRows.findIndex((row) => row.id === entry.id);
+                  const contentIndex = contentIndexById.get(entry.id) ?? -1;
                   const isFrom = pendingFrom === entry.id;
                   const isTo = pendingTo === entry.id;
                   const fromDisabled = isTo || (toIndex !== -1 && contentIndex < toIndex);
                   const toDisabled = isFrom || (fromIndex !== -1 && contentIndex > fromIndex);
+                  const savedBy = entry.savedBy ?? entry.actor ?? null;
+                  const allContributors = entry.contributors ?? [];
+                  const contributors = savedBy ? allContributors.filter((contributor) => contributor._id !== savedBy._id) : allContributors;
+                  const contributorNames = listFormatter.format(contributors.map((contributor) => contributor.name));
                   return (
-                    <tr key={entry.id} className="border-t">
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="radio"
-                          name="rev-from"
-                          value={entry.id}
-                          checked={isFrom}
-                          disabled={fromDisabled}
-                          onChange={() => setPendingFrom(entry.id)}
-                          aria-label={`Select revision ${entry.revisionId.slice(-8)} as from`}
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="radio"
-                          name="rev-to"
-                          value={entry.id}
-                          checked={isTo}
-                          disabled={toDisabled}
-                          onChange={() => setPendingTo(entry.id)}
-                          aria-label={`Select revision ${entry.revisionId.slice(-8)} as to`}
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        {entry.actor ? (
-                          <div className="flex items-center gap-2">
-                            <UserAvatar user={entry.actor} size="sm" />
-                            <span className="truncate">{entry.actor.name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">{m['page_history.unknown_user']()}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span title={formatDateTime(entry.occurredAt)}>{formatDistanceToNow(entry.occurredAt)}</span>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        <Link
-                          href={`${pagePath}?revision_id=${entry.revisionId}`}
-                          className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                          title={`Open revision ${entry.revisionId}`}
-                        >
-                          {entry.revisionId.slice(-8)}
-                        </Link>
-                      </td>
-                    </tr>
+                    <Fragment key={entry.id}>
+                      {boundary}
+                      <tr className="border-t">
+                        <td className="px-3 py-2 text-center">
+                          <input
+                            type="radio"
+                            name="rev-from"
+                            value={entry.id}
+                            checked={isFrom}
+                            disabled={fromDisabled}
+                            onChange={() => setPendingFrom(entry.id)}
+                            aria-label={m['page_history.select_from']({ revision: entry.revisionId.slice(-8) })}
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <input
+                            type="radio"
+                            name="rev-to"
+                            value={entry.id}
+                            checked={isTo}
+                            disabled={toDisabled}
+                            onChange={() => setPendingTo(entry.id)}
+                            aria-label={m['page_history.select_to']({ revision: entry.revisionId.slice(-8) })}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          {savedBy ? (
+                            <div className="flex items-center gap-2">
+                              <UserAvatar user={savedBy} size="sm" />
+                              <span className="truncate">{savedBy.name}</span>
+                              {(entry.editVia === 'oauth' || entry.editVia === 'pat') && <ApiEditChip />}
+                              {contributors.length > 0 && (
+                                <span className="text-muted-foreground ml-1 text-xs">{m['collab.history_with_others']({ names: contributorNames })}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">{m['page_history.unknown_author']()}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span title={formatDateTime(entry.occurredAt)}>{formatDistanceToNow(entry.occurredAt)}</span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs">
+                          <Link
+                            href={`${pagePath}?revision_id=${entry.revisionId}`}
+                            className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                            title={m['page_history.open_revision']({ revision: entry.revisionId })}
+                          >
+                            {entry.revisionId.slice(-8)}
+                          </Link>
+                        </td>
+                      </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -200,14 +248,14 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
         </section>
       )}
 
-      {!isLoading && !isError && contentRows.length === 1 && (
-        <section aria-label="Revision diff">
+      {!isLoading && !isError && contentRows.length === 1 && !hasNextPage && (
+        <section aria-label={m['page_history.diff_region_label']()}>
           <RevisionDiff fromId={null} toId={contentRows[0].revisionId} />
         </section>
       )}
 
       {!isLoading && !isError && contentRows.length >= 2 && activePair && (
-        <section aria-label="Revision diff" className="border-t pt-6">
+        <section aria-label={m['page_history.diff_region_label']()} className="border-t pt-6">
           <RevisionDiff fromId={activePair.from} toId={activePair.to} />
         </section>
       )}

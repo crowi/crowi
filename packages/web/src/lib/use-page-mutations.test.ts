@@ -37,7 +37,7 @@ import {
   useSetPageGrant,
   useUpdatePage,
 } from './use-page-mutations';
-import { PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
+import { PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
 beforeEach(() => {
@@ -70,6 +70,13 @@ function wasSubpagesInvalidated(invalidateSpy: { mock: { calls: unknown[][] } })
     .some((predicate) => predicate({ queryKey: userPageKeys.subpagesAll('alice') }));
 }
 
+function wasQueryKeyInvalidated(invalidateSpy: { mock: { calls: unknown[][] } }, queryKey: readonly unknown[]): boolean {
+  return invalidateSpy.mock.calls.some((call) => {
+    const invalidated = (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey;
+    return invalidated != null && JSON.stringify(invalidated) === JSON.stringify(queryKey);
+  });
+}
+
 describe('invalidatePageContentQueries', () => {
   // The portal-staleness bug: a body save invalidated the single-page
   // detail family (`pageKeys.all`) but forgot the list/portal family
@@ -87,7 +94,7 @@ describe('invalidatePageContentQueries', () => {
     const keys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
     expect(keys).toContainEqual(pageKeys.all);
     expect(keys).toContainEqual(PAGE_LIST_FAMILY_ROOT);
-    expect(keys).toContainEqual(revisionsKeys.all);
+    expect(keys).toContainEqual(pageHistoryKeys.all);
     expect(keys).toContainEqual(draftsKeys.all);
   });
 });
@@ -128,6 +135,7 @@ describe('useUpdatePage', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 
   it('does NOT invalidate the subpages cache for a body-only save (no `grant` in variables)', async () => {
@@ -156,6 +164,7 @@ describe('useSetPageGrant — subpages invalidation (feature-user-page-subpages-
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 });
 
@@ -171,6 +180,7 @@ describe('useDeletePage — subpages invalidation (feature-user-page-subpages-ta
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 });
 
@@ -186,6 +196,7 @@ describe('useRevertDeletedPage — subpages invalidation (feature-user-page-subp
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 });
 
@@ -271,6 +282,7 @@ describe('useRenamePage — subpages invalidation via onSettled (feature-user-pa
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 
   it('still invalidates the subpages cache when the subtree rename fails PARTWAY (structured 400, partial: true)', async () => {
@@ -298,6 +310,7 @@ describe('useRenamePage — subpages invalidation via onSettled (feature-user-pa
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 });
 
@@ -313,6 +326,7 @@ describe('useRenameSubtree — subpages invalidation via onSettled (feature-user
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 
   it('still invalidates the subpages cache when the subtree rename fails PARTWAY (structured 400, partial: true)', async () => {
@@ -334,5 +348,6 @@ describe('useRenameSubtree — subpages invalidation via onSettled (feature-user
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 });

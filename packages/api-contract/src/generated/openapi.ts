@@ -17238,6 +17238,28 @@ export interface components {
              */
             type: "content_revision";
             revisionId: string;
+            savedBy?: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            } | null;
+            contributors?: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            }[];
+            /** @enum {string} */
+            editVia?: "web" | "oauth" | "pat";
             pending?: boolean;
         };
         PageHistoryEventRow: {

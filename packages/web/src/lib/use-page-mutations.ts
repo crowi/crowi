@@ -5,7 +5,7 @@ import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import { errorMessage } from './error-message';
-import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
+import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
 /**
@@ -17,11 +17,8 @@ import { draftsKeys } from './use-drafts';
  *   - `PAGE_LIST_FAMILY_ROOT` — the list / portal family (`usePageList` →
  *                               `pageListKeys`) AND the sidebar tree
  *                               (`usePageChildrenLevels` → `pageChildrenKeys`)
- *   - `revisionsKeys.all`     — the revision list (a save pushes a new revision)
  *   - `pageHistoryKeys.all`   — the merged timeline, which shows those revisions
- *                               alongside metadata events. Separate from the
- *                               above: refreshing only one leaves the other
- *                               serving a pre-save view.
+ *                               alongside metadata events
  *   - `draftsKeys.all`        — the "creating pages" list (a first save publishes a draft)
  *
  * Both save paths route through here — the realtime `crowi:save` flow
@@ -37,7 +34,6 @@ import { draftsKeys } from './use-drafts';
 export function invalidatePageContentQueries(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: pageKeys.all });
   queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
-  queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
   queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
   queryClient.invalidateQueries({ queryKey: draftsKeys.all });
 }
@@ -197,6 +193,7 @@ export function useSetPageGrant() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
       // A grant change directly changes who can see the page in the
       // /user/<username>/ subpages listing.
       invalidateUserSubpagesQueries(queryClient);
@@ -256,6 +253,7 @@ export function useDeletePage() {
       });
       // A deleted page must also drop out of /user/<username>/ subpages.
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
@@ -299,6 +297,7 @@ export function useRevertDeletedPage() {
       });
       // A restored page reappears in /user/<username>/ subpages.
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
@@ -332,11 +331,8 @@ export function useRevertToRevision() {
       // The revert can be triggered from a portal listing, so refresh the
       // page lists too: the portal document now sits at a new latest revision.
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
-      // A new revision was stacked — refresh the page-history list so the
-      // reverted revision shows immediately. Without this the history view
-      // serves the pre-revert revisions off the 60s default staleTime and the
-      // new one only appears after a full browser reload.
-      queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
+      // A new revision was stacked — refresh the merged history so it shows
+      // immediately rather than serving the pre-revert timeline from cache.
       queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
@@ -409,6 +405,7 @@ export function useRenamePage() {
     // state until the next 60s staleTime lapse.
     onSettled: () => {
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
@@ -444,6 +441,7 @@ export function useRenameSubtree() {
     // mounted Subpages tab must refetch to converge either way.
     onSettled: () => {
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }

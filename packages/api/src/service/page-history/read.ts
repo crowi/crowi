@@ -127,6 +127,8 @@ type EntryWithoutActor = PageHistoryEntry extends infer T ? (T extends PageHisto
 interface MergeRow {
   entry: EntryWithoutActor;
   actorId: Types.ObjectId | null;
+  savedById?: Types.ObjectId | null;
+  contributorIds?: Types.ObjectId[];
   sortKey: { sequence: number | null; kindRank: 0 | 1; id: string; createdAt: number };
 }
 
@@ -139,7 +141,7 @@ interface PageLean {
 interface EventLean
   extends Pick<PageHistoryEventDocument, '_id' | 'page' | 'sequence' | 'kind' | 'actor' | 'occurredAt' | 'operationId' | 'source' | 'payload'> {}
 
-interface RevisionLean extends Pick<RevisionDocument, '_id' | 'createdAt' | 'author' | 'historySequence'> {}
+interface RevisionLean extends Pick<RevisionDocument, '_id' | 'createdAt' | 'author' | 'historySequence' | 'savedBy' | 'contributors' | 'editVia'> {}
 interface UserLean extends Pick<UserDocument, '_id' | 'username' | 'name' | 'email' | 'image' | 'createdAt' | 'status'> {}
 
 const isEventKind = (value: unknown): value is PageHistoryEventKind =>
@@ -300,7 +302,7 @@ export async function readPageHistory(crowi: Crowi, options: ReadPageHistoryOpti
         .lean()
         .exec() as Promise<EventLean[]>,
       Revision.find(revisionFilter)
-        .select('_id createdAt author historySequence')
+        .select('_id createdAt author historySequence savedBy contributors editVia')
         .sort({ historySequence: -1, _id: -1 })
         .limit(fetchLimit)
         .lean()
@@ -327,7 +329,7 @@ export async function readPageHistory(crowi: Crowi, options: ReadPageHistoryOpti
   }
   if (options.cursor?.region === 'unsequenced') Object.assign(unsequencedFilter, unsequencedAfter(options.cursor));
   const revisions = (await Revision.find(unsequencedFilter)
-    .select('_id createdAt author')
+    .select('_id createdAt author savedBy contributors editVia')
     .sort({ createdAt: -1, _id: -1 })
     .limit(fetchLimit)
     .lean()
@@ -338,7 +340,14 @@ export async function readPageHistory(crowi: Crowi, options: ReadPageHistoryOpti
   const window = combined.slice(0, options.limit);
   const hasMore = combined.length > options.limit;
 
-  const actorIds = Array.from(new Set(window.map((row) => row.actorId).filter((id): id is Types.ObjectId => id != null))).map(String);
+  const actorIds = Array.from(
+    new Set(
+      window
+        .flatMap((row) => [row.actorId, row.savedById, ...(row.contributorIds ?? [])])
+        .filter((id): id is Types.ObjectId => id != null)
+        .map(String),
+    ),
+  );
   const actors = new Map<string, PageUser | null>();
   if (actorIds.length > 0) {
     const users = (await User.find({ _id: { $in: actorIds } })
@@ -348,10 +357,19 @@ export async function readPageHistory(crowi: Crowi, options: ReadPageHistoryOpti
     for (const user of users) actors.set(String(user._id), toActor(user, User));
   }
 
-  const entries = window.map((row) => ({
-    ...row.entry,
-    actor: row.actorId == null ? null : (actors.get(String(row.actorId)) ?? null),
-  })) as PageHistoryEntry[];
+  const entries = window.map((row) => {
+    const actor = row.actorId == null ? null : (actors.get(String(row.actorId)) ?? null);
+    if (row.entry.type === 'page_event') return { ...row.entry, actor };
+
+    const savedBy = row.savedById === undefined ? undefined : row.savedById === null ? null : (actors.get(String(row.savedById)) ?? null);
+    const contributors = row.contributorIds?.map((id) => actors.get(String(id)) ?? null).filter((user): user is PageUser => user != null);
+    return {
+      ...row.entry,
+      actor,
+      ...(row.savedById !== undefined ? { savedBy } : {}),
+      ...(row.contributorIds !== undefined ? { contributors: contributors ?? [] } : {}),
+    };
+  }) as PageHistoryEntry[];
 
   const last = window.at(-1);
   let nextCursor: string | null = null;
@@ -404,8 +422,18 @@ function contentRow(revision: RevisionLean, sequence: number | null): MergeRow {
   const id = String(revision._id);
   const createdAt = revision.createdAt instanceof Date ? revision.createdAt : new Date(revision.createdAt);
   return {
-    entry: { type: 'content_revision', id, sequence, occurredAt: createdAt.toISOString(), actor: null, revisionId: id },
+    entry: {
+      type: 'content_revision',
+      id,
+      sequence,
+      occurredAt: createdAt.toISOString(),
+      actor: null,
+      revisionId: id,
+      ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
+    },
     actorId: revision.author ?? null,
+    savedById: revision.savedBy === undefined ? undefined : (revision.savedBy ?? null),
+    contributorIds: revision.contributors === undefined ? undefined : revision.contributors,
     sortKey: { sequence, kindRank: KIND_RANK_CONTENT, id, createdAt: createdAt.getTime() },
   };
 }
