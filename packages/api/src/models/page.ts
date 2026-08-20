@@ -5,7 +5,7 @@ import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import { changePageVisibility } from 'src/service/page-history/commands/visibility';
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
-import { purgePageHistoryEvents } from 'src/service/page-history/purge';
+import { deletePageWithMode, PageCleanupIncompleteError, type PageDeletionInput } from 'src/service/page-history/deletion';
 import { escapeRegExp } from 'src/util/regex';
 import { mapWithConcurrency, RENAME_TREE_CONCURRENCY } from 'src/util/map-with-concurrency';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
@@ -29,6 +29,7 @@ import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
 export { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR };
+export { PageCleanupIncompleteError };
 
 export const STATUS_WIP = 'wip';
 export const STATUS_PUBLISHED = 'published';
@@ -423,11 +424,11 @@ export interface PageModel extends Model<PageDocument> {
   updatePage(pageData: PageDocument, body, user, options: UpdatePageOptions): any;
   deletePage(pageData: PageDocument, user): any;
   revertDeletedPage(pageData: PageDocument, user): Promise<PageDocument>;
-  completelyDeletePage(pageData: PageDocument, user?: UserDocument | null, options?: PageRemovalInvalidationOption): Promise<PageDocument>;
-  removePage(pageData: PageDocument, options?: PageRemovalInvalidationOption): any;
-  removePageById(pageId, options?: PageRemovalInvalidationOption): any;
-  removePageByPath(pagePath, options?: PageRemovalInvalidationOption): any;
-  removeRedirectOriginPageByPath(pagePath): any;
+  completelyDeletePage(pageData: PageDocument, user: UserDocument | null | undefined, options: PageRemovalInvalidationOption): Promise<PageDocument>;
+  removePage(pageData: PageDocument, options: PageRemovalInvalidationOption): any;
+  removePageById(pageId, options: PageRemovalInvalidationOption): any;
+  removePageByPath(pagePath, options: PageRemovalInvalidationOption): any;
+  removeRedirectOriginPageByPath(pagePath, deletion: Pick<PageDeletionInput, 'actor' | 'mode'>): any;
   rename(pageData, newPagePath, user, options: RenameOptions): any;
   getPathMap(paths, search, replace): any;
   checkPagesRenamable(paths, user): any;
@@ -463,49 +464,16 @@ export interface RenameOptions {
 }
 
 /**
- * `Page.completelyDeletePage` / `removePage*` optional invalidation override.
- * Defaults documented at each call site below — `completelyDeletePage`
- * defaults to `emit` (the typed user-facing hard-delete call); `removePage`
- * family defaults to `skip` (internal cleanup is the common case; the one
- * user-facing caller — draft cancel — opts into `emit` explicitly).
+ * `Page.completelyDeletePage` / `removePage*` deletion options. Invalidation
+ * retains its wrapper-specific default, while deletion intent and actor are
+ * mandatory so no caller can silently select a non-recording mode.
  */
 export interface PageRemovalInvalidationOption {
   invalidation?: PageRemovalInvalidation;
+  deletion: Pick<PageDeletionInput, 'actor' | 'mode'>;
 }
 
-/**
- * RFC-0021 §5.1/§5.6, DC-5 — `Page.deleteOne` inside `removePage`
- * is the point of no return: once it commits, the failure mode changes from
- * "the Page is intact, retry the whole call" (thrown immediately, uncaught)
- * to "the Page row is gone, but N sibling cleanup steps still need to run,
- * and any of them can independently fail". A single step failing must
- * never skip its siblings, so every remaining step is tried and failures
- * are collected into ONE instance of this error, thrown after all steps
- * have been attempted (never per-step).
- *
- * `message` carries only `pageId` and the closed vocabulary of step names
- * (`revisions` / `history-events` / `redirect-origin` / `activity`) — never
- * the underlying driver / Mongoose failure text, which `hono/handlers/page.ts`
- * serializes verbatim into the `PAGE_DELETE_FAILED` response body. The
- * original failure(s) are attached as `cause` (a single error, or an array
- * when more than one step failed) for local debugging only.
- */
-export class PageCleanupIncompleteError extends Error {
-  readonly pageId: string;
-  readonly steps: string[];
-
-  constructor(pageId: Types.ObjectId, steps: string[], options?: { cause?: unknown }) {
-    super(`page cleanup incomplete for page ${pageId}: ${steps.join(', ')}`);
-    this.name = 'PageCleanupIncompleteError';
-    this.pageId = String(pageId);
-    this.steps = steps;
-    if (options?.cause !== undefined) {
-      this.cause = options.cause;
-    }
-  }
-}
-
-/** Accumulator shared by `removePage` / `completelyDeletePage`'s sibling-step aggregation (see `PageCleanupIncompleteError`'s doc comment). */
+/** Accumulator for `completelyDeletePage`'s outer sibling-step aggregation (see `PageCleanupIncompleteError`'s doc comment). */
 type CleanupFailures = { steps: string[]; causes: unknown[] };
 
 /** Runs one sibling cleanup step, recording `step` + the error into `failures` on failure instead of throwing — the caller keeps going to the next step either way. */
@@ -1081,7 +1049,7 @@ export default (crowi: Crowi) => {
     if (this.isUnlinkable(userData)) {
       debug('Unlink page', this._id, this.path);
       try {
-        const redirectPage = await Page.removePageById(this._id);
+        const redirectPage = await Page.removePageById(this._id, { deletion: { mode: 'redirect_stub_cleanup', actor: null } });
         debug('Redirect Page deleted', redirectPage.path);
       } catch (err: any) {
         debug('Error occured while get setting', err, err.stack);
@@ -2294,7 +2262,10 @@ export default (crowi: Crowi) => {
 
     // §D9/AC-28 — the redirect-origin stub cleanup is internal repair, not a
     // user-facing hard delete: skip its own `page-deleted` prompt.
-    await Page.completelyDeletePage(originPageData, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
+    await Page.completelyDeletePage(originPageData, user, {
+      invalidation: { mode: 'skip', reason: 'revert-deleted' },
+      deletion: { mode: 'redirect_stub_cleanup', actor: user?._id ?? null },
+    });
     // §D1 — status flip epoch-advances (same `updateOne`). This is the
     // correctness-load-bearing advance: once it lands, the pre-delete
     // yjsState/PageYjsUpdate lineage is stamped with a stale epoch and can
@@ -2348,16 +2319,18 @@ export default (crowi: Crowi) => {
     // THIS method's redirect-origin / Activity cleanup or the `delete`
     // event, so it is folded in below rather than left to propagate. Any
     // OTHER exception here means the Page row itself is not gone (the
-    // failure happened before `removePage`'s own `Page.deleteOne`) — that
+    // failure happened before `deletePageWithMode`'s own `Page.deleteOne`) — that
     // still propagates immediately, and none of the steps below run.
     const failures: CleanupFailures = { steps: [], causes: [] };
 
     try {
-      // This method is the coalescing boundary (§D9: "completelyDeletePage は
-      // removePageById(pageId, { mode: 'skip' }) を呼び自分の境界で1回
-      // coalesced emit") — the inner `removePageById` never emits on its own,
-      // avoiding a double-fire.
-      await Page.removePageById(pageId, { invalidation: { mode: 'skip', reason: 'internal-cleanup' } });
+      // Pass the outer invalidation through so `removePage` can emit at the
+      // Page-deletion boundary, before cleanup that may hang or fail. Keeping
+      // the emit at that single inner boundary also prevents a double-fire.
+      await Page.removePageById(pageId, {
+        invalidation,
+        deletion: options.deletion,
+      });
     } catch (err) {
       if (!(err instanceof PageCleanupIncompleteError)) {
         throw err;
@@ -2366,13 +2339,9 @@ export default (crowi: Crowi) => {
       failures.causes.push(err);
     }
 
-    // AC-26 — emit right after the target row is gone, BEFORE the
-    // redirect-origin / activity cleanup below (which may throw without
-    // suppressing the already-fired prompt; the row is physically deleted
-    // either way, so there is nothing left for an epoch predicate to guard).
-    emitInvalidationIfRequested(pageId, invalidation);
-
-    await attemptCleanupStep(failures, 'redirect-origin', () => Page.removeRedirectOriginPageByPath(pageData.path));
+    await attemptCleanupStep(failures, 'redirect-origin', () =>
+      Page.removeRedirectOriginPageByPath(pageData.path, { mode: 'redirect_stub_cleanup', actor: user?._id ?? null }),
+    );
     await attemptCleanupStep(failures, 'activity', () => Activity.removeByPage(pageId));
 
     pageEvent.emit('delete', pageData, user); // update as renamed page
@@ -2383,8 +2352,6 @@ export default (crowi: Crowi) => {
   };
 
   pageSchema.statics.removePage = async function (pageData, options) {
-    const Revision = crowi.model('Revision');
-    const PageYjsUpdate = crowi.model('PageYjsUpdate');
     const { _id } = pageData;
     // §D9/AC-27 — default `skip`: most callers are internal cleanup
     // (`completelyDeletePage`'s own coalesced boundary,
@@ -2392,45 +2359,19 @@ export default (crowi: Crowi) => {
     // caller (draft cancel, `hono/handlers/draft.ts`) opts into `emit`
     // explicitly.
     const invalidation: PageRemovalInvalidation = options?.invalidation ?? { mode: 'skip', reason: 'internal-cleanup' };
+    const deletion = options.deletion;
 
     debug('Remove phisically, the page', _id);
-    try {
-      await Page.deleteOne({ _id });
-    } catch (err) {
-      debug(' --> error', _id);
-      throw err;
-    }
-    emitInvalidationIfRequested(_id, invalidation);
-    // §D9/AC-27 — privacy: the page row is gone, so any residual append-log
-    // rows are now orphaned and would otherwise stay readable (raw
-    // collection scan) until the 1h TTL sweeps them. Deleted unconditionally
-    // (independent of emit/skip — this is hygiene, not a prompt). Best-
-    // effort: the row is already physically removed, so a failure here can
-    // never re-expose it (every collab load path rejects a missing page
-    // before it would read `PageYjsUpdate`). Kept OUTSIDE the aggregated
-    // cleanup below (RFC-0021 §5.6, DC-5) on purpose — this specific step
-    // already has its own "already gone, can't re-expose it" contract, and
-    // folding it in would change a best-effort swallow into a hard failure
-    // the caller has to handle.
-    try {
-      await PageYjsUpdate.deleteMany({ pageId: _id }).exec();
-    } catch (err) {
-      debug('removePage: PageYjsUpdate.deleteMany failed for page %s: %s', String(_id), (err as Error)?.message ?? err);
-    }
-
-    // RFC-0021 §5.1/§5.6 (DC-5) — `Page.deleteOne` above is the point of no
-    // return (caught and rethrown immediately, above): from here every
-    // remaining step runs to completion regardless of an earlier one failing
-    // (see `attemptCleanupStep`/`throwIfCleanupIncomplete`). id-based, so a
-    // path later reused by a different page can never cause the revision
-    // cleanup to delete the wrong page's revisions (see
-    // `Revision.removeRevisionsByPageId`'s doc comment).
-    const failures: CleanupFailures = { steps: [], causes: [] };
-
-    await attemptCleanupStep(failures, 'revisions', () => Revision.removeRevisionsByPageId(_id));
-    await attemptCleanupStep(failures, 'history-events', () => purgePageHistoryEvents(crowi, _id));
-
-    throwIfCleanupIncomplete(_id, failures);
+    await deletePageWithMode(
+      crowi,
+      {
+        pageId: _id,
+        path: pageData.path,
+        actor: deletion.actor,
+        mode: deletion.mode,
+      },
+      () => emitInvalidationIfRequested(_id, invalidation),
+    );
 
     return pageData;
   };
@@ -2463,14 +2404,14 @@ export default (crowi: Crowi) => {
   // origin page's own history-event purge fails) must propagate to the
   // caller's cleanup aggregation, not be folded into the same catch as
   // "doesn't exist".
-  pageSchema.statics.removeRedirectOriginPageByPath = async function (pagePath) {
+  pageSchema.statics.removeRedirectOriginPageByPath = async function (pagePath, deletion) {
     const redirectOriginPageData = await Page.findOne({ redirectTo: pagePath });
     if (redirectOriginPageData === null) {
       return;
     }
 
-    await Page.removePageById(redirectOriginPageData.id);
-    await Page.removeRedirectOriginPageByPath(redirectOriginPageData.path);
+    await Page.removePageById(redirectOriginPageData.id, { deletion });
+    await Page.removeRedirectOriginPageByPath(redirectOriginPageData.path, deletion);
   };
 
   pageSchema.statics.rename = async function (pageData, newPagePath, user, options: RenameOptions) {

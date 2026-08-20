@@ -38,7 +38,7 @@ export class PageHistoryPurgeError extends Error {
  * Idempotent: a single `deleteMany({ page: pageId })`, safe to call any
  * number of times for the same `pageId` (a second call simply finds nothing
  * left and returns `deletedCount: 0`). Does not depend on the Page row
- * still existing — the caller (`models/page.ts`'s `removePage`) is
+ * still existing — the caller (`service/page-history/deletion.ts`) is
  * responsible for sequencing this AFTER `Page.deleteOne` has already
  * committed (DC-5: that is the point past which no NEW event for this page
  * can ever be created, so purging before vs. after that point are the only

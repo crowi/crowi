@@ -28,6 +28,7 @@ import { registerActivationRoutes } from './handlers/activation';
 import { registerAdminAppRoutes } from './handlers/admin/app';
 import { registerAdminAuthRoutes } from './handlers/admin/auth';
 import { registerAdminMailRoutes } from './handlers/admin/mail';
+import { registerPageDeletionRoutes } from './handlers/admin/page-deletion';
 import { registerAdminPluginsRoutes } from './handlers/admin/plugins';
 import { registerAdminSearchRoutes } from './handlers/admin/search';
 import { registerAdminSecurityRoutes } from './handlers/admin/security';
@@ -271,13 +272,14 @@ export const buildHonoApp = (crowi: Crowi) => {
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
   // admin-only (first time `createJwtAdminRequired` lands on Hono).
   const withAdminCrypto = registerAdminCryptoRoutes(withSearch, crowi);
+  const withPageDeletion = registerPageDeletionRoutes(withAdminCrypto, crowi);
   // Batch 9 — the 8 admin sub-contracts (app / auth / security / mail /
   // storage / search / users / plugins). Each handler installs
   // `createJwtAdminRequired(crowi)` broadly on its `/admin/<sub>/*`
   // prefix + the bare `/admin/<sub>` path. No prefix overlap between
   // sub-contracts (every one owns a distinct second-segment literal),
   // so the broad apply pattern is safe.
-  const withAdminApp = registerAdminAppRoutes(withAdminCrypto, crowi);
+  const withAdminApp = registerAdminAppRoutes(withPageDeletion, crowi);
   const withAdminAuth = registerAdminAuthRoutes(withAdminApp, crowi);
   const withAdminSecurity = registerAdminSecurityRoutes(withAdminAuth, crowi);
   const withAdminMail = registerAdminMailRoutes(withAdminSecurity, crowi);

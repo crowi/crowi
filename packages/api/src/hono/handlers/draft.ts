@@ -188,7 +188,7 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           // history-event rows for it.
           if (newPage) {
             try {
-              await Page.removePage(newPage);
+              await Page.removePage(newPage, { deletion: { mode: 'internal_cleanup', actor: null } });
             } catch (cleanupErr) {
               debug(
                 'createDraft: failed to compensate-delete orphaned draft page %s (%s): %s',
@@ -257,7 +257,10 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         // to `skip`): opt into `emit` explicitly so a live editor on this
         // draft gets a reload prompt instead of silently saving into a
         // deleted row.
-        await Page.removePage(page, { invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' } });
+        await Page.removePage(page, {
+          invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' },
+          deletion: { mode: 'creation_cancel', actor: user._id },
+        });
 
         debug('cancelDraft removed draft', { id, path: page.path });
         return c.json({ pageId: id }, 200);

@@ -946,7 +946,9 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           if (completely === true) {
             // Hard delete bypasses the revision check (legacy parity).
-            await Page.completelyDeletePage(pageData, user);
+            await Page.completelyDeletePage(pageData, user, {
+              deletion: { mode: 'user_hard_delete', actor: user._id },
+            });
             // The document is gone from Mongo; echo the in-memory snapshot
             // so the client knows what was deleted.
             return c.json({ page: pageToResponse(pageData) }, 200);
@@ -1140,7 +1142,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               );
             }
             // Internal repair, not a user-facing hard delete — no prompt.
-            await Page.completelyDeletePage(occupant, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
+            await Page.completelyDeletePage(occupant, user, {
+              invalidation: { mode: 'skip', reason: 'revert-deleted' },
+              deletion: { mode: 'redirect_stub_cleanup', actor: user._id },
+            });
           }
 
           const restoreOperationId = randomUUID();
