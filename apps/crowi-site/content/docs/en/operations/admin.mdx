@@ -308,7 +308,8 @@ The command is idempotent, so the final re-run only costs time proportional to t
 
 - `--outbox` (default) — drains any unprocessed entry a crashed writer left behind in `Page.pendingHistoryEntry`.
 - `--scan` — assigns `historySequence` to unsequenced revisions on pages that are ready to record history. Not run by default.
-- `--batch-size <n>` (default 200) bounds how many pages are loaded per round trip; `--resume-after <pageId>` resumes a scan that was killed partway.
+- `--transitions` — settles renames, deletes and restores that stopped partway. Not run by default.
+- `--batch-size <n>` (default 200) bounds how many pages are loaded per round trip; `--resume-after <pageId>` resumes a scan that was killed partway. The transition sweep resumes from `--resume-after-operation <operationId>` instead — a separate cursor, because one counts operations and the other counts pages.
 
 ```bash
 # Drain leftover outbox entries (the default)
@@ -319,6 +320,9 @@ crowi-admin page-history repair --scan
 
 # Run both passes
 crowi-admin page-history repair --outbox --scan
+
+# Settle renames / deletes / restores that stopped partway
+crowi-admin page-history repair --transitions
 ```
 
 Passing `--scan` on its own **turns the default outbox pass off**. Say `--outbox --scan` when you want both.
@@ -329,7 +333,25 @@ Assignment runs as a **separate, resumable step after the pointer write has comm
 
 `--scan` **skips Revisions younger than ten minutes** (`RepairScanOptions.minAgeMs`'s default), so it cannot mistake an assignment still in flight for one that failed and run it twice. It also skips Revisions older than the page's tracking start, which would otherwise be given sequences out of order. Run it after that window if you want it to pick up recent writes.
 
-The metadata commands — rename, grant, trash, restore, publish — still have no writer; those come in a later phase.
+### Settling a stopped move (`--transitions`)
+
+Renaming a page, moving it to the trash and restoring it all take **two writes**: one to move the path, another to record the history. If the process dies in between, the page is left at the destination path in a "moving" state, which the normal read, list and search paths skip. To a reader the page has simply vanished.
+
+`--transitions` recovers those. For each operation it reads the page and classifies it:
+
+- **resumed** — the operation still owned the move, so the rest of it was carried out and the page settled.
+- **completed** — the move had already landed, the page was deleted, or the move never started, so the operation was closed out.
+- **blocked** — **nothing was written.** It could not be classified, so it is only reported.
+
+Read the `blocked` entries. Each one names the operation, the page and the path:
+
+- `transition-owned-by-another-operation` — another operation owns that page's move. Usually it is simply still running; wait and run the command again.
+- `unrecognised-page-state` — the page is not where the operation's record says it should be. This needs a human to look at it.
+- `no-resumer-registered` — nothing knows how to resume that kind of operation. Report it as a bug.
+
+The command is **deliberately not exhaustive**. Rewriting a page it cannot classify would risk damaging a page nobody asked it to touch, so it stops at telling you which one to look at.
+
+Grant changes and draft publishes do not move a path, so they are never part of this sweep.
 
 ## Sections in progress
 

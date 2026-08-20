@@ -302,7 +302,8 @@ crowi-admin rebuild rendered-ast --concurrency 8
 
 - `--outbox` (既定) — クラッシュした writer が `Page.pendingHistoryEntry` に残した未処理エントリを流し切ります。
 - `--scan` — 履歴を記録する状態になっているページのうち、`historySequence` が未付与のリビジョンに採番します。既定では走りません。
-- `--batch-size <n>` (既定 200) は 1 往復で読み込むページ数の上限、`--resume-after <pageId>` は中断した走査の再開位置です。
+- `--transitions` — 途中で止まった rename / 削除 / 復元を着地させます。既定では走りません。
+- `--batch-size <n>` (既定 200) は 1 往復で読み込むページ数の上限、`--resume-after <pageId>` は中断した走査の再開位置です。`--transitions` の再開位置は `--resume-after-operation <operationId>` で、`--resume-after` とは別立てです (前者は操作を、後者はページを数えるため)。
 
 ```bash
 # 残った outbox エントリを流す (既定)
@@ -313,6 +314,9 @@ crowi-admin page-history repair --scan
 
 # 両方を走らせる
 crowi-admin page-history repair --outbox --scan
+
+# 途中で止まった rename / 削除 / 復元を着地させる
+crowi-admin page-history repair --transitions
 ```
 
 `--scan` を単独で指定すると **既定の outbox パスは走りません**。両方が必要なときは `--outbox --scan` と明示してください。
@@ -323,7 +327,25 @@ crowi-admin page-history repair --outbox --scan
 
 `--scan` は **10 分より新しい Revision を対象外にします** (`RepairScanOptions.minAgeMs` の既定値)。まだ進行中の採番を「失敗した採番」と誤認して二重に走らせないための猶予です。あわせて、そのページの記録開始より前の Revision も対象外になります (履歴の順序が狂うため)。直後に流したい場合はこの猶予より後に実行してください。
 
-なお rename / grant / trash / restore / publish といったメタデータ側のコマンドはまだ writer を持ちません (後続フェーズ)。
+### 止まった移動を着地させる (`--transitions`)
+
+rename・ゴミ箱への移動・復元は、ページの path を動かしてから履歴を記録するまでの間に**必ず 2 回の書き込み**を行います。その間にプロセスが落ちると、ページは移動先の path に居るまま「移動中」の状態で残り、通常の閲覧・一覧・検索から外れます。利用者にはページが消えたように見えます。
+
+`--transitions` はこの状態を回収します。各操作について対象ページを読み、次のいずれかに分類します。
+
+- **resumed** — その操作がまだ移動を所有していたので、続きを実行して着地させました。
+- **completed** — 既に着地済みだった、対象ページが削除されていた、あるいは移動が始まってすらいなかったので、操作を終了させました。
+- **blocked** — **書き換えていません。** 判断できなかったので報告だけしています。
+
+`blocked` が出たら中身を読んでください。操作 ID・ページ ID・path が必ず添えてあります。
+
+- `transition-owned-by-another-operation` — 別の操作がそのページの移動を所有しています。多くはそちらが進行中なだけなので、しばらく置いてもう一度実行してください。
+- `unrecognised-page-state` — ページが操作の記録どおりの位置にありません。手作業での確認が要ります。
+- `no-resumer-registered` — その種類の操作を再開する手段が組み込まれていません。バグとして報告してください。
+
+このコマンドは**全部を自動で直すことを目的にしていません**。判断できないものを推測で書き換えると、誰も頼んでいないページを壊しうるためです。運用者が対象を特定できるところまでが役割です。
+
+なお grant 変更と下書きの公開は path を動かさないので、この走査の対象ではありません。
 
 ## 進行中のセクション
 
