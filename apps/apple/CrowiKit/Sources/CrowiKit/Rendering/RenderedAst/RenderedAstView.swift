@@ -43,6 +43,10 @@ public struct RenderedAstView: View {
     /// terminated meanwhile, with the reading position gone. A host that can
     /// present a browser itself sets this.
     let onOpenExternalURL: ((URL) -> Void)?
+    /// An attachment reference (`/api/attachments/<id>`). Checked before a
+    /// link is treated as a page, since an attachment path is same-origin and
+    /// would otherwise send the reader looking for a page by that name.
+    let onOpenAttachment: ((String) -> Void)?
     let imageViewer: ImageViewerConfiguration?
     private let imageLoader: any WorkspaceImageFetching
     private let workspaceOrigin: URL
@@ -60,6 +64,7 @@ public struct RenderedAstView: View {
         onNavigateToPageId: ((String) -> Void)? = nil,
         onNavigateToFragment: ((String) -> Void)? = nil,
         onOpenExternalURL: ((URL) -> Void)? = nil,
+        onOpenAttachment: ((String) -> Void)? = nil,
         imageViewer: ImageViewerConfiguration? = nil
     ) {
         self.document = document
@@ -71,6 +76,7 @@ public struct RenderedAstView: View {
         self.onNavigateToPageId = onNavigateToPageId
         self.onNavigateToFragment = onNavigateToFragment
         self.onOpenExternalURL = onOpenExternalURL
+        self.onOpenAttachment = onOpenAttachment
         self.imageViewer = imageViewer
         self.definitions = document.definitions
     }
@@ -139,6 +145,10 @@ public struct RenderedAstView: View {
             onNavigateToMention(username)
             return .handled
         case .external(let externalURL):
+            if let onOpenAttachment, let id = WorkspaceLinkRouter.attachmentId(in: externalURL.absoluteString) {
+                onOpenAttachment(id)
+                return .handled
+            }
             guard SchemeAllowlist.isAllowed(externalURL) else {
                 // §6.2 — javascript:/data:/mailto:/custom schemes: inert.
                 return .discarded

@@ -23,6 +23,12 @@ public struct AttachmentMetaLenient: Sendable, Equatable {
     /// The explicit original-bytes relative URL — `${url}/original`. `nil`
     /// when the host predates the display-derivative contract.
     public let originalUrl: String?
+    /// The name the file was uploaded under. Carried because a preview needs
+    /// an extension to know what it is looking at — bytes alone are not
+    /// enough for the system's own viewer.
+    public let originalName: String?
+    /// The server's MIME type, as a fallback when the name has no extension.
+    public let fileFormat: String?
 
     /// Decode leniently: unknown extra keys are ignored, missing keys become
     /// `nil` — only a body that is not a JSON object at all throws.
@@ -33,7 +39,9 @@ public struct AttachmentMetaLenient: Sendable, Equatable {
         return AttachmentMetaLenient(
             id: object["_id"] as? String,
             url: object["url"] as? String,
-            originalUrl: object["originalUrl"] as? String
+            originalUrl: object["originalUrl"] as? String,
+            originalName: object["originalName"] as? String,
+            fileFormat: object["fileFormat"] as? String
         )
     }
 

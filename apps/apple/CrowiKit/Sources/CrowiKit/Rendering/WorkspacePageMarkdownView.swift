@@ -82,6 +82,10 @@ public struct WorkspacePageMarkdownView: View {
     /// terminated meanwhile, with the reading position gone. A host that can
     /// present a browser itself sets this.
     var onOpenExternalURL: ((URL) -> Void)?
+    /// An attachment reference (`/api/attachments/<id>`). Checked before a
+    /// link is treated as a page, since an attachment path is same-origin and
+    /// would otherwise send the reader looking for a page by that name.
+    var onOpenAttachment: ((String) -> Void)?
     /// `feature-ios-image-viewer` — non-nil makes successfully-decoded BLOCK
     /// images tappable, presenting `ImageViewerView` fullscreen (original
     /// bytes via the configuration's resolver; canonical fallback). `nil`
@@ -107,6 +111,7 @@ public struct WorkspacePageMarkdownView: View {
         onNavigateToRelativePath: @escaping (String) -> Void,
         onNavigateToPageId: ((String) -> Void)? = nil,
         onOpenExternalURL: ((URL) -> Void)? = nil,
+        onOpenAttachment: ((String) -> Void)? = nil,
         imageViewer: ImageViewerConfiguration? = nil
     ) {
         self.rawBody = rawBody
@@ -117,6 +122,7 @@ public struct WorkspacePageMarkdownView: View {
         self.onNavigateToRelativePath = onNavigateToRelativePath
         self.onNavigateToPageId = onNavigateToPageId
         self.onOpenExternalURL = onOpenExternalURL
+        self.onOpenAttachment = onOpenAttachment
         self.imageViewer = imageViewer
     }
 
@@ -209,6 +215,10 @@ public struct WorkspacePageMarkdownView: View {
                         onNavigateToMention(username)
                         return .handled
                     case .external(let externalURL):
+                        if let onOpenAttachment, let id = WorkspaceLinkRouter.attachmentId(in: externalURL.absoluteString) {
+                            onOpenAttachment(id)
+                            return .handled
+                        }
                         guard SchemeAllowlist.isAllowed(externalURL) else {
                             // §6.2 — javascript:/data:/crowi-ios:///any other
                             // custom scheme: inert, never handed to the

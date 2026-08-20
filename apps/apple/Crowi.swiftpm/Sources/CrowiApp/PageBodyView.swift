@@ -38,6 +38,7 @@ struct PageBodyView: View {
 
     @EnvironmentObject private var settings: AppSettings
     @State private var externalLink: ExternalLink?
+    @State private var attachment: PreviewedAttachment?
 
     var body: some View {
         let viewer = ImageViewerConfiguration(
@@ -59,6 +60,7 @@ struct PageBodyView: View {
                     onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
                     onNavigateToFragment: onNavigateToFragment,
                     onOpenExternalURL: openExternally,
+                    onOpenAttachment: { attachment = PreviewedAttachment(id: $0) },
                     imageViewer: viewer
                 )
             } else {
@@ -71,9 +73,13 @@ struct PageBodyView: View {
                     onNavigateToRelativePath: openRelative,
                     onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
                     onOpenExternalURL: openExternally,
+                    onOpenAttachment: { attachment = PreviewedAttachment(id: $0) },
                     imageViewer: viewer
                 )
             }
+        }
+        .sheet(item: $attachment) { attachment in
+            AttachmentPreviewView(session: session, attachmentId: attachment.id)
         }
         .sheet(item: $externalLink) { link in
             SafariView(url: link.url)

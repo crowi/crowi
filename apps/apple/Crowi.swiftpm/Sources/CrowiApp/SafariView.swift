@@ -20,6 +20,12 @@ struct SafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }
 
+/// An attachment being previewed — a bare `String` is not `Identifiable`,
+/// which `.sheet(item:)` requires.
+struct PreviewedAttachment: Identifiable {
+    let id: String
+}
+
 /// A URL that is being presented — `URL` itself is not `Identifiable`.
 struct ExternalLink: Identifiable {
     let url: URL

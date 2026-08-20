@@ -23,6 +23,24 @@ public enum WorkspaceLinkRouter {
         return internalLink(forPath: path)
     }
 
+    /// The attachment id a URL refers to, or `nil`.
+    ///
+    /// Checked BEFORE a link is treated as a page: an attachment path is
+    /// same-origin, so without this it classifies as a page path and the
+    /// reader goes looking for a page called `/api/attachments/<id>`.
+    ///
+    /// Mirrors the web's `extractAttachmentId` — the current prefix, the
+    /// legacy `/api/v2/` and `/files/` ones, an optional `/original`, and a
+    /// trailing query or fragment. Anything deeper (`…/<id>/extra`) is not an
+    /// attachment reference.
+    public static func attachmentId(in url: String) -> String? {
+        let pattern = "(?:/api/attachments/|/api/v2/attachments/|/files/)([0-9a-fA-F]{24})(?:/original)?(?:[?#].*)?$"
+        guard let match = url.range(of: pattern, options: [.regularExpression]) else { return nil }
+        let matched = String(url[match])
+        guard let idRange = matched.range(of: "[0-9a-fA-F]{24}", options: .regularExpression) else { return nil }
+        return String(matched[idRange]).lowercased()
+    }
+
     /// The destination for a link that is already workspace-relative.
     public static func internalLink(forPath path: String) -> WorkspaceInternalLink {
         let segments = path.split(separator: "/", omittingEmptySubsequences: true)
