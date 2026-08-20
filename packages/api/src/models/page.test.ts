@@ -285,6 +285,26 @@ describe('Page', () => {
       expect('historyTransition' in raw).toBe(false);
     });
 
+    test('creating a page writes no history event, and the first content write is sequence 1', async () => {
+      // RFC-0021 Phase 2c-2a deliberately does NOT record `page_created`. There
+      // is no correct place for it: before the page is promoted the command
+      // skeleton has no sequence to hand out, and after promotion the seed
+      // revision has already taken sequence 1 — so a creation event would sort
+      // AFTER the first body, which is backwards. Recording that here means a
+      // future attempt to add it has to change this test deliberately rather
+      // than discover the ordering problem in the timeline.
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const Revision = crowi.model('Revision');
+      const created = await Page.createPage('/history-create/no-event', 'seed body', createdUsers[0], {});
+
+      expect(await PageHistoryEvent.countDocuments({ page: created._id })).toBe(0);
+
+      const reloaded = await Page.findById(created._id);
+      expect(reloaded.historySequence).toBe(1);
+      const seed = await Revision.findById(reloaded.revision).lean();
+      expect(seed.historySequence).toBe(1);
+    });
+
     test('renaming is a known status and reads as transitional', () => {
       expect(STATUSES).toContain(STATUS_RENAMING);
       expect(isTransitionalPageStatus(STATUS_RENAMING)).toBe(true);

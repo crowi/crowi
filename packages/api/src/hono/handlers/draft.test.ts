@@ -328,6 +328,25 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
       expect(recreate.status).toBe(201);
     });
 
+    it('cancelling is a physical delete: no /trash/ stub, and no Idempotency-Key required (RFC-0021 Phase 2c-2a)', async () => {
+      // Cancelling a draft leaves no trace on purpose — a draft is pre-publish
+      // work, so a `/trash/` stub or a history row would contradict what the
+      // feature is for. And neither create nor cancel takes an idempotency key,
+      // unlike the three path-moving commands; recording that here means a
+      // future change to either has to be deliberate.
+      const path = `${PATH_PREFIX}cancel-no-trace`;
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      expect(createRes.status).toBe(201);
+      const pageId = createRes.body.pageId as string;
+
+      const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
+      expect(delRes.status).toBe(200);
+
+      const Page = crowi.model('Page');
+      expect(await Page.findOne({ path: `/trash${path}` })).toBeNull();
+      expect(await Page.findOne({ redirectTo: { $ne: null }, path })).toBeNull();
+    });
+
     it("returns 404 draft_not_found when cancelling another user's draft", async () => {
       const path = `${PATH_PREFIX}not-yours`;
       const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
