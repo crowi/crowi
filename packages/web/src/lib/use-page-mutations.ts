@@ -206,17 +206,31 @@ export function useSetPageGrant() {
  *  - completely=true: the page is gone from the DB; the body still echoes the
  *    original page object for client-side feedback, but a refetch will 404.
  */
+/**
+ * A delete request plus the key identifying this attempt. Required for the same
+ * reason as {@link RenamePageVariables} — and required even for a hard delete,
+ * which ignores it, so a caller never has to know which branch it is taking.
+ */
+export type DeletePageVariables = DeletePageRequest & { idempotencyKey: string };
+
 export function useDeletePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: DeletePageRequest): Promise<PageWithRevision> => {
-      const response = await apiClient.pages.$delete({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: DeletePageVariables): Promise<PageWithRevision> => {
+      const response = await apiClient.pages.$delete({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
       }
       if (response.status === 409) {
+        // Same three-way split as rename: only the stale-revision case is an
+        // edit conflict. See `useRenamePage`.
+        const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        const code = body?.error?.code;
+        if (code === 'PAGE_TRANSITION_IN_PROGRESS' || code === 'IDEMPOTENCY_KEY_CONFLICT') {
+          throw new Error(errorMessage(code));
+        }
         throw new PageRevisionConflictError(m['errors.revision_conflict_edit']());
       }
       if (response.status === 404) {

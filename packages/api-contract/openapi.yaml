@@ -15572,6 +15572,12 @@ paths:
       security:
         - bearerAuth: []
       summary: Soft-delete (or hard-delete with completely=true) a page
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: idempotency-key
+          in: header
       requestBody:
         content:
           application/json:
@@ -15902,24 +15908,59 @@ paths:
                 required:
                   - page
         '400':
-          description: PAGE_DELETE_FAILED
+          description: >-
+            PAGE_DELETE_FAILED / IDEMPOTENCY_KEY_REQUIRED /
+            PAGE_TRANSITION_INCOMPLETE
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: object
+                anyOf:
+                  - type: object
                     properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
                     required:
-                      - code
-                      - message
-                required:
-                  - error
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - IDEMPOTENCY_KEY_REQUIRED
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - PAGE_TRANSITION_INCOMPLETE
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
         '401':
           description: Authentication required
           content:
@@ -15969,26 +16010,61 @@ paths:
                 required:
                   - error
         '409':
-          description: Stale revision_id
+          description: >-
+            Stale revision_id / IDEMPOTENCY_KEY_CONFLICT /
+            PAGE_TRANSITION_IN_PROGRESS
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: object
+                anyOf:
+                  - type: object
                     properties:
-                      code:
-                        type: string
-                        enum:
-                          - PAGE_REVISION_ERROR
-                      message:
-                        type: string
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - PAGE_REVISION_ERROR
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
                     required:
-                      - code
-                      - message
-                required:
-                  - error
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - IDEMPOTENCY_KEY_CONFLICT
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - PAGE_TRANSITION_IN_PROGRESS
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
   /pages/list:
     get:
       tags:

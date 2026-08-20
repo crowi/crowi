@@ -1250,7 +1250,7 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId });
+      const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -1283,7 +1283,7 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       expect(await Bookmark.countDocuments({ page: pageId })).toBe(1);
       expect(await Comment.countDocuments({ page: pageId })).toBe(1);
 
-      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId, completely: true });
+      const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId, completely: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -1317,7 +1317,7 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       );
 
       try {
-        const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId, completely: true });
+        const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId, completely: true });
 
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('PAGE_DELETE_FAILED');
@@ -1345,7 +1345,11 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       const update = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# updated', revision_id: staleRevisionId });
       expect(update.status).toBe(200);
 
-      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId, revision_id: staleRevisionId });
+      const res = await request(app)
+        .delete('/api/pages')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, revision_id: staleRevisionId });
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PAGE_REVISION_ERROR');
@@ -1356,7 +1360,11 @@ describe('Routes /api/pages (Hono deletePage)', () => {
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).delete('/api/pages').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app)
+        .delete('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: '000000000000000000000000' });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -1378,7 +1386,7 @@ describe('Routes /api/pages (Hono deletePage)', () => {
         grant: 1,
       });
 
-      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: userPage._id.toString() });
+      const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: userPage._id.toString() });
 
       // Cleanup the user portal page so it doesn't leak between tests.
       await Page.deleteOne({ _id: userPage._id });
@@ -1426,7 +1434,7 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const deleteRes = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId });
+      const deleteRes = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
       expect(deleteRes.status).toBe(200);
       expect(deleteRes.body.page.path).toBe(`/trash${path}`);
 
@@ -2016,7 +2024,7 @@ describe('Routes /api/pages/list (Hono listPages — trash / include_deleted)', 
 
   // Soft-delete a page via the API so it ends up under /trash/<original> with status='deleted'.
   const softDeleteViaApi = async (pageId: string) => {
-    const res = await request(app).delete('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId });
+    const res = await request(app).delete('/api/pages').set(authHeaders(accessToken)).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
     if (res.status !== 200) {
       throw new Error(`Failed to soft-delete page (${pageId}): ${res.status} ${JSON.stringify(res.body)}`);
     }
@@ -2252,7 +2260,7 @@ describe('Routes /api/pages/list (Hono listPages — root branch grant visibilit
     const createRes = await request(app).post('/api/pages').set(aliceHeaders).send({ path, body: '# soon-deleted' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id as string;
-    const delRes = await request(app).delete('/api/pages').set(aliceHeaders).send({ page_id: pageId });
+    const delRes = await request(app).delete('/api/pages').set(aliceHeaders).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
     expect(delRes.status).toBe(200);
 
     const withFlag = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'true' });
@@ -2453,7 +2461,7 @@ describe('Routes /api/pages/list (Hono listPages — total, feature-profile-stat
 
   it('include_deleted / /trash — total counts a soft-deleted page only via the trash view or include_deleted=true', async () => {
     const created = await createPageViaApi(alice.accessToken, `${PATH_PREFIX}to-delete`, '# bye');
-    const del = await request(app).delete('/api/pages').set(aliceHeaders).send({ page_id: created._id });
+    const del = await request(app).delete('/api/pages').set(aliceHeaders).set('Idempotency-Key', idempotencyKey()).send({ page_id: created._id });
     expect(del.status).toBe(200);
 
     // Soft-delete rewrites the path to /trash/<original> — only a
@@ -3160,7 +3168,7 @@ describe('Routes /api/pages/link-access (Hono claimPageLinkAccessRoute — grant
   describe('deleted / redirect-stub / rename interactions', () => {
     it('does not grant access to a deleted GRANT_RESTRICTED page', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}deleted`, '# body', GRANT_RESTRICTED);
-      const delRes = await request(app).delete('/api/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
+      const delRes = await request(app).delete('/api/pages').set(authHeaders(ownerToken)).set('Idempotency-Key', idempotencyKey()).send({ page_id: page._id });
       expect(delRes.status).toBe(200);
 
       const res = await claim(claimantToken, page._id);
@@ -3428,7 +3436,7 @@ describe('Routes /api/pages/link-access (Hono claimPageLinkAccessRoute — grant
       const driver = buildMockSearchDriver();
 
       await withMockSearchDriver(driver, async () => {
-        const res = await request(app).delete('/api/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
+        const res = await request(app).delete('/api/pages').set(authHeaders(ownerToken)).set('Idempotency-Key', idempotencyKey()).send({ page_id: page._id });
         expect(res.status).toBe(200);
 
         // Drain the tracked fire-and-forget reindex while the mock driver

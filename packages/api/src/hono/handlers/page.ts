@@ -56,12 +56,14 @@ import {
   type PageModel,
   creatorPageListMatch,
   isTransitionalPageStatus,
+  STATUS_DELETED,
   startWithPageListMatch,
   visiblePageGrantOr,
   visiblePageStatusOr,
 } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
+import { trashPageCommand } from 'src/service/page-history/commands/trash';
 import { completeOperation, createPageHistoryOperation, resolvePageHistoryOperation } from 'src/service/page-history/operation';
 import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
@@ -962,12 +964,96 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(pageRevisionConflictBody(), 409);
           }
 
-          // Page.deletePage mutates `pageData` (status -> deleted, path
-          // -> /trash/<path>); the returned value is the *redirect* page
-          // (a quirk of the legacy model). Re-populate the mutated
-          // pageData so the response reflects the soft-deleted page
-          // itself, which is what clients want.
-          await Page.deletePage(pageData, user);
+          // RFC-0021 Phase 2c-2a — soft delete runs as a recorded operation.
+          // The hard branch above returns before this and is untouched.
+          const trashKey = c.req.header('idempotency-key');
+          if (!trashKey) {
+            return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+          }
+          if (!IDEMPOTENCY_KEY_PATTERN.test(trashKey)) {
+            return c.json(pageBadRequestBody('PAGE_DELETE_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+          }
+
+          const trashSource = toPageHistoryEventSource(c.get('authContext')?.kind);
+          const trashFingerprint = createHash('sha256')
+            .update(JSON.stringify({ page_id: String(pageData._id), completely: false }))
+            .digest('hex');
+          const trashKeyTuple = { actor: user._id, command: 'trash', idempotencyKey: trashKey };
+          const inProgressBody = { error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } };
+          const keyConflictBody = {
+            error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' },
+          };
+
+          const replayTrash = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
+            if (operation.result?.status === 'failed') {
+              const code = operation.result.code ?? 'PAGE_TRANSITION_INCOMPLETE';
+              return c.json({ error: { code, message: operation.result.message ?? 'The delete did not complete.' } } as never, 400);
+            }
+            const current = (await Page.findById(pageData._id)) as PageDocument | null;
+            if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            if (isTransitionalPageStatus(current.status)) return c.json(inProgressBody, 409);
+            const populatedReplay = await Page.populatePageData(current, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedReplay) }, 200);
+          };
+
+          const trashResolution = await resolvePageHistoryOperation(crowi, trashKeyTuple, trashFingerprint);
+          if (trashResolution.kind === 'fingerprint-mismatch') return c.json(keyConflictBody, 409);
+          if (trashResolution.kind === 'settled') return replayTrash(trashResolution.operation);
+          if (trashResolution.kind === 'in-flight') return c.json(inProgressBody, 409);
+
+          // Only a first delivery validates deletability, for the same reason
+          // rename resolves first: a replay runs against a page already sitting
+          // in `/trash/`, where the answer would differ.
+          const isNonExistentUserPage = await Page.isNonExistentUserPage(pageData.path);
+          if (!Page.isDeletableName(pageData.path) && !isNonExistentUserPage) {
+            return c.json(pageBadRequestBody('PAGE_DELETE_FAILED', 'Page is not deletable.'), 400);
+          }
+
+          const trashOperationId = randomUUID();
+          const trashCreated = await createPageHistoryOperation(crowi, {
+            ...trashKeyTuple,
+            operationId: trashOperationId,
+            requestFingerprint: trashFingerprint,
+            page: pageData._id,
+            fromPath: pageData.path,
+            toPath: Page.getDeletedPageName(pageData.path),
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            toStatus: STATUS_DELETED,
+            createRedirect: true,
+            source: trashSource,
+          });
+          if (trashCreated.kind === 'lost') {
+            if (trashCreated.resolution.kind === 'fingerprint-mismatch') return c.json(keyConflictBody, 409);
+            if (trashCreated.resolution.kind === 'settled') return replayTrash(trashCreated.resolution.operation);
+            return c.json(inProgressBody, 409);
+          }
+
+          const trashOutcome = await trashPageCommand(crowi, {
+            page: pageData,
+            fromPath: pageData.path,
+            toPath: Page.getDeletedPageName(pageData.path),
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            operationId: trashOperationId,
+            actor: user._id,
+            user,
+            source: trashSource,
+          });
+
+          if (trashOutcome.status === 'owned-elsewhere' || trashOutcome.status === 'contended') return c.json(inProgressBody, 409);
+          if (trashOutcome.status === 'page-missing') {
+            await completeOperation(crowi, trashOperationId, { status: 'succeeded' });
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (trashOutcome.status === 'incomplete') {
+            const message = 'The page was moved but the delete did not finish. Ask an administrator to run the page-history repair.';
+            await completeOperation(crowi, trashOperationId, { status: 'failed', code: 'PAGE_TRANSITION_INCOMPLETE', message });
+            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
+          }
+
+          await completeOperation(crowi, trashOperationId, { status: 'succeeded' });
           // Soft delete does not flow through a page event (see the
           // corrected comment in events/page.ts's onDelete), so nothing
           // else removes this now-trashed page from the search index.
@@ -975,7 +1061,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // reindex calls above; tracked via `trackSideEffect` so tests can
           // `drainSideEffects()` before asserting on the search driver.
           crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
-          const populated = await Page.populatePageData(pageData, null);
+          const populated = await Page.populatePageData(trashOutcome.page, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;

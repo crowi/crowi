@@ -6504,7 +6504,9 @@ export interface paths {
         delete: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -6634,7 +6636,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_DELETE_FAILED */
+                /** @description PAGE_DELETE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -6643,6 +6645,18 @@ export interface paths {
                         "application/json": {
                             error: {
                                 code: string;
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_INCOMPLETE";
                                 message: string;
                             };
                         };
@@ -6681,7 +6695,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Stale revision_id */
+                /** @description Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -6691,6 +6705,18 @@ export interface paths {
                             error: {
                                 /** @enum {string} */
                                 code: "PAGE_REVISION_ERROR";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_IN_PROGRESS";
                                 message: string;
                             };
                         };

@@ -166,7 +166,7 @@ describe('useDeletePage — subpages invalidation (feature-user-page-subpages-ta
 
     const { result } = renderHook(() => useDeletePage(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ page_id: 'p1' });
+      await result.current.mutateAsync({ page_id: 'p1', idempotencyKey: 'test-idem-key-0006' });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
