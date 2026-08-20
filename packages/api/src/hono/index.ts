@@ -53,6 +53,7 @@ import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
 import { registerPasswordResetRoutes } from './handlers/password-reset';
 import { registerPresenceRoutes } from './handlers/presence';
+import { registerPageHistoryRoutes } from './handlers/page-history';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/token-auth';
@@ -221,7 +222,11 @@ export const buildHonoApp = (crowi: Crowi) => {
   // reference — re-installing would cost a second JWT verify +
   // User.findById per request).
   const withRevision = registerRevisionRoutes(withComment, crowi);
-  const withPage = registerPageRoutes(withRevision, crowi);
+  // RFC-0021 Phase 3 — registered between revision and page so it reuses the
+  // `/pages/*` auth apply revision installs, and so its `{pageId}/history` path
+  // is matched before the bare `/pages` CRUD routes.
+  const withPageHistory = registerPageHistoryRoutes(withRevision, crowi);
+  const withPage = registerPageRoutes(withPageHistory, crowi);
   const withPagePreview = registerPagePreviewRoutes(withPage, crowi);
   // pageCollab (RFC-0003 wsToken) + presence (RFC-0005 token + likers)
   // both attach `/pages/{id}/<suffix>` endpoints under the shared
