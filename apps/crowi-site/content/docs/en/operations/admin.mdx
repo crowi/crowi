@@ -262,6 +262,26 @@ Lists loaded plugins and lets you edit each plugin's configuration.
 For installing and managing plugins see [Managing plugins](../plugins/managing),
 and for how plugins work see [Plugin overview](../plugins/overview).
 
+## Page deletion records
+
+When a user permanently deletes a page, Crowi stores an admin-only deletion
+record containing the `pageId`, final path, actor, timestamp, and deletion
+mode. It does not store the body, ACL, sharing tokens, or request metadata.
+The `pageId` identifies the deleted page; it is not a reference to a current
+Page. If the path is reused later, administrators can inspect the historical
+deletions without associating them with the replacement page.
+
+Deletion records do not expire automatically. Investigations for rarely
+visited pages may happen long after deletion. When a privacy request or other
+policy requires erasure, an administrator must explicitly erase either one
+record or records for one exact path. There is no unscoped "erase all"
+operation. The server log records the acting administrator and target
+identifier, but not the erased record contents.
+
+Only administrators can read or erase these records, and they are never
+included in the regular page history. Deletions that happened before this
+feature was introduced cannot be reconstructed retroactively.
+
 ## Search
 
 A page to check the status of the search driver. Maps to `GET /admin/search`.
