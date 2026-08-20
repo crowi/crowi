@@ -32234,6 +32234,16 @@
           }
         ],
         "summary": "Rename (move) a whole subtree by path (for portal-less folders)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -32278,7 +32288,7 @@
             }
           },
           "400": {
-            "description": "PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)",
+            "description": "PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED",
             "content": {
               "application/json": {
                 "schema": {
@@ -32356,6 +32366,32 @@
                       "required": [
                         "error"
                       ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_REQUIRED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
                     }
                   ]
                 }
@@ -32385,6 +32421,39 @@
                           ]
                         },
                         "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_CONFLICT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "IDEMPOTENCY_KEY_CONFLICT"
+                          ]
+                        },
+                        "message": {
                           "type": "string"
                         }
                       },

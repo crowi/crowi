@@ -648,10 +648,9 @@ export const renamePageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Rename (move) a page — optionally together with its subtree',
   request: {
-    // RFC-0021 Phase 2c-2a. Declared optional and enforced in the handler on
-    // purpose: made required here, zod rejects a missing header before the
-    // handler runs and the shared defaultHook answers VALIDATION_ERROR, which
-    // tells a client nothing about which header it forgot.
+    // Required for both single-page and include_descendants renames. It stays
+    // optional in the schema because the handler returns the specific
+    // IDEMPOTENCY_KEY_REQUIRED error instead of defaultHook's VALIDATION_ERROR.
     headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RenamePageRequestSchema } },
@@ -696,6 +695,9 @@ export const renameSubtreeRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Rename (move) a whole subtree by path (for portal-less folders)',
   request: {
+    // Required at runtime. Kept optional here so the handler can return the
+    // specific IDEMPOTENCY_KEY_REQUIRED error for a missing header.
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RenameSubtreeRequestSchema } },
     },
@@ -706,16 +708,20 @@ export const renameSubtreeRoute = createRoute({
       content: { 'application/json': { schema: RenameSubtreeResponseSchema } },
     },
     400: {
-      description: 'PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)',
+      description: 'PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED',
       content: {
         'application/json': {
-          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema, IdempotencyKeyRequiredErrorSchema]),
         },
       },
     },
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    409: {
+      description: 'IDEMPOTENCY_KEY_CONFLICT',
+      content: { 'application/json': { schema: IdempotencyKeyConflictErrorSchema } },
     },
   },
 });

@@ -9207,7 +9207,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -9232,7 +9234,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure) */
+                /** @description PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -9254,6 +9256,12 @@ export interface paths {
                                 }[];
                                 partial?: boolean;
                             };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
                         };
                     };
                 };
@@ -9270,6 +9278,21 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Authentication is required";
                                 redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_CONFLICT */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
                             };
                         };
                     };
