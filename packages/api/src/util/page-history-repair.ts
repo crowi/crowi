@@ -1,8 +1,15 @@
 import type Crowi from 'src/crowi';
 import { resumeRenameCommand } from 'src/service/page-history/commands/rename';
+import { resumeSubtreeMemberCommand, settleSubtreeRootAfterMember } from 'src/service/page-history/commands/subtree-rename';
 import { resumeRestoreCommand } from 'src/service/page-history/commands/restore';
 import { resumeTrashCommand } from 'src/service/page-history/commands/trash';
-import { type StrandedTransitionResumer, type StrandedTransitionScanResult, resumeStrandedTransitions } from 'src/service/page-history/operation';
+import {
+  type StrandedTransitionResumer,
+  type StrandedTransitionScanResult,
+  type StrandedTransitionInspector,
+  type StrandedTransitionTerminalHook,
+  resumeStrandedTransitions,
+} from 'src/service/page-history/operation';
 import { redactErrorReason, repairPendingEntries, scanUnsequencedRevisions } from 'src/service/page-history/repair';
 
 /**
@@ -86,6 +93,8 @@ export interface RunPageHistoryRepairOptions {
    * offset.
    */
   resumeAfterOperationId?: string;
+  /** Grace window before the transition sweep may turn an unentered operation into terminal failure. */
+  minAgeMs?: number;
   /** Lets the sweep finish a transition its operation still holds. Without it, those are reported, never silently left as landed. */
   resumeCommand?: StrandedTransitionResumer;
 }
@@ -100,17 +109,46 @@ export interface RunPageHistoryRepairOptions {
  * guessed at — the sweep never invents a way to finish a command it does not
  * know.
  */
-const RESUMERS: Record<string, (crowi: Crowi, operation: Parameters<StrandedTransitionResumer>[0]) => ReturnType<StrandedTransitionResumer>> = {
-  rename: resumeRenameCommand,
-  trash: resumeTrashCommand,
-  restore: resumeRestoreCommand,
+type RepairCommandHandler = {
+  inspect?: (crowi: Crowi, operation: Parameters<StrandedTransitionInspector>[0]) => ReturnType<StrandedTransitionInspector>;
+  resume?: (crowi: Crowi, operation: Parameters<StrandedTransitionResumer>[0]) => ReturnType<StrandedTransitionResumer>;
+  onTerminal?: (crowi: Crowi, operation: Parameters<StrandedTransitionTerminalHook>[0]) => ReturnType<StrandedTransitionTerminalHook>;
 };
+
+const REPAIR_COMMANDS: Partial<Record<string, RepairCommandHandler>> = {
+  rename: { resume: resumeRenameCommand },
+  subtree_rename: {
+    inspect: async (crowi, operation) =>
+      (await settleSubtreeRootAfterMember(crowi, operation))
+        ? { action: 'completed', reason: 'subtree-root-settled' }
+        : { action: 'blocked', reason: 'subtree-root-members-incomplete' },
+  },
+  subtree_rename_member: {
+    resume: resumeSubtreeMemberCommand,
+    onTerminal: async (crowi, operation) => {
+      await settleSubtreeRootAfterMember(crowi, operation);
+    },
+  },
+  trash: { resume: resumeTrashCommand },
+  restore: { resume: resumeRestoreCommand },
+};
+
+const defaultInspectOperation =
+  (crowi: Crowi): StrandedTransitionInspector =>
+  async (operation) =>
+    REPAIR_COMMANDS[operation.command]?.inspect?.(crowi, operation) ?? null;
 
 const defaultResumeCommand =
   (crowi: Crowi): StrandedTransitionResumer =>
   async (operation) => {
-    const resume = RESUMERS[operation.command];
+    const resume = REPAIR_COMMANDS[operation.command]?.resume;
     return resume == null ? 'blocked' : resume(crowi, operation);
+  };
+
+const defaultTerminalHook =
+  (crowi: Crowi): StrandedTransitionTerminalHook =>
+  async (operation) => {
+    await REPAIR_COMMANDS[operation.command]?.onTerminal?.(crowi, operation);
   };
 
 export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRepairOptions = {}): Promise<PageHistoryRepairSummary> {
@@ -151,7 +189,10 @@ export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRep
     summary.transitions = await resumeStrandedTransitions(crowi, {
       batchSize: opts.batchSize,
       resumeAfterOperationId: opts.resumeAfterOperationId,
+      inspectOperation: defaultInspectOperation(crowi),
       resumeCommand: opts.resumeCommand ?? defaultResumeCommand(crowi),
+      onTerminalResult: defaultTerminalHook(crowi),
+      minAgeMs: opts.minAgeMs,
     });
   }
 

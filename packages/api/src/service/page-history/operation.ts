@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import { Types } from 'mongoose';
 
 import Crowi from 'src/crowi';
-import type { PageHistoryEventSource } from 'src/models/page-history-event';
+import type { PageHistoryEventKind, PageHistoryEventSource } from 'src/models/page-history-event';
 import type { PageHistoryOperationDocument, PageHistoryOperationResult } from 'src/models/page-history-operation';
 
 import { redactErrorReason } from './repair';
@@ -22,6 +23,7 @@ import { type ResumeExpectation, type TransitionPageSnapshot, classifyResume } f
  */
 
 const TERMINAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_MIN_AGE_MS = 600_000;
 
 /** How the sweep dealt with one unfinished operation. */
 export type StrandedTransitionAction = 'resumed' | 'completed' | 'blocked';
@@ -58,6 +60,12 @@ export interface OperationKey {
   idempotencyKey: string;
 }
 
+export function deriveMemberKey(idempotencyKey: string, pageId: Types.ObjectId | string): string {
+  return createHash('sha256')
+    .update(`${idempotencyKey}\0${String(pageId)}`)
+    .digest('base64url');
+}
+
 function resolveExisting(operation: PageHistoryOperationDocument, requestFingerprint: string): OperationResolution {
   // The fingerprint is the whole comparison (DC-2): the request body is never
   // re-compared field by field, so a key can never be quietly reused for a
@@ -84,9 +92,13 @@ export async function resolvePageHistoryOperation(crowi: Crowi, key: OperationKe
   return existing == null ? { kind: 'miss' } : resolveExisting(existing, requestFingerprint);
 }
 
-export interface CreateOperationInput extends OperationKey {
+interface CreateOperationBase extends OperationKey {
   operationId: string;
   requestFingerprint: string;
+}
+
+export interface CreateSinglePageOperationInput extends CreateOperationBase {
+  command: 'rename' | 'trash' | 'restore' | 'subtree_rename_member';
   page: Types.ObjectId;
   fromPath: string;
   toPath: string;
@@ -95,7 +107,25 @@ export interface CreateOperationInput extends OperationKey {
   toStatus: string | null;
   createRedirect: boolean;
   source: PageHistoryEventSource;
+  memberPageIds?: never;
+  groupOperationId?: never;
 }
+
+export interface CreateSubtreeRootOperationInput extends CreateOperationBase {
+  command: 'subtree_rename';
+  memberPageIds: Types.ObjectId[];
+  groupOperationId: string;
+  page?: never;
+  fromPath?: never;
+  toPath?: never;
+  fromStatus?: never;
+  fromStatusPresent?: never;
+  toStatus?: never;
+  createRedirect?: never;
+  source?: never;
+}
+
+export type CreateOperationInput = CreateSinglePageOperationInput | CreateSubtreeRootOperationInput;
 
 export type CreateOperationResult = { kind: 'created'; operation: PageHistoryOperationDocument } | { kind: 'lost'; resolution: OperationResolution };
 
@@ -110,20 +140,26 @@ export type CreateOperationResult = { kind: 'created'; operation: PageHistoryOpe
 export async function createPageHistoryOperation(crowi: Crowi, input: CreateOperationInput): Promise<CreateOperationResult> {
   const PageHistoryOperation = crowi.model('PageHistoryOperation');
   try {
+    const commandFields =
+      input.command === 'subtree_rename'
+        ? { memberPageIds: input.memberPageIds, groupOperationId: input.groupOperationId }
+        : {
+            page: input.page,
+            fromPath: input.fromPath,
+            toPath: input.toPath,
+            fromStatus: input.fromStatus,
+            fromStatusPresent: input.fromStatusPresent,
+            toStatus: input.toStatus,
+            createRedirect: input.createRedirect,
+            source: input.source,
+          };
     const created = (await PageHistoryOperation.create({
       actor: input.actor,
       command: input.command,
       idempotencyKey: input.idempotencyKey,
       operationId: input.operationId,
       requestFingerprint: input.requestFingerprint,
-      page: input.page,
-      fromPath: input.fromPath,
-      toPath: input.toPath,
-      fromStatus: input.fromStatus,
-      fromStatusPresent: input.fromStatusPresent,
-      toStatus: input.toStatus,
-      createRedirect: input.createRedirect,
-      source: input.source,
+      ...commandFields,
     })) as PageHistoryOperationDocument;
     return { kind: 'created', operation: created };
   } catch (err) {
@@ -143,11 +179,11 @@ export async function completeOperation(
   crowi: Crowi,
   operationId: string,
   result: Omit<PageHistoryOperationResult, 'completedAt'> & { completedAt?: Date },
-): Promise<void> {
+): Promise<PageHistoryOperationDocument> {
   const PageHistoryOperation = crowi.model('PageHistoryOperation');
   const completedAt = result.completedAt ?? new Date();
-  await PageHistoryOperation.updateOne(
-    { operationId },
+  const settled = (await PageHistoryOperation.findOneAndUpdate(
+    { operationId, result: null },
     {
       $set: {
         result: { ...result, completedAt },
@@ -155,7 +191,13 @@ export async function completeOperation(
         updatedAt: completedAt,
       },
     },
-  ).exec();
+    { returnDocument: 'after' },
+  ).exec()) as PageHistoryOperationDocument | null;
+  if (settled != null) return settled;
+
+  const winner = (await PageHistoryOperation.findOne({ operationId }).exec()) as PageHistoryOperationDocument | null;
+  if (winner == null) throw new Error(`Page history operation ${operationId} disappeared before it could be settled.`);
+  return winner;
 }
 
 const expectationOf = (operation: PageHistoryOperationDocument): ResumeExpectation => ({
@@ -167,6 +209,83 @@ const expectationOf = (operation: PageHistoryOperationDocument): ResumeExpectati
   toStatus: operation.toStatus ?? null,
 });
 
+type CompletionEvidencePageSnapshot = TransitionPageSnapshot & {
+  historyTracking?: { state?: 'untracked' | 'migrating' | 'ready' | null } | null;
+};
+
+const eventKindForCommand = (command: string): PageHistoryEventKind | null => {
+  switch (command) {
+    case 'rename':
+    case 'subtree_rename_member':
+      return 'page_renamed';
+    case 'trash':
+      return 'page_trashed';
+    case 'restore':
+      return 'page_restored';
+    default:
+      return null;
+  }
+};
+
+async function subtreeGroupOperationId(crowi: Crowi, operation: PageHistoryOperationDocument): Promise<string | null> {
+  if (operation.page == null) return null;
+  const roots = (await crowi
+    .model('PageHistoryOperation')
+    .find({ actor: operation.actor, command: 'subtree_rename', memberPageIds: operation.page })
+    .exec()) as PageHistoryOperationDocument[];
+  const root = roots.find((candidate) => deriveMemberKey(candidate.idempotencyKey, operation.page as Types.ObjectId) === operation.idempotencyKey);
+  return root?.groupOperationId ?? null;
+}
+
+/** The single durable definition of whether a path-moving operation completed. */
+export async function hasOperationCompletionEvidence(
+  crowi: Crowi,
+  operation: PageHistoryOperationDocument,
+  options: { eventOperationId?: string; page?: CompletionEvidencePageSnapshot | null } = {},
+): Promise<boolean> {
+  if (operation.page == null) return false;
+  const kind = eventKindForCommand(operation.command);
+  if (kind == null) return false;
+  const eventOperationId =
+    options.eventOperationId ?? (operation.command === 'subtree_rename_member' ? await subtreeGroupOperationId(crowi, operation) : operation.operationId);
+  if (eventOperationId == null) return false;
+
+  const evidence = await crowi.model('PageHistoryEvent').exists({ page: operation.page, operationId: eventOperationId, kind });
+  if (evidence != null) return true;
+
+  // Subtree members are grouped under the root id, so projection-only success
+  // would lose the distinction between this member and another subtree move.
+  if (operation.command === 'subtree_rename_member') return false;
+  const page =
+    options.page === undefined
+      ? ((await crowi
+          .model('Page')
+          .findById(operation.page)
+          .select('path status historyTransition historyTracking')
+          .lean()
+          .exec()) as CompletionEvidencePageSnapshot | null)
+      : options.page;
+  if (page == null || page.historyTracking?.state === 'ready' || page.historyTracking?.state === 'migrating') return false;
+  return classifyResume(page, expectationOf(operation)).decision === 'already-settled';
+}
+
+async function correctStaleFailedOperation(crowi: Crowi, operationId: string): Promise<void> {
+  const completedAt = new Date();
+  await crowi
+    .model('PageHistoryOperation')
+    .updateOne(
+      { operationId, 'result.status': 'failed' },
+      {
+        $set: {
+          result: { status: 'succeeded', completedAt },
+          expiresAt: new Date(completedAt.getTime() + TERMINAL_RETENTION_MS),
+          updatedAt: completedAt,
+        },
+      },
+    )
+    .exec();
+}
+
 /**
  * Finishes an operation whose transition is still held by it.
  *
@@ -177,12 +296,22 @@ const expectationOf = (operation: PageHistoryOperationDocument): ResumeExpectati
  */
 export type StrandedTransitionResumer = (operation: PageHistoryOperationDocument) => Promise<StrandedTransitionAction>;
 
+export type StrandedTransitionTerminalHook = (operation: PageHistoryOperationDocument) => Promise<void>;
+
+export type StrandedTransitionInspection = Pick<StrandedTransitionReport, 'action' | 'reason'>;
+
+export type StrandedTransitionInspector = (operation: PageHistoryOperationDocument) => Promise<StrandedTransitionInspection | null>;
+
 export interface StrandedTransitionScanOptions {
   batchSize?: number;
   /** Resume a previous sweep — only operations with `_id > resumeAfterOperationId` are visited. */
   resumeAfterOperationId?: string;
   /** Without one, an operation still holding its transition is reported rather than finished — the sweep will not pretend to have landed it. */
   resumeCommand?: StrandedTransitionResumer;
+  inspectOperation?: StrandedTransitionInspector;
+  onTerminalResult?: StrandedTransitionTerminalHook;
+  /** A live request gets this long to finish before repair may record terminal failure. */
+  minAgeMs?: number;
 }
 
 /**
@@ -199,6 +328,7 @@ export async function resumeStrandedTransitions(crowi: Crowi, options: StrandedT
   const PageHistoryOperation = crowi.model('PageHistoryOperation');
   const Page = crowi.model('Page');
   const batchSize = options.batchSize && options.batchSize > 0 ? options.batchSize : 100;
+  const minAgeMs = options.minAgeMs ?? DEFAULT_MIN_AGE_MS;
 
   const result: StrandedTransitionScanResult = { scannedOperations: 0, reports: [], failed: [], lastOperationId: null };
 
@@ -214,7 +344,7 @@ export async function resumeStrandedTransitions(crowi: Crowi, options: StrandedT
   }
 
   for (;;) {
-    const match: Record<string, unknown> = { result: null };
+    const match: Record<string, unknown> = { $or: [{ result: null }, { 'result.status': 'failed' }] };
     if (cursor != null) match._id = { $gt: cursor };
 
     const batch = (await PageHistoryOperation.find(match).sort({ _id: 1 }).limit(batchSize).exec()) as PageHistoryOperationDocument[];
@@ -226,6 +356,51 @@ export async function resumeStrandedTransitions(crowi: Crowi, options: StrandedT
       result.lastOperationId = operation.operationId;
 
       try {
+        const inspection = await options.inspectOperation?.(operation);
+        if (inspection != null) {
+          result.reports.push({
+            operationId: operation.operationId,
+            pageId: operation.page == null ? null : String(operation.page),
+            path: operation.toPath ?? null,
+            ...inspection,
+          });
+          continue;
+        }
+        if (operation.page == null) {
+          result.reports.push({
+            operationId: operation.operationId,
+            pageId: null,
+            path: operation.toPath ?? null,
+            action: 'blocked',
+            reason: 'no-resumer-registered',
+          });
+          continue;
+        }
+        if (await hasOperationCompletionEvidence(crowi, operation)) {
+          if (operation.result?.status === 'failed') {
+            await correctStaleFailedOperation(crowi, operation.operationId);
+            result.reports.push({
+              operationId: operation.operationId,
+              pageId: operation.page == null ? null : String(operation.page),
+              path: operation.toPath ?? null,
+              action: 'completed',
+              reason: 'stale-failure-corrected',
+            });
+          } else {
+            await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
+            result.reports.push({
+              operationId: operation.operationId,
+              pageId: operation.page == null ? null : String(operation.page),
+              path: operation.toPath ?? null,
+              action: 'completed',
+              reason: 'completion-evidence-found',
+            });
+          }
+          await options.onTerminalResult?.(operation);
+          continue;
+        }
+        if (operation.result?.status === 'failed') continue;
+
         const page =
           operation.page == null
             ? null
@@ -245,23 +420,32 @@ export async function resumeStrandedTransitions(crowi: Crowi, options: StrandedT
               break;
             }
             const action = await options.resumeCommand(operation);
+            if (action === 'resumed' && (await hasOperationCompletionEvidence(crowi, operation))) {
+              await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
+              await options.onTerminalResult?.(operation);
+            }
             result.reports.push({ operationId: operation.operationId, pageId, path, action, reason: 'transition-held-by-operation' });
             break;
           }
           case 'already-settled':
-            await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
-            result.reports.push({ operationId: operation.operationId, pageId, path, action: 'completed', reason: 'transition-already-settled' });
+            result.reports.push({ operationId: operation.operationId, pageId, path, action: 'blocked', reason: 'completion-evidence-missing' });
             break;
           case 'not-entered':
+            if (operation.createdAt.getTime() > Date.now() - minAgeMs) {
+              result.reports.push({ operationId: operation.operationId, pageId, path, action: 'blocked', reason: 'grace-window-active' });
+              break;
+            }
             await completeOperation(crowi, operation.operationId, {
               status: 'failed',
               code: 'PAGE_TRANSITION_INCOMPLETE',
               message: 'The operation never entered its transition.',
             });
+            await options.onTerminalResult?.(operation);
             result.reports.push({ operationId: operation.operationId, pageId, path, action: 'completed', reason: 'abandoned-before-entry' });
             break;
           case 'page-missing':
-            await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
+            await completeOperation(crowi, operation.operationId, { status: 'moot' });
+            await options.onTerminalResult?.(operation);
             result.reports.push({ operationId: operation.operationId, pageId, path: null, action: 'completed', reason: 'page-deleted' });
             break;
           case 'owned-elsewhere':

@@ -34,6 +34,14 @@ export interface PageTransitionInput {
   pageId: Types.ObjectId;
   /** The owning operation's id. Pinned by both the entering and the leaving CAS, and injected into the event envelope. */
   operationId: string;
+  /**
+   * Which operation the event is filed under. Defaults to the transition's own
+   * owner; a subtree member overrides it with its root's grouping id so N
+   * pages' events read as one logical operation. Equality is the default for
+   * ordinary commands; subtree members use distinct values because every
+   * member record needs its own unique operation id.
+   */
+  eventOperationId?: string;
   /** Which command owns the move (`'rename'`, `'trash'`, ...), recorded on the Page so recovery knows what to finish. */
   kind: string;
   fromPath: string;
@@ -70,11 +78,11 @@ export type PageTransitionOutcome =
   | { status: 'committed'; page: PageDocument; sequence: number | null; eventId: Types.ObjectId | null }
   /** The move had already landed before this execution ran (a resumed or duplicated attempt). No write was made. */
   | { status: 'already-settled'; page: PageDocument }
-  /** Another operation owns this Page's transition. Nothing was written. */
+  /** This invocation observed another transition owner; it does not prove whether this operation landed earlier. */
   | { status: 'owned-elsewhere'; ownerOperationId: string }
-  /** Step 1 kept losing to concurrent writers until the budget ran out. Nothing was written. */
+  /** This invocation exhausted its step-1 CAS budget; a concurrent delivery may still enter or finish the operation. */
   | { status: 'contended' }
-  /** The Page is gone. Nothing was written. */
+  /** This invocation observed the Page absent once; the operation may have landed before the Page was deleted. */
   | { status: 'page-missing' }
   /** The Page is in a state this runner will not act on — left exactly as found, for an operator to resolve. */
   | { status: 'incomplete'; reason: string };
@@ -176,7 +184,7 @@ export async function exitTransition(crowi: Crowi, input: PageTransitionInput): 
     pageId: input.pageId,
     actor: input.actor,
     source: input.source,
-    operationId: input.operationId,
+    operationId: input.eventOperationId ?? input.operationId,
     plan: () => ({
       decision: 'write',
       expected: { 'historyTransition.operationId': input.operationId, path: input.toPath },

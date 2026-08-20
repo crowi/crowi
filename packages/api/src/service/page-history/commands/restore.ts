@@ -5,7 +5,7 @@ import { type PageDocument, STATUS_PUBLISHED } from 'src/models/page';
 import type { PageHistoryEventSource } from 'src/models/page-history-event';
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 
-import type { StrandedTransitionAction } from '../operation';
+import { type StrandedTransitionAction, hasOperationCompletionEvidence } from '../operation';
 import { type PageTransitionOutcome, runPageTransition } from '../transition';
 
 /**
@@ -88,5 +88,6 @@ export async function resumeRestoreCommand(crowi: Crowi, operation: PageHistoryO
     actor: operation.actor,
     source: operation.source ?? 'system',
   });
-  return outcome.status === 'committed' || outcome.status === 'already-settled' ? 'resumed' : 'blocked';
+  if (outcome.status !== 'committed' && outcome.status !== 'already-settled') return 'blocked';
+  return (await hasOperationCompletionEvidence(crowi, operation)) ? 'resumed' : 'blocked';
 }

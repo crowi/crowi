@@ -31,7 +31,7 @@ export interface PageHistoryOperationLease {
 }
 
 export interface PageHistoryOperationResult {
-  status: 'succeeded' | 'failed' | 'partial';
+  status: 'succeeded' | 'failed' | 'partial' | 'moot';
   completedAt: Date;
   detail?: string;
   /** Error code of a failed terminal outcome, so a replay answers with the recorded response instead of re-deciding it. */
@@ -44,7 +44,14 @@ export interface PageHistoryOperationDocument extends Document {
   _id: Types.ObjectId;
   /** The user who initiated the command. `null` only for a `system`-sourced operation. */
   actor: Types.ObjectId | null;
-  /** Free-form command scope (e.g. `'rename'`, `'grant'`, `'trash'`) — Phase 2 defines the concrete set. */
+  /**
+   * Free-form command scope. So far: `'rename'`, `'trash'`, `'restore'`, and
+   * subtree rename's pair `'subtree_rename'` (the root record) /
+   * `'subtree_rename_member'` (one per page it moves). The member's name is
+   * deliberately not `'rename'`: its idempotency key is derived from the root's,
+   * so sharing the scope would let a caller's own single-page rename collide
+   * with a derived key.
+   */
   command: string;
   /** Client-generated `Idempotency-Key` — 16-128 URL-safe characters (RFC §5.3). */
   idempotencyKey: string;
@@ -76,6 +83,10 @@ export interface PageHistoryOperationDocument extends Document {
   toStatus?: string | null;
   createRedirect?: boolean;
   source?: PageHistoryEventSource;
+  /** Page ids sealed by a subtree root operation. Absent on member and single-page records. */
+  memberPageIds?: Types.ObjectId[];
+  /** Event-grouping id shared by every member of a subtree root operation. */
+  groupOperationId?: string;
   /** Subtree rename's persisted original target map (RFC §6.5) — absent for a single-Page command. */
   subtreeTargets?: PageHistoryOperationSubtreeTarget[];
   /** Per-Page progress for a multi-Page (subtree) operation, keyed by Page id string. */
@@ -112,7 +123,7 @@ const leaseSchema = new Schema<PageHistoryOperationLease>(
 
 const resultSchema = new Schema<PageHistoryOperationResult>(
   {
-    status: { type: String, enum: ['succeeded', 'failed', 'partial'], required: true },
+    status: { type: String, enum: ['succeeded', 'failed', 'partial', 'moot'], required: true },
     completedAt: { type: Date, required: true },
     detail: { type: String },
     code: { type: String },
@@ -147,6 +158,8 @@ const pageHistoryOperationSchema = new Schema<PageHistoryOperationDocument, Page
   toStatus: { type: String },
   createRedirect: { type: Boolean },
   source: { type: String, enum: PAGE_HISTORY_EVENT_SOURCES },
+  memberPageIds: { type: [Schema.Types.ObjectId], ref: 'Page', default: undefined },
+  groupOperationId: { type: String },
   subtreeTargets: { type: [subtreeTargetSchema], default: undefined },
   pageStates: { type: Map, of: String, default: () => new Map() },
   lease: { type: leaseSchema, default: null },

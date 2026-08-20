@@ -7,6 +7,7 @@ import { changePageVisibility } from 'src/service/page-history/commands/visibili
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { purgePageHistoryEvents } from 'src/service/page-history/purge';
 import { escapeRegExp } from 'src/util/regex';
+import { mapWithConcurrency, RENAME_TREE_CONCURRENCY } from 'src/util/map-with-concurrency';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 import {
   PAGE_HISTORY_EVENT_KINDS,
@@ -194,27 +195,6 @@ function pageNotFoundError(): Error {
   const error = new Error('Page not found');
   error.name = 'Crowi:Page:NotFound';
   return error;
-}
-
-/** Max simultaneous per-page operations during a subtree rename (renameTree). */
-const RENAME_TREE_CONCURRENCY = 8;
-
-/**
- * Run `fn` over `items` with at most `limit` in flight at once, preserving
- * result order. Rejects on the first error (like `Promise.all`); in-flight
- * siblings are not cancelled but no new work is started after a rejection.
- */
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await fn(items[index]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
 }
 
 export const TYPE_PORTAL = 'portal';
