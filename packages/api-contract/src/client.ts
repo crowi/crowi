@@ -79,6 +79,7 @@ import type { z } from 'zod';
 import { adminAppRoutes } from './contracts/admin/app';
 import { adminAuthRoutes } from './contracts/admin/auth';
 import { adminMailRoutes } from './contracts/admin/mail';
+import { adminPageDeletionRoutes } from './contracts/admin/page-deletion';
 import { adminPluginsRoutes } from './contracts/admin/plugins';
 import { adminSearchRoutes } from './contracts/admin/search';
 import { adminSecurityRoutes } from './contracts/admin/security';
@@ -836,6 +837,11 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminPluginsRoutes.clearRenderCacheAllRoute, (c) => c.json(stubClearRenderCache, 200))
   .openapi(adminPluginsRoutes.clearRenderCachePluginRoute, (c) => c.json(stubClearRenderCache, 200));
 
+const adminPageDeletionContractApp = new OpenAPIHono()
+  .openapi(adminPageDeletionRoutes.listPageDeletionsRoute, (c) => c.json({ records: [] }, 200))
+  .openapi(adminPageDeletionRoutes.getPageDeletionsByPathRoute, (c) => c.json({ records: [] }, 200))
+  .openapi(adminPageDeletionRoutes.erasePageDeletionRoute, (c) => c.json({ deletedCount: 0 }, 200));
+
 /**
  * OAuth 2.0 authorization-server endpoints (RFC-0010 Phase 3) — 4 routes.
  * Kept on its own chain (rather than extended onto the near-full
@@ -898,6 +904,7 @@ export type PageChain = typeof pageChain;
 export type LateContractApp = typeof lateContractApp;
 export type AdminSettingsContractApp = typeof adminSettingsContractApp;
 export type AdminUsersPluginsContractApp = typeof adminUsersPluginsContractApp;
+export type AdminPageDeletionContractApp = typeof adminPageDeletionContractApp;
 export type OAuthContractApp = typeof oauthContractApp;
 export type FederatedAuthContractApp = typeof federatedAuthContractApp;
 export type FederatedRegistrationContractApp = typeof federatedRegistrationContractApp;
@@ -938,6 +945,7 @@ export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
   ReturnType<typeof hc<LateContractApp>> &
   ReturnType<typeof hc<AdminSettingsContractApp>> &
   ReturnType<typeof hc<AdminUsersPluginsContractApp>> &
+  ReturnType<typeof hc<AdminPageDeletionContractApp>> &
   ReturnType<typeof hc<OAuthContractApp>> &
   ReturnType<typeof hc<FederatedAuthContractApp>> &
   ReturnType<typeof hc<FederatedRegistrationContractApp>>;
