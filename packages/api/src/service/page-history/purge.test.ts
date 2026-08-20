@@ -114,7 +114,7 @@ describe('service/page-history/purge (feature-page-history-phase2c1-metadata-eve
       await createVisibilityChangedEvent(page._id, 1);
       await createVisibilityChangedEvent(page._id, 2, { operationId: `op-purge-${page._id}-2b` });
 
-      await Page.completelyDeletePage(page, user);
+      await Page.completelyDeletePage(page, user, { deletion: { mode: 'user_hard_delete', actor: user._id } });
 
       expect(await Page.findById(page._id)).toBeNull();
       expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
@@ -141,7 +141,7 @@ describe('service/page-history/purge (feature-page-history-phase2c1-metadata-eve
       try {
         let caught: unknown;
         try {
-          await Page.completelyDeletePage(page, user);
+          await Page.completelyDeletePage(page, user, { deletion: { mode: 'user_hard_delete', actor: user._id } });
           throw new Error('expected completelyDeletePage to throw');
         } catch (err) {
           caught = err;
@@ -161,7 +161,10 @@ describe('service/page-history/purge (feature-page-history-phase2c1-metadata-eve
         // `removePageById` still compares equal to the original `page`.
         expect(revisionSpy).toHaveBeenCalled();
         expect(String(revisionSpy.mock.calls.at(-1)?.[0])).toBe(String(page._id));
-        expect(redirectOriginSpy).toHaveBeenCalledWith(page.path);
+        expect(redirectOriginSpy).toHaveBeenCalledWith(page.path, {
+          mode: 'redirect_stub_cleanup',
+          actor: user._id,
+        });
         expect(activitySpy).toHaveBeenCalled();
         expect(String(activitySpy.mock.calls.at(-1)?.[0])).toBe(String(page._id));
         expect(deleteListener).toHaveBeenCalledTimes(1);
@@ -187,7 +190,7 @@ describe('service/page-history/purge (feature-page-history-phase2c1-metadata-eve
       try {
         let caught: unknown;
         try {
-          await Page.completelyDeletePage(page, user);
+          await Page.completelyDeletePage(page, user, { deletion: { mode: 'user_hard_delete', actor: user._id } });
           throw new Error('expected completelyDeletePage to throw');
         } catch (err) {
           caught = err;
@@ -219,7 +222,7 @@ describe('service/page-history/purge (feature-page-history-phase2c1-metadata-eve
       try {
         let caught: unknown;
         try {
-          await Page.completelyDeletePage(page, user);
+          await Page.completelyDeletePage(page, user, { deletion: { mode: 'user_hard_delete', actor: user._id } });
           throw new Error('expected completelyDeletePage to throw');
         } catch (err) {
           caught = err;
@@ -265,7 +268,7 @@ describe('service/page-history/purge (feature-page-history-phase2c1-metadata-eve
       try {
         let caught: unknown;
         try {
-          await Page.completelyDeletePage(target, user);
+          await Page.completelyDeletePage(target, user, { deletion: { mode: 'user_hard_delete', actor: user._id } });
           throw new Error('expected completelyDeletePage to throw');
         } catch (err) {
           caught = err;

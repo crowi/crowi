@@ -1572,6 +1572,12 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       expect(pageDoc).toBeNull();
       expect(await Bookmark.countDocuments({ page: pageId })).toBe(0);
       expect(await Comment.countDocuments({ page: pageId })).toBe(0);
+      const PageDeletionRecord = crowi.model('PageDeletionRecord');
+      expect(await PageDeletionRecord.findOne({ pageId }).lean()).toMatchObject({
+        path,
+        actor: new Types.ObjectId(userId),
+        mode: 'user_hard_delete',
+      });
     });
 
     // RFC-0021 §5.1/§5.6 (`feature-page-history-phase2c1-metadata-events`,
@@ -1682,15 +1688,18 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
   const PATH_PREFIX = '/hono-page-revert-test/';
   let Page;
   let accessToken: string;
+  let userId: string;
 
   beforeAll(async () => {
     Page = crowi.model('Page');
 
-    ({ accessToken } = await createTestUser({
+    const created = await createTestUser({
       name: 'RevertPage Test',
       username: 'revertPageTester',
       email: 'revert-page-tester@example.com',
-    }));
+    });
+    accessToken = created.accessToken;
+    userId = created.user._id.toString();
   });
 
   afterEach(async () => {
@@ -1717,15 +1726,27 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
       const deleteRes = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
       expect(deleteRes.status).toBe(200);
       expect(deleteRes.body.page.path).toBe(`/trash${path}`);
+      const redirectStub = await Page.findOne({ path });
+      expect(redirectStub).not.toBeNull();
 
       // The redirect stub at the original path is the input the UI would consult,
       // but the revertDeletedPage contract takes the trashed page's id (per planner).
-      const res = await request(app).post('/api/pages/revert').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
+      const completelyDeletePageSpy = jest.spyOn(Page, 'completelyDeletePage');
+      let stubDeletion: { actor?: unknown; mode?: string } | undefined;
+      try {
+        const res = await request(app).post('/api/pages/revert').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
+        stubDeletion = completelyDeletePageSpy.mock.calls[0]?.[2]?.deletion;
 
-      expect(res.status).toBe(200);
-      expect(res.body.page._id).toBe(pageId);
-      expect(res.body.page.path).toBe(path);
-      expect(res.body.page.status).toBe('published');
+        expect(res.status).toBe(200);
+        expect(res.body.page._id).toBe(pageId);
+        expect(res.body.page.path).toBe(path);
+        expect(res.body.page.status).toBe('published');
+      } finally {
+        completelyDeletePageSpy.mockRestore();
+      }
+
+      expect(stubDeletion?.mode).toBe('redirect_stub_cleanup');
+      expect(String(stubDeletion?.actor)).toBe(userId);
 
       const pageDoc = await Page.findById(pageId);
       expect(pageDoc).not.toBeNull();
@@ -1738,6 +1759,8 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
       expect(pagesAtPath).toHaveLength(1);
       expect(pagesAtPath[0]._id.toString()).toBe(pageId);
       expect(pagesAtPath[0].redirectTo).toBeNull();
+      const PageDeletionRecord = crowi.model('PageDeletionRecord');
+      expect(await PageDeletionRecord.countDocuments({ pageId: redirectStub?._id })).toBe(0);
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {

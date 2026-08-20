@@ -339,12 +339,25 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
       expect(createRes.status).toBe(201);
       const pageId = createRes.body.pageId as string;
 
-      const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
-      expect(delRes.status).toBe(200);
-
       const Page = crowi.model('Page');
+      const removePageSpy = jest.spyOn(Page, 'removePage');
+      let deletion: { actor?: unknown; mode?: string } | undefined;
+      try {
+        const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
+        deletion = removePageSpy.mock.calls[0]?.[1]?.deletion;
+
+        expect(delRes.status).toBe(200);
+      } finally {
+        removePageSpy.mockRestore();
+      }
+
+      expect(deletion?.mode).toBe('creation_cancel');
+      expect(String(deletion?.actor)).toBe(aliceId);
+
+      const PageDeletionRecord = crowi.model('PageDeletionRecord');
       expect(await Page.findOne({ path: `/trash${path}` })).toBeNull();
       expect(await Page.findOne({ redirectTo: { $ne: null }, path })).toBeNull();
+      expect(await PageDeletionRecord.countDocuments({ pageId })).toBe(0);
     });
 
     it("returns 404 draft_not_found when cancelling another user's draft", async () => {

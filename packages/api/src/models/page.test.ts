@@ -1604,7 +1604,7 @@ describe('Page', () => {
       const pageA = await Page.createPage(path, 'body A', user, {});
       const pageAId = pageA._id;
 
-      await Page.removePage(pageA);
+      await Page.removePage(pageA, { deletion: { mode: 'internal_cleanup', actor: null } });
       expect(await Page.findById(pageAId).exec()).toBeNull();
       expect(await Revision.countDocuments({ page: pageAId })).toBe(0);
 
@@ -1616,6 +1616,30 @@ describe('Page', () => {
       const revisionsForB = await Revision.find({ page: pageB._id }).lean();
       expect(revisionsForB).toHaveLength(1);
       expect(revisionsForB[0].body).toBe('body B');
+    });
+
+    test('redirect-origin recursion uses redirect_stub_cleanup for every stub and writes no user deletion records', async () => {
+      const target = await Page.createPage('/deletion-record/redirect-target', 'target', user, {});
+      const first = await Page.createPage('/deletion-record/redirect-first', 'first', user, {});
+      const second = await Page.createPage('/deletion-record/redirect-second', 'second', user, {});
+      await Page.updatePageProperty(first, { redirectTo: second.path });
+      await Page.updatePageProperty(second, { redirectTo: target.path });
+
+      const redirectCleanupSpy = jest.spyOn(Page, 'removeRedirectOriginPageByPath');
+      let cleanupDeletions: Array<{ actor?: unknown; mode?: string }> = [];
+      try {
+        await Page.completelyDeletePage(target, user, { deletion: { mode: 'internal_cleanup', actor: null } });
+        cleanupDeletions = redirectCleanupSpy.mock.calls.map(([, deletion]) => deletion);
+      } finally {
+        redirectCleanupSpy.mockRestore();
+      }
+
+      expect(cleanupDeletions.map(({ mode }) => mode)).toEqual(['redirect_stub_cleanup', 'redirect_stub_cleanup', 'redirect_stub_cleanup']);
+      expect(cleanupDeletions.map(({ actor }) => String(actor))).toEqual([user._id.toString(), user._id.toString(), user._id.toString()]);
+
+      const PageDeletionRecord = crowi.model('PageDeletionRecord');
+      expect(await Page.find({ _id: { $in: [target._id, first._id, second._id] } })).toHaveLength(0);
+      expect(await PageDeletionRecord.countDocuments({ pageId: { $in: [target._id, first._id, second._id] } })).toBe(0);
     });
   });
 
