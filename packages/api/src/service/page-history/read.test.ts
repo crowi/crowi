@@ -102,23 +102,45 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
       expect(row.sequence).toBeNull();
     });
 
-    test('AC-4: a revision created exactly at the boundary appears once, not in both regions', async () => {
+    test('AC-4: a sequenced revision created exactly at the boundary appears once in the sequenced region', async () => {
       const page = await createReadyPage('/history-read/ac4');
       const reloaded = await Page.findById(page._id);
       const boundary = reloaded.historyTracking.trackingStartedAt;
 
-      await Revision.create({
+      const exact = await Revision.create({
         path: page.path,
         page: page._id,
         body: 'exactly at the boundary',
         format: 'markdown',
         author: user._id,
         createdAt: boundary,
+        historySequence: 2,
+      });
+      await Page.updateOne({ _id: page._id }, { $set: { historySequence: 2 } });
+
+      const result = await read(page);
+      const matches = result.entries.filter((e) => e.id === String(exact._id));
+      expect(matches).toHaveLength(1);
+      expect(matches[0].sequence).toBe(2);
+    });
+
+    test('AC-4: an unsequenced exact-boundary revision is excluded below and remains visible to the repair >= scan', async () => {
+      const page = await createReadyPage('/history-read/ac4-repair');
+      const boundary = (await Page.findById(page._id)).historyTracking.trackingStartedAt;
+      const exact = await Revision.create({
+        path: page.path,
+        page: page._id,
+        body: 'repair owns this row',
+        format: 'markdown',
+        author: user._id,
+        createdAt: boundary,
       });
 
       const result = await read(page);
-      const ids = result.entries.map((e) => e.id);
-      expect(new Set(ids).size).toBe(ids.length);
+      const repairSide = await Revision.countDocuments({ _id: exact._id, historySequence: null, createdAt: { $gte: boundary } });
+
+      expect(result.entries.filter((e) => e.id === String(exact._id))).toHaveLength(0);
+      expect(repairSide).toBe(1);
     });
   });
 
@@ -153,6 +175,31 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
       // refusing — refusing would leave the history unreachable.
       expect(result.tracking.state).toBe('untracked');
       expect(result.entries.length).toBeGreaterThan(0);
+    });
+
+    test('AC-6: a walk that starts untracked stays unsequenced after another replica promotes the page', async () => {
+      const page = await Page.create({
+        path: '/history-read/ac6',
+        creator: user._id,
+        lastUpdateUser: user._id,
+        grant: Page.GRANT_PUBLIC,
+        status: STATUS_PUBLISHED,
+        grantedUsers: [user._id],
+      });
+      const older = await Revision.create({ path: page.path, page: page._id, body: 'older', format: 'markdown', author: user._id, createdAt: new Date(1) });
+      const newer = await Revision.create({ path: page.path, page: page._id, body: 'newer', format: 'markdown', author: user._id, createdAt: new Date(2) });
+
+      const first = await read(page, 1);
+      expect(first.entries.map((entry) => entry.id)).toEqual([String(newer._id)]);
+      await Page.collection.updateOne({ _id: page._id }, { $set: { historySequence: 2, historyTracking: { state: 'ready', trackingStartedAt: new Date(0) } } });
+      await Revision.updateOne({ _id: older._id }, { $set: { historySequence: 2 } });
+
+      const second = await readPageHistory(crowi, { pageId: page._id, limit: 1, cursor: decodeCursor(first.nextCursor, String(page._id)) });
+
+      expect(second.tracking.state).toBe('untracked');
+      expect(second.entries).toHaveLength(1);
+      expect(second.entries[0]).toMatchObject({ id: String(older._id), sequence: null });
+      expect(second.nextCursor).toBeNull();
     });
 
     test('AC-8: a ready page with no recorded start still reads', async () => {
@@ -236,9 +283,67 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
     });
 
     test('a malformed marker is skipped rather than surfaced', () => {
-      expect(projectPendingEntry({ type: 'page_event' })).toBeNull();
-      expect(projectPendingEntry({ type: 'page_event', event: { kind: 'not_a_kind', sequence: 1 } })).toBeNull();
-      expect(projectPendingEntry(null)).toBeNull();
+      const pageId = new Types.ObjectId();
+      const event = {
+        _id: new Types.ObjectId(),
+        page: pageId,
+        sequence: 1,
+        kind: 'visibility_changed',
+        actor: user._id,
+        occurredAt: new Date(),
+        operationId: 'op-valid',
+        source: 'web',
+        payload: { fromGrant: 1, toGrant: 2 },
+      };
+      expect(projectPendingEntry({ type: 'page_event' }, pageId)).toBeNull();
+      expect(projectPendingEntry({ type: 'page_event', event: { kind: 'not_a_kind', sequence: 1 } }, pageId)).toBeNull();
+      expect(projectPendingEntry({ type: 'page_event', event: { ...event, operationId: undefined } }, pageId)).toBeNull();
+      expect(projectPendingEntry({ type: 'page_event', event: { ...event, page: new Types.ObjectId() } }, pageId)).toBeNull();
+      expect(projectPendingEntry({ type: 'page_event', event: { ...event, payload: { fromGrant: 1 } } }, pageId)).toBeNull();
+      expect(projectPendingEntry({ type: 'page_event', event: { ...event, payload: { fromGrant: 1, toGrant: 2, path: '/leak' } } }, pageId)).toBeNull();
+      expect(projectPendingEntry(null, pageId)).toBeNull();
+    });
+
+    test('AC-15: a durable event replaces its stale pending copy before sequence filtering', async () => {
+      const page = await createReadyPage('/history-read/ac15');
+      const durable = await addEvent(page, 'visibility_changed', { fromGrant: 1, toGrant: 2 });
+      await addEvent(page, 'page_renamed', { fromPath: '/a', toPath: '/b', redirectCreated: false, subtree: false });
+      await addEvent(page, 'page_trashed', { fromPath: '/b', toPath: '/trash/b' });
+      await Page.collection.updateOne(
+        { _id: page._id },
+        {
+          $set: {
+            pendingHistoryEntry: {
+              entryId: new Types.ObjectId(),
+              type: 'page_event',
+              event: {
+                _id: durable._id,
+                page: page._id,
+                sequence: 999,
+                kind: 'visibility_changed',
+                actor: user._id,
+                occurredAt: durable.occurredAt,
+                operationId: 'stale-marker',
+                source: 'web',
+                payload: { fromGrant: 1, toGrant: 2 },
+              },
+            },
+          },
+        },
+      );
+
+      const walked = [];
+      let cursor = null;
+      do {
+        const result = await readPageHistory(crowi, { pageId: page._id, limit: 1, cursor });
+        walked.push(...result.entries);
+        cursor = result.nextCursor == null ? null : decodeCursor(result.nextCursor, String(page._id));
+      } while (cursor != null);
+
+      const matches = walked.filter((entry) => entry.id === String(durable._id));
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({ sequence: durable.sequence });
+      expect(matches[0]).not.toHaveProperty('pending');
     });
   });
 
@@ -254,9 +359,97 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
       // A write lands between the two requests.
       await addEvent(page, 'page_trashed', { fromPath: '/b', toPath: '/trash/b' });
 
-      const second = await readPageHistory(crowi, { pageId: page._id, limit: 50, cursor: decodeCursor(first.nextCursor, String(page._id)) });
+      const walked = [...first.entries];
+      let cursor = decodeCursor(first.nextCursor, String(page._id));
+      while (cursor != null) {
+        const result = await readPageHistory(crowi, { pageId: page._id, limit: 1, cursor });
+        walked.push(...result.entries);
+        cursor = result.nextCursor == null ? null : decodeCursor(result.nextCursor, String(page._id));
+      }
 
-      expect(second.entries.some((e) => e.type === 'page_event' && e.kind === 'page_trashed')).toBe(false);
+      expect(walked.some((e) => e.type === 'page_event' && e.kind === 'page_trashed')).toBe(false);
+      expect(walked.map((entry) => entry.sequence)).toEqual([3, 2, 1]);
+      expect(new Set(walked.map((entry) => entry.id)).size).toBe(3);
+    });
+  });
+
+  describe('exactly-once pagination and bounded query shapes', () => {
+    test('walks every sequenced and unsequenced row exactly once and transitions regions', async () => {
+      const page = await createReadyPage('/history-read/exactly-once');
+      const event2 = await addEvent(page, 'visibility_changed', { fromGrant: 1, toGrant: 2 });
+      const event3 = await addEvent(page, 'page_renamed', { fromPath: '/a', toPath: '/b', redirectCreated: false, subtree: false });
+      const event4 = await addEvent(page, 'page_trashed', { fromPath: '/b', toPath: '/trash/b' });
+      const older = await Revision.create({
+        path: page.path,
+        page: page._id,
+        body: 'older',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 60_000),
+      });
+      const oldest = await Revision.create({
+        path: page.path,
+        page: page._id,
+        body: 'oldest',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 120_000),
+      });
+      const ancient = await Revision.create({
+        path: page.path,
+        page: page._id,
+        body: 'ancient',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 180_000),
+      });
+      const seedId = String((await Revision.findOne({ page: page._id, historySequence: 1 }))._id);
+
+      const ids = [];
+      const regions = [];
+      let cursor = null;
+      do {
+        const result = await readPageHistory(crowi, { pageId: page._id, limit: 2, cursor });
+        ids.push(...result.entries.map((entry) => entry.id));
+        if (result.nextCursor != null) {
+          cursor = decodeCursor(result.nextCursor, String(page._id));
+          regions.push(cursor.region);
+        } else {
+          cursor = null;
+        }
+      } while (cursor != null);
+
+      expect(ids).toEqual([String(event4._id), String(event3._id), String(event2._id), seedId, String(older._id), String(oldest._id), String(ancient._id)]);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(regions).toContain('sequenced');
+      expect(regions).toContain('unsequenced');
+    });
+
+    test('AC-21: continuation predicates and limits are pushed into each source query', async () => {
+      const page = await createReadyPage('/history-read/ac21');
+      await addEvent(page, 'visibility_changed', { fromGrant: 1, toGrant: 2 });
+      await addEvent(page, 'page_renamed', { fromPath: '/a', toPath: '/b', redirectCreated: false, subtree: false });
+      const first = await read(page, 1);
+      const eventFind = jest.spyOn(PageHistoryEvent, 'find');
+      const revisionFind = jest.spyOn(Revision, 'find');
+      let eventFilters: unknown[] = [];
+      let revisionFilters: unknown[] = [];
+      let eventQueries: Array<{ options?: { limit?: number } }> = [];
+      let revisionQueries: Array<{ options?: { limit?: number } }> = [];
+      try {
+        await readPageHistory(crowi, { pageId: page._id, limit: 1, cursor: decodeCursor(first.nextCursor, String(page._id)) });
+        eventFilters = eventFind.mock.calls.map((call) => call[0]);
+        revisionFilters = revisionFind.mock.calls.map((call) => call[0]);
+        eventQueries = eventFind.mock.results.map((result) => result.value);
+        revisionQueries = revisionFind.mock.results.map((result) => result.value);
+      } finally {
+        eventFind.mockRestore();
+        revisionFind.mockRestore();
+      }
+
+      expect(eventFilters.some((filter) => '$or' in (filter as Record<string, unknown>))).toBe(true);
+      expect(revisionFilters.some((filter) => '$or' in (filter as Record<string, unknown>))).toBe(true);
+      expect([...eventQueries, ...revisionQueries].every((query) => (query.options?.limit ?? Infinity) <= 2)).toBe(true);
     });
   });
 
@@ -291,15 +484,19 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
 
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
       const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      let warnCalls: number;
+      let errorCalls: number;
       try {
         await expect(read(page)).resolves.toBeDefined();
       } finally {
+        warnCalls = warn.mock.calls.length;
+        errorCalls = error.mock.calls.length;
         warn.mockRestore();
         error.mockRestore();
       }
 
-      expect(warn).not.toHaveBeenCalled();
-      expect(error).not.toHaveBeenCalled();
+      expect(warnCalls).toBe(0);
+      expect(errorCalls).toBe(0);
     });
 
     test('AC-24: only this page is queried for events', async () => {
@@ -352,6 +549,57 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
         JSON.stringify({ v: 2, pageId, upper: 1, region: 'sequenced', boundary: null, after: { sequence: 1, kindRank: 1, id: 'x' } }),
       ).toString('base64url');
       expect(() => decodeCursor(wrongVersion, pageId)).toThrow(/version/);
+    });
+
+    test.each([
+      ['garbage-suffixed base64url', (valid: string) => `${valid}!`],
+      [
+        'invalid boundary date',
+        (valid: string) =>
+          Buffer.from(
+            Buffer.from(valid, 'base64url')
+              .toString('utf8')
+              .replace(/"boundary":"[^"]+"/, '"boundary":"nope"'),
+          ).toString('base64url'),
+      ],
+      [
+        'unknown kind rank',
+        (valid: string) => Buffer.from(Buffer.from(valid, 'base64url').toString('utf8').replace('"kindRank":1', '"kindRank":7')).toString('base64url'),
+      ],
+      [
+        'null upper',
+        (valid: string) => Buffer.from(Buffer.from(valid, 'base64url').toString('utf8').replace('"upper":3', '"upper":null')).toString('base64url'),
+      ],
+    ])('rejects %s', (_name, mutate) => {
+      const pageId = String(new Types.ObjectId());
+      const valid = Buffer.from(
+        JSON.stringify({
+          v: 1,
+          pageId,
+          upper: 3,
+          region: 'sequenced',
+          boundary: new Date(0).toISOString(),
+          after: { sequence: 3, kindRank: 1, id: String(new Types.ObjectId()) },
+        }),
+      ).toString('base64url');
+
+      expect(() => decodeCursor(mutate(valid), pageId)).toThrow();
+    });
+
+    test('rejects region, boundary and after combinations that disagree', () => {
+      const pageId = String(new Types.ObjectId());
+      const invalid = Buffer.from(
+        JSON.stringify({
+          v: 1,
+          pageId,
+          upper: 3,
+          region: 'unsequenced',
+          boundary: null,
+          after: { sequence: 3, kindRank: 1, id: String(new Types.ObjectId()) },
+        }),
+      ).toString('base64url');
+
+      expect(() => decodeCursor(invalid, pageId)).toThrow();
     });
   });
 });

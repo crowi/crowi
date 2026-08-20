@@ -356,7 +356,7 @@ export default (crowi: Crowi) => {
   // `findAuthorsByPage`) and the backfill's `{ page: { $exists: false } }`
   // probe, and it ports directly to a Postgres `(page_id, created_at)`
   // index (plain, non-partial — same portability stance as `type`).
-  revisionSchema.index({ page: 1, createdAt: -1 });
+  revisionSchema.index({ page: 1, createdAt: -1, _id: -1 });
   // RFC-0021 Phase 3 — the merged timeline walks the sequenced rows of one page
   // in descending order, with `_id` breaking ties. The `createdAt` index above
   // stays: it still serves the unsequenced rows below the tracking boundary,

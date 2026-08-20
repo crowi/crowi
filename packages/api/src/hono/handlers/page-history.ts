@@ -4,9 +4,9 @@ import Debug from 'debug';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
-import { visiblePageGrantOr } from 'src/models/page';
+import { isTransitionalPageStatus, visiblePageGrantOr } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
-import { PageHistoryCorruptionError, PageHistoryCursorError, decodeCursor, readPageHistory } from 'src/service/page-history/read';
+import { type PageHistoryCursor, PageHistoryCorruptionError, PageHistoryCursorError, decodeCursor, readPageHistory } from 'src/service/page-history/read';
 
 import type { CrowiHonoBindings } from '../app';
 import { applyScope } from '../middleware/require-scope';
@@ -36,6 +36,16 @@ export const registerPageHistoryRoutes = <E extends OpenAPIHono<CrowiHonoBinding
 
     const objectId = new Types.ObjectId(pageId);
 
+    let decoded: PageHistoryCursor | null;
+    try {
+      decoded = cursor == null ? null : decodeCursor(cursor, pageId);
+    } catch (err) {
+      if (err instanceof PageHistoryCursorError) {
+        return c.json({ error: { code: 'INVALID_REQUEST', message: err.message } }, 400);
+      }
+      throw err;
+    }
+
     // The grant rule is expressed as query clauses, so it is evaluated by the
     // database rather than re-implemented here — one place to be wrong instead
     // of two. Only the few fields the draft rule needs come back.
@@ -56,12 +66,11 @@ export const registerPageHistoryRoutes = <E extends OpenAPIHono<CrowiHonoBinding
     // A draft is visible only to its author — mirroring the page reads keeps
     // history from leaking that a draft exists.
     const isHiddenDraft = visible != null && visible.status === 'draft' && String(visible.creator ?? '') !== String(user._id);
-    if (visible == null || isHiddenDraft) {
+    if (visible == null || isHiddenDraft || isTransitionalPageStatus(visible.status)) {
       return c.json({ error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } }, 404);
     }
 
     try {
-      const decoded = cursor == null ? null : decodeCursor(cursor, pageId);
       const result = await readPageHistory(crowi, { pageId: objectId, limit, cursor: decoded });
       return c.json(result, 200);
     } catch (err) {

@@ -5992,6 +5992,24 @@ export interface paths {
                         };
                     };
                 };
+                /** @description The access token does not grant pages:read */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
                 /** @description Page not found (also covers grant-denied) */
                 404: {
                     headers: {
@@ -6018,7 +6036,7 @@ export interface paths {
                             error: {
                                 code: string;
                                 message: string;
-                                pageId?: string;
+                                pageId: string;
                             };
                         };
                     };

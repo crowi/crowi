@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 
 import { AuthenticationRequiredErrorSchema } from '../schemas/common';
+import { InsufficientScopeErrorSchema } from '../schemas/oauth';
 import { PageNotFoundErrorSchema } from '../schemas/page';
 import { PageHistoryPageIdParamSchema, PageHistoryQuerySchema, PageHistoryResponseSchema } from '../schemas/page-history';
 
@@ -33,13 +34,17 @@ export const getPageHistoryRoute = createRoute({
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
+    403: {
+      description: 'The access token does not grant pages:read',
+      content: { 'application/json': { schema: InsufficientScopeErrorSchema } },
+    },
     404: {
       description: 'Page not found (also covers grant-denied)',
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
     },
     500: {
       description: 'The timeline could not be read — includes the page identifier so an operator can run the repair',
-      content: { 'application/json': { schema: z.object({ error: z.object({ code: z.string(), message: z.string(), pageId: z.string().optional() }) }) } },
+      content: { 'application/json': { schema: z.object({ error: z.object({ code: z.string(), message: z.string(), pageId: z.string() }) }) } },
     },
   },
 });

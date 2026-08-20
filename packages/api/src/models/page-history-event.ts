@@ -65,6 +65,44 @@ const PAYLOAD_FIELDS_BY_KIND: Record<PageHistoryEventKind, readonly string[]> = 
 /** Every field name that appears in ANY kind's payload — the superset the nested `payload` schema declares. */
 const ALL_PAYLOAD_FIELDS = Array.from(new Set(Object.values(PAYLOAD_FIELDS_BY_KIND).flat()));
 
+const isRecord = (value: unknown): value is Record<string, unknown> => value != null && typeof value === 'object' && !Array.isArray(value);
+
+/** Shared, side-effect-free payload validation for durable writes and pending read projection. */
+const invalidPayloadField = (kind: PageHistoryEventKind, payload: unknown): string | null => {
+  if (!isRecord(payload)) return 'payload';
+  const allowed = PAYLOAD_FIELDS_BY_KIND[kind];
+  const forbidden = Object.keys(payload).find((field) => !allowed.includes(field));
+  if (forbidden != null) return forbidden;
+  const missing = allowed.find((field) => payload[field] === undefined || payload[field] === null);
+  if (missing != null) return missing;
+
+  switch (kind) {
+    case 'page_created':
+      if (typeof payload.path !== 'string') return 'path';
+      if (!GRANTS.includes(payload.grant as (typeof GRANTS)[number])) return 'grant';
+      return payload.status === 'published' || payload.status === 'draft' ? null : 'status';
+    case 'page_renamed':
+      if (typeof payload.fromPath !== 'string') return 'fromPath';
+      if (typeof payload.toPath !== 'string') return 'toPath';
+      if (typeof payload.redirectCreated !== 'boolean') return 'redirectCreated';
+      return typeof payload.subtree === 'boolean' ? null : 'subtree';
+    case 'visibility_changed':
+      if (!GRANTS.includes(payload.fromGrant as (typeof GRANTS)[number])) return 'fromGrant';
+      return GRANTS.includes(payload.toGrant as (typeof GRANTS)[number]) ? null : 'toGrant';
+    case 'page_trashed':
+    case 'page_restored':
+      if (typeof payload.fromPath !== 'string') return 'fromPath';
+      return typeof payload.toPath === 'string' ? null : 'toPath';
+    case 'draft_published':
+      if (payload.fromStatus !== 'draft') return 'fromStatus';
+      return payload.toStatus === 'published' ? null : 'toStatus';
+  }
+};
+
+export function isValidPageHistoryEventPayload(kind: PageHistoryEventKind, payload: unknown): payload is PageHistoryPayloadByKind[PageHistoryEventKind] {
+  return invalidPayloadField(kind, payload) === null;
+}
+
 export interface PageHistoryEventDocument extends Document {
   _id: Types.ObjectId;
   page: Types.ObjectId;
@@ -139,6 +177,7 @@ const pageHistoryEventSchema = new Schema<PageHistoryEventDocument, PageHistoryE
 // cross-collection half of the normative "no shared sequence" invariant
 // (see `service/page-history/repair.ts`).
 pageHistoryEventSchema.index({ page: 1, sequence: 1 }, { unique: true, name: 'pageHistoryEvent_page_sequence_unique' });
+pageHistoryEventSchema.index({ page: 1, sequence: -1, _id: -1 }, { name: 'pageHistoryEvent_page_sequence_cursor' });
 // RFC §5.3 — makes a command retry idempotent while still allowing a single
 // higher-level operation to write several different kinds (e.g. a
 // body-plus-grant save's content + visibility rows share one operationId).
@@ -161,6 +200,11 @@ pageHistoryEventSchema.pre('validate', function () {
 
   const payloadObj =
     (this.payload as unknown as { toObject?: () => Record<string, unknown> })?.toObject?.() ?? (this.payload as unknown as Record<string, unknown>) ?? {};
+
+  const invalidField = invalidPayloadField(this.kind, payloadObj);
+  if (invalidField != null) {
+    this.invalidate(`payload.${invalidField}`, `payload.${invalidField} is not valid for kind "${this.kind}"`);
+  }
 
   for (const field of ALL_PAYLOAD_FIELDS) {
     const hasValue = payloadObj[field] !== undefined && payloadObj[field] !== null;

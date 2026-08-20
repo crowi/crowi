@@ -14588,6 +14588,34 @@ paths:
                       - message
                 required:
                   - error
+        '403':
+          description: The access token does not grant pages:read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INSUFFICIENT_SCOPE
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          requiredScope:
+                            type: string
+                        required:
+                          - requiredScope
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
         '404':
           description: Page not found (also covers grant-denied)
           content:
@@ -14632,6 +14660,7 @@ paths:
                     required:
                       - code
                       - message
+                      - pageId
                 required:
                   - error
   /pages:
