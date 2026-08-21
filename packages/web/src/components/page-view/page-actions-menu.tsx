@@ -3,11 +3,12 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, FileDown, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { notify } from '@/lib/notify';
+import { toMarkdownFileName } from '@/lib/page-download-filename';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
 import { useForceCloseable } from '@/lib/use-force-closeable';
@@ -87,6 +88,38 @@ export function PageActionsMenu({
       .catch(() => notify.error(m['page.markdown_copy_failed']()));
   };
 
+  const handleDownloadMarkdown = () => {
+    const body = page.revision?.body ?? '';
+    // Same no-op-on-empty-body rule as the copy action — an empty file is
+    // useless to the recipient and would only give the false impression
+    // that something was downloaded.
+    if (body.length === 0) return;
+    let url: string | null = null;
+    try {
+      const fileName = toMarkdownFileName(page.path, page._id);
+      const blob = new Blob([body], { type: 'text/markdown;charset=utf-8' });
+      url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify.error(m['page.markdown_download_failed']());
+      // The revoke call above may be what threw, or may never have been
+      // reached — either way the object URL must not leak. Retry it here,
+      // swallowing a second failure: cleanup must never escape past the
+      // notification already shown.
+      if (url !== null) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // already notified above
+        }
+      }
+    }
+  };
+
   return (
     <>
       <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
@@ -119,6 +152,10 @@ export function PageActionsMenu({
           <DropdownMenuItem onSelect={handleCopyMarkdown}>
             <ClipboardCopy className="h-4 w-4 mr-2" />
             {m['page.action_copy_markdown']()}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleDownloadMarkdown}>
+            <FileDown className="h-4 w-4 mr-2" />
+            {m['page.action_download_markdown']()}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => router.push(`/_history?path=${encodeURIComponent(page.path)}`)}>

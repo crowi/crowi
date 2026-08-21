@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-storage-gcs",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Native Google Cloud Storage driver for Crowi 2.0. Uses Application Default Credentials by default, with an encrypted inline service-account key as fallback.",
   "repository": {
     "type": "git",

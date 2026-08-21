@@ -40,3 +40,15 @@ pre-push:
     - name: openapi-fresh
       glob: "packages/api-contract/**"
       run: pnpm check:openapi
+    # Second net for .claude/scripts + .claude/skills/*/tests: ci.yml skips a
+    # .claude/*.md-only push (see its paths-ignore comment), so claude-md-drift.
+    # test.mjs would otherwise never run on such a push. This job is not
+    # path-scoped to markdown alone (the pre-push files list mixes code and
+    # docs), so it runs whenever anything under .claude/ changed.
+    #
+    # This does NOT cover a root CLAUDE.md heading rename by itself — CLAUDE.md
+    # lives outside .claude/, so this glob never matches it. That case is
+    # covered separately by ci.yml's '!CLAUDE.md' paths-ignore negation.
+    - name: claude-scripts
+      glob: ".claude/**"
+      run: pnpm test:scripts && pnpm test:scripts:sh

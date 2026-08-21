@@ -372,17 +372,22 @@ skill がやること (= Workflow の外側、人間ゲートを持つ層):
 ```
 2.1. config.json を読む: maxReviewAttempts (既定 3) / runSimplify / codexReviewer (既定 false)
 2.2. spec contract を判定:
-     - spec_contract: 2 → `bash .claude/skills/_shared/validate-implementation-spec.sh <spec>`
+     - frontmatter が `kind: umbrella` → spec_contract の値に関わらず needsPlanner=true(v2 fast path には入れない — pipeline はこの分岐が機能しなかった場合の最終防波堤として umbrella を拒否するが、通常はここで legacy 相当に倒すので拒否には到達しない)。planner が `phases:` の sub-spec 群から実装順序 / `longLived` / `extraGates` を task state へ seed する。
+     - spec_contract: 2(umbrella を除く)→ `bash .claude/skills/_shared/validate-implementation-spec.sh <spec>`
        を実行。green なら needsPlanner=false。red なら stale/欠落を提示して中止
      - marker 無し / v1 → legacy と明記し needsPlanner=true(scope に関係なく)
 2.3. multi-phase 判定: spec に `### Phase N:` が 2 本以上あれば phases[] を抽出。
      各 phase の autoContinue を末尾マーカーから判定 ((即時/非衝突)→true、
      (要調整)/(blocked)→false、無印→true)。task.json に phases[] を書く。
      single-phase なら phases=[{id:'main', title:<name>, autoContinue:true}]。
-     `--phase=N` 指定時は phases を N 以降に絞る。
+     `--phase=N` 指定時は phases を N 以降に絞り、args に resume: true を付ける。
+     **phases[] の各要素は autoContinue を明示的な boolean で必ず持たせる** —
+     pipeline は欠落を fail-fast で拒否する (欠落を「gate なし」に読ませない)。
 2.4. Workflow を起動 (同じ turn 内で必ず発火):
      Workflow({ scriptPath: '.claude/skills/crowi-feature/pipeline.workflow.js',
-                args: { id, needsPlanner, runSimplify, maxReviewAttempts, codexReviewer, phases } })
+                args: { id, needsPlanner, runSimplify, maxReviewAttempts, codexReviewer, phases,
+                        resume } })  // resume は --phase 再開時のみ true
+     pipeline は args を構造検証し (malformed JSON / 型違い / autoContinue 欠落は agent を 1 つも起動せず FAILED)、needsPlanner=false のときは validate-implementation-spec.sh を **pipeline 自身が再実行**して呼び出し元の申告を機械検証する (resume 時は --structure-only — 先行 phase が参照 path を計画どおり変更済みのため staleness だけ免除)。umbrella spec が万一この経路に来たら fail-fast する (2.2 で needsPlanner=true に倒すのが正規の分岐なので、通常は到達しない)。run 終了時に .reviews/codex-runs/<id>/metrics.jsonl へ実測メトリクスを 1 行追記する (best-effort — 記録失敗は run 結果に影響しない)。
 2.5. Workflow の返り値 status で分岐 (これだけが skill の判断材料):
      - DONE      → 完了報告 (step 4)
      - GATED     → 「Phase <gatedAt> は要調整。続けるなら `/feature {id} --phase=<gatedAt>`」

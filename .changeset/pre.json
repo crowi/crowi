@@ -30,7 +30,8 @@
     "@crowi/plugin-slack": "0.1.0-dev",
     "@crowi/plugin-renderer-mermaid": "0.1.0-alpha.1",
     "@crowi/svg-sanitize": "0.1.0-alpha.1",
-    "@crowi/plugin-google": "0.1.0-alpha.0"
+    "@crowi/plugin-google": "0.1.0-alpha.0",
+    "@crowi/plugin-storage-gcs": "0.1.0-alpha.0"
   },
   "changesets": [
     "admin-boundary-authcontext",
@@ -104,6 +105,7 @@
     "feature-notification-realtime-invalidation",
     "feature-page-update-notification",
     "feature-plugin-config-readiness",
+    "federated-account-link-flow",
     "federated-admin-identity-management",
     "federated-email-ownership",
     "files-url-to-attachments",
@@ -170,6 +172,7 @@
     "page-link-space-paths-web",
     "page-list-exclude-portal-self",
     "page-list-sort",
+    "page-markdown-download",
     "page-path-plus-space",
     "page-sidebar",
     "page-toc-responsive",
@@ -248,6 +251,7 @@
     "smtp-nodemailer-9-security",
     "spotty-jars-shave",
     "spotty-moons-brake",
+    "storage-gcs",
     "suspended-user-profile-visible",
     "svg-sanitize-private-bundled",
     "svg-sanitize-via-plugin-api",

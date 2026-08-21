@@ -47,6 +47,9 @@ const DECISIONS = JSON.stringify(A.decisions || {}, null, 2)
 const MAX = A.maxReviewAttempts ?? 2
 const REVIEW_ONLY = A.reviewOnly === true
 const CRITICAL = A.critical === true
+// 縮退した round (codex 判定をほぼ経ていない) を明示的に受け入れる escape hatch。
+// 既定 false: 縮退 round は OK/ISSUES ではなく DEGRADED を返す。
+const ACCEPT_FALLBACK = A.acceptFallback === true
 const isRfc = OUTPUT === 'rfc'
 const SPEC_CONTRACT = '.claude/skills/_shared/spec-contract.md'
 const SPEC_VALIDATOR = '.claude/skills/_shared/validate-implementation-spec.sh'
@@ -77,6 +80,10 @@ if (!Number.isInteger(MAX) || MAX < 1) {
 // ----------------------------------------------------------------------------
 const FALLBACKS = []
 const REBUTTED = []
+// round を跨いで蓄積する (最終 round のものだけ返すと、中間 round が出した
+// preexisting / findings が黙って消える)。返却時に dedup 済み。
+const PREEXISTING = []
+const ALL_FINDINGS = []
 const sanitize = (s) => String(s).replace(/[^a-zA-Z0-9_-]/g, '_')
 const RUN_SCOPE = sanitize(SLUG || A.docPath || 'doc')
 const envelope = (dataSchema) => ({
@@ -128,7 +135,10 @@ async function codexStage({ label, phase: ph, prompt, schema, sandbox, docPathCh
   const why = glue ? `${glue.status}${glue.note ? ` (${glue.note})` : ''}` : 'glue agent failed'
   log(`[codex:${label}] ${why} — falling back to Claude`)
   FALLBACKS.push({ stage: label, reason: why })
-  return await fallback()
+  const fb = await fallback()
+  // fallback 経由で得た結果に印を付ける — round の縮退判定 (何本の lens が独立した
+  // codex 判定を経たか) はこの印を数える。schema 検証は済んでいるので追加してよい。
+  return fb && typeof fb === 'object' ? { ...fb, viaFallback: true } : fb
 }
 
 const REVIEW = {
@@ -297,6 +307,60 @@ function lensPrompt(l, doc) {
   )
 }
 
+// ---- structured findings + degraded-round accounting ----------------------
+// mustFix: 指摘がこの doc の修正必須になる lens。carryForward: 「何が足りないか」を
+// 挙げる系の lens (coverage / completeness) — その指摘は doc を落とすのではなく
+// 実装・次の設計へ持ち越す粒度。preexisting は verdict に関係なく全 lens から拾う。
+// dedup キーは lens+category+text (同一指摘が複数 round で再出しても 1 件)。
+const MUST_FIX_LENSES = new Set(isRfc ? ['approach', 'quality'] : ['root-cause', 'red-team', 'implementability'])
+function findingsOf(reviews) {
+  const out = []
+  const seen = new Set()
+  const add = (lens, category, text) => {
+    const key = `${lens}\u0000${category}\u0000${text}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ lens, category, text })
+  }
+  for (const r of reviews) {
+    const lens = r.lens || 'unknown'
+    // claude-<key> is the same review as <key> run by a different model (see
+    // claudeCriticalLens above) — classify it by the underlying lens, not by
+    // the claude- prefix, or a lens like claude-completeness (rfc) would be
+    // forced mustFix while its codex-run sibling completeness stays carryForward.
+    const mustFix = MUST_FIX_LENSES.has(lens.replace(/^claude-/, ''))
+    if (r.verdict === 'ISSUES') for (const b of r.blocking || []) add(lens, mustFix ? 'mustFix' : 'carryForward', b)
+    for (const pre of r.preexisting || []) add(lens, 'preexisting', pre)
+  }
+  return out
+}
+const dedupe = (arr) => [...new Set(arr)]
+function collectRound(reviews) {
+  for (const f of findingsOf(reviews)) {
+    if (!ALL_FINDINGS.some((g) => g.lens === f.lens && g.category === f.category && g.text === f.text)) ALL_FINDINGS.push(f)
+  }
+  for (const r of reviews) for (const pre of r.preexisting || []) if (!PREEXISTING.includes(pre)) PREEXISTING.push(pre)
+}
+// round の縮退度 = 独立した codex 判定を経なかった lens の数
+// (死んで消えた lens + Claude fallback で走った lens)。fail-open のままだと
+// codex が全滅した round でも blocking が空なら OK が返る — 縮退が閾値以上の
+// round の verdict は信用せず DEGRADED を返す (ACCEPT_FALLBACK で明示上書き可)。
+const DEGRADED_THRESHOLD = CRITICAL ? 3 : 2
+function roundStats(reviews, attempt) {
+  const planned = lenses.length + (CRITICAL ? 1 : 0)
+  const viaFallback = reviews.filter((r) => r.viaFallback === true).length
+  const dead = Math.max(0, planned - reviews.length)
+  return {
+    attempt,
+    lensesPlanned: planned,
+    lensesReturned: reviews.length,
+    viaFallback,
+    deadLenses: dead,
+    nonIndependent: viaFallback + dead,
+  }
+}
+const isDegradedRound = (stats) => stats.nonIndependent >= DEGRADED_THRESHOLD
+
 async function runReview(doc, attempt) {
   phase('Review')
   // Escalation (crowi-design decision 2026-07-13): reviewers run on the
@@ -343,17 +407,26 @@ if (REVIEW_ONLY) {
   const reviews = await runReview(doc, 1)
   if (reviews.length === 0)
     return { status: 'FAILED', reason: 'all reviewers failed', docPath: doc, slug: SLUG, codexFallbacks: FALLBACKS }
+  collectRound(reviews)
+  const stats = roundStats(reviews, 1)
   const blocking = reviews.flatMap((r) => (r.verdict === 'ISSUES' ? r.blocking : []))
-  const preexisting = reviews.flatMap((r) => r.preexisting || [])
-  return {
-    status: blocking.length === 0 ? 'OK' : 'ISSUES',
+  const common = {
     docPath: doc,
     outputType: OUTPUT,
     blocking,
-    preexisting,
+    preexisting: dedupe(PREEXISTING),
+    findings: ALL_FINDINGS,
+    reviewStats: stats,
     reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
     codexFallbacks: FALLBACKS,
   }
+  // 縮退 round の verdict は信用しない: OK でも ISSUES でも DEGRADED を返し、
+  // 呼び出し側 (crowi-spec-review) が「このまま採用するか、codex 復旧後に
+  // 再実行するか、acceptFallback: true で明示的に受け入れるか」を決める。
+  if (isDegradedRound(stats) && !ACCEPT_FALLBACK) {
+    return { status: 'DEGRADED', reason: 'codex_degraded_this_round', ...common }
+  }
+  return { status: blocking.length === 0 ? 'OK' : 'ISSUES', ...common }
 }
 
 // ---- write -> review -> revise loop ----
@@ -420,6 +493,25 @@ for (let attempt = 1; attempt <= MAX; attempt++) {
   if (reviews.length === 0)
     return { status: 'FAILED', reason: 'all reviewers failed', docPath: DOC, slug: SLUG, codexFallbacks: FALLBACKS }
   lastReviews = reviews
+  collectRound(reviews)
+  const stats = roundStats(reviews, attempt)
+  // 縮退 round は APPROVED にも NEEDS_WORK にも進めない — この round の verdict
+  // 自体が独立した codex 判定をほぼ経ていないため。呼び出し側が codex 復旧後に
+  // 再実行するか、acceptFallback: true で明示的に受け入れる。
+  if (isDegradedRound(stats) && !ACCEPT_FALLBACK) {
+    return {
+      status: 'DEGRADED',
+      reason: 'codex_degraded_this_round',
+      docPath: DOC,
+      rfcNumber: draft.rfcNumber,
+      outputType: OUTPUT,
+      reviewStats: stats,
+      findings: ALL_FINDINGS,
+      preexisting: dedupe(PREEXISTING),
+      reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
+      codexFallbacks: FALLBACKS,
+    }
+  }
   const blocking = reviews.flatMap((r) => (r.verdict === 'ISSUES' ? r.blocking : []))
   log(`[${SLUG}] review ${attempt}/${MAX}: ${blocking.length} blocking issue(s) across ${reviews.length} lenses`)
   if (blocking.length === 0) {
@@ -435,7 +527,8 @@ for (let attempt = 1; attempt <= MAX; attempt++) {
       residualOpenQuestions: draft.residualOpenQuestions || [],
       rebutted: REBUTTED,
       blocking,
-      preexisting: reviews.flatMap((r) => r.preexisting || []),
+      preexisting: dedupe(PREEXISTING),
+      findings: ALL_FINDINGS,
       reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
       codexFallbacks: FALLBACKS,
     }
@@ -513,6 +606,8 @@ if (!isRfc) {
       residualOpenQuestions: draft.residualOpenQuestions || [],
       rebutted: REBUTTED,
       blocking: [reason],
+      preexisting: dedupe(PREEXISTING),
+      findings: ALL_FINDINGS,
       reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
       codexFallbacks: FALLBACKS,
     }
@@ -525,7 +620,8 @@ return {
   rfcNumber: draft.rfcNumber,
   outputType: OUTPUT,
   verdict,
-  preexisting: lastReviews.flatMap((r) => r.preexisting || []),
+  preexisting: dedupe(PREEXISTING),
+  findings: ALL_FINDINGS,
   residualOpenQuestions: draft.residualOpenQuestions || [],
   rebutted: REBUTTED,
   reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),

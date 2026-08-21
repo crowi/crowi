@@ -1,20 +1,21 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import faker from 'faker';
-import { createAuthProviderLinkingTerminal, createLinkGrantStore, unlinkFederatedIdentity } from 'src/auth/auth-provider-linking';
+import { createAuthProviderLinkingTerminal, resolveAuthProviderLinkReplay, unlinkFederatedIdentity } from 'src/auth/auth-provider-linking';
 import type { UserDocument } from 'src/models/user';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 /**
- * RFC-0014 phase 3 — DB-integration tests for linking a provider account to
- * an already signed-in user (AC-2, AC-4, AC-5, AC-6).
+ * DB-integration tests for linking a
+ * provider account to an already-signed-in user, unlinking it again, and
+ * re-deriving the outcome an already-consumed completion-code replay must
+ * report.
  *
- * The route-level halves (AC-1 protected start, AC-3 callback branch, AC-7
- * handoff identity fence) live in
- * `hono/handlers/federated-auth.test.ts` — these cover the primitives
- * underneath them.
+ * The route-level halves (link-start / callback / confirmation GET / final
+ * POST) live in `hono/handlers/federated-auth.test.ts` — these cover the
+ * DB-level primitives underneath them.
  */
-describe('auth provider linking (RFC-0014 phase 3)', () => {
+describe('auth provider linking (3-stage link flow)', () => {
   const UserIdentity = () => crowi.model('UserIdentity');
   const Config = () => crowi.model('Config');
 
@@ -25,53 +26,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
     return user;
   };
 
-  describe('link grant binding (AC-2)', () => {
-    it('round-trips a grant and consumes it exactly once — a replayed id is rejected like an unknown one', async () => {
-      const store = createLinkGrantStore();
-      const grant = { userId: 'user-1', provider: 'google', authVersion: 3, handoffChallenge: 'jkt-victim' };
-
-      const grantId = await store.issue(grant);
-      expect(await store.consume(grantId)).toEqual(grant);
-      // Single-use: an attacker who intercepted the `/start` URL cannot
-      // replay its grant behind the legitimate navigation.
-      expect(await store.consume(grantId)).toBeNull();
-    });
-
-    it('returns null for an unknown grant id — indistinguishable from a consumed or expired one', async () => {
-      const store = createLinkGrantStore();
-      expect(await store.consume('never-issued')).toBeNull();
-    });
-
-    it('expires a grant that outlived its 30s window', async () => {
-      jest.useFakeTimers();
-      try {
-        const store = createLinkGrantStore();
-        const grantId = await store.issue({ userId: 'user-1', provider: 'google', authVersion: 0, handoffChallenge: 'jkt' });
-        jest.advanceTimersByTime(30_001);
-        expect(await store.consume(grantId)).toBeNull();
-      } finally {
-        jest.useRealTimers();
-      }
-    });
-
-    it("AC-2: the consumed grant carries the VICTIM's subject/authVersion/sender key — the values `/start` compares against, so an attacker's own JWT and sender key cannot satisfy it", async () => {
-      const store = createLinkGrantStore();
-      const victim = { userId: 'victim-id', provider: 'google', authVersion: 7, handoffChallenge: 'jkt-victim-browser' };
-      const grantId = await store.issue(victim);
-
-      const consumed = await store.consume(grantId);
-      // Every one of these is a value the attacker would have to match: a
-      // different signed-in user (`userId`), a session invalidated since
-      // (`authVersion`), or — the decisive one for a stolen link URL — a
-      // different browser's sender key (`handoffChallenge`).
-      expect(consumed?.userId).toBe('victim-id');
-      expect(consumed?.authVersion).toBe(7);
-      expect(consumed?.handoffChallenge).toBe('jkt-victim-browser');
-      expect(consumed?.provider).toBe('google');
-    });
-  });
-
-  describe('linking terminal (AC-4)', () => {
+  describe('linking terminal', () => {
     it('links a fresh identity to the target user', async () => {
       const user = await seedUser();
       const terminal = createAuthProviderLinkingTerminal(crowi);
@@ -80,7 +35,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(await UserIdentity().countDocuments({ provider: 'link-p1', providerUserId: 'sub-fresh' })).toBe(1);
     });
 
-    it('AC-4: re-linking the SAME account to the SAME user is a success no-op, not an error — and creates no second row', async () => {
+    it('re-linking the SAME account to the SAME user is a success no-op, not an error — and creates no second row', async () => {
       const user = await seedUser();
       const terminal = createAuthProviderLinkingTerminal(crowi);
 
@@ -91,7 +46,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(await UserIdentity().countDocuments({ provider: 'link-p2', providerUserId: 'sub-same' })).toBe(1);
     });
 
-    it('AC-4: an account already linked to ANOTHER user is refused without moving it, and without naming the owner', async () => {
+    it('an account already linked to ANOTHER user is refused without moving it, and without naming the owner', async () => {
       const owner = await seedUser();
       const attacker = await seedUser();
       const terminal = createAuthProviderLinkingTerminal(crowi);
@@ -121,9 +76,128 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       const row = await UserIdentity().findOne({ userId: user._id, provider: 'link-p4' });
       expect(row?.providerUserId).toBe('sub-first');
     });
+
+    it('design decision 16: a same-subject row landing BETWEEN the exact-subject read and the slot read resolves to already_linked_here, not provider_slot_taken', async () => {
+      const user = await seedUser();
+      const provider = 'link-interleave';
+      const providerUserId = 'sub-interleave';
+      const terminal = createAuthProviderLinkingTerminal(crowi);
+      const UserIdentityModel = UserIdentity();
+
+      // Simulate: our own insert collided (as a concurrent writer already
+      // won), the exact-subject read genuinely still sees nothing (it ran
+      // BEFORE the interleaving insert lands), and then — as a side effect
+      // of that first read — the SAME subject's row lands for real before
+      // the terminal's own slot read runs.
+      const createSpy = jest.spyOn(UserIdentityModel, 'create').mockImplementationOnce(async () => {
+        throw Object.assign(new Error('E11000 duplicate key'), { code: 11000 });
+      });
+      const originalFindOne = UserIdentityModel.findOne.bind(UserIdentityModel);
+      let findOneCalls = 0;
+      const findOneSpy = jest.spyOn(UserIdentityModel, 'findOne').mockImplementation(async (...args: Parameters<typeof originalFindOne>) => {
+        findOneCalls += 1;
+        if (findOneCalls === 1) {
+          // The exact-subject read (query 1: {provider, providerUserId}).
+          const result = await originalFindOne(...args);
+          // The interleaving insert lands strictly AFTER this read.
+          await UserIdentityModel.collection.insertOne({ userId: user._id, provider, providerUserId });
+          return result;
+        }
+        return originalFindOne(...args);
+      });
+
+      try {
+        const outcome = await terminal.link({ userId: user._id.toString(), provider, providerUserId });
+        expect(outcome).toEqual({ kind: 'already_linked_here' });
+        expect(await UserIdentity().countDocuments({ provider, providerUserId })).toBe(1);
+      } finally {
+        createSpy.mockRestore();
+        findOneSpy.mockRestore();
+      }
+    });
   });
 
-  describe('unlink guard (AC-5)', () => {
+  describe('resolveAuthProviderLinkReplay', () => {
+    it('exact subject, same owner as the record -> linked', async () => {
+      const user = await seedUser();
+      await UserIdentity().create({ userId: user._id, provider: 'replay-p1', providerUserId: 'sub-1' });
+
+      expect(await resolveAuthProviderLinkReplay(crowi, { userId: user._id.toString(), provider: 'replay-p1', providerUserId: 'sub-1' })).toEqual({
+        kind: 'linked',
+      });
+    });
+
+    it('exact subject, DIFFERENT owner than the record -> owned_by_other_user', async () => {
+      const owner = await seedUser();
+      const other = await seedUser();
+      await UserIdentity().create({ userId: owner._id, provider: 'replay-p2', providerUserId: 'sub-2' });
+
+      expect(await resolveAuthProviderLinkReplay(crowi, { userId: other._id.toString(), provider: 'replay-p2', providerUserId: 'sub-2' })).toEqual({
+        kind: 'owned_by_other_user',
+      });
+    });
+
+    it('exact subject absent, provider slot present with the SAME providerUserId (the original insert landed between the two reads) -> linked', async () => {
+      const user = await seedUser();
+      const provider = 'replay-p3';
+      const providerUserId = 'sub-3';
+      const UserIdentityModel = UserIdentity();
+
+      // Force the SAME interleave design decision 16/17 exist for: the
+      // exact-subject read genuinely finds nothing (runs BEFORE the
+      // insert lands), and the row lands for real strictly between that
+      // read and the provider-slot read.
+      const originalFindOne = UserIdentityModel.findOne.bind(UserIdentityModel);
+      let findOneCalls = 0;
+      const findOneSpy = jest.spyOn(UserIdentityModel, 'findOne').mockImplementation(async (...args: Parameters<typeof originalFindOne>) => {
+        findOneCalls += 1;
+        if (findOneCalls === 1) {
+          const result = await originalFindOne(...args);
+          await UserIdentityModel.collection.insertOne({ userId: user._id, provider, providerUserId });
+          return result;
+        }
+        return originalFindOne(...args);
+      });
+
+      try {
+        expect(await resolveAuthProviderLinkReplay(crowi, { userId: user._id.toString(), provider, providerUserId })).toEqual({
+          kind: 'linked',
+        });
+      } finally {
+        findOneSpy.mockRestore();
+      }
+    });
+
+    it('exact subject absent, provider slot present with a DIFFERENT providerUserId -> provider_slot_taken', async () => {
+      const user = await seedUser();
+      await UserIdentity().create({ userId: user._id, provider: 'replay-p4', providerUserId: 'sub-other' });
+
+      expect(await resolveAuthProviderLinkReplay(crowi, { userId: user._id.toString(), provider: 'replay-p4', providerUserId: 'sub-4' })).toEqual({
+        kind: 'provider_slot_taken',
+      });
+    });
+
+    it('no row at all (original insert never landed, or landed and was later removed) -> not_linked', async () => {
+      const user = await seedUser();
+      expect(await resolveAuthProviderLinkReplay(crowi, { userId: user._id.toString(), provider: 'replay-p5', providerUserId: 'sub-5' })).toEqual({
+        kind: 'not_linked',
+      });
+    });
+
+    it('provider slug alone never decides success — a different subject under the same provider slug is a conflict, not linked', async () => {
+      const user = await seedUser();
+      await UserIdentity().create({ userId: user._id, provider: 'replay-p6', providerUserId: 'sub-real' });
+
+      const replay = await resolveAuthProviderLinkReplay(crowi, { userId: user._id.toString(), provider: 'replay-p6', providerUserId: 'sub-impersonated' });
+      expect(replay).toEqual({ kind: 'provider_slot_taken' });
+
+      const terminal = createAuthProviderLinkingTerminal(crowi);
+      const terminalOutcome = await terminal.link({ userId: user._id.toString(), provider: 'replay-p6', providerUserId: 'sub-impersonated' });
+      expect(terminalOutcome).toEqual({ kind: 'provider_slot_taken' });
+    });
+  });
+
+  describe('unlink guard', () => {
     const setDisablePasswordAuth = async (value: boolean) => {
       await Config().updateConfig('crowi', 'auth:disablePasswordAuth', value);
       await crowi.getConfigService().load();
@@ -133,7 +207,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       await setDisablePasswordAuth(false);
     });
 
-    it('AC-5: refuses while password auth is disabled instance-wide, and leaves the identity in place', async () => {
+    it('refuses while password auth is disabled instance-wide, and leaves the identity in place', async () => {
       const user = await seedUser();
       await UserIdentity().create({ userId: user._id, provider: 'unlink-p1', providerUserId: 'sub-1' });
       await setDisablePasswordAuth(true);
@@ -142,7 +216,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(await UserIdentity().countDocuments({ userId: user._id, provider: 'unlink-p1' })).toBe(1);
     });
 
-    it('AC-5: refuses when the user has no password set, and leaves the identity in place', async () => {
+    it('refuses when the user has no password set, and leaves the identity in place', async () => {
       const user = await seedUser();
       await UserIdentity().create({ userId: user._id, provider: 'unlink-p2', providerUserId: 'sub-2' });
       // `Fixture.generate('User')` creates no password — exactly the
@@ -153,7 +227,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(await UserIdentity().countDocuments({ userId: user._id, provider: 'unlink-p2' })).toBe(1);
     });
 
-    it('AC-5: removes the identity once a password exists', async () => {
+    it('removes the identity once a password exists', async () => {
       const user = await seedUser();
       await user.setPassword('Password!1');
       await user.save();
@@ -163,7 +237,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(await UserIdentity().countDocuments({ userId: user._id, provider: 'unlink-p3' })).toBe(0);
     });
 
-    it('AC-5: reports not_linked (never a false success) for a provider this user never connected', async () => {
+    it('reports not_linked (never a false success) for a provider this user never connected', async () => {
       const user = await seedUser();
       await user.setPassword('Password!1');
       await user.save();
@@ -171,7 +245,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(await unlinkFederatedIdentity(crowi, user, 'unlink-never')).toEqual({ kind: 'not_linked' });
     });
 
-    it('AC-5: the guard never counts identities — unlinking the ONLY identity succeeds as long as a password remains', async () => {
+    it('the guard never counts identities — unlinking the ONLY identity succeeds as long as a password remains', async () => {
       const user = await seedUser();
       await user.setPassword('Password!1');
       await user.save();
@@ -188,8 +262,8 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
     });
   });
 
-  describe('link / unlink concurrency (AC-6)', () => {
-    it('AC-6: concurrent link + unlink of the same identity settle on ONE state consistent with the write order, never a duplicate', async () => {
+  describe('link / unlink concurrency', () => {
+    it('concurrent link + unlink of the same identity settle on ONE state consistent with the write order, never a duplicate', async () => {
       const user = await seedUser();
       await user.setPassword('Password!1');
       await user.save();
@@ -211,7 +285,7 @@ describe('auth provider linking (RFC-0014 phase 3)', () => {
       expect(['unlinked', 'not_linked']).toContain(unlinkOutcome.kind);
     });
 
-    it('AC-6: two concurrent links of the same account by DIFFERENT users never both succeed and never transfer ownership', async () => {
+    it('two concurrent links of the same account by DIFFERENT users never both succeed and never transfer ownership', async () => {
       const first = await seedUser();
       const second = await seedUser();
       const terminal = createAuthProviderLinkingTerminal(crowi);

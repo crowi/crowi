@@ -75,6 +75,64 @@ describe('Hono cors middleware', () => {
       expect(res.headers.get('access-control-allow-origin')).toBeNull();
     });
 
+    it('allows a resolved federated-auth web origin distinct from CLIENT_URL/baseUrl (same-site split-origin)', async () => {
+      // AUTH_PUBLIC_WEB_URL=https://wiki.example.com / AUTH_PUBLIC_API_URL=https://api.example.com,
+      // with CLIENT_URL a different value (the harness's own http://localhost:13001) — production-relevant
+      // because `node_env` under jest is 'test', not 'development' (see the rejection test above).
+      const savedUrls = crowi.federatedAuthPublicUrls;
+      crowi.federatedAuthPublicUrls = { apiUrl: 'https://api.example.com', webUrl: 'https://wiki.example.com' };
+      try {
+        const honoApp = buildHonoApp(crowi);
+        const preflight = await honoApp.fetch(
+          new Request(`${BASE_ORIGIN}/app/info`, {
+            method: 'OPTIONS',
+            headers: {
+              Origin: 'https://wiki.example.com',
+              'Access-Control-Request-Method': 'POST',
+              'Access-Control-Request-Headers': 'Authorization,Content-Type',
+            },
+          }),
+        );
+        expect([200, 204]).toContain(preflight.status);
+        expect(preflight.headers.get('access-control-allow-origin')).toBe('https://wiki.example.com');
+        expect(preflight.headers.get('access-control-allow-credentials')).toBe('true');
+        const allowMethods = preflight.headers.get('access-control-allow-methods') ?? '';
+        expect(allowMethods).toContain('POST');
+
+        const actual = await honoApp.fetch(
+          new Request(`${BASE_ORIGIN}/app/info`, {
+            method: 'GET',
+            headers: { Origin: 'https://wiki.example.com' },
+          }),
+        );
+        expect(actual.status).toBe(200);
+        expect(actual.headers.get('access-control-allow-origin')).toBe('https://wiki.example.com');
+        expect(actual.headers.get('access-control-allow-credentials')).toBe('true');
+      } finally {
+        crowi.federatedAuthPublicUrls = savedUrls;
+      }
+    });
+
+    it('still rejects an unrelated third-party origin even with a federated-auth web origin resolved', async () => {
+      const savedUrls = crowi.federatedAuthPublicUrls;
+      crowi.federatedAuthPublicUrls = { apiUrl: 'https://api.example.com', webUrl: 'https://wiki.example.com' };
+      try {
+        const honoApp = buildHonoApp(crowi);
+        const res = await honoApp.fetch(
+          new Request(`${BASE_ORIGIN}/app/info`, {
+            method: 'OPTIONS',
+            headers: {
+              Origin: 'http://evil.example.com',
+              'Access-Control-Request-Method': 'POST',
+            },
+          }),
+        );
+        expect(res.headers.get('access-control-allow-origin')).toBeNull();
+      } finally {
+        crowi.federatedAuthPublicUrls = savedUrls;
+      }
+    });
+
     it('allows any localhost origin when node_env is development', async () => {
       // Build a fresh Hono app under a temporarily-flipped node_env
       // so the dev-mode localhost allow rule fires. Restore right

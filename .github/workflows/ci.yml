@@ -13,10 +13,20 @@ on:
       - 'docs/**'
       - 'apps/crowi-site/**' # validated by its own Cloudflare Pages deploy
       - '.changeset/**'
-      - '.claude/**'
+      # .claude/ の markdown だけ明示的に skip する('.claude/**' は削除済み —
+      # コード (workflow JS・scripts・tests) にはテストがあり、一度も実行され
+      # ない経路を作らないため)。'**/*.md' が .claude/ 配下(先頭がドットの
+      # セグメント)まで届くかは glob 実装依存で確実ではないので、ここで
+      # 明示する。
+      - '.claude/**/*.md'
       - '.github/workflows/docker.yml'
       - '.github/workflows/docker-elasticsearch.yml'
       - '.github/workflows/release.yml'
+      # Negation un-ignores root CLAUDE.md specifically (path filters evaluate
+      # in order, last match wins) — '**/*.md' above would otherwise skip CI
+      # on a CLAUDE.md-only push, including the exact case claude-md-drift.
+      # test.mjs exists to catch (a heading it references gets renamed).
+      - '!CLAUDE.md'
   pull_request:
     branches: [main, dev, dev2-2]
     paths-ignore: *ci-skip
@@ -65,10 +75,12 @@ jobs:
           --health-timeout 5s
           --health-retries 12
 
-      # Shared Redis 8.x, exercised by 7 of the 8 Redis-consumer smoke tests
+      # Shared Redis 8.x, exercised by 8 of the 9 Redis-consumer smoke tests
       # (feature-redis-8-upgrade Phase 2 — everything except Config pub/sub,
       # which needs a single-subscriber instance and uses `crowi-test-redis`
-      # below instead). `services:` can't reference `env.REDIS_IMAGE` (see
+      # below instead; the account-link `link-completion` smoke test also
+      # uses this shared instance). `services:` can't
+      # reference `env.REDIS_IMAGE` (see
       # the workflow-level `env:` comment above), so the tag is duplicated
       # here literally. Anchored so `flake-report` below can alias it — that
       # job spawns @crowi/api's jest directly and needs the identical Redis.
@@ -217,6 +229,11 @@ jobs:
         # package but are plain zero-dep node:test scripts like this dir's,
         # not part of that package's own vitest/jest suite.
         run: pnpm test:scripts
+
+      - name: Run .claude/ shell-script smoke tests
+        # orchestrate-watch.sh / task-state.sh / spec-contract validator の
+        # bash スモークテスト。node --test 系(test:scripts)ではカバーされない。
+        run: pnpm test:scripts:sh
 
       - name: Build project
         run: pnpm build

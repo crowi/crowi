@@ -42,34 +42,6 @@ export async function buildProviderStartUrl(provider: string, continuePath: stri
   return url.toString();
 }
 
-/**
- * The link-mode variant: same `/start`, but the api additionally demands
- * a single-use grant minted by the signed-in session and pinned to this
- * browser's key. Minting has to happen AFTER the key exists (the grant
- * is bound to its thumbprint) and BEFORE the navigation, so the two
- * steps cannot be collapsed into a plain href.
- */
-export async function buildProviderLinkStartUrl(provider: string, continuePath: string): Promise<string> {
-  const apiUrl = resolveApiOrigin();
-  const senderKey = await createAndStoreSenderKey();
-
-  const grantResponse = await apiClient.auth.providers[':name']['link-grants'].$post({
-    param: { name: provider },
-    json: { handoffChallenge: await senderKey.thumbprint() },
-  });
-  if (grantResponse.status !== 200) throw new Error('link grant request failed');
-  const { linkGrant } = await grantResponse.json();
-
-  const signature = await senderKey.sign(buildStartCanonicalMessage(apiUrl, provider, continuePath, senderKey.publicJwkB64));
-  const url = new URL(`${apiUrl}/api/auth/providers/${encodeURIComponent(provider)}/start`);
-  url.searchParams.set('continue', continuePath);
-  url.searchParams.set('handoff_jwk', senderKey.publicJwkB64);
-  url.searchParams.set('handoff_proof', signature);
-  url.searchParams.set('link', '1');
-  url.searchParams.set('link_grant', linkGrant);
-  return url.toString();
-}
-
 export type CompleteAuthHandoffResult = { ok: true; username: string } | { ok: false; message: string };
 
 /**

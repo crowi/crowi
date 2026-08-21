@@ -94,6 +94,10 @@
           "REGISTRATION_CLOSED",
           "FEDERATED_HANDOFF_INVALID",
           "FEDERATED_HANDOFF_CONSUMED",
+          "FEDERATED_IDENTITY_IN_USE",
+          "FEDERATED_LINK_AUTH_STATE_CHANGED",
+          "FEDERATED_LINK_NOT_LINKED",
+          "LINK_COMPLETION_CONSUMED",
           "ENCRYPTION_NOT_CONFIGURED",
           "MAIL_FROM_NOT_CONFIGURED",
           "MAIL_TEST_FAILED",
@@ -9142,7 +9146,7 @@
         "tags": [
           "federatedAuth"
         ],
-        "summary": "Top-level navigation that redirects the browser to the named provider",
+        "summary": "Top-level navigation that redirects the browser to the named provider (public sign-in ONLY)",
         "parameters": [
           {
             "schema": {
@@ -9179,26 +9183,6 @@
             "required": true,
             "name": "handoff_proof",
             "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "1"
-              ]
-            },
-            "required": false,
-            "name": "link",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": false,
-            "name": "link_grant",
-            "in": "query"
           }
         ],
         "responses": {
@@ -9206,69 +9190,7 @@
             "description": "Redirect to the provider authorization endpoint"
           },
           "400": {
-            "description": "Malformed continue / sender proof, or an invalid/expired/mismatched link grant",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "$ref": "#/components/schemas/ErrorCode"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "link=1 without a web-session JWT — never downgraded to the public sign-in start",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "$ref": "#/components/schemas/ErrorCode"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "link=1 with a non-web credential (PAT / OAuth access token)",
+            "description": "Malformed continue / sender proof, OR a raw `link` query key is present (any value) — the retired link-via-GET flow is gone entirely; a raw `link` key is always rejected rather than silently downgraded to public sign-in.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9410,7 +9332,7 @@
         ],
         "responses": {
           "302": {
-            "description": "Redirect to the trusted web login/complete page on success, or back to the trusted web /login on failure"
+            "description": "Ordinary sign-in: redirect to the trusted web login/complete page on success, or back to the trusted web /login on failure. Link flow (query `state` in the reserved crowilnk_ namespace): success redirects to `/me?provider=<name>&link_completion=<code>` (provider + completion code ONLY); failure redirects to `/me?provider=<name>&link=link_failed` (provider + the generic marker ONLY — never a completion code, never accountLabel, never the underlying reason)."
           },
           "404": {
             "description": "Unknown or unconfigured provider (also used when trusted origins cannot be resolved)",
@@ -9820,12 +9742,12 @@
         }
       }
     },
-    "/auth/providers/{name}/link-grants": {
+    "/auth/providers/{name}/link-start": {
       "post": {
         "tags": [
           "federatedAuth"
         ],
-        "summary": "Mint a short-lived, opaque grant that authorizes ONE link start for the current web session",
+        "summary": "Mint an IdP authorization URL + flow-specific state cookie for the current web session (stage 1 of 3)",
         "parameters": [
           {
             "schema": {
@@ -9836,45 +9758,303 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "handoffChallenge": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "handoffChallenge"
-                ]
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
-            "description": "Opaque single-use grant id",
+            "description": "Authorization URL to navigate the browser to. Sets a flow-specific, 300s state cookie.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "linkGrant": {
-                      "type": "string"
+                    "authorizationUrl": {
+                      "type": "string",
+                      "format": "uri"
                     }
                   },
                   "required": [
-                    "linkGrant"
+                    "authorizationUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The signed link-state cookie value would exceed its per-cookie byte limit, or the aggregate Cookie-header admission budget cannot be satisfied even after pruning — no Set-Cookie or authorizationUrl is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "$ref": "#/components/schemas/ErrorCode"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
                   ]
                 }
               }
             }
           },
           "401": {
-            "description": "Authentication required",
+            "description": "Authentication required (credential missing/invalid — resolved by middleware before this route's own validation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Non-web credential (PAT / OAuth access token) — linking is a session-level account change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "$ref": "#/components/schemas/ErrorCode"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, unconfigured, or credential-kind provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "$ref": "#/components/schemas/ErrorCode"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (e.g. a declared multi-instance topology with no reachable Redis)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/providers/{name}/link-completions/{code}": {
+      "get": {
+        "tags": [
+          "federatedAuth"
+        ],
+        "summary": "Read a pending link completion's confirmation details (stage 3a — non-destructive)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{43}$"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending, unconsumed completion bound to the caller — provider label fallback + optional display-only accountLabel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "accountLabel": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authenticated but `{code}` fails the 43-character base64url shape (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "fieldErrors": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "formErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "fieldErrors",
+                            "formErrors"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required — resolved by middleware before this route's own `{code}` shape validation, so an unauthenticated + malformed code is still 401, never 400",
             "content": {
               "application/json": {
                 "schema": {
@@ -9944,7 +10124,7 @@
             }
           },
           "404": {
-            "description": "Unknown, unconfigured, or credential-kind provider",
+            "description": "Never-issued, expired, retention-expired, or bound to a different user/provider/authVersion — all collapse to the same generic NOT_FOUND (no result-unknown code exists)",
             "content": {
               "application/json": {
                 "schema": {
@@ -9960,6 +10140,316 @@
                           "type": "string"
                         },
                         "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller's own completion was already consumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "LINK_COMPLETION_CONSUMED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "federatedAuth"
+        ],
+        "summary": "Atomically consume a link completion code and insert the identity (stage 3b — terminal)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{43}$"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Linked (fresh winner OR an already-consumed replay that resolves to the same owner) — the same body either way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "linked"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authenticated but `{code}` fails the 43-character base64url shape (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "fieldErrors": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "formErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "fieldErrors",
+                            "formErrors"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required — resolved by middleware before this route's own `{code}` shape validation, so an unauthenticated + malformed code is still 401, never 400",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Non-web credential (PAT / OAuth access token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "$ref": "#/components/schemas/ErrorCode"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Never-issued, expired, retention-expired, or bound to a different user/provider — all collapse to the same generic NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "$ref": "#/components/schemas/ErrorCode"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "FEDERATED_IDENTITY_IN_USE (provider account owned by someone else, or this user already has a different account of this provider), FEDERATED_LINK_AUTH_STATE_CHANGED (fresh User re-read found the session inactive or authVersion changed since link-start), or FEDERATED_LINK_NOT_LINKED (an already-consumed replay whose original insert has not landed) — no other conflict code exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FEDERATED_IDENTITY_IN_USE",
+                            "FEDERATED_LINK_AUTH_STATE_CHANGED",
+                            "FEDERATED_LINK_NOT_LINKED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
                       },
                       "required": [
                         "code",

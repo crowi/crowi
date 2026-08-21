@@ -19,6 +19,7 @@ import { publishDraftPage } from 'src/service/page-history/commands/publish-draf
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { createPresenceCollabDeps } from 'src/service/presence';
 import { getEditorCapCounter } from 'src/util/collab-cap';
+import { isMultiInstanceDeclared } from 'src/util/env-schema';
 import { createWsTokenUtil, isWsTokenSecretFromEnv } from 'src/util/ws-token';
 import { attachWsNamespace } from 'src/ws/attach-namespace';
 import type { WebSocket as WsWebSocket } from 'ws';
@@ -96,30 +97,11 @@ export interface AttachedCollab {
  * NOT the mere presence of `REDIS_URL` (E1): Redis is configured in plenty
  * of single-replica deployments (sessions / Socket.IO), so failing on
  * `REDIS_URL` alone over-triggers. Any truthy value (`1`, `true`, a replica
- * count > 1) declares multi-instance.
+ * count > 1) declares multi-instance. Truth table lives in
+ * `src/util/env-schema.ts#isMultiInstanceDeclared` — also consumed by the
+ * federated-link completion store's topology selection.
  */
 const MULTI_INSTANCE_ENV = 'CROWI_MULTI_INSTANCE';
-
-/**
- * Whether the operator has declared a multi-instance deployment.
- *
- * Convention (must match `.env.example` + the ja/en docs): a SET flag
- * enables multi-instance. Truthy for `1` / `true` / any integer ≥ 2 (a
- * replica count); unset / `0` / `false` mean single-instance (the default).
- * We accept both a boolean-ish flag and a replica count so it slots into
- * common orchestration env (e.g. setting it from a `REPLICAS` value).
- */
-function isMultiInstanceDeclared(): boolean {
-  const raw = process.env[MULTI_INSTANCE_ENV];
-  if (!raw) return false;
-  const trimmed = raw.trim().toLowerCase();
-  if (trimmed === 'true') return true;
-  if (trimmed === 'false') return false;
-  const asNumber = Number(trimmed);
-  if (Number.isFinite(asNumber)) return asNumber >= 2 || trimmed === '1';
-  // Any other non-empty string is treated as a truthy declaration.
-  return true;
-}
 
 /**
  * editor-preview-reliability §4 / E1 — fail fast when a GENUINELY
@@ -146,7 +128,7 @@ function isMultiInstanceDeclared(): boolean {
  */
 export function assertWsTokenSecretForMultiInstance(_crowi: Crowi): void {
   if (isWsTokenSecretFromEnv()) return;
-  if (!isMultiInstanceDeclared()) return;
+  if (!isMultiInstanceDeclared(process.env)) return;
 
   throw new Error(
     `[crowi:collab] ${MULTI_INSTANCE_ENV} declares a multi-instance deployment but WS_TOKEN_SECRET is not set. ` +

@@ -35,7 +35,7 @@ const sentinel = require('./redis-smoke-sentinel') as {
  * marker-file protocol this builds on.
  */
 
-export type RedisSmokeCategory = 'collab' | 'editor-cap' | 'presence' | 'notifications' | 'config' | 'rate-limit' | 'lru' | 'boot';
+export type RedisSmokeCategory = 'collab' | 'editor-cap' | 'presence' | 'notifications' | 'config' | 'rate-limit' | 'lru' | 'link-completion' | 'boot';
 
 /** The 3 Redis connection targets Phase 1 provisioned. */
 export const REDIS_SMOKE_URLS: Readonly<Record<'shared' | 'config' | 'tls', string>> = sentinel.REDIS_SMOKE_TARGETS;

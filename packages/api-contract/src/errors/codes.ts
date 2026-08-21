@@ -69,6 +69,11 @@ export const ERROR_CODES = [
   // --- federated sign-in (RFC-0014) ---
   'FEDERATED_HANDOFF_INVALID',
   'FEDERATED_HANDOFF_CONSUMED',
+  // --- federated account linking (RFC-0014 §5.4) ---
+  'FEDERATED_IDENTITY_IN_USE',
+  'FEDERATED_LINK_AUTH_STATE_CHANGED',
+  'FEDERATED_LINK_NOT_LINKED',
+  'LINK_COMPLETION_CONSUMED',
   // --- admin subsystems ---
   'ENCRYPTION_NOT_CONFIGURED',
   'MAIL_FROM_NOT_CONFIGURED',

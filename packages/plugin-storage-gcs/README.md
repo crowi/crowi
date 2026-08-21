@@ -163,7 +163,7 @@ the key itself is never trimmed, URL-encoded, or path-normalized. The keys
 Crowi uses are:
 
 ```
-attachment/<pageId>/<fileId>/<original-filename>
+attachment/<pageId>/<md5-of-filename><ext>
 user/<userId>.<ext>
 ```
 

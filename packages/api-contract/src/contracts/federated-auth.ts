@@ -13,14 +13,18 @@
  */
 import { createRoute, z } from '@hono/zod-openapi';
 
-import { ApiErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
+import { ApiErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema, ValidationErrorSchema } from '../schemas/common';
 import {
-  CreateLinkGrantRequestSchema,
-  CreateLinkGrantResponseSchema,
-  LinkedAuthProviderListResponseSchema,
+  CompleteProviderLinkConflictErrorSchema,
+  CompleteProviderLinkResponseSchema,
   FederatedHandoffRequestSchema,
   FederatedHandoffResponseSchema,
+  LinkCompletionCodeSchema,
+  LinkCompletionConsumedErrorSchema,
+  LinkedAuthProviderListResponseSchema,
+  PendingLinkCompletionResponseSchema,
   ProviderListResponseSchema,
+  StartProviderLinkResponseSchema,
   UnlinkAuthProviderErrorSchema,
 } from '../schemas/federated-auth';
 
@@ -69,7 +73,7 @@ export const startFederatedProviderRoute = createRoute({
   method: 'get',
   path: '/auth/providers/{name}/start',
   tags: ['federatedAuth'],
-  summary: 'Top-level navigation that redirects the browser to the named provider',
+  summary: 'Top-level navigation that redirects the browser to the named provider (public sign-in ONLY)',
   request: {
     params: z.object({ name: z.string() }),
     query: z.object({
@@ -78,30 +82,14 @@ export const startFederatedProviderRoute = createRoute({
       handoff_jwk: z.string().min(1),
       /** base64url ES256 signature over the start canonical message. */
       handoff_proof: z.string().min(1),
-      /**
-       * RFC-0014 phase 3 — `'1'` switches this start into LINK mode: the
-       * request must carry a web-session JWT, and the flow attaches the
-       * resulting identity to that session's user instead of signing
-       * anyone in. Absent (the ordinary sign-in start) the route stays
-       * fully public.
-       */
-      link: z.literal('1').optional(),
-      /** The opaque id from `POST /auth/providers/{name}/link-grants`. Required when `link=1`, ignored otherwise. */
-      link_grant: z.string().min(1).optional(),
     }),
   },
   responses: {
     302: { description: 'Redirect to the provider authorization endpoint' },
     400: {
-      description: 'Malformed continue / sender proof, or an invalid/expired/mismatched link grant',
-      content: { 'application/json': { schema: ApiErrorSchema } },
-    },
-    401: {
-      description: 'link=1 without a web-session JWT — never downgraded to the public sign-in start',
-      content: { 'application/json': { schema: ApiErrorSchema } },
-    },
-    403: {
-      description: 'link=1 with a non-web credential (PAT / OAuth access token)',
+      description:
+        'Malformed continue / sender proof, OR a raw `link` query key is present (any value) — ' +
+        'the retired link-via-GET flow is gone entirely; a raw `link` key is always rejected rather than silently downgraded to public sign-in.',
       content: { 'application/json': { schema: ApiErrorSchema } },
     },
     404: {
@@ -136,22 +124,79 @@ export const listLinkedAuthProvidersRoute = createRoute({
   },
 });
 
-export const createAuthProviderLinkGrantRoute = createRoute({
+/**
+ * Stage 1: an authenticated web-session
+ * POST mints the IdP authorization URL and a flow-specific state cookie.
+ * `createJwtAuth` is installed via `app.use(...)` BEFORE `.openapi(...)`
+ * registration (see `hono/handlers/federated-auth.ts`), so credential
+ * resolution — and any PAT `lastUsedAt` bump — happens strictly before this
+ * route's own Zod validation runs: an unauthenticated/malformed-credential
+ * request never reaches this handler at all (401), regardless of the path
+ * shape.
+ */
+export const startProviderLinkRoute = createRoute({
   method: 'post',
-  path: '/auth/providers/{name}/link-grants',
+  path: '/auth/providers/{name}/link-start',
   tags: ['federatedAuth'],
-  summary: 'Mint a short-lived, opaque grant that authorizes ONE link start for the current web session',
+  summary: 'Mint an IdP authorization URL + flow-specific state cookie for the current web session (stage 1 of 3)',
   request: {
     params: z.object({ name: z.string() }),
-    body: { content: { 'application/json': { schema: CreateLinkGrantRequestSchema } } },
   },
   responses: {
     200: {
-      description: 'Opaque single-use grant id',
-      content: { 'application/json': { schema: CreateLinkGrantResponseSchema } },
+      description: 'Authorization URL to navigate the browser to. Sets a flow-specific, 300s state cookie.',
+      content: { 'application/json': { schema: StartProviderLinkResponseSchema } },
+    },
+    400: {
+      description:
+        'The signed link-state cookie value would exceed its per-cookie byte limit, or the aggregate Cookie-header admission budget cannot be satisfied even after pruning — no Set-Cookie or authorizationUrl is returned.',
+      content: { 'application/json': { schema: ApiErrorSchema } },
     },
     401: {
-      description: 'Authentication required',
+      description: "Authentication required (credential missing/invalid — resolved by middleware before this route's own validation)",
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Non-web credential (PAT / OAuth access token) — linking is a session-level account change',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    404: {
+      description: 'Unknown, unconfigured, or credential-kind provider',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error (e.g. a declared multi-instance topology with no reachable Redis)',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+/**
+ * Stage 3a: authenticated, non-
+ * destructive confirmation read. Same auth-before-validation ordering as
+ * `link-start` — an unauthenticated request is always 401 regardless of
+ * whether `{code}` is well-formed.
+ */
+export const getProviderLinkCompletionRoute = createRoute({
+  method: 'get',
+  path: '/auth/providers/{name}/link-completions/{code}',
+  tags: ['federatedAuth'],
+  summary: "Read a pending link completion's confirmation details (stage 3a — non-destructive)",
+  request: {
+    params: z.object({ name: z.string(), code: LinkCompletionCodeSchema }),
+  },
+  responses: {
+    200: {
+      description: 'Pending, unconsumed completion bound to the caller — provider label fallback + optional display-only accountLabel',
+      content: { 'application/json': { schema: PendingLinkCompletionResponseSchema } },
+    },
+    400: {
+      description: 'Authenticated but `{code}` fails the 43-character base64url shape (VALIDATION_ERROR)',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description:
+        "Authentication required — resolved by middleware before this route's own `{code}` shape validation, so an unauthenticated + malformed code is still 401, never 400",
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
     403: {
@@ -159,8 +204,63 @@ export const createAuthProviderLinkGrantRoute = createRoute({
       content: { 'application/json': { schema: ApiErrorSchema } },
     },
     404: {
-      description: 'Unknown, unconfigured, or credential-kind provider',
+      description:
+        'Never-issued, expired, retention-expired, or bound to a different user/provider/authVersion — all collapse to the same generic NOT_FOUND (no result-unknown code exists)',
       content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    409: {
+      description: "The caller's own completion was already consumed",
+      content: { 'application/json': { schema: LinkCompletionConsumedErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+/**
+ * Stage 3b: authenticated final
+ * confirmation. Atomically consumes `{code}`; a fresh `User` re-read fences
+ * ACTIVE status + `authVersion` before the identity insert. Same auth-
+ * before-validation ordering as the GET above.
+ */
+export const completeProviderLinkRoute = createRoute({
+  method: 'post',
+  path: '/auth/providers/{name}/link-completions/{code}',
+  tags: ['federatedAuth'],
+  summary: 'Atomically consume a link completion code and insert the identity (stage 3b — terminal)',
+  request: {
+    params: z.object({ name: z.string(), code: LinkCompletionCodeSchema }),
+  },
+  responses: {
+    200: {
+      description: 'Linked (fresh winner OR an already-consumed replay that resolves to the same owner) — the same body either way',
+      content: { 'application/json': { schema: CompleteProviderLinkResponseSchema } },
+    },
+    400: {
+      description: 'Authenticated but `{code}` fails the 43-character base64url shape (VALIDATION_ERROR)',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description:
+        "Authentication required — resolved by middleware before this route's own `{code}` shape validation, so an unauthenticated + malformed code is still 401, never 400",
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Non-web credential (PAT / OAuth access token)',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    404: {
+      description: 'Never-issued, expired, retention-expired, or bound to a different user/provider — all collapse to the same generic NOT_FOUND',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    409: {
+      description:
+        'FEDERATED_IDENTITY_IN_USE (provider account owned by someone else, or this user already has a different account of this provider), ' +
+        'FEDERATED_LINK_AUTH_STATE_CHANGED (fresh User re-read found the session inactive or authVersion changed since link-start), or ' +
+        'FEDERATED_LINK_NOT_LINKED (an already-consumed replay whose original insert has not landed) — no other conflict code exists.',
+      content: { 'application/json': { schema: CompleteProviderLinkConflictErrorSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -217,7 +317,11 @@ export const callbackFederatedProviderRoute = createRoute({
   },
   responses: {
     302: {
-      description: 'Redirect to the trusted web login/complete page on success, or back to the trusted web /login on failure',
+      description:
+        'Ordinary sign-in: redirect to the trusted web login/complete page on success, or back to the trusted web /login on failure. ' +
+        'Link flow (query `state` in the reserved crowilnk_ namespace): success redirects to `/me?provider=<name>&link_completion=<code>` ' +
+        '(provider + completion code ONLY); failure redirects to `/me?provider=<name>&link=link_failed` (provider + the generic marker ONLY — ' +
+        'never a completion code, never accountLabel, never the underlying reason).',
     },
     404: {
       description: 'Unknown or unconfigured provider (also used when trusted origins cannot be resolved)',
@@ -264,6 +368,8 @@ export const federatedAuthRoutes = {
   callbackFederatedProviderRoute,
   federatedHandoffRoute,
   listLinkedAuthProvidersRoute,
-  createAuthProviderLinkGrantRoute,
+  startProviderLinkRoute,
+  getProviderLinkCompletionRoute,
+  completeProviderLinkRoute,
   unlinkAuthProviderRoute,
 };

@@ -789,6 +789,8 @@ redaction は「書き出してから消す」のではなく、**証跡を `net
 offload (§13) より前に**必ず適用する — 生の値が一度でもディスクに触れる
 経路を作らない。
 
+**機械的な実装は `.claude/scripts/redact-context.mjs` を使う** (stdin → stdout、`--take N` でコードポイント単位の切り詰め)。本節の規則 — Authorization / Cookie ヘッダ、`password` / `accessToken` / `refreshToken` / `wsToken` / `token` のフィールド単位置換、JWT・PEM 鍵など — をパターンとして実装済みで、その場しのぎの `sed`(行単位のため複数行 PEM を跨げない)や `head -c`(バイト単位のためマルチバイト文字を割って invalid UTF-8 を作る)を書かないこと。
+
 - すべての HTTP リクエスト/レスポンスは、書き出し前に `Authorization`
   ヘッダ **と** `Cookie` ヘッダ全体を `[REDACTED]` に置換する。`Cookie` は
   `crowi.accessToken` (`packages/web/src/lib/auth-token.ts` が login/refresh

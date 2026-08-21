@@ -30,14 +30,40 @@ describe('SettingsLayout initial tab', () => {
     expect(screen.getByText('SECURITY PANEL')).toBeVisible();
   });
 
-  // The api's post-link redirect lands on /me?provider=…&link=…, and the
-  // outcome it wants to show lives on the security tab. Defaulting to
-  // Profile put "account linked" on a tab the user was not looking at.
-  it.each(['linked', 'federated_identity_in_use', 'link_failed'])('opens the security tab when returning from a link flow (?link=%s)', (result) => {
-    searchParams.current = new URLSearchParams(`provider=google&link=${result}`);
+  // A successful callback redirect
+  // (`?provider=…&link_completion=…`, both present) is the confirmation
+  // dialog's own trigger, and it lives on the security tab.
+  it('opens the security tab for a completion URL (?provider=&link_completion=, both present)', () => {
+    searchParams.current = new URLSearchParams('provider=google&link_completion=abc123');
     renderLayout();
 
     expect(screen.getByText('SECURITY PANEL')).toBeVisible();
+  });
+
+  it('does NOT open the security tab when only ONE of provider/link_completion is present', () => {
+    searchParams.current = new URLSearchParams('provider=google');
+    renderLayout();
+    expect(screen.getByText('PROFILE PANEL')).toBeVisible();
+
+    cleanup();
+    searchParams.current = new URLSearchParams('link_completion=abc123');
+    renderLayout();
+    expect(screen.getByText('PROFILE PANEL')).toBeVisible();
+  });
+
+  // A callback FAILURE redirect (`link=link_failed`, no completion code) also lands on the security tab.
+  it('opens the security tab for a callback failure (?provider=&link=link_failed)', () => {
+    searchParams.current = new URLSearchParams('provider=google&link=link_failed');
+    renderLayout();
+
+    expect(screen.getByText('SECURITY PANEL')).toBeVisible();
+  });
+
+  it('an explicit ?tab= wins over a completion URL', () => {
+    searchParams.current = new URLSearchParams('tab=profile&provider=google&link_completion=abc123');
+    renderLayout();
+
+    expect(screen.getByText('PROFILE PANEL')).toBeVisible();
   });
 
   it('ignores an unknown ?tab= rather than showing nothing', () => {

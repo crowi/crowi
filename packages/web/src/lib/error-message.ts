@@ -102,6 +102,11 @@ export const ERROR_MESSAGE_KEYS = {
   // federated sign-in (RFC-0014)
   FEDERATED_HANDOFF_INVALID: m['errors.federated_handoff_invalid'],
   FEDERATED_HANDOFF_CONSUMED: m['errors.federated_handoff_consumed'],
+  // federated account linking (RFC-0014 §5.4)
+  FEDERATED_IDENTITY_IN_USE: m['errors.federated_identity_in_use'],
+  FEDERATED_LINK_AUTH_STATE_CHANGED: m['errors.federated_link_auth_state_changed'],
+  FEDERATED_LINK_NOT_LINKED: m['errors.federated_link_not_linked'],
+  LINK_COMPLETION_CONSUMED: m['errors.link_completion_consumed'],
   // admin subsystems
   ENCRYPTION_NOT_CONFIGURED: m['errors.encryption_key_not_set'],
   MAIL_FROM_NOT_CONFIGURED: m['errors.mail_from_not_configured'],

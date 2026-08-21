@@ -295,11 +295,29 @@ front proxy. **`:4304` is the canonical dev entry point**:
 
 No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
 
-## Replace every replica at once when upgrading to this version
+## Updating to this version — coordinated replica swap required
 
-If you run api with more than one replica, **replace them all at once for this upgrade rather than rolling them.** A single-instance deployment satisfies this automatically and needs no action.
+<Callout type="warn">
+  **Updating to the account-linking release requires draining and replacing
+  every api replica together — never a one-at-a-time rolling restart.** A
+  new-version replica issues a flow-specific link-state cookie for the
+  account-linking flow (`crowi.oauthLinkState.<state>`); an old-version
+  replica's callback handler does not recognize that cookie namespace and
+  falls back to reading the
+  fixed sign-in state cookie (`crowi.oauthState`) — which it then deletes
+  before validating it. In a mixed fleet, a callback that happens to land on
+  an old-version replica breaks not only the in-flight account link, but any
+  **unrelated, concurrent ordinary sign-in** whose fixed state cookie that
+  request wipes out. Stop every api replica together, deploy the new version
+  to all of them, and restart them together — or stand up a fresh fleet on
+  the new version and cut traffic over to it all at once (blue/green). There
+  is no compatibility route or fallback cookie bridging the two versions.
+  Single-instance deployments, including local dev, automatically satisfy
+  this — with only one replica, old-version / new-version mixing cannot
+  happen.
+</Callout>
 
-The reason is that renaming a page, moving it to the trash and restoring it now pass through a new "moving" state. A replica running the older version does not know that state, treats a page mid-move as an ordinary page, and can start a second move on top of it. Neither move then finishes, and the page is left stranded mid-move.
+**The same coordinated swap is required for page history.** Renaming a page, moving it to the trash and restoring it now pass through a new "moving" state. A replica running the older version does not know that state, treats a page mid-move as an ordinary page, and can start a second move on top of it. Neither move then finishes, and the page is left stranded mid-move.
 
 If you have already mixed versions, replace every replica and then run:
 

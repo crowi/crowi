@@ -322,6 +322,55 @@ status="$(run_validator "$REPO" "$READY_SPEC" "$OUTPUT")"
 assert_status 1 "$status" "changes to referenced implementation must make the spec stale"
 grep -qi 'stale' "$OUTPUT" || fail "stale failure must be explicit"
 
+# --structure-only: staleness だけを免除し、構造検証はすべて行う (resume した
+# パイプラインの provenance 再検証用)。stale な spec が structure-only では通り、
+# 構造の壊れた spec は structure-only でも落ちることを固定する。
+run_validator_structure_only() {
+  local repo="$1"
+  local spec="$2"
+  local output_file="$3"
+  local status
+
+  set +e
+  (
+    cd "$repo"
+    "$VALIDATOR" --structure-only "$spec"
+  ) >"$output_file" 2>&1
+  status=$?
+  set -e
+  printf '%s' "$status"
+}
+
+status="$(run_validator_structure_only "$REPO" "$READY_SPEC" "$OUTPUT")"
+assert_status 0 "$status" "--structure-only must exempt exactly the staleness check"
+
+BROKEN_SPEC="$REPO/specs/broken-structure.md"
+sed 's/^scope:.*/scope: bogus-scope/' "$READY_SPEC" >"$BROKEN_SPEC"
+status="$(run_validator_structure_only "$REPO" "$BROKEN_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "--structure-only must still enforce structural validation"
+
+# --structure-only must still enforce grounded_at existence/ancestry — only the
+# reference-path diff/dirty check (the actual "staleness" part) is exempt.
+MISSING_COMMIT_SPEC="$REPO/specs/missing-commit.md"
+sed 's/^grounded_at:.*/grounded_at: ffffffffffffffffffffffffffffffffffffff/' "$READY_SPEC" >"$MISSING_COMMIT_SPEC"
+status="$(run_validator_structure_only "$REPO" "$MISSING_COMMIT_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "--structure-only must still reject a grounded_at commit that does not exist"
+grep -qi 'grounded_at commit does not exist' "$OUTPUT" || fail "missing-commit failure must name the missing commit"
+
+NOT_ANCESTOR_REPO="$TMP_ROOT/not-ancestor-repo"
+cp -R "$REPO" "$NOT_ANCESTOR_REPO"
+git -C "$NOT_ANCESTOR_REPO" reset -q --hard "$BASE_SHA"
+git -C "$NOT_ANCESTOR_REPO" checkout -qb side-branch
+printf 'side\n' >"$NOT_ANCESTOR_REPO/SIDE.md"
+git -C "$NOT_ANCESTOR_REPO" add SIDE.md
+git -C "$NOT_ANCESTOR_REPO" commit -qm "side-branch commit"
+SIDE_SHA="$(git -C "$NOT_ANCESTOR_REPO" rev-parse HEAD)"
+git -C "$NOT_ANCESTOR_REPO" checkout -q main 2>/dev/null || git -C "$NOT_ANCESTOR_REPO" checkout -q master
+write_ready_spec "$NOT_ANCESTOR_REPO/specs/ready.md" "$SIDE_SHA" "src/export/export.ts"
+status="$(run_validator_structure_only "$NOT_ANCESTOR_REPO" "$NOT_ANCESTOR_REPO/specs/ready.md" "$OUTPUT")"
+assert_status 1 "$status" "--structure-only must still reject a grounded_at that is not an ancestor of HEAD"
+grep -qi 'not an ancestor' "$OUTPUT" || fail "not-ancestor failure must be explicit"
+
 UNRELATED_REPO="$TMP_ROOT/unrelated-repo"
 cp -R "$REPO" "$UNRELATED_REPO"
 git -C "$UNRELATED_REPO" reset -q --hard "$BASE_SHA"
