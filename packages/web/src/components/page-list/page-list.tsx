@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { CreatePageCtaButton, CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
 import { useTocScrollSpy } from '@/components/page-view/page-toc';
+import { CopyPageMarkdownButton } from '@/components/page-view/copy-page-markdown-button';
 import { PageTocColumns } from '@/components/page-view/page-toc-columns';
 import { PortalizeBanner } from '@/components/page-view/portalize-dialog';
 import { PortalMetaBar } from './portal-meta-bar';
@@ -274,7 +275,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   // the centered column.
   if (portalPage) {
     return (
-      <PageTocColumns toc={portalToc} activeTocId={activeTocId}>
+      <PageTocColumns toc={portalToc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton page={portalPage} />}>
         {body}
       </PageTocColumns>
     );
