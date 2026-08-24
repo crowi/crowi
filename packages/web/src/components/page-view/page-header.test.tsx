@@ -1,4 +1,4 @@
-import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
+import { PageGrantEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { PropsWithChildren, ReactElement } from 'react';
@@ -35,7 +35,7 @@ vi.mock('@/lib/use-likers', () => ({ useLikers, likersKeys: { pagePrefix: (id: s
 vi.mock('@/lib/use-seen', () => ({ useSeenUsers }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 
-import { PageHeader } from './page-header';
+import { GrantChip, PageHeader } from './page-header';
 
 function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   return {
@@ -120,6 +120,14 @@ function renderHeader(ui: ReactElement) {
   const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
   return render(ui, { wrapper });
 }
+
+describe('GrantChip', () => {
+  it('does not render a chip for a public page', () => {
+    const { container } = render(<GrantChip grant={PageGrantEnum.PUBLIC} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+});
 
 describe('PageHeader — expanded state', () => {
   it('renders the expanded header (no compact bar) when sticky is enabled but not scrolled', () => {
