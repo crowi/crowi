@@ -93,6 +93,7 @@ const CORPUS_FILES = [
   'typed-nodes.json',
   'frontmatter.json',
   'github-alerts.json',
+  'break-normalization.json',
 ] as const;
 
 /**
@@ -106,7 +107,9 @@ const CORPUS_FILES = [
  *     instead of failing (`frontmatter.json`);
  *   - the fixture claims the consumer needs NO change, which is precisely
  *     the claim nothing forces a human to re-verify (`github-alerts.json`,
- *     where `sanitize-ast.ts` narrows the node to an ordinary blockquote).
+ *     where `sanitize-ast.ts` narrows the node to an ordinary blockquote;
+ *     `break-normalization.json`, where the wire discriminant is the
+ *     pre-existing `break` type and the CrowiKit decoder already handles it).
  *
  * Membership is curated by hand and the assertion below only checks that a
  * qualifying fixture carries a non-empty note — it cannot judge whether the
@@ -114,7 +117,7 @@ const CORPUS_FILES = [
  * fixture forces someone to write the sentence, not that the sentence is
  * verified.
  */
-const EXTERNAL_COORDINATION_REQUIRED: ReadonlySet<string> = new Set(['frontmatter.json', 'github-alerts.json']);
+const EXTERNAL_COORDINATION_REQUIRED: ReadonlySet<string> = new Set(['frontmatter.json', 'github-alerts.json', 'break-normalization.json']);
 
 const corpus = CORPUS_FILES.map((file) => [file, JSON.parse(readFileSync(path.join(CORPUS_DIR, file), 'utf8')) as GoldenCorpusFile] as const);
 
@@ -163,6 +166,15 @@ const REQUIRED_CASES: Record<(typeof CORPUS_FILES)[number], string[]> = {
   'typed-nodes.json': ['math-display-projection', 'math-inline-projection', 'diagram-mermaid-svg-projection', 'link-card-hoist', 'placeholder-projection'],
   'frontmatter.json': ['frontmatter-basic', 'frontmatter-mid-document-thematic-break-unaffected'],
   'github-alerts.json': ['github-alerts-all-variants', 'github-alerts-conservative-fallbacks'],
+  'break-normalization.json': [
+    'table-cell-bare-br-normalized',
+    'table-cell-multiple-br-normalized',
+    'case-and-self-closing-variants-normalized',
+    'heading-bare-br-normalized',
+    'whitespace-preserving-span-retained',
+    'table-cell-mixed-raw-html-retained',
+    'flow-bare-br-retained',
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -264,8 +276,8 @@ describe('golden corpus self-description', () => {
 // infra (`util/page-response.ts`), already covered by
 // `page-response.test.ts`; nothing new to re-test here.
 describe('renderer version', () => {
-  it('RENDERER_PIPELINE_VERSION is 1.2.0 (new bundled GitHub Alerts transform — minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('1.2.0');
+  it('RENDERER_PIPELINE_VERSION is 1.3.0 (new bundled break-normalization transform — minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.3.0');
   });
 });
 
