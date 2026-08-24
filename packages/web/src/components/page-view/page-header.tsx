@@ -2,19 +2,20 @@
 
 import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
 import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
-import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
+import type { LucideIcon } from 'lucide-react';
 import { ArrowUp, Edit2, Link2, Lock } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { Button } from '@/components/ui/button';
+import { grantLabel } from '@/lib/grant-label';
+import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { UsePresenceResult } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
 import { useWideViewport } from '@/lib/use-wide-viewport';
 import { cn } from '@/lib/utils';
-import type { LucideIcon } from 'lucide-react';
 import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
 import { LinkSharePopover } from './link-share-popover';
@@ -87,16 +88,11 @@ function getPageTitle(path: string): string {
  * callers can short-circuit rendering.
  */
 function grantChipInfo(grant: number | undefined): { Icon: LucideIcon; label: string } | null {
-  if (grant === PageGrantEnum.RESTRICTED) {
-    return { Icon: Link2, label: m['page.grant_chip_restricted']() };
-  }
-  if (grant === PageGrantEnum.SPECIFIED) {
-    return { Icon: Lock, label: m['page.grant_chip_specified']() };
-  }
-  if (grant === PageGrantEnum.OWNER) {
-    return { Icon: Lock, label: m['page.grant_chip_owner']() };
-  }
-  return null;
+  // PUBLIC has a label for history, but public pages intentionally have no chip.
+  if (grant === PageGrantEnum.PUBLIC) return null;
+  const label = grantLabel(grant);
+  if (label == null) return null;
+  return { Icon: grant === PageGrantEnum.RESTRICTED ? Link2 : Lock, label };
 }
 
 /**

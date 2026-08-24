@@ -1,8 +1,9 @@
-import type { PageHistoryEventRow as PageHistoryEvent } from '@crowi/api-contract';
+import type { PageHistoryEventRow as PageHistoryEvent, PageHistoryPayloadByKind } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
+import { grantLabel } from '@/lib/grant-label';
 
 interface PageEventRowProps {
   event: PageHistoryEvent;
@@ -25,8 +26,55 @@ function eventMessage(event: PageHistoryEvent, actor: string) {
   }
 }
 
+interface EventDetail {
+  text: string;
+  title: string;
+  redirectCreated?: boolean;
+}
+
+function eventDetail(event: PageHistoryEvent): EventDetail | null {
+  if (event.payload == null || typeof event.payload !== 'object' || Array.isArray(event.payload)) return null;
+
+  switch (event.kind) {
+    case 'page_created':
+    case 'draft_published':
+      return null;
+    case 'page_renamed': {
+      const payload = event.payload as Partial<PageHistoryPayloadByKind['page_renamed']>;
+      if (typeof payload.fromPath !== 'string' || typeof payload.toPath !== 'string' || typeof payload.redirectCreated !== 'boolean') {
+        return null;
+      }
+      const text = m['page_history.detail_renamed']({ fromPath: payload.fromPath, toPath: payload.toPath });
+      return { text, title: text, redirectCreated: payload.redirectCreated };
+    }
+    case 'visibility_changed': {
+      const payload = event.payload as Partial<PageHistoryPayloadByKind['visibility_changed']>;
+      if (typeof payload.fromGrant !== 'number' || typeof payload.toGrant !== 'number') return null;
+      const fromGrant = grantLabel(payload.fromGrant);
+      const toGrant = grantLabel(payload.toGrant);
+      if (fromGrant == null || toGrant == null) return null;
+      const text = m['page_history.detail_visibility']({ fromGrant, toGrant });
+      return { text, title: text };
+    }
+    case 'page_trashed': {
+      const payload = event.payload as Partial<PageHistoryPayloadByKind['page_trashed']>;
+      if (typeof payload.fromPath !== 'string' || typeof payload.toPath !== 'string') return null;
+      // The trash path is an internal storage location, not a useful destination for readers.
+      const text = m['page_history.detail_trashed']({ path: payload.fromPath });
+      return { text, title: text };
+    }
+    case 'page_restored': {
+      const payload = event.payload as Partial<PageHistoryPayloadByKind['page_restored']>;
+      if (typeof payload.fromPath !== 'string' || typeof payload.toPath !== 'string') return null;
+      const text = m['page_history.detail_restored']({ path: payload.toPath });
+      return { text, title: text };
+    }
+  }
+}
+
 export function PageEventRow({ event }: PageEventRowProps) {
   const actor = event.actor?.name ?? m['page_history.unknown_user']();
+  const detail = eventDetail(event);
 
   return (
     <tr className="border-t bg-muted/20">
@@ -41,6 +89,18 @@ export function PageEventRow({ event }: PageEventRowProps) {
             {formatDistanceToNow(event.occurredAt)}
           </span>
         </div>
+        {detail != null && (
+          <div data-testid="event-detail" className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+            <span data-testid="event-detail-text" className="min-w-0 truncate whitespace-nowrap" title={detail.title}>
+              {detail.text}
+            </span>
+            {detail.redirectCreated && (
+              <span className="shrink-0 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {m['page_history.redirect_badge']()}
+              </span>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );
