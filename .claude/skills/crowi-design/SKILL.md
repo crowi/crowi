@@ -119,9 +119,7 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
    `.claude/skills/_shared/validate-implementation-spec.sh` を実行し、green なら確定、
    red なら draft/false へ戻す。
 
-   返り値 = `{ status, docPath, verdict, residualOpenQuestions, rebutted?, blocking?,
-   reviewSummary, codexFallbacks }`。`rebutted[]` は「レビュー指摘自体が誤りだったので
-   実コード反証つきで適用しなかった」もの — 最終報告に載せる。
+   返り値 = `{ status, docPath, verdict, residualOpenQuestions, rebutted?, blocking?, preexisting?, findings?, reviewStats?, reviewSummary, codexFallbacks }`。`rebutted[]` は「レビュー指摘自体が誤りだったので実コード反証つきで適用しなかった」もの — 最終報告に載せる。`findings[]` / `preexisting[]` / `reviewStats` の意味は reviewOnly(§reviewOnly 節)と同じ。
 5. **報告**(`status` で分岐):
    - **DONE**(verdict APPROVED)→ doc を提示:
      - **spec** → `.feature-state/specs/feature-<slug>.md`(敵対的レビュー済み)。
@@ -144,6 +142,7 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
      回さない — 大 RFC は long tail になる)。是正必須なのは fundamental な誤りと
      自分の混入誤りのみ。
    - **FAILED** → reason を提示。
+   - **DEGRADED** → この round は独立した codex 判定をほぼ経ていない(`reviewStats` で内訳が見える)ので verdict として採用しない。doc 自体はディスクに残っている(`status: draft` / `implementation_ready: false`)。**単純な再実行は割高** — write-review-revise loop に resume 入口は無いので、再度 Workflow を呼ぶと writer が brief から書き直しになり、それまでの revise round で積んだ修正が失われる。実務上の対処は codex 復旧を待ってから再実行するか、`acceptFallback: true` を args に足して明示的に縮退した判定を受け入れる(spec を approved に上げる根拠にはしない)。
    - いずれの分岐でも `codexFallbacks` が非空なら「stage X は Claude fallback で実行」を
      報告に含める。
 
@@ -171,6 +170,12 @@ Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js'
            args: { slug, outputType, reviewOnly: true, docPath: <path>,
                    critical: <bool>, round: <毎回変える値> } })
 ```
+
+返り値には `blocking[]` に加えて構造化 `findings[]`(`{lens, category, text}` の
+dedup 済み)、round を跨いで蓄積された `preexisting[]`、`reviewStats`(lens の
+実行内訳)が載る。**`status: 'DEGRADED'` は「この round は独立した codex 判定を
+ほぼ経ていない」の意味で、OK/ISSUES の代わりに返る** — verdict として採用せず、
+codex 復旧後の再実行か `acceptFallback: true` での明示受け入れを選ぶ。
 
 **同じ doc を再レビューするときは `args` に必ず区別できる値(`round` 等)を入れる。**
 Workflow は同一 `{scriptPath, args}` をセッション全体でキャッシュするので、doc を直して

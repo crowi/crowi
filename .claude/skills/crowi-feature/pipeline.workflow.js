@@ -37,24 +37,69 @@ function parseArgs(a) {
     try {
       return JSON.parse(a)
     } catch {
-      return {}
+      return { __parseError: true }
     }
   }
   return {}
 }
 const A = parseArgs(args)
+
+// ---- structural validation: fail fast BEFORE any agent runs -----------------
+// Malformed args must never silently default: a phases array that quietly
+// collapses to [{id:'main'}] loses multi-phase gating, and an absent
+// autoContinue read as "not false" auto-continues past a gate a human meant
+// to hold. Gate-driving booleans are therefore REQUIRED where they gate.
+function validateStructural(a) {
+  const errors = []
+  if (a.__parseError) errors.push('args did not parse as JSON')
+  if (typeof a.id !== 'string' || !a.id.trim()) errors.push('id (non-empty string) is required')
+  // id is interpolated unquoted into Bash commands run by mechanical agents
+  // (the provenance validator call, the metrics --data payload). A space,
+  // quote, `;`, or `$(...)` there would break or inject into those commands.
+  // The validator's own id format (`^feature-[a-z0-9]+(-[a-z0-9]+)*$`) is
+  // narrower than this needs to be for legacy ids, so this only excludes
+  // shell metacharacters rather than mirroring it exactly.
+  else if (!/^[A-Za-z0-9._-]+$/.test(a.id)) errors.push('id must match [A-Za-z0-9._-]+ (no spaces or shell metacharacters)')
+  for (const flag of ['needsPlanner', 'runSimplify', 'codexReviewer', 'resume']) {
+    if (a[flag] !== undefined && typeof a[flag] !== 'boolean') errors.push(`${flag} must be a bare boolean when present`)
+  }
+  if (a.maxReviewAttempts !== undefined && (!Number.isInteger(a.maxReviewAttempts) || a.maxReviewAttempts < 1)) {
+    errors.push('maxReviewAttempts must be an integer >= 1 when present')
+  }
+  if (a.phases !== undefined) {
+    if (!Array.isArray(a.phases) || a.phases.length === 0) {
+      errors.push('phases must be a non-empty array when present')
+    } else {
+      a.phases.forEach((p, i) => {
+        if (!p || typeof p !== 'object') return errors.push(`phases[${i}] must be an object`)
+        if (typeof p.id !== 'string' || !p.id.trim()) errors.push(`phases[${i}].id (non-empty string) is required`)
+        if (typeof p.autoContinue !== 'boolean') {
+          errors.push(`phases[${i}].autoContinue must be an explicit boolean — absence would silently drop the human gate`)
+        }
+      })
+    }
+  }
+  return errors
+}
+const STRUCTURAL_ERRORS = validateStructural(A)
+if (STRUCTURAL_ERRORS.length) {
+  return {
+    status: 'FAILED',
+    reason: `crowi-feature pipeline: invalid args — ${STRUCTURAL_ERRORS.join('; ')} (got: ${JSON.stringify(A)})`,
+  }
+}
+
 const ID = A.id
 const NEEDS_PLANNER = A.needsPlanner !== false
 const RUN_SIMPLIFY = A.runSimplify !== false
 const MAX_REVIEW = A.maxReviewAttempts ?? 3
 const CODEX_REVIEWER = A.codexReviewer === true
+// resume=true when re-entering at a gated phase (--phase=<id>): provenance
+// re-validation then skips only the staleness check, because earlier phases
+// have legitimately changed the referenced paths by design.
+const RESUME = A.resume === true
 const PHASES =
   Array.isArray(A.phases) && A.phases.length ? A.phases : [{ id: 'main', title: ID, autoContinue: true }]
-
-// Fail fast before any agent runs: a missing id must not fall through.
-if (!ID) {
-  return { status: 'FAILED', reason: `crowi-feature pipeline: missing required arg id (got: ${JSON.stringify(A)})` }
-}
 
 // Structured returns so the script branches on data, not on prose / magic strings.
 const IMPL_RESULT = {
@@ -387,26 +432,142 @@ async function runPhase(p) {
   return { ok: true, summary: done.summary, commitShas: done.commitShas || [] }
 }
 
+// ---- v2 provenance gate: the pipeline verifies the caller's claim itself ----
+// needsPlanner=false means "this spec passed validate-implementation-spec.sh".
+// That used to be the caller's self-report; a caller could skip planning
+// without the spec ever being machine-validated. The pipeline now runs the
+// validator itself (via a mechanical agent — workflow scripts have no
+// filesystem access) and refuses to proceed on a claim it cannot verify.
+// The same agent reads frontmatter `kind`: an umbrella spec must not enter
+// the v2 fast path, because nothing on this path derives its sub-spec phases —
+// the default [{id:'main'}] would silently run an umbrella as a single phase.
+const PROVENANCE = {
+  type: 'object',
+  required: ['ready', 'kind', 'detail'],
+  additionalProperties: false,
+  properties: {
+    ready: { type: 'boolean' },
+    kind: { type: 'string', enum: ['leaf', 'umbrella', 'unknown'] },
+    detail: { type: 'string' },
+  },
+}
+async function verifyProvenance() {
+  const flag = RESUME ? '--structure-only ' : ''
+  return await agent(
+    `You are a MECHANICAL RUNNER. Do not analyze the spec yourself.\n` +
+      `1) Run with Bash: bash .claude/skills/_shared/validate-implementation-spec.sh ${flag}.feature-state/specs/${ID}.md\n` +
+      `2) Read the frontmatter of .feature-state/specs/${ID}.md (the first --- block) and note the value of its "kind:" line, if any.\n` +
+      `3) Return {ready: <true iff step 1 exited 0>, kind: <this is about the frontmatter "kind:" line alone, ` +
+      `independent of step 1's exit code — "umbrella" if that line's value is exactly umbrella; "leaf" if there ` +
+      `is no "kind:" line in the frontmatter at all; "unknown" for any other kind: value>, ` +
+      `detail: <the last 3 lines of step 1 output>}.`,
+    { model: 'haiku', effort: 'low', label: `validate-spec:${ID}`, schema: PROVENANCE },
+  )
+}
+
 // ---- drive the phases, breaking at the first downstream autoContinue gate ----
-const completed = []
-for (let i = 0; i < PHASES.length; i++) {
-  const p = PHASES[i]
-  // The resume/start phase (i === 0) always runs; a later phase that is gated
-  // stops the run BEFORE it so a human can review and resume with --phase=<id>.
-  if (i > 0 && p.autoContinue === false) {
-    return {
-      status: 'GATED',
-      gatedAt: p.id,
-      completed,
-      codexFallbacks: FALLBACKS,
-      message: `Phase ${p.id} (${p.title}) is gated (autoContinue=false). Resume with: /crowi-feature ${ID} --phase=${p.id}`,
+async function drivePhases() {
+  if (!NEEDS_PLANNER) {
+    const prov = await verifyProvenance()
+    if (!prov || !prov.ready) {
+      return {
+        status: 'FAILED',
+        reason:
+          `crowi-feature pipeline: needsPlanner=false claims a validator-green contract v2 spec, but ` +
+          `validate-implementation-spec.sh did not pass${RESUME ? ' (structure-only)' : ''}: ` +
+          (prov ? prov.detail : 'validation agent did not complete'),
+        codexFallbacks: FALLBACKS,
+      }
+    }
+    if (prov.kind === 'umbrella') {
+      // Last-resort backstop: crowi-feature/SKILL.md 2.2 is supposed to route
+      // any `kind: umbrella` spec to needsPlanner=true BEFORE this workflow
+      // ever runs, precisely because nothing on the v2 fast path derives an
+      // umbrella's sub-spec phases (the default [{id:'main'}] would silently
+      // run it as one phase). Reaching this branch means that routing did
+      // not happen — treat it as a caller bug, not a normal outcome.
+      return {
+        status: 'FAILED',
+        reason:
+          `crowi-feature pipeline: ${ID} is an umbrella spec but was routed onto the v2 fast path ` +
+          `(needsPlanner=false). This should not happen — crowi-feature/SKILL.md 2.2 must route ` +
+          `umbrella specs to needsPlanner=true before invoking this workflow. Re-run crowi-feature ` +
+          `for ${ID} so it detects kind: umbrella and takes the planner path.`,
+        codexFallbacks: FALLBACKS,
+      }
+    }
+    if (prov.kind === 'unknown') {
+      // A kind: value that is neither absent nor "umbrella" cannot be told apart
+      // from a mistyped "umbrella" (e.g. a stray capital or typo) — refuse rather
+      // than silently treating it as a leaf spec, which is what would let a
+      // genuine umbrella slip onto the fast path undetected.
+      return {
+        status: 'FAILED',
+        reason:
+          `crowi-feature pipeline: ${ID}'s frontmatter has a "kind:" value that is neither absent nor ` +
+          `"umbrella" (validator agent reported kind=unknown). Fix the frontmatter — omit kind: for a ` +
+          `leaf spec, or set kind: umbrella — then retry.`,
+        codexFallbacks: FALLBACKS,
+      }
     }
   }
-  log(`[${ID}] === phase ${p.id} (${p.title}) ===`)
-  const r = await runPhase(p)
-  completed.push({ phase: p.id, ...r })
-  if (!r.ok) {
-    return { status: r.needsHuman ? 'ESCALATE' : 'FAILED', at: p.id, reason: r.reason, completed, codexFallbacks: FALLBACKS }
+
+  const completed = []
+  for (let i = 0; i < PHASES.length; i++) {
+    const p = PHASES[i]
+    // The resume/start phase (i === 0) always runs; a later phase that is gated
+    // stops the run BEFORE it so a human can review and resume with --phase=<id>.
+    if (i > 0 && p.autoContinue === false) {
+      return {
+        status: 'GATED',
+        gatedAt: p.id,
+        completed,
+        codexFallbacks: FALLBACKS,
+        message: `Phase ${p.id} (${p.title}) is gated (autoContinue=false). Resume with: /crowi-feature ${ID} --phase=${p.id}`,
+      }
+    }
+    log(`[${ID}] === phase ${p.id} (${p.title}) ===`)
+    const r = await runPhase(p)
+    completed.push({ phase: p.id, ...r })
+    if (!r.ok) {
+      return { status: r.needsHuman ? 'ESCALATE' : 'FAILED', at: p.id, reason: r.reason, completed, codexFallbacks: FALLBACKS }
+    }
   }
+  return { status: 'DONE', completed, codexFallbacks: FALLBACKS }
 }
-return { status: 'DONE', completed, codexFallbacks: FALLBACKS }
+
+const finalResult = await drivePhases()
+
+// ---- run metrics (best-effort; must never change the run result) -----------
+// One JSON line per run in .reviews/codex-runs/<id>/metrics.jsonl, so pipeline
+// tuning (review attempts, codex fallback rate, gate placement) is judged from
+// measurements instead of feel. Values are enums / numbers / kebab ids only —
+// the payload rides a Bash --data argument, so it must not contain a single
+// quote. The child process stamps the timestamp (this runtime blocks Date).
+try {
+  const m = {
+    workflow: 'crowi-feature-pipeline',
+    id: ID,
+    status: finalResult.status,
+    phasesPlanned: PHASES.length,
+    phasesCompleted: (finalResult.completed || []).length,
+    codexFallbacks: FALLBACKS.length,
+    needsPlanner: NEEDS_PLANNER,
+    codexReviewer: CODEX_REVIEWER,
+    resume: RESUME,
+  }
+  await agent(
+    `You are a MECHANICAL RUNNER. Run exactly this with Bash and return {recorded: <true iff exit 0>}:\n` +
+      `node .claude/scripts/record-run-metrics.mjs --dir .reviews/codex-runs/${ID} --data '${JSON.stringify(m)}'`,
+    {
+      model: 'haiku',
+      effort: 'low',
+      label: `metrics:${ID}`,
+      schema: { type: 'object', required: ['recorded'], additionalProperties: false, properties: { recorded: { type: 'boolean' } } },
+    },
+  )
+} catch {
+  // best-effort by contract
+}
+
+return finalResult

@@ -2,9 +2,8 @@
 # orchestrate-watch.test.sh — smoke tests for orchestrate-watch.sh's lane E
 # "longLived" stall-threshold branch (feature-worktree-extra-gates).
 #
-# Not wired into any CI/lint pipeline: .claude/ is agent tooling, not product
-# code (same convention as task-state.test.sh). Run it manually after
-# touching orchestrate-watch.sh's lane E:
+# Wired into CI (`pnpm test:scripts:sh`) and the pre-push claude-scripts
+# lefthook job. Run it manually after touching orchestrate-watch.sh's lane E:
 #   bash .claude/scripts/orchestrate-watch.test.sh
 #
 # Builds a throwaway git repo (a "main" plus several worktrees, each with one

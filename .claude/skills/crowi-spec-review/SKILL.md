@@ -56,9 +56,10 @@ Codex 不可時は各レンズが Claude に fail-open)。
    ```
    Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
               args: { reviewOnly: true, docPath: '.feature-state/specs/<id>.md',
-                      outputType: 'spec', slug: '<id>', critical: true } })
+                      outputType: 'spec', slug: '<id>', critical: true,
+                      round: <毎回変える値> } })
    ```
-   返り値 = `{ status: 'OK'|'ISSUES', blocking[], reviewSummary, codexFallbacks }`。
+   返り値 = `{ status: 'OK'|'ISSUES'|'DEGRADED', blocking[], preexisting[], findings[], reviewStats, reviewSummary, codexFallbacks }`。`findings[]` は `{lens, category: 'mustFix'|'carryForward'|'preexisting', text}` の dedup 済み構造化指摘 (blocking[] は互換のため残る)。**`status: 'DEGRADED'` のとき、この round の verdict を採用してはならない** — 独立した codex 判定を経なかった lens (Claude fallback + 死亡) が閾値以上で、OK でも ISSUES でもその判定は縮退している。codex 復旧後に再実行するか、縮退を承知で使う場合のみ `acceptFallback: true` を付けて再起動する (spec を approved に上げる根拠には使わない)。`reviewStats` (lensesPlanned / viaFallback / deadLenses) で縮退の内訳が見える。**再実行するときは `args.round` を必ず変える** — Workflow は同一 `{scriptPath, args}` をセッション全体でキャッシュするので、同じ引数のまま呼び直すと codex が復旧していても DEGRADED がそのまま返る(crowi-design のキャッシュ規則と同じ)。
 3. **統合(レビューのレビュー)**: blocking を main が判断する。レビュアーは過大主張も
    するので、**怪しい指摘は自分で実コードに当てて再確認**してから採用する。
 4. **是正**: 採用した blocking を反映して spec を**クリーンに書き直す**(改訂注記・

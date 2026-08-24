@@ -3,9 +3,19 @@
 set -u
 
 usage() {
-  echo "usage: validate-implementation-spec.sh <spec-path>" >&2
+  echo "usage: validate-implementation-spec.sh [--structure-only] <spec-path>" >&2
   exit 2
 }
+
+# --structure-only: grounded_at の staleness 検査 (参照 path が grounded_at 以降に
+# 変わっていないこと) だけをスキップし、構造検証はすべて行う。resume した実装
+# パイプラインが provenance を再検証する用途 — 先行 phase が参照 path を計画どおり
+# 変更した後では、full の staleness 検査は必ず偽陽性になるため。
+STRUCTURE_ONLY=0
+if [[ "${1:-}" == "--structure-only" ]]; then
+  STRUCTURE_ONLY=1
+  shift
+fi
 
 [[ "$#" -eq 1 ]] || usage
 
@@ -156,7 +166,7 @@ if [[ "$KIND" == "umbrella" ]]; then
         add_error "umbrella phase must be an implementation spec, not another umbrella: $phase"
         continue
       fi
-      if ! phase_errors="$(bash "$VALIDATOR" "$phase_path" 2>&1 >/dev/null)"; then
+      if ! phase_errors="$(bash "$VALIDATOR" $([[ "$STRUCTURE_ONLY" -eq 1 ]] && echo --structure-only) "$phase_path" 2>&1 >/dev/null)"; then
         while IFS= read -r line; do
           [[ -n "$line" ]] && add_error "phase $phase: ${line#ERROR: }"
         done <<<"$phase_errors"
@@ -531,6 +541,10 @@ if [[ "$GROUNDED_AT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
     add_error "grounded_at commit does not exist: $GROUNDED_AT"
   elif ! git merge-base --is-ancestor "$GROUNDED_AT" HEAD >/dev/null 2>&1; then
     add_error "spec is stale: grounded_at is not an ancestor of HEAD"
+  elif [[ "$STRUCTURE_ONLY" -eq 1 ]]; then
+    : # structure-only: grounded_at 自体の存在・ancestry は確認済み。ここから先の
+      # 「参照 path が grounded_at 以降に変わっていないか」の diff/dirty 検査だけを
+      # 飛ばす (resume 時、先行 phase がその path を計画どおり変更済みのため)。
   elif [[ "${#REFERENCE_PATHS[@]}" -gt 0 ]]; then
     # Generated artifacts are excluded from the staleness check. The check
     # exists to detect "the code this spec reasoned about has moved"; a

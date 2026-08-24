@@ -91,12 +91,16 @@ description: |
   ls .feature-state/specs/*.md 2>/dev/null | grep -E "(^|/)(feature-)?<入力>\.md$"
   ```
   複数一致なら列挙して中止。
-- **0 件なら wiki を確認**(pull・一方向): `crowi_get_page` で `/crowi/spec/<入力>` →
-  無ければ `/crowi/spec/feature-<入力>` も試す。見つかったら body を
-  `.feature-state/specs/<id>.md` に書き出して(「wiki から pull した」と報告)続行。
-  pull した spec も Step 2 の ready 判定は通常どおり行う(wiki にあるからと言って
-  ready とは限らない)。MCP 未接続なら「specs/ に無い(wiki は未確認: MCP 未接続)」で中止。
-  wiki にも無ければ「spec が無い」で中止。
+- **0 件なら wiki を確認**(pull・一方向): **crowi CLI の直リダイレクトで materialize する**
+  (取得本文をモデルが Write で書き起こす転記経路を、実装の入口に置かない):
+  ```bash
+  mkdir -p .feature-state/specs   # bash redirect は親ディレクトリを作らない
+  crowi -p local get "/crowi/spec/<入力>" > ".feature-state/specs/<id>.md" \
+    || crowi -p local get "/crowi/spec/feature-<入力>" > ".feature-state/specs/<id>.md"
+  # 検証: live と一致するか (末尾改行 1 行だけの差は一致とみなす)
+  crowi -p local get "/crowi/spec/<id>" | diff - ".feature-state/specs/<id>.md"
+  ```
+  見つかったら「wiki から pull した」と報告して続行。pull した spec も Step 2 の ready 判定は通常どおり行う(wiki にあるからと言って ready とは限らない)。CLI が使えない環境に限り `crowi_get_page` (MCP) を fallback にしてよいが、その場合も書き出した内容を live と diff で突合してから進む。wiki にも無ければ「spec が無い」で中止。
 
   **wiki との正本ルール**(crowi-design と共通): 作業中の正本は `.feature-state/specs/`、
   wiki `/crowi/spec/<id>` は耐久スナップショット。同期は一方向のみ(design → wiki の
@@ -259,7 +263,7 @@ signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 /
 | gw start 失敗(同名 branch 残骸等) | gw のエラーを提示して中止。`-f` 系は使わずユーザーに委ねる |
 | claude 起動待ち timeout | 手動手順を表示(worktree は残す) |
 | send-keys 後に反応が無い | 追いパンチしない。報告に「投入したが未確認」と書き、ユーザーに window 確認を促す |
-| spec が umbrella(他 spec をフェーズとして参照する形式) | kickoff の手順自体は変わらない(通常どおり `/crowi-feature <id>` を投入)。v2 は design 時点の実装順序に各 phase の sub-spec / `extraGates` / `longLived` 相当を確定し、implementer が task state へ seed する。legacy は feature-planner が従来どおり計画する。 |
+| spec が umbrella(他 spec をフェーズとして参照する形式) | kickoff の手順自体は変わらない(通常どおり `/crowi-feature <id>` を投入)。umbrella は spec_contract の値に関わらず crowi-feature SKILL 側で needsPlanner=true に倒される(v2 fast path はどの spec からも sub-spec phases を機械導出できないため)。feature-planner が `phases:` の sub-spec 群から実装順序 / `extraGates` / `longLived` 相当を task state へ seed する。 |
 
 ## crowi-feature / complete-feature との関係
 

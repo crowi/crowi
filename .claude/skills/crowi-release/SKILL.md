@@ -106,9 +106,31 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
   人間が明示的にスキップを指示した場合のみで、その旨を Go/No-Go 材料に記録する
   (黙って省略しない)
 
-## 歴史的経緯(手動時代の gotcha — CI が壊れて手動 publish に戻るときの参照)
+## 手動フォールバック(CI が壊れて手動 publish に戻るとき)
 
-- ~~npm publish の 2FA 対話~~ → OIDC Trusted Publishing で不要に(long-lived token なし)
-- ~~macOS buildx は default builder で push~~ → CI の multi-arch build に移行済み
-- ~~initial-release changeset の手修正~~ → 解消済み(fixed group 運用)
-- 手動リリースの完全手順は memory `alpha1_released_2026-06-18` と release-runbook.mdx を参照
+通常運用では CI が publish → tag → image → 告知まで行う(冒頭の境界表)。この節は CI が
+使えないときだけの経路。**運用の正本は
+`apps/crowi-site/content/docs/{ja,en}/operations/release-runbook.mdx`** で、外部設定・
+dist-tag・channel 切替はそちらが持つ。
+
+手順は CI がやっていることを手で行う:
+
+1. `pnpm changeset version`(pre mode 中ならそのまま)で version bump + CHANGELOG を
+   最終 commit として積む
+2. リリースブランチを push → main への PR を 1 本作って merge。**tag は出荷された
+   コードが乗る main のコミットを指すべき**で、かつ main への直 push は避けるため、
+   この順序を崩さない
+3. merge 後の main に `git tag v<dist-version>` → push。`<dist-version>` は
+   `node scripts/compute-dist-version.mjs` の算出値(npm のパッケージ版とは別カウンタ)
+4. `pnpm changeset publish` で npm へ
+5. Docker image を `scripts/release-tags.mjs` の tag 規則どおり multi-arch で build + push
+
+**手動に落ちた瞬間、CI が吸収していた罠が戻ってくる**(CI 経路では解消済みに見えるが、
+解消しているのは「CI がやっている間」だけ):
+
+- **npm の OIDC Trusted Publishing は CI でしか効かない。** 手動 publish には token か
+  2FA の対話が要る
+- **macOS の buildx は default builder のままだと multi-arch を push できない。**
+  `docker buildx create --use` で builder を作ってから push する
+- **新規パッケージの初回だけは Trusted Publisher を設定できない**(npm 上に存在しない
+  名前には登録不可)。1 回手で publish してから登録する — 詳細は runbook が正本

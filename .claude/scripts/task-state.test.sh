@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # task-state.test.sh — smoke tests for task-state.sh.
 #
-# Not wired into any CI/lint pipeline: .claude/ is agent tooling, not product
-# code (see feature-task-state-script.md's openQuestions resolution). Run it
-# manually after touching task-state.sh:
+# Wired into CI (`pnpm test:scripts:sh`) and the pre-push claude-scripts
+# lefthook job. Run it manually after touching task-state.sh:
 #   bash .claude/scripts/task-state.test.sh
 #
 # Uses TASK_STATE_STATE_DIR to point task-state.sh at a throwaway temp dir —
