@@ -2,6 +2,16 @@ import { z } from '@hono/zod-openapi';
 
 import { PageUserSchema } from './page';
 
+/** Kind-specific payloads shared by event writers and history readers. */
+export interface PageHistoryPayloadByKind {
+  page_created: { path: string; grant: number; status: 'published' | 'draft' };
+  page_renamed: { fromPath: string; toPath: string; redirectCreated: boolean; subtree: boolean };
+  visibility_changed: { fromGrant: number; toGrant: number };
+  page_trashed: { fromPath: string; toPath: string };
+  page_restored: { fromPath: string; toPath: string };
+  draft_published: { fromStatus: 'draft'; toStatus: 'published' };
+}
+
 /**
  * RFC-0021 Phase 3 — the merged page timeline.
  *

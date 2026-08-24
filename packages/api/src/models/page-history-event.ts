@@ -1,4 +1,5 @@
-import { Document, Model, Schema, Types, model } from 'mongoose';
+import type { PageHistoryPayloadByKind } from '@crowi/api-contract';
+import { Document, Model, model, Schema, Types } from 'mongoose';
 
 import Crowi from 'src/crowi';
 // From the leaf module, NOT `./page` — importing `GRANTS` from `page.ts`
@@ -8,6 +9,8 @@ import Crowi from 'src/crowi';
 // under `tsx` (a TDZ `ReferenceError`, reproduced via
 // `rebuild-attachment-display-derivatives-sigint-harness.ts`).
 import { GRANTS } from './page-grants';
+
+export type { PageHistoryPayloadByKind } from '@crowi/api-contract';
 
 /**
  * RFC-0021 §5.1/§5.2/§5.6 — Phase 1 (`feature-page-history-phase1-model`).
@@ -32,16 +35,6 @@ export type PageHistoryEventKind = (typeof PAGE_HISTORY_EVENT_KINDS)[number];
 
 export const PAGE_HISTORY_EVENT_SOURCES = ['web', 'oauth', 'pat', 'collab', 'system'] as const;
 export type PageHistoryEventSource = (typeof PAGE_HISTORY_EVENT_SOURCES)[number];
-
-/** RFC §5.2 — kind-specific payload shapes. Deliberately excludes `grantedUsers`, user ids, share tokens, and emails. */
-export interface PageHistoryPayloadByKind {
-  page_created: { path: string; grant: number; status: 'published' | 'draft' };
-  page_renamed: { fromPath: string; toPath: string; redirectCreated: boolean; subtree: boolean };
-  visibility_changed: { fromGrant: number; toGrant: number };
-  page_trashed: { fromPath: string; toPath: string };
-  page_restored: { fromPath: string; toPath: string };
-  draft_published: { fromStatus: 'draft'; toStatus: 'published' };
-}
 
 /**
  * The field set each kind's payload owns — the authoritative table the
