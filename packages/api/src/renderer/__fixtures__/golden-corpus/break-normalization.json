@@ -1,0 +1,576 @@
+{
+  "rule": "An attribute-less `<br>` / `<br/>` / `<br />` HTML tag (ASCII tag-name case-insensitive) that sits inside a `paragraph` / `heading` / `tableCell` phrasing subtree, and whose subtree contains NO OTHER raw `html` node, is normalized from an mdast `html` node into the canonical mdast `break` node (RENDERER_PIPELINE_VERSION 1.3.0+) — the same wire type `remark-breaks` already produces for a soft line break. A single non-bare `html` node ANYWHERE in that phrasing unit's subtree (an attribute, another tag, mixed text, a multi-tag value) blocks EVERY replacement in that unit, so a bare `<br>` sharing a unit with unrelated raw HTML stays `html`. Contamination is judged per `tableCell`, never per `tableRow`/`table` — one raw-HTML cell does not block its clean sibling cells. A bare `<br>` at FLOW position (a direct child of `root` / `blockquote` / `listItem`, not one of the 3 units above) is never touched.",
+  "why": "Non-web clients (RFC-0023 §4.1) treat `html` as opaque content and show a visible placeholder for it, even though an attribute-less `<br>` has a fully known meaning. `break` is an EXISTING v1 closed-registry type (`packages/api-contract/src/schemas/rendered-ast.ts`) that every native decoder already understands — this corpus fixes the NEW wire fact that `break` can now appear directly under `tableCell` (previously only possible under `paragraph` from `remark-breaks` or the GitHub Alerts marker delimiter), plus the producer-side contamination boundary that decides when a `<br>` is left as `html` instead. Pinning both the stored shape and the v1 envelope in the SAME case (not two independently-green halves) is what proves the producer (`core/break-normalization.ts`) and the projection (`sanitize-ast.ts`) agree on one wire contract.",
+  "consumers": [
+    "packages/api/src/renderer/golden-corpus.test.ts",
+    "apps/apple/CrowiKit/Tests/CrowiKitTests/RenderedAstGoldenCorpusTests.swift"
+  ],
+  "consumerContract": "The api jest driver asserts the PRODUCER side (markdown → expectedAst via runPipeline with an empty registry, and expectedAst → expectedEnvelope via sanitizeAst). The CrowiKit XCTest asserts the CONSUMER side (its sanitize-walker mirror over expectedAst, and its strict envelope decoder over expectedEnvelope). The Swift consumer is wired up in Phase 4 (apps/apple lives on the feature-ios-app/impl branch).",
+  "consumerCoordination": "CrowiKit's production code needs NO change for this fixture: its envelope decoder already turns the wire discriminant `\"break\"` into `.lineBreak` (RenderedAstEnvelopeDecoder.swift), its parent-placement table already maps `\"tableCell\": (.tableCells, .phrasing)` matching this server's registry, its inline-text builder already renders `.lineBreak` as a real `\"\\n\"`, and its table-cell view already renders that text with no `lineLimit`/`truncationMode`, so a `\"\\n\"` becomes a real second line. The one required action is repo-mechanical, not a code change: the CrowiKit owner must add `\"break-normalization\"` to the hand-written `corpusFiles` array in `RenderedAstGoldenCorpusTests.swift` (currently `[\"core-blocks\", \"inline\", \"code\", \"image-attrs\", \"gfm-references\", \"typed-nodes\"]`) before this fixture is ever read on that side — until then, `testEveryCorpusFileIsRegistered` on the CrowiKit side is what catches the omission (it fails loudly rather than silently skipping the new file).",
+  "normalization": "none — expected values are exact.",
+  "exclusions": "Plugin-dispatch output byte strings (Mermaid / PlantUML / link-card / shiki generated HTML) are deliberately NOT pinned by this corpus — packages/e2e/tests/renderer-plugins.spec.ts owns that coverage against a live server. The web-rendered DOM parity between an `html(\"<br>\")` tree and a `break` tree (same visual line break) is pinned by packages/web/src/components/editor/render-mdast.test.tsx instead, not here.",
+  "cases": [
+    {
+      "name": "table-cell-bare-br-normalized",
+      "why": "positive — the central composite case: a single bare `<br>` inside a GFM table cell (`a<br>b`) normalizes to `break` in the stored AST, and the same `break` (not a placeholder) is what a declared v1 client receives inside `tableCell.children` — proving the producer (core/break-normalization.ts) and the projection (sanitize-ast.ts) agree on the same wire shape in one case rather than two independently-green halves.",
+      "markdown": "| h |\n| --- |\n| a<br>b |\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "table",
+            "align": [
+              null
+            ],
+            "children": [
+              {
+                "type": "tableRow",
+                "children": [
+                  {
+                    "type": "tableCell",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "h"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "children": [
+                  {
+                    "type": "tableCell",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "a"
+                      },
+                      {
+                        "type": "break"
+                      },
+                      {
+                        "type": "text",
+                        "value": "b"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "table",
+              "align": [
+                null
+              ],
+              "children": [
+                {
+                  "type": "tableRow",
+                  "children": [
+                    {
+                      "type": "tableCell",
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "h"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableRow",
+                  "children": [
+                    {
+                      "type": "tableCell",
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "a"
+                        },
+                        {
+                          "type": "break"
+                        },
+                        {
+                          "type": "text",
+                          "value": "b"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "table-cell-multiple-br-normalized",
+      "why": "positive — the most common real Crowi authoring pattern (multiple manual line breaks inside one table cell, `a<br>b<br>c`): both bare `<br>`s in the same clean unit convert to `break`, not just the first one.",
+      "markdown": "| h |\n| --- |\n| a<br>b<br>c |\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "table",
+            "align": [
+              null
+            ],
+            "children": [
+              {
+                "type": "tableRow",
+                "children": [
+                  {
+                    "type": "tableCell",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "h"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "children": [
+                  {
+                    "type": "tableCell",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "a"
+                      },
+                      {
+                        "type": "break"
+                      },
+                      {
+                        "type": "text",
+                        "value": "b"
+                      },
+                      {
+                        "type": "break"
+                      },
+                      {
+                        "type": "text",
+                        "value": "c"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "table",
+              "align": [
+                null
+              ],
+              "children": [
+                {
+                  "type": "tableRow",
+                  "children": [
+                    {
+                      "type": "tableCell",
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "h"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableRow",
+                  "children": [
+                    {
+                      "type": "tableCell",
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "a"
+                        },
+                        {
+                          "type": "break"
+                        },
+                        {
+                          "type": "text",
+                          "value": "b"
+                        },
+                        {
+                          "type": "break"
+                        },
+                        {
+                          "type": "text",
+                          "value": "c"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "case-and-self-closing-variants-normalized",
+      "why": "positive — the 3 accepted value forms (`<br>` / `<br/>` / `<br />`) and ASCII tag-name case-insensitivity (`<BR>` / `<Br/>`) all normalize inside an ordinary paragraph, with the surrounding text order preserved.",
+      "markdown": "x<BR>y<Br/>z<br />w\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "value": "x"
+              },
+              {
+                "type": "break"
+              },
+              {
+                "type": "text",
+                "value": "y"
+              },
+              {
+                "type": "break"
+              },
+              {
+                "type": "text",
+                "value": "z"
+              },
+              {
+                "type": "break"
+              },
+              {
+                "type": "text",
+                "value": "w"
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "x"
+                },
+                {
+                  "type": "break"
+                },
+                {
+                  "type": "text",
+                  "value": "y"
+                },
+                {
+                  "type": "break"
+                },
+                {
+                  "type": "text",
+                  "value": "z"
+                },
+                {
+                  "type": "break"
+                },
+                {
+                  "type": "text",
+                  "value": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "heading-bare-br-normalized",
+      "why": "positive — headings are a phrasing unit too (registry `childModel: 'phrasing'`), so a heading whose only content is a bare `<br>` gets a `break` child on the wire even though it has no visible TOC label (core/headings.ts drops an HTML-only heading from the TOC, unrelated to this transform, and keeps stamping a non-empty anchor id from the raw text).",
+      "markdown": "### <br>\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "heading",
+            "depth": 3,
+            "children": [
+              {
+                "type": "break"
+              }
+            ],
+            "data": {
+              "hProperties": {
+                "id": "br"
+              }
+            }
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "heading",
+              "depth": 3,
+              "data": {
+                "hProperties": {
+                  "id": "br"
+                }
+              },
+              "children": [
+                {
+                  "type": "break"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "whitespace-preserving-span-retained",
+      "why": "negative — an author-built whitespace-preserving context (`<span style=\"white-space:pre\">x<br>y</span>`): the unit's phrasing subtree holds 3 `html` nodes and only one of them is a bare `<br>`, so D-3's unit-scope contamination rule keeps ALL THREE as `html` (including the otherwise-bare `<br>`) rather than normalizing it and silently adding a visible extra line to this author-controlled whitespace context.",
+      "markdown": "<span style=\"white-space:pre\">x<br>y</span>\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "html",
+                "value": "<span style=\"white-space:pre\">"
+              },
+              {
+                "type": "text",
+                "value": "x"
+              },
+              {
+                "type": "html",
+                "value": "<br>"
+              },
+              {
+                "type": "text",
+                "value": "y"
+              },
+              {
+                "type": "html",
+                "value": "</span>"
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "html",
+                  "value": "<span style=\"white-space:pre\">"
+                },
+                {
+                  "type": "text",
+                  "value": "x"
+                },
+                {
+                  "type": "html",
+                  "value": "<br>"
+                },
+                {
+                  "type": "text",
+                  "value": "y"
+                },
+                {
+                  "type": "html",
+                  "value": "</span>"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "table-cell-mixed-raw-html-retained",
+      "why": "negative — a table cell mixing raw HTML with a bare `<br>` (`<b>x</b><br>y`): the whole cell unit is contaminated by the non-bare `<b>`/`</b>` nodes, so the `<br>` also stays `html` and is transported as `html` (registry placement `both`) rather than `crowiOpaque`, matching today's opaque-HTML policy for non-web clients.",
+      "markdown": "| h |\n| --- |\n| <b>x</b><br>y |\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "table",
+            "align": [
+              null
+            ],
+            "children": [
+              {
+                "type": "tableRow",
+                "children": [
+                  {
+                    "type": "tableCell",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "h"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "children": [
+                  {
+                    "type": "tableCell",
+                    "children": [
+                      {
+                        "type": "html",
+                        "value": "<b>"
+                      },
+                      {
+                        "type": "text",
+                        "value": "x"
+                      },
+                      {
+                        "type": "html",
+                        "value": "</b>"
+                      },
+                      {
+                        "type": "html",
+                        "value": "<br>"
+                      },
+                      {
+                        "type": "text",
+                        "value": "y"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "table",
+              "align": [
+                null
+              ],
+              "children": [
+                {
+                  "type": "tableRow",
+                  "children": [
+                    {
+                      "type": "tableCell",
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "h"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableRow",
+                  "children": [
+                    {
+                      "type": "tableCell",
+                      "children": [
+                        {
+                          "type": "html",
+                          "value": "<b>"
+                        },
+                        {
+                          "type": "text",
+                          "value": "x"
+                        },
+                        {
+                          "type": "html",
+                          "value": "</b>"
+                        },
+                        {
+                          "type": "html",
+                          "value": "<br>"
+                        },
+                        {
+                          "type": "text",
+                          "value": "y"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flow-bare-br-retained",
+      "why": "negative — a bare `<br>` with no enclosing paragraph/heading/tableCell (a standalone line) sits at FLOW position directly under `root`; break-normalization only ever touches phrasing-unit subtrees, so this stays `html` in both the stored AST and the v1 envelope — and, because `html` has registry placement `both`, it is valid there and never degrades to `crowiOpaque{reason:'invalid-position'}`.",
+      "markdown": "<br>\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "html",
+            "value": "<br>"
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "html",
+              "value": "<br>"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
