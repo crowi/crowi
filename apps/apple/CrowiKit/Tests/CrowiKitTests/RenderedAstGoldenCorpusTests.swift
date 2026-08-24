@@ -53,7 +53,7 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
     /// when it matters.
     private static let corpusFiles = [
         "core-blocks", "inline", "code", "image-attrs", "gfm-references", "typed-nodes",
-        "frontmatter", "github-alerts",
+        "frontmatter", "github-alerts", "break-normalization",
     ]
 
     /// Files whose stored shape is projected to v1 by a rule that exists ONLY
