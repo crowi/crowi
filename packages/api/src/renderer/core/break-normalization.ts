@@ -40,11 +40,19 @@ export const BARE_HTML_BREAK_RE = /^<br(?: ?\/)?>$/i;
 export const PHRASING_UNIT_TYPES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'tableCell']);
 
 /**
- * D-4 — every registry `childModel: 'phrasing'` parent type. A bare
- * `<br>` is replaced only when its DIRECT parent's type is one of
- * these; flow position (`root` / `blockquote` / `listItem` directly)
- * and any unrecognised (e.g. plugin-injected) parent keep the `html`
- * node untouched.
+ * D-4 — the registry `childModel: 'phrasing'` parent types, minus
+ * `crowiFigure`. A bare `<br>` is replaced only when its DIRECT parent's
+ * type is one of these; flow position (`root` / `blockquote` / `listItem`
+ * directly) and any unrecognised (e.g. plugin-injected) parent keep the
+ * `html` node untouched.
+ *
+ * `crowiFigure` is excluded because it cannot contain one: `image-attrs`
+ * builds it with a single image child, and its standalone predicate
+ * requires every non-image sibling to be whitespace-only text, so a
+ * paragraph holding an `html` node never becomes a figure. Listing it
+ * would be dead scope. The test below derives the rest from the registry,
+ * so a newly added phrasing type fails rather than silently losing
+ * normalization.
  */
 export const BREAK_PARENT_TYPES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'emphasis', 'strong', 'delete', 'link', 'linkReference', 'tableCell']);
 
@@ -57,11 +65,11 @@ function toBreakNode(html: Html): Break {
 }
 
 /**
- * Pass 1 (D-3) — true iff every `html` node anywhere in `unit`'s
- * phrasing subtree is a bare `<br>`. A single non-bare `html` (an
- * attribute, another tag, mixed text, a value holding more than one
- * tag…) contaminates the WHOLE unit, so pass 2 must not touch anything
- * in it — this is what keeps a space-preserving wrapper like
+ * Pass 1 (D-3) — true iff some `html` node anywhere in `unit`'s phrasing
+ * subtree is NOT a bare `<br>`. A single such node (an attribute, another
+ * tag, mixed text, a value holding more than one tag…) contaminates the
+ * WHOLE unit, so pass 2 must not touch anything in it — this is what
+ * keeps a space-preserving wrapper like
  * `<span style="white-space:pre">x<br>y</span>` untouched even though
  * its own `<br>` is otherwise bare.
  *
@@ -71,14 +79,14 @@ function toBreakNode(html: Html): Break {
  * early on the (rare) contaminated case; the transform's O(N) bound
  * counts this as one of the "at most 2 passes per unit".
  */
-function isUncontaminated(unit: PhrasingParent): boolean {
-  let contaminated = false;
+function hasNonBareHtml(unit: PhrasingParent): boolean {
+  let found = false;
   walkPhrasingTree(unit, (node) => {
     for (const child of node.children ?? []) {
-      if (child.type === 'html' && !isBareBreakHtml(child)) contaminated = true;
+      if (child.type === 'html' && !isBareBreakHtml(child)) found = true;
     }
   });
-  return !contaminated;
+  return found;
 }
 
 /**
@@ -100,18 +108,14 @@ function replaceBareBreaks(unit: PhrasingParent): void {
 }
 
 function normalizeUnit(unit: PhrasingParent): void {
-  if (!isUncontaminated(unit)) return;
+  if (hasNonBareHtml(unit)) return;
   replaceBareBreaks(unit);
 }
 
 /**
- * D-5 — registered LAST in `buildCorePlugins` (`core/index.ts`), right
- * before `remarkBreaks`: after GitHub Alerts / headings / raw-space-
- * links / image-attrs / syntax-highlight (all of which need either
- * pristine source `position` or a pristine pre-HTML-interpretation
- * tree), and before `remarkBreaks` / emoji / every external transform
- * (which then observe canonical `break` nodes instead of raw `<br>`
- * `html`).
+ * D-5 — registered LAST in `buildCorePlugins`, right before
+ * `remarkBreaks`. `core/index.ts` owns the plugin order and states why
+ * each neighbour sits where it does; don't restate it here.
  *
  * Reuses the shared `walkPhrasingTree` (feature-renderer-plugin-
  * boundary's `embed-tags.ts` / `url-inline-expand.ts` walker, already

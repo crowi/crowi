@@ -1,4 +1,5 @@
 import type { Break, Heading, Html, Paragraph, PhrasingContent, Position, Root, RootContent, TableCell } from 'mdast';
+import { RENDERED_AST_NODE_DEFS } from '@crowi/api-contract';
 import { createEmptyPipelineMetadata } from '../pipeline';
 import { BARE_HTML_BREAK_RE, BREAK_PARENT_TYPES, PHRASING_UNIT_TYPES, remarkNormalizeHtmlBreaks } from './break-normalization';
 
@@ -53,8 +54,16 @@ describe('core/break-normalization transform', () => {
       expect(PHRASING_UNIT_TYPES).toEqual(new Set(['paragraph', 'heading', 'tableCell']));
     });
 
-    it('BREAK_PARENT_TYPES is exactly the 8 phrasing-childModel registry types', () => {
-      expect(BREAK_PARENT_TYPES).toEqual(new Set(['paragraph', 'heading', 'emphasis', 'strong', 'delete', 'link', 'linkReference', 'tableCell']));
+    // Derived from the registry rather than restated, so a newly added
+    // `childModel: 'phrasing'` type has to be either covered here or
+    // excluded on purpose — it cannot silently lose normalization.
+    it('BREAK_PARENT_TYPES covers every phrasing-childModel registry type except the documented exclusion', () => {
+      const phrasingParents = Object.entries(RENDERED_AST_NODE_DEFS)
+        .filter(([, def]) => def.childModel === 'phrasing')
+        .map(([name]) => name);
+      // `crowiFigure` cannot hold an `html` child — see BREAK_PARENT_TYPES' doc comment.
+      const expected = new Set(phrasingParents.filter((name) => name !== 'crowiFigure'));
+      expect(BREAK_PARENT_TYPES).toEqual(expected);
     });
   });
 
@@ -166,7 +175,16 @@ describe('core/break-normalization transform', () => {
       expect(wrapper.children).toEqual([html('<br>')]);
     });
 
-    it.each([...BREAK_PARENT_TYPES])('converts a bare `<br>` whose direct parent type is the allow-listed `%s`', (parentType) => {
+    it.each([
+      'paragraph',
+      'heading',
+      'emphasis',
+      'strong',
+      'delete',
+      'link',
+      'linkReference',
+      'tableCell',
+    ])('converts a bare `<br>` whose direct parent type is the allow-listed `%s`', (parentType) => {
       const parent = { type: parentType, children: [text('a'), html('<br>'), text('b')] } as unknown as PhrasingContent;
       const tree = root(paragraph(parent));
       runTransform(tree);

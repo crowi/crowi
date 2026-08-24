@@ -155,21 +155,16 @@ describe('rebuild rendered-ast (RFC-0023 §15)', () => {
       .exec();
 
     const api = createRebuildCliApi(crowi);
-    const outcome = await api.rebuildRenderedAst({});
-    const stats = outcome.stats as { eligible: number; written: number };
+    await api.rebuildRenderedAst({});
 
     const untouched = await readRevision(historyRevisionId);
     // Never collected: `collectPrefilteredTargets` only ever resolves each
-    // page's CURRENT `.revision`, and this id isn't one anymore.
+    // page's CURRENT `.revision`, and this id isn't one anymore. Had the
+    // stale history revision leaked into the scan it would have been
+    // rewritten and stamped, so this single assertion carries the claim —
+    // asserting the run-wide eligible/written counters instead would bind
+    // this test to how many targets the other tests in this file happen to
+    // leave behind.
     expect(untouched.rendererVersion).toBeUndefined();
-
-    // Every CURRENT-revision target from earlier tests in this file was
-    // already backfilled by the "real run" test and reconfirmed at 0 by
-    // the "idempotence" test just above; this test's own page's current
-    // revision is a fresh save (already stamped RENDERER_PIPELINE_VERSION),
-    // so a correct scan finds NOTHING newly eligible here — the stale
-    // history revision must not have leaked into either count.
-    expect(stats.eligible).toBe(0);
-    expect(stats.written).toBe(0);
   });
 });
