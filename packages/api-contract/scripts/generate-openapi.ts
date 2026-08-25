@@ -57,6 +57,7 @@ import {
   inviteAcceptRoutes,
   meRoutes,
   accessTokenRoutes,
+  oauthSessionRoutes,
   oauthRoutes,
   notificationRoutes,
   pageCollabRoutes,
@@ -102,6 +103,8 @@ import {
   InviteUsersResponseSchema,
   ListAdminUsersRequestSchema,
   ListAdminUsersResponseSchema,
+  ListOAuthSessionsResponseSchema,
+  OAuthSessionSchema,
   ListAttachmentsResponseSchema,
   ListDraftsResponseSchema,
   ListPagesRequestSchema,
@@ -211,6 +214,10 @@ const schemas = [
   ['DeviceInfoResponse', DeviceInfoResponseSchema],
   ['DeviceVerifyRequest', DeviceVerifyRequestSchema],
   ['DeviceVerifyResponse', DeviceVerifyResponseSchema],
+
+  // OAuth session list/revoke
+  ['OAuthSession', OAuthSessionSchema],
+  ['ListOAuthSessionsResponse', ListOAuthSessionsResponseSchema],
 
   // oauth client-info (RFC-0016 Phase 0)
   ['ClientInfoResponse', ClientInfoResponseSchema],
@@ -328,6 +335,10 @@ const routeGroups = [
   // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
   // right after meRoutes to mirror the buildHonoApp chain.
   accessTokenRoutes,
+  // Self-service OAuth session list/revoke, also under `/me/*`.
+  // Registered right after access-token and before oauth to mirror the
+  // buildHonoApp chain.
+  oauthSessionRoutes,
   // RFC-0010 Phase 3 — OAuth authorization-server endpoints (authorize /
   // token / revoke / discovery). Registered after access-token to mirror
   // the buildHonoApp chain.

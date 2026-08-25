@@ -48,6 +48,7 @@ import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
 import { registerOAuthRoutes } from './handlers/oauth';
+import { registerOAuthSessionRoutes } from './handlers/oauth-session';
 import { registerPageRoutes } from './handlers/page';
 import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
@@ -203,13 +204,18 @@ export const buildHonoApp = (crowi: Crowi) => {
   // `registerMeRoutes`: it rides that handler's broad `/me/*` jwtAuth
   // apply rather than installing its own (avoids a second User.findById).
   const withAccessToken = registerAccessTokenRoutes(withMe, crowi);
+  // Self-service OAuth session (refresh-token rotation-chain tip) list/revoke
+  // (`/me/oauth-sessions`). Also rides `registerMeRoutes`'s broad `/me/*`
+  // jwtAuth apply, so it registers right after `registerAccessTokenRoutes`
+  // for the same reason.
+  const withOAuthSession = registerOAuthSessionRoutes(withAccessToken, crowi);
   // RFC-0010 Phase 3/4 — OAuth authorization-server endpoints. `/oauth/token`,
   // `/oauth/revoke`, `/.well-known/oauth-authorization-server`,
   // `/oauth/device/authorize` and `GET /oauth/device` are public;
   // `/oauth/authorize` and `/oauth/device/verify` install their own per-path
   // `createJwtAuth` (no prefix overlap with any other handler's broad apply,
   // so they are self-contained).
-  const withOAuth = registerOAuthRoutes(withAccessToken, crowi);
+  const withOAuth = registerOAuthRoutes(withOAuthSession, crowi);
   const withUser = registerUserRoutes(withOAuth, crowi);
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);

@@ -2983,6 +2983,229 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/oauth-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's active OAuth sessions (refresh-token rotation-chain tips) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Active OAuth session list (no secrets) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            oauthSessions: {
+                                id: string;
+                                clientId: string;
+                                clientName: string;
+                                scopes: string[];
+                                /** Format: date-time */
+                                authorizedAt: string;
+                                /** Format: date-time */
+                                lastRefreshedAt: string;
+                                /** Format: date-time */
+                                expiresAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description OAuth sessions can only be managed from a web session, or the account is not active */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED";
+                                message: string;
+                                redirectTo: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/oauth-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an OAuth session (the rotation-chain component reachable from this tip) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Session revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            clientId: string;
+                            clientName: string;
+                            scopes: string[];
+                            /** Format: date-time */
+                            authorizedAt: string;
+                            /** Format: date-time */
+                            lastRefreshedAt: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description OAuth sessions can only be managed from a web session, or the account is not active */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED";
+                                message: string;
+                                redirectTo: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No such session belonging to the current user */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/oauth/authorize": {
         parameters: {
             query?: never;
@@ -15659,6 +15882,32 @@ export interface components {
         DeviceVerifyResponse: {
             /** @enum {string} */
             status: "approved" | "denied";
+        };
+        OAuthSession: {
+            id: string;
+            clientId: string;
+            clientName: string;
+            scopes: string[];
+            /** Format: date-time */
+            authorizedAt: string;
+            /** Format: date-time */
+            lastRefreshedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ListOAuthSessionsResponse: {
+            oauthSessions: {
+                id: string;
+                clientId: string;
+                clientName: string;
+                scopes: string[];
+                /** Format: date-time */
+                authorizedAt: string;
+                /** Format: date-time */
+                lastRefreshedAt: string;
+                /** Format: date-time */
+                expiresAt: string;
+            }[];
         };
         ClientInfoResponse: {
             clientId: string;
