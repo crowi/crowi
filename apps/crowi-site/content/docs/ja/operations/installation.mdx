@@ -49,7 +49,7 @@ cd crowi
 # 2. 依存関係をインストール
 pnpm install
 
-# 3. 開発用インフラ (MongoDB / Redis / Elasticsearch / PlantUML) を起動
+# 3. 開発用インフラ (MongoDB / Redis / Elasticsearch / Mailpit) を起動
 docker compose up -d
 
 # 4. 環境変数ファイルを用意
@@ -91,7 +91,7 @@ api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完
 | `mongodb` | `mongo:8` | `27017` |
 | `redis` | `redis:8.8.0` | `6379` |
 | `elasticsearch` | カスタムイメージ (9.4.0 + `analysis-kuromoji`) | `9200` |
-| `plantuml` | `plantuml/plantuml-server` | `8080` |
+| `mailpit` | `axllent/mailpit:latest` | `1025` (SMTP) / `8025` (Web UI) |
 
 Elasticsearch イメージは日本語形態素解析プラグイン `analysis-kuromoji` を
 あらかじめ同梱したカスタムビルドです。詳細は [検索のセットアップ](./search-setup)

@@ -49,7 +49,7 @@ cd crowi
 # 2. Install dependencies
 pnpm install
 
-# 3. Start the development infrastructure (MongoDB / Redis / Elasticsearch / PlantUML)
+# 3. Start the development infrastructure (MongoDB / Redis / Elasticsearch / Mailpit)
 docker compose up -d
 
 # 4. Prepare the environment file
@@ -92,7 +92,7 @@ middleware**, not the application itself.
 | `mongodb` | `mongo:8` | `27017` |
 | `redis` | `redis:8.8.0` | `6379` |
 | `elasticsearch` | Custom image (9.4.0 + `analysis-kuromoji`) | `9200` |
-| `plantuml` | `plantuml/plantuml-server` | `8080` |
+| `mailpit` | `axllent/mailpit:latest` | `1025` (SMTP) / `8025` (web UI) |
 
 The Elasticsearch image is a custom build that bundles the Japanese
 morphological analysis plugin `analysis-kuromoji`. See
