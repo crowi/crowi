@@ -114,6 +114,24 @@ const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[], failure?
   error: failure?.error,
 });
 
+// The admin form always resends every non-secret field's current value
+// (not only the ones the operator actually edited — see `buildRequest` in
+// `plugin-config-form.tsx`), so "changed" cannot be inferred from mere
+// presence in `body.values`. `currentValueFor` reconstructs the value the
+// form loaded (same `existing[key] ?? defaultValue ?? null` fallback as
+// `getPluginConfigRoute`, except secrets — those are never echoed back, so
+// their form baseline is always blank and the only fair comparison is
+// against the raw stored value) so an unedited field compares equal and is
+// excluded from `toWrite` below.
+const currentValueFor = (field: SerializedPluginField, existing: Record<string, unknown>): unknown =>
+  field.kind === 'secret' ? existing[field.name] : (existing[field.name] ?? field.defaultValue ?? null);
+
+const isSameValue = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => v === b[i]);
+  return false;
+};
+
 const readPluginNamespace = (crowi: Crowi, pluginName: string): Record<string, unknown> => {
   const crowiNs = readCrowiConfigNamespace(crowi.getConfig());
   const prefix = `plugin:${pluginName}:`;
@@ -228,7 +246,43 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         if (!field) continue;
         if (field.kind === 'secret' && value === undefined) continue;
         merged[key] = value;
+        if (isSameValue(value, currentValueFor(field, existing))) continue;
         toWrite[key] = value;
+      }
+
+      // A save that rewrites ANY member of a `configAtomicGroups` group
+      // changes the group's identity as a whole (the group is written
+      // together below), even when the changed field itself isn't
+      // `@sensitive` — e.g. swapping just `clientId` to a different OAuth
+      // project keeps the stored secret but pairs it with a client it was
+      // never issued for. Gate on group membership rather than
+      // `field.kind === 'secret'` so that case isn't missed. Runs here,
+      // ahead of `safeParse`, because an unconfirmed save that is also
+      // invalid must surface the confirmation requirement first — though
+      // both leave nothing written, so the two orders are observationally
+      // identical.
+      const atomicGroups = plugin.configAtomicGroups ?? [];
+      const touchedGroups = atomicGroups.filter((group) => group.keys.some((key) => key in toWrite));
+
+      if (touchedGroups.length > 0 && !body.confirmLinkedIdentities) {
+        const driverNames = crowi
+          .getPlugins()
+          .auth.list()
+          .filter((entry) => entry.plugin === plugin.name)
+          .map((entry) => entry.driverName);
+        const count = driverNames.length > 0 ? await crowi.model('UserIdentity').countDocuments({ provider: { $in: driverNames } }) : 0;
+        if (count > 0) {
+          return c.json(
+            {
+              error: {
+                code: 'LINKED_IDENTITIES_EXIST' as const,
+                message: `${count} user(s) are linked through this provider. Changing its credentials may prevent them from signing in.`,
+                count,
+              },
+            },
+            409,
+          );
+        }
       }
 
       const parsed = plugin.configSchema.safeParse(merged);
@@ -252,13 +306,12 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
 
       // RFC-0014 phase 4 — fields belonging to a `configAtomicGroups` group
       // leave the ordinary per-key write path entirely. A group is touched
-      // as a whole whenever ANY of its members is in the request, and the
-      // values written are taken from the VALIDATED merge (`parsed.data`),
-      // not from the request: that is what supplies an omitted secret from
-      // the currently-stored value, so saving only the client id can never
+      // as a whole whenever ANY of its members is in the request (computed
+      // above, ahead of the confirmation gate), and the values written are
+      // taken from the VALIDATED merge (`parsed.data`), not from the
+      // request: that is what supplies an omitted secret from the
+      // currently-stored value, so saving only the client id can never
       // blank the secret next to it.
-      const atomicGroups = plugin.configAtomicGroups ?? [];
-      const touchedGroups = atomicGroups.filter((group) => group.keys.some((key) => key in toWrite));
       const atomicFieldNames = new Set(atomicGroups.flatMap((group) => group.keys));
 
       const writes: Record<string, unknown> = {};
