@@ -139,6 +139,29 @@ interface PluginConfigValidationBody {
   };
 }
 
+/**
+ * Thrown on a 409 `LINKED_IDENTITIES_EXIST` instead of routing through
+ * `throwGenericError`, which would collapse the `count` the confirmation
+ * dialog needs down to a plain string message (mirrors
+ * `PluginConfigValidationError`'s handling of 422 `issues` for the same
+ * reason).
+ */
+export class LinkedIdentitiesExistError extends Error {
+  readonly count: number;
+  constructor(message: string, count: number) {
+    super(message);
+    this.name = 'LinkedIdentitiesExistError';
+    this.count = count;
+  }
+}
+
+interface LinkedIdentitiesExistBody {
+  error?: {
+    message?: string;
+    count?: number;
+  };
+}
+
 export function useUpdateAdminPluginConfig(name: string) {
   const queryClient = useQueryClient();
   return useMutation<UpdatePluginConfigResponse, Error, UpdatePluginConfigRequest>({
@@ -148,6 +171,10 @@ export function useUpdateAdminPluginConfig(name: string) {
       if (response.status === 422) {
         const body = (await response.json().catch(() => null)) as PluginConfigValidationBody | null;
         throw new PluginConfigValidationError(body?.error?.message ?? 'Plugin config failed validation', body?.error?.issues ?? []);
+      }
+      if (response.status === 409) {
+        const body = (await response.json().catch(() => null)) as LinkedIdentitiesExistBody | null;
+        throw new LinkedIdentitiesExistError(body?.error?.message ?? 'Users are linked through this provider', body?.error?.count ?? 0);
       }
       return throwGenericError(response, 'Failed to update plugin config', 'Plugin not found');
     },

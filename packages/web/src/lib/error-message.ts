@@ -106,6 +106,10 @@ export const ERROR_MESSAGE_KEYS = {
   MAIL_TEST_FAILED: m['errors.mail_test_failed'],
   PLUGIN_NOT_FOUND: m['errors.plugin_not_found'],
   PLUGIN_CONFIG_VALIDATION_FAILED: m['errors.plugin_config_validation_failed'],
+  // Generic fallback for LINKED_IDENTITIES_EXIST; the primary UI path
+  // (plugin-config-form.tsx's confirmation dialog) renders its own
+  // count-bearing message instead of this parameterless one.
+  LINKED_IDENTITIES_EXIST: m['errors.linked_identities_exist'],
 } satisfies Record<ErrorCode, MessageFn>;
 
 const isKnownCode = (code: string): code is ErrorCode => code in ERROR_MESSAGE_KEYS;

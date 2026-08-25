@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SecretField } from '@/components/admin/secret-field';
-import { PluginConfigValidationError, useUpdateAdminPluginConfig } from '@/lib/use-admin-plugins';
+import { LinkedIdentitiesExistError, PluginConfigValidationError, useUpdateAdminPluginConfig } from '@/lib/use-admin-plugins';
 import { acquireRefreshedToken, apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
@@ -40,6 +40,10 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
   const [savedOutcome, setSavedOutcome] = useState<SaveOutcome | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [issues, setIssues] = useState<Map<string, string>>(new Map());
+  // Set when a save comes back 409 LINKED_IDENTITIES_EXIST. Holds the exact
+  // body that was rejected so confirming re-sends the same values plus the
+  // flag, rather than re-deriving from (possibly since-changed) form state.
+  const [linkedIdentitiesConfirm, setLinkedIdentitiesConfirm] = useState<{ count: number; body: UpdatePluginConfigRequest } | null>(null);
 
   // Defensive: surface "no config" instead of crashing if the server
   // response shape is unexpected (e.g. stale bundle, transitional
@@ -50,6 +54,15 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
 
   const dirty = isDirty(state, initialState, config.fields);
 
+  const save = async (body: UpdatePluginConfigRequest) => {
+    const response = await update.mutateAsync(body);
+    setSavedAt(Date.now());
+    setSavedOutcome(deriveOutcome(response));
+    // Clear local "cleared / dirty" markers — the just-saved state
+    // is the new baseline.
+    setState(applySaved(state, config.fields));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setServerError(null);
@@ -59,13 +72,12 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
 
     const body = buildRequest(state, config.fields);
     try {
-      const response = await update.mutateAsync(body);
-      setSavedAt(Date.now());
-      setSavedOutcome(deriveOutcome(response));
-      // Clear local "cleared / dirty" markers — the just-saved state
-      // is the new baseline.
-      setState(applySaved(state, config.fields));
+      await save(body);
     } catch (err) {
+      if (err instanceof LinkedIdentitiesExistError) {
+        setLinkedIdentitiesConfirm({ count: err.count, body });
+        return;
+      }
       if (err instanceof PluginConfigValidationError) {
         const next = new Map<string, string>();
         for (const issue of err.issues) {
@@ -74,6 +86,18 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
         }
         setIssues(next);
       }
+      setServerError(err instanceof Error ? err.message : m['admin.plugins.save_failed']());
+    }
+  };
+
+  const handleConfirmLinkedIdentities = async () => {
+    if (!linkedIdentitiesConfirm) return;
+    setServerError(null);
+    try {
+      await save({ ...linkedIdentitiesConfirm.body, confirmLinkedIdentities: true });
+      setLinkedIdentitiesConfirm(null);
+    } catch (err) {
+      setLinkedIdentitiesConfirm(null);
       setServerError(err instanceof Error ? err.message : m['admin.plugins.save_failed']());
     }
   };
@@ -93,6 +117,26 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
           {update.isPending ? m['admin.plugins.save_pending']() : m['admin.plugins.save']()}
         </Button>
       </div>
+
+      <Dialog open={linkedIdentitiesConfirm !== null} onOpenChange={(open) => !open && setLinkedIdentitiesConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{m['admin.plugins.linked_identities_confirm_title']()}</DialogTitle>
+            <DialogDescription>{m['admin.plugins.linked_identities_confirm_body']({ count: linkedIdentitiesConfirm?.count ?? 0 })}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={update.isPending}>
+                {m['admin.plugins.linked_identities_confirm_cancel']()}
+              </Button>
+            </DialogClose>
+            <Button type="button" onClick={handleConfirmLinkedIdentities} disabled={update.isPending}>
+              {update.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              {update.isPending ? m['admin.plugins.linked_identities_confirm_pending']() : m['admin.plugins.linked_identities_confirm_confirm']()}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
