@@ -167,7 +167,14 @@ export function useUpdateAdminPluginConfig(name: string) {
   return useMutation<UpdatePluginConfigResponse, Error, UpdatePluginConfigRequest>({
     mutationFn: async (data) => {
       const response = await apiClient.admin.plugins.config.$put({ query: { name }, json: data });
-      if (response.status === 200) return (await response.json()) as UpdatePluginConfigResponse;
+      if (response.status === 200) {
+        const body = (await response.json()) as UpdatePluginConfigResponse;
+        // feature-plugin-config-live-verification — the wire field is
+        // optional (an older api replica mid-rolling-deploy never sends
+        // it at all); normalize here at the JSON boundary so every caller
+        // downstream can treat `verificationResults` as always present.
+        return { ...body, verificationResults: body.verificationResults ?? [] };
+      }
       if (response.status === 422) {
         const body = (await response.json().catch(() => null)) as PluginConfigValidationBody | null;
         throw new PluginConfigValidationError(body?.error?.message ?? 'Plugin config failed validation', body?.error?.issues ?? []);

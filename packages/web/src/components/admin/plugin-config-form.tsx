@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { Loader2, Save, CheckCircle2, AlertTriangle, Play, Copy, Check } from 'lucide-react';
-import type { PluginConfigResponse, PluginField, UpdatePluginConfigRequest } from '@crowi/api-contract';
+import type {
+  PluginConfigResponse,
+  PluginField,
+  PluginVerificationFailureReason,
+  PluginVerificationResult,
+  UpdatePluginConfigRequest,
+} from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
@@ -36,14 +42,44 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
 
   const initialState = useMemo(() => deriveInitialState(config), [config]);
   const [state, setState] = useState<FieldState>(initialState);
+  // The dirty baseline `state` is compared against. Starts as
+  // `initialState` (the server-derived config this component mounted
+  // with) but, unlike `initialState`, is also advanced to the just-saved
+  // values on every successful save (see `save()`) — it does NOT wait for
+  // the `config` prop itself to refetch and echo the new server state
+  // back down. A save's own response already tells this component
+  // definitively what is now persisted; making the notice's visibility
+  // depend on a SEPARATE round-trip (the query invalidation this
+  // triggers, then the resulting refetch actually completing) meant a
+  // delayed or failed refetch left `dirty` permanently true and the
+  // verification notice permanently hidden, even though the save itself
+  // had already succeeded.
+  const [baseline, setBaseline] = useState<FieldState>(initialState);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [savedOutcome, setSavedOutcome] = useState<SaveOutcome | null>(null);
+  // feature-plugin-config-live-verification — non-blocking post-save
+  // connectivity/permission probe results from the most recent save.
+  // Always `[]` (never omitted, see `useUpdateAdminPluginConfig`'s wire
+  // normalization) when nothing was verified.
+  const [savedVerification, setSavedVerification] = useState<PluginVerificationResult[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const [issues, setIssues] = useState<Map<string, string>>(new Map());
   // Set when a save comes back 409 LINKED_IDENTITIES_EXIST. Holds the exact
   // body that was rejected so confirming re-sends the same values plus the
   // flag, rather than re-deriving from (possibly since-changed) form state.
   const [linkedIdentitiesConfirm, setLinkedIdentitiesConfirm] = useState<{ count: number; body: UpdatePluginConfigRequest } | null>(null);
+
+  // feature-plugin-config-live-verification AC-7 — the save flow is
+  // "in-flight" for as long as the mutation is pending OR the
+  // linked-identities confirmation dialog it may have opened is still
+  // showing. The dialog case matters separately from `isPending`: once
+  // the 409 response lands, the mutation itself is settled (not
+  // pending) while the operator decides whether to confirm — if editing
+  // were allowed during that window, a since-edited field would be
+  // silently discarded (the confirm button re-sends the ORIGINAL
+  // rejected body) or, worse, `applySaved` would adopt an unsent edit as
+  // the new saved baseline once the confirmed save resolves.
+  const inFlight = update.isPending || linkedIdentitiesConfirm !== null;
 
   // Defensive: surface "no config" instead of crashing if the server
   // response shape is unexpected (e.g. stale bundle, transitional
@@ -52,15 +88,22 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
     return <p className="text-muted-foreground text-sm">{m['admin.plugins.no_config']()}</p>;
   }
 
-  const dirty = isDirty(state, initialState, config.fields);
+  const dirty = isDirty(state, baseline, config.fields);
 
   const save = async (body: UpdatePluginConfigRequest) => {
     const response = await update.mutateAsync(body);
     setSavedAt(Date.now());
     setSavedOutcome(deriveOutcome(response));
-    // Clear local "cleared / dirty" markers — the just-saved state
-    // is the new baseline.
-    setState(applySaved(state, config.fields));
+    setSavedVerification(response.verificationResults ?? []);
+    // Clear local "cleared / dirty" markers, and adopt the result as the
+    // new dirty baseline — see `baseline`'s own doc for why this doesn't
+    // wait on `config` to refetch. Every field the request could have
+    // changed either round-trips through `state` unchanged (non-secret) or
+    // is normalized by `applySaved` (secret) to exactly what the request
+    // just sent, so the SAME object is correct as both.
+    const next = applySaved(state, config.fields);
+    setState(next);
+    setBaseline(next);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,6 +112,7 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
     setIssues(new Map());
     setSavedAt(null);
     setSavedOutcome(null);
+    setSavedVerification([]);
 
     const body = buildRequest(state, config.fields);
     try {
@@ -102,17 +146,29 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
     }
   };
 
+  const showSaveNotice = savedAt !== null && !inFlight && !dirty;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {serverError && <ErrorAlert message={serverError} />}
 
       {config.fields.map((field) => (
-        <FieldRow key={field.name} field={field} pluginName={config.name} state={state} setState={setState} issue={issues.get(field.name)} />
+        <FieldRow
+          key={field.name}
+          field={field}
+          pluginName={config.name}
+          state={state}
+          setState={setState}
+          issue={issues.get(field.name)}
+          disabled={inFlight}
+        />
       ))}
 
+      {showSaveNotice && savedVerification.length > 0 && <VerificationNotice results={savedVerification} />}
+
       <div className="flex items-center justify-end gap-3 pt-2">
-        {savedAt !== null && !update.isPending && !dirty && savedOutcome !== null && <SaveOutcomeBadge outcome={savedOutcome} />}
-        <Button type="submit" disabled={update.isPending || !dirty}>
+        {showSaveNotice && savedOutcome !== null && <SaveOutcomeBadge outcome={savedOutcome} />}
+        <Button type="submit" disabled={inFlight || !dirty}>
           {update.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
           {update.isPending ? m['admin.plugins.save_pending']() : m['admin.plugins.save']()}
         </Button>
@@ -147,9 +203,11 @@ interface FieldRowProps {
   state: FieldState;
   setState: React.Dispatch<React.SetStateAction<FieldState>>;
   issue: string | undefined;
+  /** feature-plugin-config-live-verification AC-7 — disables every editable control (and the `@action` button) while a save is in flight. */
+  disabled: boolean;
 }
 
-function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) {
+function FieldRow({ field, pluginName, state, setState, issue, disabled }: FieldRowProps) {
   const description = field.description;
   // Localized label from the plugin's `configI18n` overlay; falls back to the
   // raw schema field name. `field.name` is still the wire key used for ids and
@@ -162,7 +220,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
   // manifest") and shows the JSON result. Short-circuit before the value
   // controls so it never renders as a stray text input.
   if (field.action) {
-    return <PluginActionButton pluginName={pluginName} action={field.action} description={description} />;
+    return <PluginActionButton pluginName={pluginName} action={field.action} description={description} disabled={disabled} />;
   }
 
   if (field.kind === 'secret') {
@@ -189,6 +247,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
             setState((prev) => updateField(prev, field.name, (cur) => ({ ...(cur as SecretFieldState), draft: '', dirty: false, clearRequested: false })))
           }
           error={issue}
+          disabled={disabled}
         />
         {description && <p className="text-muted-foreground text-xs">{description}</p>}
       </div>
@@ -199,7 +258,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
     const value = Boolean(state.values[field.name]);
     return (
       <div className="flex items-start gap-3">
-        <Switch id={`field-${field.name}`} checked={value} onCheckedChange={(v) => setState((prev) => setValue(prev, field.name, v))} />
+        <Switch id={`field-${field.name}`} checked={value} onCheckedChange={(v) => setState((prev) => setValue(prev, field.name, v))} disabled={disabled} />
         <div className="space-y-1">
           <Label htmlFor={`field-${field.name}`} className="text-sm font-medium">
             {labelDisplay}
@@ -224,7 +283,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
           {labelDisplay}
           {optional}
         </Label>
-        <Select value={value} onValueChange={(v) => setState((prev) => setValue(prev, field.name, v))} name={field.name}>
+        <Select value={value} onValueChange={(v) => setState((prev) => setValue(prev, field.name, v))} name={field.name} disabled={disabled}>
           <SelectTrigger id={`field-${field.name}`} className="w-full max-w-md">
             <SelectValue />
           </SelectTrigger>
@@ -270,6 +329,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
             )
           }
           rows={4}
+          disabled={disabled}
         />
         {description && <p className="text-muted-foreground text-xs">{description}</p>}
         {issue && (
@@ -301,6 +361,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
           setState((prev) => setValue(prev, field.name, next));
         }}
         className="max-w-md"
+        disabled={disabled}
       />
       {description && (
         <p className="text-muted-foreground text-xs">
@@ -321,6 +382,8 @@ interface PluginActionButtonProps {
   action: NonNullable<PluginField['action']>;
   /** Localized help text shown under the button; bare URLs are linkified. */
   description?: string;
+  /** feature-plugin-config-live-verification AC-7 — disables the button independent of its own `pending` state, while the surrounding form's save is in flight. */
+  disabled?: boolean;
 }
 
 /**
@@ -332,7 +395,7 @@ interface PluginActionButtonProps {
  * response body (e.g. the Slack App manifest JSON) is shown in a dialog
  * with a copy button — the "show + copy" UX the manifest flow needs.
  */
-function PluginActionButton({ pluginName, action, description }: PluginActionButtonProps) {
+function PluginActionButton({ pluginName, action, description, disabled = false }: PluginActionButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -378,7 +441,7 @@ function PluginActionButton({ pluginName, action, description }: PluginActionBut
 
   return (
     <div className="space-y-1.5">
-      <Button type="button" variant="outline" onClick={run} disabled={pending}>
+      <Button type="button" variant="outline" onClick={run} disabled={pending || disabled}>
         {pending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
         {pending ? m['admin.plugins.action_pending']() : action.label}
       </Button>
@@ -469,6 +532,53 @@ function SaveOutcomeBadge({ outcome }: { outcome: SaveOutcome }) {
       {text}
     </span>
   );
+}
+
+/**
+ * feature-plugin-config-live-verification — shows the non-blocking
+ * connectivity/permission probe outcome for the plugin(s) affected by the
+ * most recent save. Fixed translations only (AC-8: never raw server/SDK
+ * text — `results` already carries nothing but `plugin` + `status` +
+ * a closed `reason` enum). Always includes the instance-scope caveat
+ * (AC-10): this reflects only the api instance that answered the save
+ * request, never a cluster-wide aggregate.
+ */
+function VerificationNotice({ results }: { results: PluginVerificationResult[] }) {
+  return (
+    <div className="space-y-1 text-sm" role="status">
+      {results.map((result) => (
+        <p
+          key={result.plugin}
+          className={
+            result.status === 'ok'
+              ? 'flex items-center gap-1 text-emerald-700 dark:text-emerald-300'
+              : 'flex items-center gap-1 text-amber-700 dark:text-amber-300'
+          }
+        >
+          {result.status === 'ok' ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+          {result.status === 'ok'
+            ? m['admin.plugins.verification_ok']({ plugin: result.plugin })
+            : m['admin.plugins.verification_failed']({ plugin: result.plugin, reason: verificationReasonText(result.reason) })}
+        </p>
+      ))}
+      <p className="text-muted-foreground text-xs">{m['admin.plugins.verification_instance_scope_note']()}</p>
+    </div>
+  );
+}
+
+function verificationReasonText(reason: PluginVerificationFailureReason): string {
+  switch (reason) {
+    case 'unreachable':
+      return m['admin.plugins.verification_reason_unreachable']();
+    case 'auth-failed':
+      return m['admin.plugins.verification_reason_auth_failed']();
+    case 'resource-missing':
+      return m['admin.plugins.verification_reason_resource_missing']();
+    case 'write-denied':
+      return m['admin.plugins.verification_reason_write_denied']();
+    default:
+      return m['admin.plugins.verification_reason_unknown']();
+  }
 }
 
 interface SecretFieldState {
