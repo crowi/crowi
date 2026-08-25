@@ -14,9 +14,9 @@
  * which collides with the Hono router's path-segment matching, so the
  * name is passed as a query string rather than a path parameter.
  */
-import { type ConfigReadinessIssue, type PluginInfo, adminPluginsRoutes } from '@crowi/api-contract';
-import type { OpenAPIHono } from '@hono/zod-openapi';
+import { adminPluginsRoutes, type ConfigReadinessIssue, type PluginInfo, type PluginVerificationResult } from '@crowi/api-contract';
 import type { CrowiPlugin } from '@crowi/plugin-api';
+import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
@@ -304,6 +304,21 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
 
       const configService = crowi.getConfigService();
 
+      // feature-plugin-config-live-verification — materialize the
+      // verification plan HERE: after `safeParse` (the plan needs
+      // `parsed.data` as the changed plugin's override — see
+      // `createVerificationPlan`'s doc), but strictly BEFORE any of the
+      // saves below touch Mongo or the config cache. Skipped entirely for
+      // a no-op save (`toWrite` empty — nothing atomic or ordinary to
+      // persist): a plan that will never be executed is just wasted
+      // safeParse/deep-freeze work, and the pre-save-snapshot invariant is
+      // moot when there is no save.
+      // `manager` is guaranteed defined here — `plugin` above only resolves
+      // via `manager?.getLoadedPlugin(name)`, so a truthy `plugin` implies a
+      // truthy `manager`; TS can't see that dependency, hence the `!`.
+      const verificationPlan =
+        Object.keys(toWrite).length > 0 ? manager!.createVerificationPlan([`plugin:${plugin.name}`], { [plugin.name]: parsed.data }) : null;
+
       // RFC-0014 phase 4 — fields belonging to a `configAtomicGroups` group
       // leave the ordinary per-key write path entirely. A group is touched
       // as a whole whenever ANY of its members is in the request (computed
@@ -341,14 +356,31 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
 
       let hotReloaded = false;
       let reconfigureFailed = false;
-      const pluginManager = crowi.pluginManager;
-      if (pluginManager && (Object.keys(writes).length > 0 || touchedGroups.length > 0)) {
-        const result = await pluginManager.reconfigureAffected([`plugin:${plugin.name}`]);
+      // feature-plugin-config-live-verification — `[]` (not omitted) on
+      // every 200: a rolling-deploy old-api-replica peer never sends this
+      // field at all (the contract field is optional for THAT reason), but
+      // this handler always includes it, empty when verification never ran
+      // (no-op save, or no affected plugin declares `verifyConfig`).
+      let verificationResults: PluginVerificationResult[] = [];
+      if (Object.keys(writes).length > 0 || touchedGroups.length > 0) {
+        const result = await manager!.reconfigureAffected([`plugin:${plugin.name}`]);
         hotReloaded = result.attempted > 0 && result.succeeded === result.attempted;
         reconfigureFailed = result.attempted > result.succeeded;
+
+        // Verification runs only on this existing `didPersist` success path
+        // — after reconfigure, matching the design's ordering (save →
+        // reconfigure → verify) — and never on a no-op/409/422/atomic-500
+        // path (`verificationPlan` is `null` there, see above).
+        if (verificationPlan) {
+          const outcomes = await manager!.verifyAffectedConfig(verificationPlan);
+          verificationResults = outcomes.map(
+            ({ pluginName, result: outcome }): PluginVerificationResult =>
+              outcome.status === 'ok' ? { plugin: pluginName, status: 'ok' } : { plugin: pluginName, status: 'failed', reason: outcome.reason },
+          );
+        }
       }
 
-      return c.json({ ok: true as const, hotReloaded, reconfigureFailed }, 200);
+      return c.json({ ok: true as const, hotReloaded, reconfigureFailed, verificationResults }, 200);
     })
     .openapi(adminPluginsRoutes.clearRenderCacheAllRoute, async (c) => {
       const renderer = crowi.renderer;
