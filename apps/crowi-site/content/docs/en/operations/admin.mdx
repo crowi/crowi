@@ -259,6 +259,27 @@ Lists loaded plugins and lets you edit each plugin's configuration.
   back to the Zod `.describe()` default text).
 - Clearing the render cache per-plugin or globally is also done here.
 
+### Confirming a credential change on an auth plugin
+
+Changing the OAuth client credentials of an **auth plugin** such as
+`@crowi/plugin-google` raises a confirmation dialog **when users are already linked
+through that provider**. The dialog names how many people are linked and warns that
+the change may stop them signing in. Confirming saves; cancelling saves nothing and
+leaves your input in the form.
+
+Confirmation is triggered when the credentials are declared as an **atomic group** —
+a set of fields that only mean anything together, such as a client ID and its
+secret — and you change any member of it. Changing only `clientId` without sending
+`clientSecret` therefore still asks, because the stored secret would be paired with
+a client it was never issued for. Saves that touch only fields outside an atomic
+group, and saves to plugins that register no auth driver (storage, search, and so
+on), are unaffected.
+
+Against the API directly, `PUT /admin/plugins/config` answers with
+`409 LINKED_IDENTITIES_EXIST` and the linked count. Resending the same request with
+`confirmLinkedIdentities: true` saves it. That flag is never persisted into the
+plugin's stored configuration.
+
 For installing and managing plugins see [Managing plugins](../plugins/managing),
 and for how plugins work see [Plugin overview](../plugins/overview).
 
