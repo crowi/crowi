@@ -252,6 +252,32 @@ Lists loaded plugins and lets you edit each plugin's configuration.
   back to the Zod `.describe()` default text).
 - Clearing the render cache per-plugin or globally is also done here.
 
+### Connection check after saving
+
+Saving a plugin's configuration **also tries the saved values against the real
+backend, for plugins that support it**, and shows the outcome. Today that is
+`@crowi/plugin-storage-local` and `@crowi/plugin-storage-aws-s3` (a write, read and
+delete round trip) and `@crowi/plugin-search-elasticsearch` (a cluster-info call
+only).
+
+**The check runs after the save and never rolls it back.** A failure still leaves
+the value saved and reports "saved, but verification failed". The reason is reduced
+to one of five — unreachable, authentication failed, resource missing, write denied,
+unknown — and the backend's own message is never shown.
+
+Two operational caveats:
+
+- **The result is the result on whichever instance answered the request.** Nothing
+  is aggregated across instances, so a configuration that one instance can reach and
+  another cannot is indistinguishable here.
+- The storage round trip fires its cleanup delete on an independent budget, but
+  **a failed delete does not overturn the verdict**. Credentials that allow writes
+  but deny `DeleteObject` still report success, leaving one probe object behind per
+  save.
+
+The form stays uneditable while a check is in flight, so a value you never submitted
+cannot end up treated as saved.
+
 ### Confirming a credential change on an auth plugin
 
 Changing the OAuth client credentials of an **auth plugin** such as
