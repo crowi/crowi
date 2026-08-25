@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import type { PropsWithChildren, ReactElement } from 'react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GrantChip } from '@/components/grant-chip';
 import { matchMediaImpl } from '@/lib/test-utils/mocks';
 import { WIDE_VIEWPORT_QUERY } from '@/lib/use-wide-viewport';
 
@@ -35,7 +36,7 @@ vi.mock('@/lib/use-likers', () => ({ useLikers, likersKeys: { pagePrefix: (id: s
 vi.mock('@/lib/use-seen', () => ({ useSeenUsers }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 
-import { GrantChip, PageHeader } from './page-header';
+import { PageHeader } from './page-header';
 
 function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   return {
@@ -126,6 +127,12 @@ describe('GrantChip', () => {
     const { container } = render(<GrantChip grant={PageGrantEnum.PUBLIC} />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('keeps the public visibility signal absent from the page header', () => {
+    renderHeader(<PageHeader page={makePage({ grant: PageGrantEnum.PUBLIC })} />);
+
+    expect(screen.queryByText('公開')).toBeNull();
   });
 });
 
