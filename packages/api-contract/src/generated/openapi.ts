@@ -14835,7 +14835,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Save succeeded; hotReloaded flag indicates live apply */
+                /** @description Save succeeded; hotReloaded flag indicates live apply. verificationResults (feature-plugin-config-live-verification) carries non-blocking connectivity/permission probe results for the changed plugin and its dependents, run after this save already persisted and reconfigured — empty on a no-op save or when no affected plugin declares verifyConfig, optional on the wire for rolling-deploy compat with an older api replica, and reflects only the instance that answered this request (never a cluster-wide aggregate). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -14846,6 +14846,17 @@ export interface paths {
                             ok: true;
                             hotReloaded: boolean;
                             reconfigureFailed: boolean;
+                            verificationResults?: ({
+                                plugin: string;
+                                /** @enum {string} */
+                                status: "ok";
+                            } | {
+                                plugin: string;
+                                /** @enum {string} */
+                                status: "failed";
+                                /** @enum {string} */
+                                reason: "unreachable" | "auth-failed" | "resource-missing" | "write-denied" | "unknown";
+                            })[];
                         };
                     };
                 };
@@ -17492,6 +17503,17 @@ export interface components {
             ok: true;
             hotReloaded: boolean;
             reconfigureFailed: boolean;
+            verificationResults?: ({
+                plugin: string;
+                /** @enum {string} */
+                status: "ok";
+            } | {
+                plugin: string;
+                /** @enum {string} */
+                status: "failed";
+                /** @enum {string} */
+                reason: "unreachable" | "auth-failed" | "resource-missing" | "write-denied" | "unknown";
+            })[];
         };
         PluginNotFoundError: {
             error: {
