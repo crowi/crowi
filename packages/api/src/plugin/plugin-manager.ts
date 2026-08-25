@@ -5,10 +5,15 @@ import type {
   CrowiPlugin,
   MailSender,
   NotifierDriver,
+  PluginConfigVerificationOptions,
+  PluginConfigVerificationResult,
+  PluginConfigVerificationSnapshot,
   PluginReadinessDeclaration,
+  ReadonlyDeep,
   SearchDriver,
   StateCell,
   StorageDriver,
+  VerificationFailureReason,
 } from '@crowi/plugin-api';
 import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
@@ -19,7 +24,7 @@ import { credentialVaultModelNamesList, isCredentialVaultModel } from './credent
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
 import { atomicConfigGroupKey } from 'src/models/config';
-import { formatPluginConfigKey, formatPluginNamespace, parsePluginNamespace, readCrowiConfigNamespace } from './plugin-namespace';
+import { formatPluginConfigKey, formatPluginNamespace, parsePluginNamespace, pluginConfigKeyPrefix, readCrowiConfigNamespace } from './plugin-namespace';
 import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
@@ -113,6 +118,115 @@ export interface CoreManagerReadinessIssue {
 export type ManagerReadinessIssue = PluginManagerReadinessIssue | CoreManagerReadinessIssue;
 
 /**
+ * One plugin's slot in a `VerificationPlan` (feature-plugin-config-live-
+ * verification). `'ready'` carries the frozen snapshot + hook to invoke;
+ * `'unmaterializable'` means the plugin declares `verifyConfig` but its own
+ * or a dependency's config could not be safely parsed at plan-creation
+ * time (e.g. an existing, currently-invalid dependency config) — the hook
+ * is never called for this entry, and `verifyAffectedConfig()` reports it
+ * as `{ status: 'failed', reason: 'unknown' }` without running anything.
+ */
+type VerificationPlanEntry =
+  | { pluginName: string; kind: 'ready'; hook: NonNullable<CrowiPlugin['verifyConfig']>; snapshot: PluginConfigVerificationSnapshot }
+  | { pluginName: string; kind: 'unmaterializable' };
+
+/**
+ * Immutable set of per-plugin verification work, built by
+ * `createVerificationPlan()` from the config an admin save is ABOUT to
+ * persist and executed later (after the save + reconfigure have already
+ * completed) by `verifyAffectedConfig()`. Opaque to callers outside this
+ * module — the handler only creates one and passes it back.
+ */
+export interface VerificationPlan {
+  readonly entries: readonly VerificationPlanEntry[];
+}
+
+/** One plugin's outcome from `verifyAffectedConfig()`, in `loadedPlugins` topological order. */
+export interface PluginVerificationOutcome {
+  pluginName: string;
+  result: PluginConfigVerificationResult;
+}
+
+/** Sentinel distinguishing "the hook's promise settled by rejecting/throwing" from an actual (even if malformed) resolved value, inside `verifyAffectedConfig()`'s race. */
+const HOOK_THREW = Symbol('verification-hook-threw');
+
+const VALID_VERIFICATION_REASONS: ReadonlySet<VerificationFailureReason> = new Set([
+  'unreachable',
+  'auth-failed',
+  'resource-missing',
+  'write-denied',
+  'unknown',
+]);
+
+/**
+ * Project whatever a `verifyConfig` hook resolved to onto the closed
+ * `PluginConfigVerificationResult` union — a hook running third-party code
+ * is not trusted to return exactly this shape. An unrecognized `status`,
+ * a missing/unknown `reason`, or a non-object value all fall back to
+ * `{ status: 'failed', reason: 'unknown' }` rather than leaking whatever
+ * extra fields the hook attached (see the result type's own doc).
+ *
+ * The property reads themselves are wrapped in try/catch: `value` is
+ * whatever the hook resolved with, which can be a Proxy or an object with a
+ * throwing getter on `status`/`reason` — a plain property access on those
+ * throws synchronously. Left unguarded, that throw would escape this
+ * function (and the `Promise.all` it runs inside), turning an already-saved
+ * config's non-blocking verification step into a rejected promise instead
+ * of a safe `unknown` result.
+ */
+function normalizeVerificationResult(value: unknown): PluginConfigVerificationResult {
+  try {
+    if (value && typeof value === 'object') {
+      const v = value as { status?: unknown; reason?: unknown };
+      if (v.status === 'ok') return { status: 'ok' };
+      if (v.status === 'failed') {
+        const reason =
+          typeof v.reason === 'string' && VALID_VERIFICATION_REASONS.has(v.reason as VerificationFailureReason)
+            ? (v.reason as VerificationFailureReason)
+            : 'unknown';
+        return { status: 'failed', reason };
+      }
+    }
+  } catch {
+    // Fall through to the same unknown-result default below.
+  }
+  return { status: 'failed', reason: 'unknown' };
+}
+
+/**
+ * Deep-clone `value` (so the plan owns a copy independent of whatever
+ * `parsed.data` object the caller passed in) and deep-freeze the clone —
+ * the immutability half of "immutable request plan"
+ * (feature-plugin-config-live-verification §1). `structuredClone` is safe
+ * here because every `configSchema` value is plain JSON-shaped data
+ * (string / number / boolean / array / plain object) — plugins never put
+ * functions, class instances, or other non-cloneable values in config.
+ */
+function deepFreezeClone<T>(value: T): T {
+  return deepFreeze(structuredClone(value));
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const key of Object.getOwnPropertyNames(value)) {
+      deepFreeze((value as Record<string, unknown>)[key]);
+    }
+    Object.freeze(value);
+  }
+  return value;
+}
+
+/** Extract a plugin's own `plugin:<name>:*` slice out of an already-read `crowi` config namespace object — same shape as `readPluginConfigNamespace()` in `plugin-context.ts`, but operating on a caller-supplied namespace object instead of re-reading `crowi.getConfig()` (`createVerificationPlan()` reads the namespace exactly once, up front, so every plugin it materializes sees the same point-in-time cache). */
+function extractPluginNamespace(configNamespace: Record<string, unknown>, pluginName: string): Record<string, unknown> {
+  const prefix = pluginConfigKeyPrefix(pluginName);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(configNamespace)) {
+    if (key.startsWith(prefix)) out[key.slice(prefix.length)] = value;
+  }
+  return out;
+}
+
+/**
  * Loads the plugins listed in `crowi.config.json`, resolves their
  * dependency order, runs each plugin's `register*` callbacks, and
  * exposes the resulting registries to the rest of the application.
@@ -173,6 +287,16 @@ export class PluginManager {
    * plugin (see `createPluginContext`'s `state` field).
    */
   private stateCells = new Map<string, StateCell<unknown>>();
+  /**
+   * The caller-side race budget `verifyAffectedConfig()` gives each hook
+   * (feature-plugin-config-live-verification §3) — losing the race
+   * normalizes to `{ status: 'failed', reason: 'unreachable' }`, it never
+   * cancels the hook itself. Private (not configurable via
+   * `crowi.config.json`) — tests override it directly (same pattern as
+   * `selectedDrivers` above) to exercise the timeout path without a real
+   * multi-second wait.
+   */
+  private verificationTimeoutMs = 10_000;
 
   constructor(private readonly crowi: Crowi) {}
 
@@ -337,6 +461,220 @@ export class PluginManager {
   async reconfigureAffected(changedNamespaces: string[]): Promise<{ attempted: number; succeeded: number }> {
     const affected = this.affectedPluginsFromNamespaces(changedNamespaces);
     return this.runReconfigure(affected);
+  }
+
+  /**
+   * Materialize an immutable {@link VerificationPlan} for every affected
+   * plugin (the changed plugin(s) named in `changedNamespaces` plus their
+   * transitive dependents, same set `reconfigureAffected` uses) that
+   * declares `verifyConfig` — feature-plugin-config-live-verification §1/§2.
+   * MUST be called BEFORE the triggering save persists anything: `overrides`
+   * (plugin name → its already-`safeParse`d config) lets the caller hand in
+   * values that haven't been written to Mongo yet, so the plan captures
+   * exactly what the save is ABOUT to make true rather than a value that
+   * might change before `verifyAffectedConfig()` actually runs.
+   *
+   * Reads the live config cache exactly ONCE (`getCrowiConfigNamespace()`),
+   * so every plugin this call materializes — the changed plugin, its
+   * dependents' own config, and any dependency config those dependents'
+   * hooks might read — sees the SAME point-in-time cache, not a value that
+   * could shift between two plugins' materialization if a concurrent save
+   * landed mid-call. Every materialized value is deep-cloned + deep-frozen
+   * (`deepFreezeClone`) before being handed to a snapshot facade, so a plan,
+   * once created, cannot be mutated by anything — including a hook that
+   * tries to.
+   *
+   * A plugin whose own config, or whose declared (`requires` +
+   * `exposesConfigToDependents: true`) dependency's config, cannot be
+   * `safeParse`d becomes an `'unmaterializable'` entry: its hook is never
+   * invoked, and `verifyAffectedConfig()` reports it as
+   * `{ status: 'failed', reason: 'unknown' }` without doing any I/O. This
+   * never blocks the save — the plan is inert data, executed later.
+   */
+  createVerificationPlan(changedNamespaces: string[], overrides: Record<string, unknown>): VerificationPlan {
+    const affected = this.affectedPluginsFromNamespaces(changedNamespaces);
+    const configNamespace = this.getCrowiConfigNamespace();
+    const materialized = new Map<string, ReadonlyDeep<unknown> | null>();
+
+    // The whole body is one try/catch: `schema.safeParse` can still throw
+    // (a `.transform()`/`.refine()` callback is ordinary user code, not
+    // guaranteed to only ever return/reject cleanly) and `structuredClone`
+    // throws on a non-cloneable value a transform could produce (e.g. a
+    // `Date`/`URL`). Either failure must degrade this ONE plugin to
+    // `unmaterializable` — plan creation runs ahead of the save handler's
+    // own try/catch (`updatePluginConfigRoute`), so an uncaught throw here
+    // would 500 the save itself over an optional, best-effort feature.
+    const materialize = (pluginName: string): ReadonlyDeep<unknown> | null => {
+      const cached = materialized.get(pluginName);
+      if (cached !== undefined) return cached;
+
+      try {
+        let value: unknown;
+        if (Object.hasOwn(overrides, pluginName)) {
+          // Already validated by the caller's own `safeParse` — trust it
+          // as-is rather than re-parsing.
+          value = overrides[pluginName];
+        } else {
+          const plugin = this.getLoadedPlugin(pluginName);
+          const schema = plugin?.configSchema;
+          if (!schema) {
+            materialized.set(pluginName, null);
+            return null;
+          }
+          const parsed = schema.safeParse(extractPluginNamespace(configNamespace, pluginName));
+          if (!parsed.success) {
+            materialized.set(pluginName, null);
+            return null;
+          }
+          value = parsed.data;
+        }
+
+        const frozen = deepFreezeClone(value) as ReadonlyDeep<unknown>;
+        materialized.set(pluginName, frozen);
+        return frozen;
+      } catch {
+        // No message/stack logged — a schema transform's thrown value could
+        // itself embed a config value (see `verifyAffectedConfig`'s same
+        // no-raw-error-text policy).
+        debug('createVerificationPlan: materializing %s threw; treating as unmaterializable', pluginName);
+        materialized.set(pluginName, null);
+        return null;
+      }
+    };
+
+    const entries: VerificationPlanEntry[] = [];
+    // Iterate `loadedPlugins` (topological order) rather than the `affected`
+    // Set directly — `affectedPluginsFromNamespaces` builds it via BFS, whose
+    // insertion order isn't the topo order `verifyAffectedConfig()` promises
+    // for its results.
+    for (const plugin of this.loadedPlugins) {
+      if (!affected.has(plugin.name) || !plugin.verifyConfig) continue;
+
+      const own = materialize(plugin.name);
+      if (own === null) {
+        entries.push({ pluginName: plugin.name, kind: 'unmaterializable' });
+        continue;
+      }
+
+      const dependencyNames = (plugin.requires ?? []).filter((dep) => this.getLoadedPlugin(dep)?.exposesConfigToDependents === true);
+      const dependencyValues = new Map<string, ReadonlyDeep<unknown>>();
+      let dependenciesOk = true;
+      for (const dep of dependencyNames) {
+        const value = materialize(dep);
+        if (value === null) {
+          dependenciesOk = false;
+          break;
+        }
+        dependencyValues.set(dep, value);
+      }
+      if (!dependenciesOk) {
+        entries.push({ pluginName: plugin.name, kind: 'unmaterializable' });
+        continue;
+      }
+
+      const requires = plugin.requires;
+      const snapshot: PluginConfigVerificationSnapshot = {
+        config: <T>() => own as ReadonlyDeep<T>,
+        dependencyConfig: <T>(dependencyName: string): ReadonlyDeep<T> => {
+          // Same capability check as `PluginContext.dependencyConfig` —
+          // declaring a name in `requires` is only this plugin's side of
+          // the contract, the dependency must also opt in.
+          if (!requires?.includes(dependencyName)) {
+            throw new Error(`Plugin '${plugin.name}' tried to read dependency config of '${dependencyName}', but did not list it in 'requires'.`);
+          }
+          const value = dependencyValues.get(dependencyName);
+          if (value === undefined) {
+            throw new Error(
+              `Plugin '${plugin.name}' tried to read dependency config of '${dependencyName}', but the dependency did not declare 'exposesConfigToDependents'.`,
+            );
+          }
+          return value as ReadonlyDeep<T>;
+        },
+      };
+      entries.push({ pluginName: plugin.name, kind: 'ready', hook: plugin.verifyConfig, snapshot });
+    }
+
+    return { entries };
+  }
+
+  /**
+   * Execute a plan built by `createVerificationPlan()` — called AFTER the
+   * triggering save has already persisted and `reconfigureAffected()` has
+   * already run (feature-plugin-config-live-verification §2/§3). Every
+   * `'ready'` entry's hook is launched in parallel, each raced against
+   * `verificationTimeoutMs` independently: losing the race, a synchronous
+   * throw, a rejected promise, or a malformed return value all normalize to
+   * a safe `{ status: 'failed', ... }` result (`normalizeVerificationResult`)
+   * — nothing here can reject or throw out to the caller. A hook promise
+   * that is still running when its race times out is never awaited again;
+   * a `.catch()` is attached immediately so a later rejection cannot become
+   * an unhandled promise rejection.
+   *
+   * Returns one outcome per plan entry, ordered by `loadedPlugins`
+   * topological order (not by resolution order, and not by insertion order
+   * of `plan.entries`).
+   */
+  async verifyAffectedConfig(plan: VerificationPlan): Promise<PluginVerificationOutcome[]> {
+    const results = new Map<string, PluginConfigVerificationResult>();
+    const timeoutMs = this.verificationTimeoutMs;
+
+    await Promise.all(
+      plan.entries.map(async (entry) => {
+        if (entry.kind === 'unmaterializable') {
+          results.set(entry.pluginName, { status: 'failed', reason: 'unknown' });
+          return;
+        }
+
+        const { pluginName, hook, snapshot } = entry;
+        const options: PluginConfigVerificationOptions = { timeoutMs };
+
+        let hookPromise: Promise<PluginConfigVerificationResult>;
+        try {
+          hookPromise = Promise.resolve(hook(snapshot, options));
+        } catch (err) {
+          hookPromise = Promise.reject(err);
+        }
+        // Guard immediately (before racing) — a hook that keeps running
+        // past the timeout and later rejects must not surface as an
+        // unhandled rejection just because nothing was still awaiting it.
+        // No message/stack logged: a driver SDK's thrown error can embed
+        // the endpoint, bucket, or credentials it was talking to (§3's
+        // no-raw-error-data contract covers rejections, not just returned
+        // results).
+        const guarded: Promise<PluginConfigVerificationResult | typeof HOOK_THREW> = hookPromise.catch(() => {
+          debug('verifyConfig %s threw/rejected', pluginName);
+          return HOOK_THREW;
+        });
+
+        const timedOut = Symbol('verification-timeout');
+        let timer: ReturnType<typeof setTimeout>;
+        const timeout = new Promise<typeof timedOut>((resolve) => {
+          timer = setTimeout(() => resolve(timedOut), timeoutMs);
+          timer.unref?.();
+        });
+
+        const outcome = await Promise.race([guarded, timeout]);
+        // Whichever branch of the race won, the timer must not linger:
+        // left running, it is one live closure per save per hook until it
+        // eventually fires on its own — harmless individually, but it adds
+        // up under save-heavy admin traffic.
+        clearTimeout(timer!);
+        if (outcome === timedOut) {
+          results.set(pluginName, { status: 'failed', reason: 'unreachable' });
+        } else if (outcome === HOOK_THREW) {
+          results.set(pluginName, { status: 'failed', reason: 'unknown' });
+        } else {
+          results.set(pluginName, normalizeVerificationResult(outcome));
+        }
+      }),
+    );
+
+    const ordered: PluginVerificationOutcome[] = [];
+    for (const plugin of this.loadedPlugins) {
+      const result = results.get(plugin.name);
+      if (result) ordered.push({ pluginName: plugin.name, result });
+    }
+    return ordered;
   }
 
   /**
