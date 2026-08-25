@@ -97,6 +97,18 @@ A variant with `s3:ListBucket` enabled is at
 not needed today, but reserved for a future `crowi-admin storage list` /
 `storage diff` command that would enumerate keys server-side.
 
+## Post-save connectivity verification
+
+Saving `bucket` (or the paired `@crowi/plugin-aws` credentials) from `/admin/plugins` triggers a non-blocking round trip after the save already succeeded: the plugin writes a small object under a reserved key prefix, reads it back, and deletes it, using a single-attempt client built from exactly the values you just saved. The admin UI shows the outcome ("saved, but verification failed" plus a fixed reason) without undoing the save — a failed probe never rolls anything back.
+
+This uses the **same three permissions** listed above (`s3:PutObject`/`s3:GetObject`/`s3:DeleteObject`) against the same bucket — no additional IAM action is required. The probe object lives under the `__crowi_config_verification__/` key prefix, entirely separate from `attachment/*` and `user/*`. Cleanup is best-effort: if a probe object is ever left behind (e.g. the connection genuinely hung), it is always under this prefix and safe to delete in bulk:
+
+```bash
+aws s3 rm "s3://YOUR_BUCKET_NAME/__crowi_config_verification__/" --recursive
+```
+
+The verification result reflects only the api instance that handled your save request — it is not aggregated across replicas, and it does not check `s3:ListBucket`, bucket policy, CORS, or SSE configuration (those are out of scope; see the sections above).
+
 ## What does NOT need to be configured
 
 - **Bucket policy** — IAM policy is enough for normal single-account
