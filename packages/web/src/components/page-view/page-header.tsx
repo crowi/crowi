@@ -1,14 +1,13 @@
 'use client';
 
 import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
-import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
+import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import type { LucideIcon } from 'lucide-react';
-import { ArrowUp, Edit2, Link2, Lock } from 'lucide-react';
+import { ArrowUp, Edit2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { GrantChip } from '@/components/grant-chip';
 import { Button } from '@/components/ui/button';
-import { grantLabel } from '@/lib/grant-label';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
@@ -79,41 +78,6 @@ interface PageHeaderProps {
 function getPageTitle(path: string): string {
   if (path === '/') return 'Home';
   return pageDisplayName(path) || 'Untitled';
-}
-
-/**
- * Resolve the icon + chip label for a page's grant. RESTRICTED uses a
- * link icon because "anyone with the link" is the sharing posture;
- * SPECIFIED / OWNER use the lock icon. Returns `null` for PUBLIC so
- * callers can short-circuit rendering.
- */
-function grantChipInfo(grant: number | undefined): { Icon: LucideIcon; label: string } | null {
-  // PUBLIC has a label for history, but public pages intentionally have no chip.
-  if (grant === PageGrantEnum.PUBLIC) return null;
-  const label = grantLabel(grant);
-  if (label == null) return null;
-  return { Icon: grant === PageGrantEnum.RESTRICTED ? Link2 : Lock, label };
-}
-
-/**
- * Pill chip next to the page title that names the page's sharing
- * posture and picks up `--page-grant-accent` for border + text + icon.
- * Companion to the thin accent strip in `(auth)/layout.tsx` — both
- * read the same CSS variable so the colour stays consistent.
- */
-export function GrantChip({ grant }: { grant: number }) {
-  const info = grantChipInfo(grant);
-  if (!info) return null;
-  const { Icon, label } = info;
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium"
-      style={{ borderColor: 'var(--page-grant-accent)', color: 'var(--page-grant-accent)' }}
-    >
-      <Icon className="h-3 w-3" aria-hidden="true" />
-      {label}
-    </span>
-  );
 }
 
 export function PageHeader({
