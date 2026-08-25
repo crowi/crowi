@@ -82,6 +82,7 @@ components:
         - MAIL_TEST_FAILED
         - PLUGIN_NOT_FOUND
         - PLUGIN_CONFIG_VALIDATION_FAILED
+        - LINKED_IDENTITIES_EXIST
     ApplicationNotInstalledError:
       type: object
       properties:
@@ -5009,6 +5010,8 @@ components:
         values:
           type: object
           additionalProperties: {}
+        confirmLinkedIdentities:
+          type: boolean
       required:
         - values
     UpdatePluginConfigResponse:
@@ -28941,6 +28944,8 @@ paths:
                 values:
                   type: object
                   additionalProperties: {}
+                confirmLinkedIdentities:
+                  type: boolean
               required:
                 - values
       responses:
@@ -29032,6 +29037,34 @@ paths:
                     required:
                       - code
                       - message
+                required:
+                  - error
+        '409':
+          description: >-
+            The save rewrites a credential atomic group and users are linked
+            through this plugin's auth driver(s); resubmit with
+            confirmLinkedIdentities: true to proceed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - LINKED_IDENTITIES_EXIST
+                      message:
+                        type: string
+                      count:
+                        type: integer
+                        minimum: 0
+                    required:
+                      - code
+                      - message
+                      - count
                 required:
                   - error
         '422':

@@ -75,6 +75,7 @@ export const ERROR_CODES = [
   'MAIL_TEST_FAILED',
   'PLUGIN_NOT_FOUND',
   'PLUGIN_CONFIG_VALIDATION_FAILED',
+  'LINKED_IDENTITIES_EXIST',
 ] as const;
 
 export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi('ErrorCode');

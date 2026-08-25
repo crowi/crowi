@@ -23,6 +23,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import {
   ClearRenderCacheResponseSchema,
   ConfigReadinessResponseSchema,
+  LinkedIdentitiesExistErrorSchema,
   ListPluginsResponseSchema,
   PluginConfigResponseSchema,
   PluginConfigValidationErrorSchema,
@@ -124,6 +125,11 @@ export const updatePluginConfigRoute = createRoute({
     404: {
       description: 'Plugin not loaded',
       content: { 'application/json': { schema: PluginNotFoundErrorSchema } },
+    },
+    409: {
+      description:
+        "The save rewrites a credential atomic group and users are linked through this plugin's auth driver(s); resubmit with confirmLinkedIdentities: true to proceed",
+      content: { 'application/json': { schema: LinkedIdentitiesExistErrorSchema } },
     },
     422: {
       description: 'Plugin config failed plugin-defined validation',
@@ -248,6 +254,7 @@ export type {
   ClearRenderCacheResponse,
   ConfigReadinessIssue,
   ConfigReadinessResponse,
+  LinkedIdentitiesExistError,
   ListPluginsResponse,
   PluginAdminPlacement,
   PluginConfigResponse,

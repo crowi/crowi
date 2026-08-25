@@ -116,6 +116,7 @@ export type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
  */
 export const UpdatePluginConfigRequestSchema = z.object({
   values: z.record(z.string(), z.unknown()),
+  confirmLinkedIdentities: z.boolean().optional(),
 });
 export type UpdatePluginConfigRequest = z.infer<typeof UpdatePluginConfigRequestSchema>;
 
@@ -162,6 +163,20 @@ export const PluginConfigValidationErrorSchema = z.object({
   }),
 });
 export type PluginConfigValidationError = z.infer<typeof PluginConfigValidationErrorSchema>;
+
+/**
+ * Deliberately its own schema rather than the shared `ConflictErrorSchema`
+ * (fixed `code: 'CONFLICT'`) — this needs the `count` field and its own
+ * literal code.
+ */
+export const LinkedIdentitiesExistErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('LINKED_IDENTITIES_EXIST'),
+    message: z.string(),
+    count: z.number().int().nonnegative(),
+  }),
+});
+export type LinkedIdentitiesExistError = z.infer<typeof LinkedIdentitiesExistErrorSchema>;
 
 /**
  * Response shape for the Phase 4 "clear render cache" endpoints. The
