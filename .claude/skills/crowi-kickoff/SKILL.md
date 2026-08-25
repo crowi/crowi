@@ -192,7 +192,25 @@ tmux send-keys -t "<claude の pane_id>" Enter
 sleep 2
 ```
 
-4. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
+4. **agmsg の受信を自分宛だけに絞る**。`watch.sh` は role 名を渡さないと
+   **そのプロジェクトに登録された全 (team, agent) ペア**を購読するので、既定のままだと
+   worktree セッションに manager⇄planner のやり取りまで流れ込む(実測。impl セッションが
+   自分宛でない版数の議論を読まされ、そのぶんのトークンと注意を払っていた)。role 名は
+   **spec id をそのまま使う**(worktree 名・task id と同じ値にして、どのセッションの
+   role かを一意にする)。`actas` は未登録なら join も行うので事前の join は要らない:
+
+```bash
+tmux send-keys -t "<claude の pane_id>" "/agmsg actas <id>"
+sleep 1
+tmux send-keys -t "<claude の pane_id>" Enter
+sleep 3
+```
+
+   投入した role は **worktree セッション自身が終端で drop する**
+   (`/crowi-complete-feature` か `/crowi-handoff`)。`actas` の排他ロックは
+   セッション ID に紐づくので、main 側から外して回ることはできない。
+
+5. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
    **平文で書き、行頭を `/` にしない**):
 
 ```bash
@@ -211,13 +229,14 @@ tmux send-keys -t "<claude の pane_id>" Enter
 として報告する(このリトライは初回指示の配送完了であり、鉄則の「指示は 1 通
 のみ」の例外ではない — 新しい内容は送らない)。
 
-4. **fallback**: tmux 環境でない / window が見つからない / 60 秒待っても claude が
+6. **fallback**: tmux 環境でない / window が見つからない / 60 秒待っても claude が
    起動しない → 投入せず、手動手順を表示して終わる(中止ではない — worktree は
    作成済みなので Step 6 の報告に含める):
 
 ```
 cd <worktree-abs-path> && claude
-→ 最初に: /crowi-feature <id>
+→ 最初に: /agmsg actas <id>        (受信を自分宛に絞る。省くと他 role 宛まで流れ込む)
+→ 次に:   /crowi-feature <id>
 → 完了時: /crowi-complete-feature / 中断時: /crowi-handoff
 ```
 

@@ -209,11 +209,35 @@ spec を経由していないので、内容は **git から起こす**。最低
 synthesize した task も既存 task と同じ扱いで orchestrate に拾われる
 (integrate-worktree が裏取り → merge する)。
 
+### Step 3.5: agmsg role を drop する (signal を立てた後)
+
+crowi-kickoff は起動時に `/agmsg actas <id>` でこのセッションの受信を自分宛だけに
+絞っている。その role はこのセッションの仕事が終われば不要になるので、ここで落とす:
+
+```
+/agmsg drop <id>
+```
+
+**この skill が drop の置き場所である理由**: `actas` の排他ロックは**セッション ID に
+紐づく**ので、`reset.sh` を実行できるのは role を握っている当のセッション自身だけ。
+main 側で走る integrate-worktree からは外せない。かつ complete-feature は「このセッションの
+仕事は終わった」を宣言する唯一の地点で、role の生存期間とちょうど一致する。
+
+**integrate 側に置いてはいけない**: integrate は必ず走るとは限らない。ESCALATE で
+止まる worktree・統合されず捨てられる worktree があり、そこに置くと role が永久に残る。
+中断側の終端は `/crowi-handoff` が同じ drop を持つ。
+
+role が登録されていない (kickoff 経由でない・手動起動) 場合、`drop` は該当なしで
+何もしないので、無条件に実行してよい。失敗しても signal は既に立っているので
+**completion 自体は失敗させない** — 報告に 1 行残して進む。
+
 ### Step 4: 報告
 
 ```
 <id> は ready for merge です (branch <b> @ <sha>、全ゲート green)。
 [synthesize した場合] spec 無しの直 fix だったので task を新規 synthesize しました。
+[drop した場合] agmsg role <id> を drop しました。
+[drop が失敗した場合] agmsg role <id> の drop に失敗 (<理由>) — signal は立っています。
 main セッションの crowi-orchestrate が次の tick で裏取りして integrate-worktree を起動します。
 ```
 
