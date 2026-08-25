@@ -313,6 +313,37 @@ describe('Routes /api/oauth (Hono)', () => {
       expect(reuse.body.error).toBe('invalid_grant');
     });
 
+    it('carries the chain-origin authorizedAt unchanged through 2 rotations, and legacy predecessors fall back to createdAt (AC-1)', async () => {
+      const pair = await getInitialPair();
+      const originHash = Refresh().hashToken(pair.refresh_token);
+      const origin = await Refresh().findOne({ tokenHash: originHash });
+      expect(origin?.authorizedAt).toBeInstanceOf(Date);
+
+      const r1 = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+      expect(r1.status).toBe(200);
+      const successor1Hash = Refresh().hashToken(r1.body.refresh_token);
+      const successor1 = await Refresh().findOne({ tokenHash: successor1Hash });
+      expect(successor1?.authorizedAt?.getTime()).toBe(origin?.authorizedAt?.getTime());
+
+      const r2 = await token({ grant_type: 'refresh_token', refresh_token: r1.body.refresh_token, client_id: 'crowi-cli' });
+      expect(r2.status).toBe(200);
+      const successor2Hash = Refresh().hashToken(r2.body.refresh_token);
+      const successor2 = await Refresh().findOne({ tokenHash: successor2Hash });
+      expect(successor2?.authorizedAt?.getTime()).toBe(origin?.authorizedAt?.getTime());
+
+      // Legacy predecessor with no authorizedAt (pre-migration row): the
+      // successor must fall back to the predecessor's createdAt.
+      await Refresh().updateOne({ tokenHash: successor2Hash }, { $unset: { authorizedAt: '' } });
+      const legacyPredecessor = await Refresh().findOne({ tokenHash: successor2Hash });
+      expect(legacyPredecessor?.authorizedAt).toBeUndefined();
+
+      const r3 = await token({ grant_type: 'refresh_token', refresh_token: r2.body.refresh_token, client_id: 'crowi-cli' });
+      expect(r3.status).toBe(200);
+      const successor3Hash = Refresh().hashToken(r3.body.refresh_token);
+      const successor3 = await Refresh().findOne({ tokenHash: successor3Hash });
+      expect(successor3?.authorizedAt?.getTime()).toBe(legacyPredecessor?.createdAt.getTime());
+    });
+
     it('detects reuse outside the grace window and revokes the whole chain (AC-2)', async () => {
       const pair = await getInitialPair();
       const r1 = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
