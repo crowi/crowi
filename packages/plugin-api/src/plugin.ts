@@ -1,5 +1,6 @@
 import type { z } from 'zod/v3';
 import type { PluginContext } from './context';
+import type { PluginConfigVerificationOptions, PluginConfigVerificationResult, PluginConfigVerificationSnapshot } from './config-verification';
 import type { StorageRegistry } from './registries/storage';
 import type { SearchRegistry } from './registries/search';
 import type { AuthRegistry } from './registries/auth';
@@ -316,4 +317,38 @@ export interface CrowiPlugin {
    * of the very UI they need to fix the misconfiguration.
    */
   reconfigure?: (ctx: PluginContext) => void | Promise<void>;
+
+  /**
+   * Non-blocking connectivity/permission probe run once, after a save that
+   * touched this plugin's own config OR a dependency's config (any plugin
+   * that has this one in `requires`) has already persisted AND already
+   * run `reconfigure` — feature-plugin-config-live-verification. Never
+   * gates the save: whatever this returns is reported alongside a save
+   * that already succeeded, never rolled back.
+   *
+   * Receives a {@link PluginConfigVerificationSnapshot}, NOT the live
+   * `PluginContext` — do not close over or otherwise reach for `ctx` from
+   * inside this hook. The snapshot is a read-only, point-in-time view
+   * materialized from the exact values the triggering save just wrote (own
+   * config) plus any declared, `exposesConfigToDependents`-opted-in
+   * dependency config — it never reflects a LATER save by a different
+   * admin request, even one that lands while this hook is still running.
+   * `snapshot.config()` / `snapshot.dependencyConfig()` can throw if the
+   * runtime couldn't materialize a value (e.g. an existing, currently
+   * invalid dependency config); the runtime skips calling this hook
+   * entirely in that case rather than invoking it with a broken snapshot.
+   *
+   * `options.timeoutMs` is a notice, not a cancellation signal — see its
+   * doc. Must resolve within that budget or the caller treats it as
+   * `{ status: 'failed', reason: 'unreachable' }`; a promise that keeps
+   * running past that point should still clean up after itself when it
+   * eventually settles, but must never throw out of that cleanup in a way
+   * that becomes an unhandled rejection.
+   *
+   * The returned result (and anything it internally logs) must never
+   * include raw SDK/driver error text, stack traces, endpoints, or
+   * credential material — only the closed `reason` enum. See
+   * `PluginConfigVerificationResult`.
+   */
+  verifyConfig?: (snapshot: PluginConfigVerificationSnapshot, options: PluginConfigVerificationOptions) => Promise<PluginConfigVerificationResult>;
 }
