@@ -1,6 +1,6 @@
 ---
 title: Admin panel
-description: Using the admin panel sections (App / Security / Authentication / Share / Plugins / Users / Storage / Mail / Notification / Search / Renderers)
+description: Using the admin panel sections (App / Security / Authentication / Plugins / Users / Storage / Mail / Notification / Search / Renderers)
 ---
 
 The Crowi admin panel is where you manage site-wide settings, users, and
@@ -31,7 +31,7 @@ headings are grouped as follows.
 
 | Group | Sections | Status |
 | ----- | -------- | ------ |
-| Settings | App / Security / Authentication / Share / Plugins | Available |
+| Settings | App / Security / Authentication / Plugins | Available |
 | User management | Users (+ "User approval" when sign-ups are pending) | Available |
 | Shared services | (config-only base plugins, e.g. AWS) | Plugin-dependent |
 | Storage | Storage (+ storage plugins) | Available |
@@ -157,13 +157,6 @@ Mail delivery settings. Maps to `GET/PUT /admin/mail` and
   the saved settings).
 
 See [Mail settings](./mail) for details.
-
-## Share
-
-Toggles external share links on or off. A simple toggle that maps to
-`GET/PUT /admin/share`. When disabled, external share links can no longer
-be issued for pages. For the user-facing sharing feature, see
-[Sharing pages](../guide/sharing).
 
 ## Users
 

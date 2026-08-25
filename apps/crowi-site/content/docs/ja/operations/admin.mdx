@@ -1,6 +1,6 @@
 ---
 title: 管理画面
-description: Crowi の管理画面 (App / Security / Authentication / Share / Plugins / Users / Storage / Mail / Notification / Search / Renderers) の各セクションの使い方
+description: Crowi の管理画面 (App / Security / Authentication / Plugins / Users / Storage / Mail / Notification / Search / Renderers) の各セクションの使い方
 ---
 
 Crowi の管理画面は、サイト全体の設定・ユーザー管理・プラグイン構成を
@@ -29,7 +29,7 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
 
 | グループ | セクション | 状態 |
 | -------- | ---------- | ---- |
-| 設定 | App / Security / Authentication / Share / Plugins | 利用可能 |
+| 設定 | App / Security / Authentication / Plugins | 利用可能 |
 | ユーザー管理 | Users (+ 承認待ちがあれば「ユーザー承認」) | 利用可能 |
 | 共通サービス | (config のみの基盤プラグイン、例: AWS) | プラグイン依存 |
 | ストレージ | Storage (+ ストレージプラグイン) | 利用可能 |
@@ -152,13 +152,6 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
   設定です)。
 
 詳細は [メール設定](./mail) を参照してください。
-
-## Share
-
-外部共有リンクの有効・無効を切り替えます。`GET/PUT /admin/share` に
-対応する単純な toggle です。無効にすると、ページの外部共有リンク発行が
-できなくなります。利用者側の共有機能については
-[ページの共有](../guide/sharing) を参照してください。
 
 ## Users
 
