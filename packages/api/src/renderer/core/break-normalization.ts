@@ -20,15 +20,33 @@ import type { UnifiedTransformPlugin } from './headings';
  */
 
 /**
- * D-2 — the ONLY 3 accepted forms of a bare `<br>`, ASCII tag-name
- * case-insensitive: `<br>` / `<br/>` / `<br />`. Anchored (`^`/`$`)
- * against the WHOLE `html` node value, so any other text in the same
- * node — leading/trailing content, extra internal whitespace, an
- * attribute, a second tag — disqualifies it. Partial replacement is
- * out of scope: splitting one `html` node into several raises a new
- * position/data-attribution question this feature does not take on.
+ * D-2 — an attribute-less `<br>` in any spelling CommonMark accepts,
+ * ASCII tag-name case-insensitive. CommonMark's open-tag grammar is
+ * `<` tagname attributes* whitespace? `/`? `>`, so the whitespace run
+ * before the optional slash is unbounded and may contain tabs and
+ * newlines: `<br>` / `<br >` / `<br/>` / `<br />` / `<br\t/>` all mean
+ * exactly the same line break and a reader cannot tell them apart.
+ * Accepting only some of them would leave the rest as a placeholder on
+ * non-web clients for no reason a user could name.
+ *
+ * The class is `[ \t\r\n]`, not `\s`. Measured against remark-parse, those
+ * four are the only characters it will carry inside the tag: VT, FF, NBSP,
+ * U+2000 and the BOM all make it emit plain text instead, and `\s` would
+ * match them — letting a plugin-injected `<br\u00a0>` normalize to a break
+ * that no Markdown source can produce.
+ *
+ * There is deliberately no whitespace class after the slash either: that
+ * position is outside the grammar, so `remark-parse` emits `<br/ >` as plain
+ * text rather than an `html` node (measured, not inferred). Matching either
+ * would claim a shape the parser never hands us.
+ *
+ * Anchored (`^`/`$`) against the WHOLE `html` node value, so any other
+ * text in the same node — leading/trailing content, an attribute, a
+ * second tag — disqualifies it. Partial replacement is out of scope:
+ * splitting one `html` node into several raises a new position/data-
+ * attribution question this feature does not take on.
  */
-export const BARE_HTML_BREAK_RE = /^<br(?: ?\/)?>$/i;
+export const BARE_HTML_BREAK_RE = /^<br[ \t\r\n]*\/?>$/i;
 
 /**
  * D-3 — the block-level phrasing containers a contamination check is
