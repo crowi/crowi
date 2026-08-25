@@ -31,6 +31,17 @@ interface SecretFieldProps {
   onUndoClear: () => void;
   /** Optional per-field server-side validation error to render below the input. */
   error?: string;
+  /**
+   * Disables the input AND the Clear / Undo buttons, independent of
+   * `clearRequested` (feature-plugin-config-live-verification AC-7).
+   * Callers set this while a save is in flight (mutation pending, or a
+   * confirmation dialog it triggered is open) so a secret can't be
+   * edited/cleared/undone mid-save, which would otherwise get silently
+   * discarded or misapplied when the in-flight save's response resets
+   * local state. Defaults to `false` — existing callers that never pass
+   * this see no behaviour change.
+   */
+  disabled?: boolean;
 }
 
 /**
@@ -47,7 +58,19 @@ interface SecretFieldProps {
  *     "Will be cleared on save" badge replaces the green one; an "Undo
  *     clear" button replaces "Clear".
  */
-export function SecretField({ id, label, value, hasValue, dirty, clearRequested, onChange, onClearRequested, onUndoClear, error }: SecretFieldProps) {
+export function SecretField({
+  id,
+  label,
+  value,
+  hasValue,
+  dirty,
+  clearRequested,
+  onChange,
+  onClearRequested,
+  onUndoClear,
+  error,
+  disabled = false,
+}: SecretFieldProps) {
   // `dirty` is reserved for callers that want to drive UI off it; the
   // current visual treatment derives entirely from value/hasValue/
   // clearRequested. Keep the prop in the API for forward-compat with
@@ -78,7 +101,7 @@ export function SecretField({ id, label, value, hasValue, dirty, clearRequested,
         aria-invalid={Boolean(error)}
         placeholder={hasValue ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
         autoComplete="new-password"
-        disabled={clearRequested}
+        disabled={clearRequested || disabled}
       />
       {error && (
         <p className="text-xs text-destructive" role="alert">
@@ -88,11 +111,11 @@ export function SecretField({ id, label, value, hasValue, dirty, clearRequested,
       {hasValue && (
         <div className="pt-1">
           {!clearRequested ? (
-            <Button type="button" size="sm" variant="outline" onClick={onClearRequested}>
+            <Button type="button" size="sm" variant="outline" onClick={onClearRequested} disabled={disabled}>
               {m['admin.common.secret_clear_button']()}
             </Button>
           ) : (
-            <Button type="button" size="sm" variant="ghost" onClick={onUndoClear}>
+            <Button type="button" size="sm" variant="ghost" onClick={onUndoClear} disabled={disabled}>
               {m['admin.common.secret_clear_undo']()}
             </Button>
           )}

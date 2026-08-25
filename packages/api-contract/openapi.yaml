@@ -5025,6 +5025,41 @@ components:
           type: boolean
         reconfigureFailed:
           type: boolean
+        verificationResults:
+          type: array
+          items:
+            oneOf:
+              - type: object
+                properties:
+                  plugin:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                required:
+                  - plugin
+                  - status
+              - type: object
+                properties:
+                  plugin:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - failed
+                  reason:
+                    type: string
+                    enum:
+                      - unreachable
+                      - auth-failed
+                      - resource-missing
+                      - write-denied
+                      - unknown
+                required:
+                  - plugin
+                  - status
+                  - reason
       required:
         - ok
         - hotReloaded
@@ -28950,7 +28985,16 @@ paths:
                 - values
       responses:
         '200':
-          description: Save succeeded; hotReloaded flag indicates live apply
+          description: >-
+            Save succeeded; hotReloaded flag indicates live apply.
+            verificationResults (feature-plugin-config-live-verification)
+            carries non-blocking connectivity/permission probe results for the
+            changed plugin and its dependents, run after this save already
+            persisted and reconfigured — empty on a no-op save or when no
+            affected plugin declares verifyConfig, optional on the wire for
+            rolling-deploy compat with an older api replica, and reflects only
+            the instance that answered this request (never a cluster-wide
+            aggregate).
           content:
             application/json:
               schema:
@@ -28964,6 +29008,41 @@ paths:
                     type: boolean
                   reconfigureFailed:
                     type: boolean
+                  verificationResults:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: object
+                          properties:
+                            plugin:
+                              type: string
+                            status:
+                              type: string
+                              enum:
+                                - ok
+                          required:
+                            - plugin
+                            - status
+                        - type: object
+                          properties:
+                            plugin:
+                              type: string
+                            status:
+                              type: string
+                              enum:
+                                - failed
+                            reason:
+                              type: string
+                              enum:
+                                - unreachable
+                                - auth-failed
+                                - resource-missing
+                                - write-denied
+                                - unknown
+                          required:
+                            - plugin
+                            - status
+                            - reason
                 required:
                   - ok
                   - hotReloaded

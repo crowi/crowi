@@ -600,7 +600,7 @@ const stubDeleteAdminUser: DeleteAdminUserResponse = { deletedId: '' };
 const stubPendingUsersCount: PendingUsersCountResponse = { count: 0 };
 const stubListPlugins: ListPluginsResponse = { plugins: [] };
 const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {} };
-const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
+const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false, verificationResults: [] };
 const stubPluginReadiness: ConfigReadinessResponse = { issues: [] };
 const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: '', removedCount: 0 };
 

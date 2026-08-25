@@ -5,7 +5,8 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod/v3';
-import type { CrowiPlugin, StorageDriver } from '@crowi/plugin-api';
+import { CONFIG_VERIFICATION_KEY_PREFIX } from '@crowi/plugin-api';
+import type { CrowiPlugin, PluginConfigVerificationResult, StorageDriver, VerificationFailureReason } from '@crowi/plugin-api';
 
 const LocalStorageConfigSchema = z
   .object({
@@ -31,9 +32,134 @@ const plugin: CrowiPlugin = {
     registry.register('local', driver);
     ctx.log.debug('registered local storage driver');
   },
+
+  // feature-plugin-config-live-verification — snapshot-only, non-blocking.
+  // Builds its own throwaway driver from the snapshot (never the live
+  // driver behind `registry`/`ctx.state()`) and does a real
+  // `put -> get -> delete` round trip under the reserved verification key
+  // namespace, so a misconfigured `rootDir` (missing parent, wrong
+  // permissions) surfaces after save instead of silently at the next real
+  // upload.
+  verifyConfig: async (snapshot) => {
+    const driver = createLocalDriver(snapshot.config<LocalStorageConfig>());
+    return probeStorageDriver(driver, classifyLocalStorageError);
+  },
 };
 
 export default plugin;
+
+/**
+ * The put -> [independent-budget cleanup] -> get -> compare round trip
+ * shared by every storage `verifyConfig` hook that already has a
+ * `StorageDriver` to probe with. Generic over the public `StorageDriver`
+ * contract (feature-plugin-config-live-verification §4) — takes no option
+ * beyond what `put`/`get`/`delete` already accept, and never touches
+ * anything outside the reserved `CONFIG_VERIFICATION_KEY_PREFIX` namespace.
+ *
+ * Exported (not just used internally) so it — and the independent-cleanup
+ * behaviour in particular — can be tested directly against a driver double
+ * without needing a real slow/hanging filesystem or network call: see
+ * `storage-local.test.ts`. `cleanupTimeoutMs` overrides the cleanup budget
+ * for exactly that purpose — production callers never pass it.
+ */
+export async function probeStorageDriver(
+  driver: Pick<StorageDriver, 'put' | 'get' | 'delete'>,
+  classify: (err: unknown) => VerificationFailureReason,
+  cleanupTimeoutMs: number = VERIFICATION_CLEANUP_TIMEOUT_MS,
+): Promise<PluginConfigVerificationResult> {
+  const key = `${CONFIG_VERIFICATION_KEY_PREFIX}${randomBytes(16).toString('hex')}`;
+  const payload = randomBytes(32);
+
+  let putKey: string;
+  try {
+    ({ key: putKey } = await driver.put(key, payload, { contentType: 'application/octet-stream' }));
+  } catch (err) {
+    // Nothing was written — no probe object exists yet, so there is
+    // nothing to clean up.
+    return { status: 'failed', reason: classify(err) };
+  }
+
+  // The probe object now exists on disk — schedule its cleanup THIS
+  // instant, racing "the read below settles" against the cleanup's own
+  // budget, rather than sequencing cleanup strictly after the read
+  // finishes. A read that settles quickly (the overwhelming common case)
+  // still wins that race, so cleanup fires right after it as before; but a
+  // read that never settles at all (a truly stuck stream) no longer holds
+  // cleanup hostage forever — it fires once the budget elapses regardless
+  // (AC-11). `read` is shared (not re-invoked) by the verdict computation
+  // below.
+  const read = driver.get(key).then(readAllBuffer);
+  scheduleVerificationCleanup(driver, key, read, cleanupTimeoutMs);
+
+  try {
+    const bytes = await read;
+    // A driver reporting success while silently storing under a different
+    // key than requested, or returning corrupted bytes, is neither one of
+    // the classified driver exceptions — there's no error to classify, so
+    // 'unknown' is the honest reason rather than guessing a specific one.
+    return putKey === key && bytes.equals(payload) ? { status: 'ok' } : { status: 'failed', reason: 'unknown' };
+  } catch (err) {
+    return { status: 'failed', reason: classify(err) };
+  }
+}
+
+/** Independent budget for the fire-and-forget cleanup delete (feature-plugin-config-live-verification §3) — deliberately separate from the caller-side hook timeout. */
+const VERIFICATION_CLEANUP_TIMEOUT_MS = 5_000;
+
+/**
+ * Fire a cleanup `delete(key)` off, decoupled from both the caller and from
+ * `gate` (the in-flight read) ever settling. Triggered by whichever comes
+ * first — `gate` settling (success or failure, read normally already done
+ * by then) or `timeoutMs` elapsing — then calls `driver.delete(key)` and
+ * lets it run to completion in the background; a failure is logged only
+ * and never surfaces (same no-cancellation policy as the hook-level race —
+ * see `PluginConfigVerificationOptions`'s doc). Never awaited by the
+ * caller, never thrown out of.
+ *
+ * Deliberately NOT `Promise.race([gateSettled, budgetElapsed])`: racing two
+ * promises adds a handful of extra microtask hops before the winner's
+ * continuation runs, which — for the common case where `gate` settles well
+ * under the budget — could still leave `driver.delete()` uncalled by the
+ * time a caller that `await`s `gate` itself (one hop, not several) observes
+ * completion. Attaching `trigger` directly to `gate` keeps the two on equal
+ * footing: it fires in the very same microtask turn `gate`'s settlement is
+ * observed.
+ */
+function scheduleVerificationCleanup(driver: Pick<StorageDriver, 'delete'>, key: string, gate: Promise<unknown>, timeoutMs: number): void {
+  let triggered = false;
+  let timer: ReturnType<typeof setTimeout>;
+  const trigger = (): void => {
+    if (triggered) return;
+    triggered = true;
+    clearTimeout(timer);
+    // No error detail logged — a filesystem error can embed the resolved
+    // absolute path (§3's no-raw-error-data contract).
+    driver.delete(key).catch(() => {
+      console.warn('[crowi:plugin:@crowi/plugin-storage-local] verification cleanup delete failed.');
+    });
+  };
+  timer = setTimeout(trigger, timeoutMs);
+  timer.unref?.();
+  void gate.then(trigger, trigger);
+}
+
+async function readAllBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Classify a local-driver `put`/`get` failure into the fixed reason set
+ * (feature-plugin-config-live-verification §3's table). Anything not
+ * explicitly listed there falls into `'unknown'`.
+ */
+export function classifyLocalStorageError(err: unknown): VerificationFailureReason {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  if (code === 'ENOENT') return 'resource-missing';
+  if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS') return 'write-denied';
+  return 'unknown';
+}
 
 /**
  * One object found under the `attachment/<pageId>/derivatives/<attachmentId>/`

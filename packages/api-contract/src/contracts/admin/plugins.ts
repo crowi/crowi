@@ -111,7 +111,8 @@ export const updatePluginConfigRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Save succeeded; hotReloaded flag indicates live apply',
+      description:
+        'Save succeeded; hotReloaded flag indicates live apply. verificationResults (feature-plugin-config-live-verification) carries non-blocking connectivity/permission probe results for the changed plugin and its dependents, run after this save already persisted and reconfigured — empty on a no-op save or when no affected plugin declares verifyConfig, optional on the wire for rolling-deploy compat with an older api replica, and reflects only the instance that answered this request (never a cluster-wide aggregate).',
       content: { 'application/json': { schema: UpdatePluginConfigResponseSchema } },
     },
     401: {
@@ -263,6 +264,8 @@ export type {
   PluginInfo,
   PluginNotFoundError,
   PluginReadinessField,
+  PluginVerificationFailureReason,
+  PluginVerificationResult,
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '../../schemas/admin/plugins';
