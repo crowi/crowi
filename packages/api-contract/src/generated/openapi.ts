@@ -14830,6 +14830,7 @@ export interface paths {
                         values: {
                             [key: string]: unknown;
                         };
+                        confirmLinkedIdentities?: boolean;
                     };
                 };
             };
@@ -14893,6 +14894,22 @@ export interface paths {
                                 /** @enum {string} */
                                 code: "PLUGIN_NOT_FOUND";
                                 message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description The save rewrites a credential atomic group and users are linked through this plugin's auth driver(s); resubmit with confirmLinkedIdentities: true to proceed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "LINKED_IDENTITIES_EXIST";
+                                message: string;
+                                count: number;
                             };
                         };
                     };
@@ -15702,7 +15719,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -17468,6 +17485,7 @@ export interface components {
             values: {
                 [key: string]: unknown;
             };
+            confirmLinkedIdentities?: boolean;
         };
         UpdatePluginConfigResponse: {
             /** @enum {boolean} */

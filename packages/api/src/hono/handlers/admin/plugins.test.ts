@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
+import { z } from 'zod/v3';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import s3Plugin from '@crowi/plugin-storage-aws-s3';
 import gcsPlugin from '@crowi/plugin-storage-gcs';
@@ -826,5 +827,235 @@ describe('PUT/GET /api/admin/plugins/config — GCS service-account key validati
     await crowi.getConfigService().load();
     const flatBucketKey = formatPluginConfigKey(gcsPlugin.name, 'bucket');
     expect(crowi.getConfig().crowi[flatBucketKey]).toBe('old-bucket');
+  });
+});
+
+/**
+ * `googlePlugin`'s driver is never actually registered here (`registerAuth`
+ * only runs during real plugin bootstrap, and `@crowi/plugin-google` isn't
+ * in this harness's implicit-default set) — `crowi.getPlugins().auth.list()`
+ * is stubbed directly instead, the same private-surface pattern the
+ * readiness suite above uses for `getLoadedPlugins()`/`selectedDrivers`.
+ *
+ * Every real auth/storage plugin in this file (`googlePlugin`, `gcsPlugin`)
+ * has ALL its config fields inside a single atomic group, so testing that a
+ * non-group field change never gates needs a synthetic plugin with one
+ * group plus one ungrouped field.
+ */
+describe('PUT /api/admin/plugins/config — linked-identities confirmation gate (feature-auth-plugin-credential-change-guard AC-1/AC-2/AC-3/AC-4/AC-5/AC-6/AC-7b)', () => {
+  const SYNTH_DRIVER_NAME = 'synth-auth';
+  const syntheticAuthPlugin: CrowiPlugin = {
+    name: '@crowi/plugin-synth-auth-test',
+    version: '0.0.0',
+    configSchema: z
+      .object({
+        clientId: z.string().trim().default(''),
+        clientSecret: z.string().trim().describe('@sensitive synthetic test secret').default(''),
+        timeout: z.number().default(30),
+      })
+      .strict(),
+    configAtomicGroups: [{ name: 'credentials', keys: ['clientId', 'clientSecret'], sensitive: true }],
+  };
+  const syntheticNonAuthPlugin: CrowiPlugin = {
+    name: '@crowi/plugin-synth-non-auth-test',
+    version: '0.0.0',
+    configSchema: z
+      .object({
+        apiKey: z.string().trim().default(''),
+      })
+      .strict(),
+    configAtomicGroups: [{ name: 'credentials', keys: ['apiKey'], sensitive: false }],
+  };
+
+  type PluginManagerLoadedPluginsAccess = {
+    loadedPlugins: readonly CrowiPlugin[];
+  };
+
+  let adminToken: string;
+  let originalLoadedPlugins: readonly CrowiPlugin[];
+  let authListSpy: ReturnType<typeof jest.spyOn>;
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'Linked Identities Admin',
+      username: 'linkedIdentitiesAdmin',
+      email: 'linked-identities-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+  });
+
+  beforeEach(() => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    originalLoadedPlugins = manager.getLoadedPlugins();
+    (manager as unknown as PluginManagerLoadedPluginsAccess).loadedPlugins = [
+      ...originalLoadedPlugins,
+      googlePlugin,
+      syntheticAuthPlugin,
+      syntheticNonAuthPlugin,
+    ];
+    // `syntheticNonAuthPlugin` deliberately never appears here: no
+    // registered driver means it must never trigger the gate.
+    authListSpy = jest.spyOn(crowi.getPlugins().auth, 'list').mockReturnValue([
+      { driverName: 'google', plugin: googlePlugin.name },
+      { driverName: SYNTH_DRIVER_NAME, plugin: syntheticAuthPlugin.name },
+    ]);
+  });
+
+  afterEach(async () => {
+    const manager = crowi.pluginManager;
+    if (manager) (manager as unknown as PluginManagerLoadedPluginsAccess).loadedPlugins = originalLoadedPlugins;
+    jest.restoreAllMocks();
+    const Config = crowi.model('Config');
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-google:__atomic:clientCredentials').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-auth-test:__atomic:credentials').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-auth-test:timeout').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-non-auth-test:__atomic:credentials').catch(() => undefined);
+    await crowi.getConfigService().load();
+    await crowi.model('UserIdentity').deleteMany({ provider: { $in: ['google', SYNTH_DRIVER_NAME] } });
+  });
+
+  const putGoogleConfig = (values: Record<string, unknown>, confirmLinkedIdentities?: boolean) =>
+    request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: googlePlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values, ...(confirmLinkedIdentities !== undefined ? { confirmLinkedIdentities } : {}) });
+
+  const putSynthConfig = (values: Record<string, unknown>, confirmLinkedIdentities?: boolean) =>
+    request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: syntheticAuthPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values, ...(confirmLinkedIdentities !== undefined ? { confirmLinkedIdentities } : {}) });
+
+  const linkIdentity = (provider: string, providerUserId: string) =>
+    crowi.model('UserIdentity').create({ userId: new Types.ObjectId(), provider, providerUserId });
+
+  it('AC-1: a credential group change with linked identities and no confirmation returns 409 with the count, and writes nothing', async () => {
+    await linkIdentity('google', 'sub-1');
+    await linkIdentity('google', 'sub-2');
+
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('LINKED_IDENTITIES_EXIST');
+    expect(res.body.error.count).toBe(2);
+
+    const Config = crowi.model('Config');
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-google:/ }).exec();
+    expect(rows).toHaveLength(0);
+  });
+
+  it('AC-2: resubmitting the same request with confirmLinkedIdentities: true saves it', async () => {
+    await linkIdentity('google', 'sub-1');
+
+    const blocked = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(blocked.status).toBe(409);
+
+    const confirmed = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' }, true);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientId']).toBe('id-1');
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientSecret']).toBe('secret-1');
+  });
+
+  it('AC-3: a credential group change with zero linked identities saves without confirmation', async () => {
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('AC-4: changing only a field outside every atomic group saves without confirmation, even with identities linked', async () => {
+    await linkIdentity(SYNTH_DRIVER_NAME, 'sub-1');
+
+    const res = await putSynthConfig({ timeout: 60 });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-synth-auth-test:timeout']).toBe(60);
+  });
+
+  // The admin form's `buildRequest` sends every non-secret field's current
+  // value on every save, not only the ones the operator edited — so a real
+  // save touching only `timeout` still carries `clientId` in the body. The
+  // gate must judge "changed" against the stored value, not against
+  // presence in the request, or this would 409 even though the atomic
+  // group's identity never moved.
+  it('AC-4: a full-form save (unchanged clientId resent alongside a changed timeout) does not trigger the gate', async () => {
+    await putSynthConfig({ clientId: 'client-1', timeout: 45 });
+    await linkIdentity(SYNTH_DRIVER_NAME, 'sub-1');
+
+    const res = await putSynthConfig({ clientId: 'client-1', timeout: 60 });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-synth-auth-test:timeout']).toBe(60);
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-synth-auth-test:clientId']).toBe('client-1');
+  });
+
+  it('AC-7b: omitting clientSecret and changing only clientId still 409s when identities are linked (group-membership gate, not secret presence)', async () => {
+    const seeded = await putGoogleConfig({ clientId: 'old-id', clientSecret: 'old-secret' });
+    expect(seeded.status).toBe(200);
+
+    await linkIdentity('google', 'sub-1');
+
+    const res = await putGoogleConfig({ clientId: 'new-id' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('LINKED_IDENTITIES_EXIST');
+    expect(res.body.error.count).toBe(1);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientId']).toBe('old-id');
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientSecret']).toBe('old-secret');
+  });
+
+  it('AC-5: a plugin that registers no auth driver saves an atomic-group change without confirmation, even with unrelated identities linked', async () => {
+    await linkIdentity('google', 'sub-1');
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: syntheticNonAuthPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { apiKey: 'new-key' } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi[formatPluginConfigKey(syntheticNonAuthPlugin.name, 'apiKey')]).toBe('new-key');
+  });
+
+  it('AC-6: a save that touches no atomic-group field (unsent secret) never requires confirmation, even with identities linked', async () => {
+    await linkIdentity('google', 'sub-1');
+
+    const res = await putGoogleConfig({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const Config = crowi.model('Config');
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-google:/ }).exec();
+    expect(rows).toHaveLength(0);
+  });
+
+  it('does not treat confirmLinkedIdentities as a config value', async () => {
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' }, true);
+    expect(res.status).toBe(200);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:confirmLinkedIdentities']).toBeUndefined();
+  });
+
+  it('AC-1 (auth.list filter): does not count identities for a different driver the same registry lists', async () => {
+    await linkIdentity(SYNTH_DRIVER_NAME, 'sub-1');
+
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(res.status).toBe(200);
+    expect(authListSpy).toHaveBeenCalled();
   });
 });
