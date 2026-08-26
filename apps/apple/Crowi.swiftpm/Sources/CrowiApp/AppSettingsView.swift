@@ -43,10 +43,25 @@ struct AppSettingsView: View {
 
             Section {
                 Toggle("Developer Mode", isOn: $settings.isDeveloperModeEnabled)
+                if settings.isDeveloperModeEnabled {
+                    TextField("10.0.1.4, my-server.local", text: $settings.allowedInsecureHostsText, axis: .vertical)
+                        .autocorrectionDisabled()
+                        #if canImport(UIKit)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        #endif
+                }
             } header: {
                 Text("Diagnostics")
             } footer: {
-                Text("Shows the raw failure behind an error message. Useful in a bug report; not meant for everyday reading.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Shows the raw failure behind an error message. Useful in a bug report; not meant for everyday reading.")
+                    if settings.isDeveloperModeEnabled {
+                        Text(
+                            "Comma-separated hosts allowed to add a workspace over plain HTTP — for a LAN or self-hosted dev server. Only private-network addresses (10.x / 172.16–31.x / 192.168.x) actually reach the network; iOS itself refuses anything else, including Tailscale."
+                        )
+                    }
+                }
             }
 
             Section("About") {

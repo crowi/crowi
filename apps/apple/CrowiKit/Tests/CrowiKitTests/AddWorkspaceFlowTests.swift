@@ -95,6 +95,52 @@ final class AddWorkspaceFlowTests: XCTestCase {
         }
     }
 
+    /// Developer Mode's per-host exemption: a host the caller explicitly
+    /// listed reaches the probe over plain `http`, same as the built-in
+    /// `localhost`/`127.0.0.1`/`*.local` exemption already does.
+    func testAnAllowedInsecureHostReachesTheProbe() async throws {
+        let fixture = """
+        { "title": "LAN Crowi", "version": "9.9.9" }
+        """.data(using: .utf8)!
+
+        let onboarded = try await AddWorkspaceFlow.addWorkspace(
+            userInput: "http://10.0.1.4:4304",
+            allowedInsecureHosts: ["10.0.1.4"],
+            probe: { _ in try AppInfoLenient.decode(fixture) },
+            presentSession: { authorizeURL in
+                let state = URLComponents(url: authorizeURL, resolvingAgainstBaseURL: false)!
+                    .queryItems!.first(where: { $0.name == "state" })!.value!
+                return URL(string: "crowi-ios://callback?code=the-code&state=\(state)")!
+            },
+            floor: "2.0.0",
+            urlSession: Self.mockTokenExchangeSession()
+        )
+
+        XCTAssertEqual(onboarded.workspaceOrigin.host, "10.0.1.4")
+    }
+
+    /// A host NOT in the caller-supplied set is refused exactly as if the
+    /// set were empty — the exemption is per-host, not "any http once
+    /// Developer Mode is on".
+    func testAHostNotInTheAllowedListIsStillRefused() async {
+        do {
+            _ = try await AddWorkspaceFlow.addWorkspace(
+                userInput: "http://10.0.1.9:4304",
+                allowedInsecureHosts: ["10.0.1.4"],
+                probe: { _ in
+                    XCTFail("probe should not be reached for a host outside the allowed set")
+                    throw URLError(.unknown)
+                },
+                presentSession: Self.neverCalledPresentSession
+            )
+            XCTFail("expected insecureOrigin")
+        } catch AddWorkspaceFlow.AddWorkspaceError.insecureOrigin {
+            // expected
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
     func testUnreachableHostSurfacesAsHostUnreachable() async {
         do {
             _ = try await AddWorkspaceFlow.addWorkspace(

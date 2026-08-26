@@ -48,8 +48,16 @@ public enum AddWorkspaceFlow {
     ///     production callers pass `ASWebAuthenticationSessionRunner.run`.
     ///   - floor: overridable only for tests — production always uses
     ///     `MinimumVersionFloor.floor` (the single source, AC-4).
+    /// - Parameters:
+    ///   - allowedInsecureHosts: Developer Mode's per-host `http` exemption
+    ///     (`AppSettings.allowedInsecureHosts`, lowercased) — empty unless
+    ///     the caller has already confirmed Developer Mode is on. Compared
+    ///     against `WorkspaceOrigin.host` only (never scheme/port), the same
+    ///     granularity as the built-in `localhost`/`127.0.0.1`/`*.local`
+    ///     exemption it extends.
     public static func addWorkspace(
         userInput: String,
+        allowedInsecureHosts: Set<String> = [],
         probe: @Sendable (APIBaseURL) async throws -> AppInfoLenient = { try await AppInfoLenient.fetch(apiBaseURL: $0) },
         presentSession: @Sendable (_ authorizeURL: URL) async throws -> URL,
         floor: String = MinimumVersionFloor.floor,
@@ -58,7 +66,7 @@ public enum AddWorkspaceFlow {
         guard let origin = WorkspaceOrigin.normalize(userInput: userInput) else {
             throw AddWorkspaceError.invalidURL
         }
-        try assertHTTPSGate(origin)
+        try assertHTTPSGate(origin, allowedInsecureHosts: allowedInsecureHosts)
 
         let apiBaseURL = APIBaseURL(workspaceOrigin: origin)
         let info: AppInfoLenient
@@ -85,13 +93,19 @@ public enum AddWorkspaceFlow {
     }
 
     /// The §3/§14 HTTPS gate, in isolation — `https` always passes; `http`
-    /// passes ONLY for `localhost` / `127.0.0.1` / `*.local`; everything
-    /// else throws `insecureOrigin`. Internal (not `private`) so
+    /// passes for `localhost` / `127.0.0.1` / `*.local` (always) or a host in
+    /// `allowedInsecureHosts` (Developer Mode's per-workspace opt-in);
+    /// everything else throws `insecureOrigin`. Internal (not `private`) so
     /// `HTTPSGateTests` can exercise it directly without running the whole
     /// pipeline (which would also require a probe + sign-in stub).
-    static func assertHTTPSGate(_ origin: WorkspaceOrigin) throws {
+    ///
+    /// Not a way around iOS's own App Transport Security: a host that isn't
+    /// actually on a private network still fails at the OS level the moment
+    /// the probe request goes out, regardless of what's in this set. This
+    /// gate only decides whether the APP is willing to try.
+    static func assertHTTPSGate(_ origin: WorkspaceOrigin, allowedInsecureHosts: Set<String> = []) throws {
         if origin.isHTTPS { return }
-        guard origin.scheme == "http", origin.isExemptLocalHost else {
+        guard origin.scheme == "http", origin.isExemptLocalHost || allowedInsecureHosts.contains(origin.host) else {
             throw AddWorkspaceError.insecureOrigin(origin)
         }
     }

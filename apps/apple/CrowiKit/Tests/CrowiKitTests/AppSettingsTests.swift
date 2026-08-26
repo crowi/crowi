@@ -36,6 +36,46 @@ final class AppSettingsTests: XCTestCase {
 }
 
 @MainActor
+final class AllowedInsecureHostsSettingTests: XCTestCase {
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "wiki.crowi.ios.tests.\(UUID().uuidString)")!
+    }
+
+    func testEmptyUntilTyped() {
+        XCTAssertEqual(AppSettings(defaults: makeDefaults()).allowedInsecureHosts, [])
+    }
+
+    func testTextSurvivesTheAppBeingRestarted() {
+        let defaults = makeDefaults()
+        AppSettings(defaults: defaults).allowedInsecureHostsText = "10.0.1.4"
+        XCTAssertEqual(AppSettings(defaults: defaults).allowedInsecureHostsText, "10.0.1.4")
+    }
+
+    func testCommaAndNewlineBothSeparateEntries() {
+        XCTAssertEqual(AllowedInsecureHostsParser.parse("10.0.1.4, my-server.local\nanother-host"), ["10.0.1.4", "my-server.local", "another-host"])
+    }
+
+    /// Developer Mode's real use is pasting whatever a LAN tool printed, not
+    /// typing a bare hostname — a full URL and a bare host must parse the
+    /// same, and scheme/port/path are stripped off, not compared.
+    func testAFullPastedURLParsesToJustTheHost() {
+        XCTAssertEqual(AllowedInsecureHostsParser.parse("http://10.0.1.4:4304/"), ["10.0.1.4"])
+    }
+
+    func testHostIsLowercasedRegardlessOfHowItWasTyped() {
+        XCTAssertEqual(AllowedInsecureHostsParser.parse("My-Server.local"), ["my-server.local"])
+    }
+
+    func testBlankAndWhitespaceOnlyEntriesAreDropped() {
+        XCTAssertEqual(AllowedInsecureHostsParser.parse("10.0.1.4,, \n , my-server.local"), ["10.0.1.4", "my-server.local"])
+    }
+
+    func testEmptyTextParsesToNoHosts() {
+        XCTAssertEqual(AllowedInsecureHostsParser.parse(""), [])
+    }
+}
+
+@MainActor
 final class AppAppearanceSettingTests: XCTestCase {
     private func makeDefaults() -> UserDefaults {
         UserDefaults(suiteName: "wiki.crowi.ios.tests.\(UUID().uuidString)")!

@@ -37,4 +37,16 @@ final class HTTPSGateTests: XCTestCase {
         let origin = WorkspaceOrigin.normalize(userInput: "http://wiki.example.com:8080")!
         XCTAssertThrowsError(try AddWorkspaceFlow.assertHTTPSGate(origin))
     }
+
+    /// Developer Mode's per-host exemption — matched on host only, same
+    /// granularity as the built-in `localhost`/`127.0.0.1`/`*.local` set.
+    func testAllowsPlainHTTPOnAHostInTheAllowedSet() {
+        let origin = WorkspaceOrigin.normalize(userInput: "http://10.0.1.4:4304")!
+        XCTAssertNoThrow(try AddWorkspaceFlow.assertHTTPSGate(origin, allowedInsecureHosts: ["10.0.1.4"]))
+    }
+
+    func testStillRejectsAHostNotInTheAllowedSet() {
+        let origin = WorkspaceOrigin.normalize(userInput: "http://10.0.1.9:4304")!
+        XCTAssertThrowsError(try AddWorkspaceFlow.assertHTTPSGate(origin, allowedInsecureHosts: ["10.0.1.4"]))
+    }
 }

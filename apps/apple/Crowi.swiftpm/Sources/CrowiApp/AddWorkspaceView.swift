@@ -6,6 +6,7 @@ import SwiftUI
 /// sign-in, §4.1) → persisted via `WorkspaceStore.finishAdding`.
 struct AddWorkspaceView: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
+    @EnvironmentObject private var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
 
     /// Called with the newly onboarded workspace right before this view
@@ -66,6 +67,7 @@ struct AddWorkspaceView: View {
                 let sessionRunner = ASWebAuthenticationSessionRunner()
                 let onboarded = try await AddWorkspaceFlow.addWorkspace(
                     userInput: input,
+                    allowedInsecureHosts: settings.isDeveloperModeEnabled ? Set(settings.allowedInsecureHosts) : [],
                     presentSession: { authorizeURL in try await sessionRunner.run(authorizeURL: authorizeURL) }
                 )
                 let workspace = try workspaceStore.finishAdding(onboarded)
@@ -77,17 +79,19 @@ struct AddWorkspaceView: View {
                 // Backing out of the sheet is not a failure — say nothing.
                 failure = ASWebAuthenticationSessionRunner.isUserCancellation(error)
                     ? nil
-                    : DisplayableFailure(message: Self.describe(error), error: error)
+                    : DisplayableFailure(message: describe(error), error: error)
             }
         }
     }
 
-    private static func describe(_ error: Error) -> String {
+    private func describe(_ error: Error) -> String {
         switch error {
         case AddWorkspaceFlow.AddWorkspaceError.invalidURL:
             return "Enter a valid URL."
         case AddWorkspaceFlow.AddWorkspaceError.insecureOrigin:
-            return "This host must use HTTPS (only localhost/127.0.0.1/*.local may use http)."
+            return settings.isDeveloperModeEnabled
+                ? "This host must use HTTPS. To allow plain HTTP for a LAN host, add it to Settings → Developer Mode → Allowed Hosts."
+                : "This host must use HTTPS (only localhost/127.0.0.1/*.local may use http)."
         case AddWorkspaceFlow.AddWorkspaceError.notACrowiHost:
             return "This does not look like a Crowi instance."
         case AddWorkspaceFlow.AddWorkspaceError.hostUnreachable:

@@ -43,6 +43,31 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(isDeveloperModeEnabled, forKey: Self.developerModeKey) }
     }
 
+    /// Free-form, comma/newline-separated hosts the reader typed in
+    /// Developer Mode — a LAN or self-hosted dev server the add-workspace
+    /// HTTPS gate would otherwise refuse. Stored as raw text (not the parsed
+    /// list) so the field round-trips exactly what was typed, including a
+    /// trailing comma mid-edit.
+    ///
+    /// This ONLY widens the app's own gate (`AddWorkspaceFlow.assertHTTPSGate`)
+    /// — it does not, and cannot, widen iOS's own App Transport Security,
+    /// which is fixed at build time in Info.plist (`NSAllowsLocalNetworking`)
+    /// and covers RFC 1918 private ranges only. A host outside that range
+    /// (a public IP, a Tailscale `100.x` address) can be typed here, gets
+    /// past this app-level gate, and then is refused by the OS itself before
+    /// any request leaves the device — this list is not a way around ATS,
+    /// only a way to opt an origin into the exemption ATS already grants.
+    @Published public var allowedInsecureHostsText: String {
+        didSet { defaults.set(allowedInsecureHostsText, forKey: Self.allowedInsecureHostsKey) }
+    }
+
+    /// The parsed, normalized form of `allowedInsecureHostsText` — lowercased
+    /// host names only (scheme/port/path stripped if the reader pasted a
+    /// full URL), for `WorkspaceOrigin.host` comparison at the gate.
+    public var allowedInsecureHosts: [String] {
+        AllowedInsecureHostsParser.parse(allowedInsecureHostsText)
+    }
+
     /// Overrides the device's light/dark choice for this app only.
     @Published public var appearance: AppAppearance {
         didSet { defaults.set(appearance.rawValue, forKey: Self.appearanceKey) }
@@ -62,6 +87,7 @@ public final class AppSettings: ObservableObject {
     static let appearanceKey = "wiki.crowi.ios.settings.appearance"
     static let developerModeKey = "wiki.crowi.ios.settings.developerMode"
     static let opensLinksInAppKey = "wiki.crowi.ios.settings.opensLinksInApp"
+    static let allowedInsecureHostsKey = "wiki.crowi.ios.settings.allowedInsecureHosts"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -72,6 +98,27 @@ public final class AppSettings: ObservableObject {
         // An unreadable or retired stored value falls back to following the
         // device rather than picking a side for the reader.
         appearance = AppAppearance(rawValue: defaults.string(forKey: Self.appearanceKey) ?? "") ?? .system
+        allowedInsecureHostsText = defaults.string(forKey: Self.allowedInsecureHostsKey) ?? ""
+    }
+}
+
+/// Parses `AppSettings.allowedInsecureHostsText` into normalized host names.
+/// Forgiving on purpose: Developer Mode's one real use is pasting whatever a
+/// LAN tool printed (`http://10.0.1.4:4304/`), not typing a bare hostname —
+/// so a full URL, a `host:port`, and a bare host all parse to the same host.
+public enum AllowedInsecureHostsParser {
+    public static func parse(_ text: String) -> [String] {
+        text
+            .split(whereSeparator: { $0 == "," || $0.isNewline })
+            .compactMap { host(from: String($0)) }
+    }
+
+    private static func host(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let candidate = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
+        guard let host = URL(string: candidate)?.host else { return nil }
+        return host.lowercased()
     }
 }
 

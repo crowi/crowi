@@ -22,5 +22,18 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Developer Mode's allowed-host exemption (AddWorkspaceFlow.assertHTTPSGate)
+	     only decides whether the APP is willing to try a plain-HTTP origin;
+	     App Transport Security is enforced by iOS itself, ahead of any app
+	     code, from this static Info.plist. NSAllowsLocalNetworking permits
+	     only RFC 1918 private ranges (10/8, 172.16/12, 192.168/16) plus
+	     link-local and .local — NOT Tailscale's 100.64.0.0/10 CGNAT range,
+	     which stays refused regardless of what a reader adds to the app's
+	     own allowed-host list. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
