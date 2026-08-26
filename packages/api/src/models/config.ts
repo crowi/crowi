@@ -87,7 +87,7 @@ export function hasSlackToken(config: Config): boolean {
 export interface ConfigModel extends Model<ConfigDocument> {
   applicationInstall(): Promise<void>;
   updateByParams(ns: string, key: string, value: string): Promise<void>;
-  /** RFC-0014 phase 4 — write a whole `configAtomicGroups` group as one document. Throws on failure (unlike `updateConfig`), because callers must not proceed on an unpersisted value. */
+  /** RFC-0014 phase 4 — write a whole `configAtomicGroups` group as one document. Throws on failure, because callers must not proceed on an unpersisted value — the same contract `updateConfig` now has for a single key. */
   updateAtomicConfigGroup(ns: string, pluginName: string, groupName: string, values: AtomicConfigGroupValue): Promise<void>;
   updateConfig(ns: string, key: string, value: string): Promise<void>;
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>;
@@ -165,29 +165,34 @@ export default (crowi: Crowi) => {
   /**
    * RFC-0014 phase 4 — write one atomic config group as a SINGLE document.
    *
-   * Deliberately built on `updateByParams` (which throws) rather than
-   * `updateConfig` (which swallows): the whole point of a group is that a
-   * failed write must be visible to the caller so nothing downstream —
-   * in-memory config, listeners, Redis publish — proceeds on a value that
-   * was never persisted.
+   * Built on `updateByParams`, same as `updateConfig` now is: the whole
+   * point of a group is that a failed write must be visible to the caller
+   * so nothing downstream — in-memory config, listeners, Redis publish —
+   * proceeds on a value that was never persisted.
    */
   configSchema.statics.updateAtomicConfigGroup = async function (ns: string, pluginName: string, groupName: string, values: AtomicConfigGroupValue) {
     await Config.updateByParams(ns, atomicConfigGroupKey(pluginName, groupName), values as unknown as string);
   };
 
+  // Deliberately no try/catch: a rejection here must reach the caller so
+  // ConfigService never mutates in-memory config, notifies listeners, or
+  // publishes to Redis for a value the database does not hold.
   configSchema.statics.updateConfig = async function (ns: string, key: string, value: string) {
-    try {
-      await Config.updateByParams(ns, key, value);
-    } catch (err) {
-      debug('updateConfig', err);
-    }
+    await Config.updateByParams(ns, key, value);
   };
 
+  // `Promise.allSettled`, not `Promise.all`: every key's write must reach
+  // its own resolution before this can throw, otherwise a rejection races
+  // ahead of in-flight siblings and the caller observes an indeterminate
+  // DB state (some keys still mid-write) at the moment the error surfaces.
+  // Waiting for full settlement makes the DB state final and observable by
+  // the time the rejection propagates. Only the first rejection is thrown
+  // — callers only ever collapse this to a 500 and never inspect the rest.
   configSchema.statics.updateConfigByNamespace = async function (ns: string, nsConfig: Record<string, any>) {
-    try {
-      await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)));
-    } catch (err) {
-      debug('updateConfigByNamespace', err);
+    const results = await Promise.allSettled(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)));
+    const firstRejection = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (firstRejection) {
+      throw firstRejection.reason;
     }
   };
 
