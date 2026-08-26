@@ -144,4 +144,26 @@ describe('GET /api/pages/:pageId/history', () => {
 
     expect(second.status).toBe(404);
   });
+
+  // AC-11 — cursors are minted with the normalised (lowercase) id, so an
+  // uppercase-hex pageId in the URL must still match on continuation, not
+  // just on the first page.
+  it('AC-11: reads the second page with an uppercase-hex pageId in the URL', async () => {
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}uppercase-id`, '# v1');
+    const Page = crowi.model('Page');
+    const Revision = crowi.model('Revision');
+    const pageDoc = await Page.findById(page._id);
+    const revision = await Revision.prepareRevision(pageDoc, '# v2', owner, { format: 'markdown' });
+    await Page.pushRevision(pageDoc, revision, owner);
+    const upperPageId = String(page._id).toUpperCase();
+
+    const first = await request(app).get(`/api/pages/${upperPageId}/history`).query({ limit: 1 }).set(authHeaders(ownerToken));
+    expect(first.status).toBe(200);
+    expect(first.body.nextCursor).toEqual(expect.any(String));
+
+    const second = await request(app).get(`/api/pages/${upperPageId}/history`).query({ limit: 1, cursor: first.body.nextCursor }).set(authHeaders(ownerToken));
+
+    expect(second.status).toBe(200);
+    expect(second.body.entries).toHaveLength(1);
+  });
 });

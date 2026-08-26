@@ -362,6 +362,13 @@ export interface PageModel extends Model<PageDocument> {
   findPageById(id): Promise<PageDocument>;
   findPageByIdAndGrantedUser(id, userData): Promise<PageDocument>;
   /**
+   * RFC-0021 §16 — the read a re-entering path-moving command uses instead
+   * of `findPageByIdAndGrantedUser`. See the implementation below (right
+   * after `findPageByIdAndGrantedUser`) for why it exists and exactly which
+   * check it drops.
+   */
+  findPageByIdForReentry(id, userData): Promise<PageDocument | null>;
+  /**
    * feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
    * (invite-link) resolution for the `IdRedirector`-only share URL. See
    * the implementation below (right after `findPageByIdAndGrantedUser`)
@@ -1352,6 +1359,44 @@ export default (crowi: Crowi) => {
     }
 
     return pageData;
+  };
+
+  /**
+   * RFC-0021 §16 — the by-id read a re-entering path-moving command
+   * (rename / trash / restore / subtree rename) uses in place of
+   * `findPageByIdAndGrantedUser` above.
+   *
+   * It applies the same draft-hiding and grant enforcement as the granted
+   * read — a caller who has lost access must not get this page's content back
+   * just because they are replaying a request they made while they still had
+   * it. The one check it drops is the transitional-status collapse: a page
+   * between `enterTransition` and `exitTransition` is exactly the page a
+   * re-entry needs to see, so `findPageByIdAndGrantedUser`'s existence-hiding
+   * of it would 404 the retry before the caller's own operation ever gets a
+   * chance to resolve.
+   *
+   * Returns `null` — rather than throwing, as `findPageById` does — when no
+   * such Page exists at all, so a caller can tell "gone" from "hidden" and
+   * decide for itself whether a re-entry may still proceed against a member
+   * record with no root left.
+   */
+  pageSchema.statics.findPageByIdForReentry = async function (id, userData) {
+    const pageData = await Page.findOne({ _id: id });
+    if (pageData === null) {
+      return null;
+    }
+    const populated = await Page.populatePageData(pageData, null);
+
+    // RFC-0004: same draft existence-hiding rule as `findPageByIdAndGrantedUser`.
+    if (populated.isDraft() && (!userData || !populated.isCreator(userData))) {
+      throw pageNotFoundError();
+    }
+
+    if (userData && !populated.isGrantedFor(userData)) {
+      throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
+    }
+
+    return populated;
   };
 
   /**

@@ -189,6 +189,11 @@ pageHistoryOperationSchema.index({ retryTokenNonce: 1 }, { unique: true, sparse:
 // to be part of the index — an equality-only index would leave the sort to an
 // in-memory pass over every unfinished operation.
 pageHistoryOperationSchema.index({ result: 1, _id: 1 }, { name: 'pageHistoryOperation_result_id' });
+// TTL — MongoDB removes a row once `expiresAt` is in the past
+// (`expireAfterSeconds: 0`). `expiresAt` stays `null` until `completeOperation`
+// sets it alongside the terminal `result`, so an in-flight row (still `null`)
+// is never a TTL match — only a settled operation's retention deadline is.
+pageHistoryOperationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'pageHistoryOperation_expiresAt_ttl' });
 
 export default (_crowi: Crowi) => {
   const PageHistoryOperation = model<PageHistoryOperationDocument, PageHistoryOperationModel>('PageHistoryOperation', pageHistoryOperationSchema);
