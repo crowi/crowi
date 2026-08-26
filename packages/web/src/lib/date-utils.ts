@@ -1,4 +1,5 @@
 import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
 
 export function formatDistanceToNow(dateString: string): string {
   const date = new Date(dateString);
@@ -20,6 +21,24 @@ export function formatDistanceToNow(dateString: string): string {
   if (diffWeeks < 4) return m['notifications.relative_weeks']({ count: diffWeeks });
   if (diffMonths < 12) return m['notifications.relative_months']({ count: diffMonths });
   return m['notifications.relative_years']({ count: diffYears });
+}
+
+export function formatHistoryDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const locale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
+  // Calendar-day boundaries keep the representation stable across midnight; elapsed hours would silently reclassify nearby entries.
+  const isToday = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+
+  if (isToday) {
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  }
+
+  return date.toLocaleDateString(locale, {
+    year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 /**

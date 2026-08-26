@@ -3,27 +3,27 @@ import { m } from '@paraglide/messages.js';
 
 import { GrantChip } from '@/components/grant-chip';
 import { UserAvatar } from '@/components/user-avatar';
-import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
+import { formatDateTime, formatHistoryDate } from '@/lib/date-utils';
 import { grantLabel } from '@/lib/grant-label';
 
 interface PageEventRowProps {
   event: PageHistoryEvent;
 }
 
-function eventMessage(event: PageHistoryEvent, actor: string) {
+function eventMessage(event: PageHistoryEvent) {
   switch (event.kind) {
     case 'page_created':
-      return m['page_history.event_page_created']({ actor });
+      return m['page_history.event_page_created']();
     case 'page_renamed':
-      return m['page_history.event_page_renamed']({ actor });
+      return m['page_history.event_page_renamed']();
     case 'visibility_changed':
-      return m['page_history.event_visibility_changed']({ actor });
+      return m['page_history.event_visibility_changed']();
     case 'page_trashed':
-      return m['page_history.event_page_trashed']({ actor });
+      return m['page_history.event_page_trashed']();
     case 'page_restored':
-      return m['page_history.event_page_restored']({ actor });
+      return m['page_history.event_page_restored']();
     case 'draft_published':
-      return m['page_history.event_draft_published']({ actor });
+      return m['page_history.event_draft_published']();
   }
 }
 
@@ -84,43 +84,49 @@ function eventDetail(event: PageHistoryEvent): EventDetail | null {
 }
 
 export function PageEventRow({ event }: PageEventRowProps) {
-  const actor = event.actor?.name ?? m['page_history.unknown_user']();
+  const actorName = event.actor?.name ?? m['page_history.unknown_user']();
+  const actor = event.actor ?? { name: actorName, username: 'unknown-user', image: null };
   const detail = eventDetail(event);
 
   return (
-    <tr className="border-t bg-muted/20">
-      <td colSpan={5} className="px-3 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {event.actor && <UserAvatar user={event.actor} size="sm" />}
-          <span>{eventMessage(event, actor)}</span>
+    <tr className="border-t text-xs text-muted-foreground">
+      {/* Separate empty selection cells preserve the radio lanes through audit-only rows. */}
+      <td className="px-3 py-2 text-center" />
+      <td className="px-3 py-2 text-center" />
+      <td className="min-w-0 px-3 py-2">
+        <div className="flex w-0 min-w-full items-center gap-2 whitespace-nowrap">
+          <UserAvatar user={actor} size="xs" />
+          <span className="shrink-0">{actorName}</span>
+          <span className="shrink-0">{eventMessage(event)}</span>
           {event.subtree && (
             <span className="rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{m['page_history.subtree_badge']()}</span>
           )}
-          <span className="ml-auto text-xs text-muted-foreground" title={formatDateTime(event.occurredAt)}>
-            {formatDistanceToNow(event.occurredAt)}
-          </span>
+          {detail != null && (
+            <span data-testid="event-detail" className="flex min-w-0 flex-1 items-center gap-2" title={detail.title}>
+              {detail.kind === 'visibility' ? (
+                <>
+                  <GrantChip grant={detail.fromGrant} publicTreatment="muted" />
+                  <span aria-hidden="true">→</span>
+                  <GrantChip grant={detail.toGrant} publicTreatment="muted" />
+                </>
+              ) : (
+                <span data-testid="event-detail-text" className="min-w-0 truncate whitespace-nowrap" title={detail.title}>
+                  {detail.text}
+                </span>
+              )}
+              {detail.kind === 'text' && detail.redirectCreated && (
+                <span className="shrink-0 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  {m['page_history.redirect_badge']()}
+                </span>
+              )}
+            </span>
+          )}
         </div>
-        {detail != null && (
-          <div data-testid="event-detail" className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted-foreground" title={detail.title}>
-            {detail.kind === 'visibility' ? (
-              <>
-                <GrantChip grant={detail.fromGrant} publicTreatment="muted" />
-                <span aria-hidden="true">→</span>
-                <GrantChip grant={detail.toGrant} publicTreatment="muted" />
-              </>
-            ) : (
-              <span data-testid="event-detail-text" className="min-w-0 truncate whitespace-nowrap" title={detail.title}>
-                {detail.text}
-              </span>
-            )}
-            {detail.kind === 'text' && detail.redirectCreated && (
-              <span className="shrink-0 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {m['page_history.redirect_badge']()}
-              </span>
-            )}
-          </div>
-        )}
       </td>
+      <td className="px-3 py-2">
+        <span title={formatDateTime(event.occurredAt)}>{formatHistoryDate(event.occurredAt)}</span>
+      </td>
+      <td className="px-3 py-2" />
     </tr>
   );
 }

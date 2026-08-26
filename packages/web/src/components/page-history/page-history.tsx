@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
-import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
+import { formatDateTime, formatHistoryDate } from '@/lib/date-utils';
 import { usePageHistory } from '@/lib/use-page-history';
 
 import { PageEventRow } from './page-event-row';
@@ -213,7 +213,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <span title={formatDateTime(entry.occurredAt)}>{formatDistanceToNow(entry.occurredAt)}</span>
+                          <span title={formatDateTime(entry.occurredAt)}>{formatHistoryDate(entry.occurredAt)}</span>
                         </td>
                         <td className="px-3 py-2 font-mono text-xs">
                           <Link
