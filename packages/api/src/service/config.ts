@@ -134,23 +134,38 @@ export default class ConfigService {
    * Persists every key of `config` to `ns`, then (and ONLY then) updates
    * local memory, notifies change listeners, and publishes to Redis.
    *
-   * `configModel.updateConfigByNamespace` propagates a write failure
-   * (`models/config.ts`) instead of swallowing it, so a rejection here
-   * throws straight through to the caller — the admin PUT handler's own
-   * try/catch → 500 — BEFORE `this.update(...)` runs. Zero memory
-   * mutation, zero listener call, zero Redis publish on failure: no
-   * replica, local or remote, can observe a value the database does not
-   * hold. Some keys may still have persisted individually (the model
-   * write is not atomic across keys — see `updateConfigByNamespace`'s own
-   * doc), but a later resend of the same full `config` re-writes them
-   * anyway (`updateByParams` upserts), which is what makes DB and memory
-   * converge again.
+   * `configModel.updateConfigByNamespace` writes each key independently
+   * (`Promise.allSettled` — see its own doc), so a rejection here can
+   * still leave some keys persisted: the write is not atomic across keys.
+   * On that rejection, before rethrowing, this reloads from Mongo
+   * (`this.load()`) so local memory reflects exactly what landed, tells
+   * local listeners, and republishes using the namespaces the attempted
+   * batch touched so other replicas reload too. That keeps "in-memory
+   * config matches what Mongo holds" true even on partial failure,
+   * without requiring the caller to resend the same payload to converge.
+   *
+   * If the reload itself fails (typically because Mongo is generally
+   * unavailable at that point, not just for this one write), memory is
+   * left as-is and only the original write error propagates — the
+   * reload failure is logged, never thrown, so it can't mask the write
+   * failure the caller needs to see.
    */
   async saveConfig(ns: string, config: Record<string, any>) {
     debug('Save config', ns, config);
-    await this.configModel.updateConfigByNamespace(ns, config);
-
     const changed = deriveChangedNamespaces(ns, Object.keys(config));
+
+    try {
+      await this.configModel.updateConfigByNamespace(ns, config);
+    } catch (writeErr) {
+      try {
+        await this.load();
+        await this.notifyUpdated(changed, 'local');
+      } catch (reconcileErr) {
+        debug('Failed to reconcile config after a write failure:', (reconcileErr as Error).message);
+      }
+      throw writeErr;
+    }
+
     await this.update({ ...this.config, [ns]: { ...this.config[ns], ...config } }, changed);
   }
 

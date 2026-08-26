@@ -148,7 +148,23 @@ export default (crowi: Crowi) => {
     if (count > 0) {
       throw new Error('Application already installed');
     }
-    await Config.updateConfigByNamespace('crowi', getArrayForInstalling());
+    try {
+      await Config.updateConfigByNamespace('crowi', getArrayForInstalling());
+    } catch (err) {
+      // The count check above guarantees `{ ns: 'crowi' }` was empty
+      // before this call, so every row now present under that namespace
+      // was written by this failed seeding attempt — deleting the whole
+      // namespace can't destroy pre-existing data. Without this, a
+      // partially-written seeding batch leaves rows behind that make
+      // `isAppInstalled` report `already_installed` forever, even though
+      // install never actually completed.
+      try {
+        await Config.deleteMany({ ns: 'crowi' }).exec();
+      } catch (deleteErr) {
+        debug('applicationInstall: failed to remove partially seeded crowi config:', (deleteErr as Error).message);
+      }
+      throw err;
+    }
   };
 
   configSchema.statics.updateByParams = async function (ns: string, key: string, value: string) {

@@ -136,6 +136,57 @@ describe('Config model test', () => {
     });
   });
 
+  /**
+   * The seeding write is not atomic across keys, so a rejection can
+   * leave some rows behind under `{ ns: 'crowi' }`. Left in place, those
+   * rows would make count-based install checks report the app as
+   * installed forever even though install never completed.
+   */
+  describe('write reconciliation (feature-config-write-reconciliation)', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    async function withEmptyCrowiNamespace(run: () => Promise<void>) {
+      const existingCrowiRows = await Config.find({ ns: 'crowi' }).lean().exec();
+      await Config.deleteMany({ ns: 'crowi' }).exec();
+
+      try {
+        await run();
+      } finally {
+        await Config.deleteMany({ ns: 'crowi' }).exec();
+        if (existingCrowiRows.length > 0) {
+          await Config.insertMany(existingCrowiRows);
+        }
+      }
+    }
+
+    test('AC-7: applicationInstall removes the crowi namespace after a partial seeding failure, so the count guard reports uninstalled again', async () => {
+      await withEmptyCrowiNamespace(async () => {
+        jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during install'));
+
+        await expect(Config.applicationInstall()).rejects.toThrow('mongo write failed during install');
+
+        const count = await Config.countDocuments({ ns: 'crowi' }).exec();
+        expect(count).toBe(0);
+      });
+    });
+
+    test('AC-9: applicationInstall still propagates the original seeding error when the cleanup deletion itself fails', async () => {
+      await withEmptyCrowiNamespace(async () => {
+        jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during install'));
+        jest.spyOn(Config, 'deleteMany').mockImplementationOnce(() => {
+          throw new Error('mongo delete failed');
+        });
+
+        // The delete failure must never surface in place of the seeding
+        // failure — the caller still needs to see why install didn't
+        // complete.
+        await expect(Config.applicationInstall()).rejects.toThrow('mongo write failed during install');
+      });
+    });
+  });
+
   describe('encryption of sensitive values', () => {
     const originalKey = process.env.CROWI_ENCRYPTION_KEY;
 

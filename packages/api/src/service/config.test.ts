@@ -2,7 +2,13 @@ import ConfigService, { type ConfigChangeListener, deriveChangedNamespaces } fro
 
 /** Shared by `ConfigService listener API` + the `saveConfig(Value)` describe blocks below. */
 function makeService(
-  overrides: { updateByParams?: jest.Mock; updateAtomicConfigGroup?: jest.Mock; updateConfig?: jest.Mock; updateConfigByNamespace?: jest.Mock } = {},
+  overrides: {
+    updateByParams?: jest.Mock;
+    updateAtomicConfigGroup?: jest.Mock;
+    updateConfig?: jest.Mock;
+    updateConfigByNamespace?: jest.Mock;
+    loadAllConfig?: jest.Mock;
+  } = {},
 ): ConfigService {
   const writes: Array<{ ns: string; config: Record<string, unknown> }> = [];
   const updateConfigByNamespace =
@@ -15,8 +21,9 @@ function makeService(
   const updateAtomicConfigGroup =
     overrides.updateAtomicConfigGroup ?? jest.fn(async (_ns: string, _plugin: string, _group: string, _values: Record<string, string>) => undefined);
   const deleteConfig = jest.fn(async (_ns: string, _key: string) => undefined);
+  const loadAllConfig = overrides.loadAllConfig ?? jest.fn(async () => ({}));
   const fakeCrowi = {
-    model: () => ({ updateConfigByNamespace, updateConfig, updateByParams, updateAtomicConfigGroup, deleteConfig }),
+    model: () => ({ updateConfigByNamespace, updateConfig, updateByParams, updateAtomicConfigGroup, deleteConfig, loadAllConfig }),
     event: () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const e: any = {
@@ -170,70 +177,112 @@ describe('ConfigService.saveConfigValue (AC-3: fail-propagating by default)', ()
 });
 
 /**
- * feature-config-write-durability §2/§3 — `saveConfig`'s underlying
- * model static (`configModel.updateConfigByNamespace`) propagates a write
- * failure instead of swallowing it, so a rejection reaches the caller
- * before `this.update(...)` (local memory mutation, listener notify,
- * Redis publish) ever runs (AC-3), and a resend of the SAME full config
- * after a partial failure re-writes every key and converges memory with
- * the database (AC-9).
+ * `saveConfig`'s underlying model static (`updateConfigByNamespace`)
+ * writes each key independently, so a rejection can still leave some
+ * keys persisted. Reloading from Mongo before rethrowing is what makes
+ * local memory converge to whatever actually landed, instead of relying
+ * on a caller resending the same payload to reconcile it.
  */
-describe('ConfigService.saveConfig (AC-3/AC-9: fail-propagating by default, resend converges)', () => {
-  it('AC-3: failure propagates the rejection, leaves local memory unmutated, and never notifies listeners', async () => {
-    const updateConfigByNamespace = jest.fn(async () => {
-      throw new Error('mongo write failed');
-    });
-    const svc = makeService({ updateConfigByNamespace });
-    svc.config.crowi = { 'app:title': 'Old Title' };
-    const calls: unknown[] = [];
-    svc.onConfigChange((ns) => {
-      calls.push(ns);
-    });
-
-    await expect(svc.saveConfig('crowi', { 'app:title': 'New Title' })).rejects.toThrow('mongo write failed');
-
-    expect(svc.config.crowi['app:title']).toBe('Old Title');
-    expect(calls).toEqual([]);
-  });
-
-  it('AC-9: resending the SAME full config after a partial-write failure ends with memory and the underlying store in agreement', async () => {
-    // Mimics the model layer's own Promise.allSettled semantics: only
-    // `app:confidential`'s write actually fails on the first attempt —
-    // `app:title`'s succeeds and lands in `db` even though the overall
-    // call still rejects.
-    const db: Record<string, unknown> = {};
-    let failConfidential = true;
+describe('ConfigService.saveConfig (feature-config-write-reconciliation)', () => {
+  /**
+   * Mimics the model layer's own Promise.allSettled semantics: a batch
+   * containing `app:confidential` always fails that one key while its
+   * siblings still land in `db` — any other batch succeeds outright.
+   * Also backs `loadAllConfig` so the reload in `saveConfig`'s failure
+   * path observes exactly what `db` holds.
+   */
+  function makePartialWriteDb() {
+    const db: Record<string, unknown> = { 'app:title': 'Old Title' };
     const updateConfigByNamespace = jest.fn(async (_ns: string, config: Record<string, unknown>) => {
-      const shouldFail = failConfidential && 'app:confidential' in config;
+      const failing = 'app:confidential' in config;
       for (const [key, value] of Object.entries(config)) {
-        if (shouldFail && key === 'app:confidential') continue;
+        if (failing && key === 'app:confidential') continue;
         db[key] = value;
       }
-      if (shouldFail) {
+      if (failing) {
         throw new Error('mongo write failed: app:confidential');
       }
     });
-    const svc = makeService({ updateConfigByNamespace });
+    const loadAllConfig = jest.fn(async () => ({ crowi: { ...db } }));
+    return { db, updateConfigByNamespace, loadAllConfig };
+  }
 
-    const fullConfig = { 'app:title': 'New Title', 'app:confidential': 'Internal only' };
+  it('AC-1/AC-2: reloads from Mongo after a partial-write failure, converging memory to what landed, and notifies/publishes the attempted namespaces', async () => {
+    const { updateConfigByNamespace, loadAllConfig } = makePartialWriteDb();
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig });
+    svc.config.crowi = { 'app:title': 'Old Title' };
+    const publish = jest.fn(async () => undefined);
+    svc.pubSub.publisher = { publish };
+    const calls: Array<{ ns: string[]; source: string }> = [];
+    svc.onConfigChange((ns, source) => calls.push({ ns, source }));
 
-    await expect(svc.saveConfig('crowi', fullConfig)).rejects.toThrow('mongo write failed: app:confidential');
-    // Memory was never touched by the failed attempt — this is exactly
-    // what forces a resend to recompute from the pre-failure (stale)
-    // state and resubmit every key, not just the one that failed.
-    expect(svc.config.crowi).toBeUndefined();
-    expect(db).toEqual({ 'app:title': 'New Title' });
+    await expect(svc.saveConfig('crowi', { 'app:title': 'New Title', 'app:confidential': 'Internal only' })).rejects.toThrow(
+      'mongo write failed: app:confidential',
+    );
 
-    failConfidential = false;
-    await svc.saveConfig('crowi', fullConfig);
+    // `app:title` actually landed in Mongo despite the overall rejection
+    // — memory must reflect exactly that, not the stale pre-attempt
+    // value and not the attempted (never-persisted) `app:confidential`.
+    expect(svc.config.crowi).toEqual({ 'app:title': 'New Title' });
+    expect(loadAllConfig).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([{ ns: ['crowi'], source: 'local' }]);
 
-    expect(db).toEqual(fullConfig);
-    expect(svc.config.crowi).toEqual(fullConfig);
-    // The resend re-sent BOTH keys, not a diff against the failed
-    // attempt — upsert-idempotency on the key that already persisted is
-    // what makes this self-healing rather than merely "eventually mostly
-    // correct".
-    expect(updateConfigByNamespace).toHaveBeenNthCalledWith(2, 'crowi', fullConfig);
+    expect(publish).toHaveBeenCalledTimes(1);
+    const [channel, payload] = publish.mock.calls[0];
+    expect(channel).toBe(svc.pubSub.channel);
+    expect(JSON.parse(payload)).toEqual({ id: svc.pubSub.id, changedNamespaces: ['crowi'] });
+  });
+
+  it('AC-3: the original write error propagates even though the reload succeeded', async () => {
+    const updateConfigByNamespace = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const loadAllConfig = jest.fn(async () => ({ crowi: {} }));
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig });
+
+    await expect(svc.saveConfig('crowi', { 'app:title': 'New Title' })).rejects.toThrow('mongo write failed');
+  });
+
+  it('AC-4: when the reload itself fails, memory is left untouched, listeners are never notified, and the original write error propagates', async () => {
+    const updateConfigByNamespace = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const loadAllConfig = jest.fn(async () => {
+      throw new Error('mongo read failed');
+    });
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig });
+    svc.config.crowi = { 'app:title': 'Old Title' };
+    const publish = jest.fn(async () => undefined);
+    svc.pubSub.publisher = { publish };
+    const calls: unknown[] = [];
+    svc.onConfigChange((ns) => calls.push(ns));
+
+    await expect(svc.saveConfig('crowi', { 'app:title': 'New Title' })).rejects.toThrow('mongo write failed');
+
+    expect(svc.config.crowi).toEqual({ 'app:title': 'Old Title' });
+    expect(calls).toEqual([]);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('AC-5: without a resend, a later unrelated save does not carry a value the earlier failed attempt never actually persisted', async () => {
+    const { db, updateConfigByNamespace, loadAllConfig } = makePartialWriteDb();
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig });
+    svc.config.crowi = { 'app:title': 'Old Title' };
+
+    await expect(svc.saveConfig('crowi', { 'app:title': 'New Title', 'app:confidential': 'Internal only' })).rejects.toThrow(
+      'mongo write failed: app:confidential',
+    );
+    // The reload already converged memory to what actually landed.
+    expect(svc.config.crowi).toEqual({ 'app:title': 'New Title' });
+    expect(db['app:confidential']).toBeUndefined();
+
+    // A later, unrelated save must build on that converged state, not
+    // resurrect the never-persisted `app:confidential` — proving memory
+    // was never left holding a value the database didn't actually have.
+    await svc.saveConfig('crowi', { 'security:registrationMode': 'Restricted' });
+
+    expect(svc.config.crowi).toEqual({ 'app:title': 'New Title', 'security:registrationMode': 'Restricted' });
+    expect(svc.config.crowi['app:confidential']).toBeUndefined();
   });
 });
 
