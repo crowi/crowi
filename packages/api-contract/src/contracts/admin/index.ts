@@ -14,6 +14,7 @@
 export * from './app';
 export * from './auth';
 export * from './mail';
+export * from './page-deletion';
 export * from './plugins';
 export * from './search';
 export * from './security';

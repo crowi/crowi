@@ -1,29 +1,27 @@
 'use client';
 
+import type { PageHistoryContentRow } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
+import { History as HistoryIcon, Loader2, Terminal } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-import { GitCompare, History as HistoryIcon, Loader2, Terminal } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
+
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
-import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
-import { usePageRevisions } from '@/lib/use-page-revisions';
+import { formatDateTime, formatHistoryDate } from '@/lib/date-utils';
+import { usePageHistory } from '@/lib/use-page-history';
+
+import { PageEventRow } from './page-event-row';
 import { RevisionDiff } from './revision-diff';
-import { m } from '@paraglide/messages.js';
-import { getLocale } from '@paraglide/runtime.js';
 
 interface PageHistoryProps {
   pageId: string;
   pagePath: string;
 }
 
-/**
- * Small "app" chip shown next to the author when a revision was authored
- * through the API with an access token (`editVia` of `oauth` / `pat`), as
- * opposed to the browser / collaborative editor. RFC-0010. Self-contained
- * `TooltipProvider` so it can drop into the history table (which has none).
- */
 function ApiEditChip() {
   return (
     <TooltipProvider>
@@ -43,75 +41,38 @@ function ApiEditChip() {
   );
 }
 
-/**
- * History list + diff viewer for a single page.
- * - Defaults `from` to the second-newest revision and `to` to the newest, so
- *   opening the screen on a page with two or more revisions immediately shows
- *   the most recent change.
- * - The user can pick any pair via radio buttons and press Compare to refresh
- *   the diff viewer below.
- */
 export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
-  const { revisions, isLoading, isError, error, refetch } = usePageRevisions(pageId);
-
-  // Locale-aware joiner for the contributors list ("Alice, Bob, and
-  // Carol" in en, 「Alice、Bob、Carol」 in ja). Memoised against the
-  // current locale so we don't allocate a fresh formatter per render.
+  const { entries, tracking, isLoading, isError, error, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = usePageHistory(pageId);
+  const contentRows = useMemo(() => entries.filter((entry): entry is PageHistoryContentRow => entry.type === 'content_revision'), [entries]);
+  const contentIndexById = useMemo(() => new Map(contentRows.map((row, index) => [row.id, index])), [contentRows]);
+  const trackingBoundaryIndex = useMemo(() => (tracking?.state === 'ready' ? entries.findIndex((entry) => entry.sequence === null) : -1), [entries, tracking]);
   const listFormatter = useMemo(() => {
     const locale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
     return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
   }, []);
 
-  // 一覧上の選択状態 (まだ Compare を押していない)
-  const [pendingFrom, setPendingFrom] = useState<string | null>(null);
-  const [pendingTo, setPendingTo] = useState<string | null>(null);
-  // 実際に diff viewer に渡す pair
-  const [activePair, setActivePair] = useState<{ from: string; to: string } | null>(null);
-  // どの一覧 (revisions の最新 _id) に対してデフォルト選択を初期化済みかを記録。
-  // revisions が refetch などで切り替わった際にも追従できるようにする。
-  const [initializedFor, setInitializedFor] = useState<string | null>(null);
+  const [selectedFrom, setSelectedFrom] = useState<string | null>(null);
+  const [selectedTo, setSelectedTo] = useState<string | null>(null);
+  const [selectionPageId, setSelectionPageId] = useState(pageId);
+  const [defaultPairInitialized, setDefaultPairInitialized] = useState(false);
 
-  // 初回 (もしくは revisions の中身が変わった時) にデフォルト選択をセット。
-  // React 19 ではエフェクトでの setState はアンチパターンなので、
-  // 描画時に「変更を検知したら反映する」スタイルで行う。
-  const newestId = revisions[0]?._id ?? null;
-  if (newestId && newestId !== initializedFor) {
-    const latest = revisions[0];
-    const previous = revisions[1] ?? null;
-    setInitializedFor(newestId);
-    if (latest && previous) {
-      setPendingFrom(previous._id);
-      setPendingTo(latest._id);
-      setActivePair({ from: previous._id, to: latest._id });
-    } else if (latest) {
-      // 1 件しかない場合は to のみ既定にする
-      setPendingFrom(null);
-      setPendingTo(latest._id);
-      setActivePair(null);
-    }
+  if (selectionPageId !== pageId) {
+    setSelectionPageId(pageId);
+    setDefaultPairInitialized(false);
+    setSelectedFrom(null);
+    setSelectedTo(null);
+  } else if (!defaultPairInitialized && contentRows.length >= 2) {
+    const latest = contentRows[0];
+    const previous = contentRows[1];
+    setDefaultPairInitialized(true);
+    setSelectedFrom(previous.id);
+    setSelectedTo(latest.id);
   }
 
-  const canCompare = useMemo(() => {
-    return Boolean(pendingFrom && pendingTo && pendingFrom !== pendingTo);
-  }, [pendingFrom, pendingTo]);
-
-  const isPairDirty = useMemo(() => {
-    if (!activePair) return canCompare;
-    return canCompare && (activePair.from !== pendingFrom || activePair.to !== pendingTo);
-  }, [activePair, canCompare, pendingFrom, pendingTo]);
-
-  const handleCompare = () => {
-    if (!canCompare || !pendingFrom || !pendingTo) return;
-    setActivePair({ from: pendingFrom, to: pendingTo });
-  };
-
-  // `revisions` is newest-first (index 0 = newest, larger index = older).
-  // The diff is always rendered `from` → `to`, so `from` must be the
-  // OLDER side and `to` the NEWER side. Disable any radio that would
-  // invert that: `to` can't sit at/older than the selected `from`, and
-  // `from` can't sit at/newer than the selected `to`.
-  const fromIndex = pendingFrom ? revisions.findIndex((r) => r._id === pendingFrom) : -1;
-  const toIndex = pendingTo ? revisions.findIndex((r) => r._id === pendingTo) : -1;
+  const selectedFromRow = selectedFrom ? contentRows.find((row) => row.id === selectedFrom) : null;
+  const selectedToRow = selectedTo ? contentRows.find((row) => row.id === selectedTo) : null;
+  const fromIndex = selectedFrom ? (contentIndexById.get(selectedFrom) ?? -1) : -1;
+  const toIndex = selectedTo ? (contentIndexById.get(selectedTo) ?? -1) : -1;
 
   return (
     <div className="space-y-6">
@@ -126,13 +87,13 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
       {isLoading && (
         <div className="flex items-center gap-2 text-muted-foreground py-6" role="status">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">{m['page_history.revisions_loading']()}</span>
+          <span className="text-sm">{m['page_history.history_loading']()}</span>
         </div>
       )}
 
       {isError && (
         <Alert variant="destructive">
-          <AlertTitle>{m['page_history.revisions_failed']()}</AlertTitle>
+          <AlertTitle>{m['page_history.history_failed']()}</AlertTitle>
           <AlertDescription>
             {error?.message ?? m['common.try_again_later']()}
             <div className="mt-3">
@@ -144,93 +105,87 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
         </Alert>
       )}
 
-      {!isLoading && !isError && revisions.length === 0 && (
+      {!isLoading && !isError && entries.length === 0 && (
         <Alert>
-          <AlertTitle>{m['page_history.no_revisions_title']()}</AlertTitle>
-          <AlertDescription>{m['page_history.no_revisions_body']()}</AlertDescription>
+          <AlertTitle>{m['page_history.no_history_title']()}</AlertTitle>
+          <AlertDescription>{m['page_history.no_history_body']()}</AlertDescription>
         </Alert>
       )}
 
-      {!isLoading && !isError && revisions.length === 1 && (
-        <section aria-label="Revision diff">
-          <RevisionDiff fromId={null} toId={revisions[0]._id} />
-        </section>
-      )}
-
-      {!isLoading && !isError && revisions.length >= 2 && (
-        <>
-          <section aria-label="Revisions list">
-            <div className="rounded-md border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="px-3 py-2 text-center font-medium w-16">
-                      {m['page_history.col_from']()}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-center font-medium w-16">
-                      {m['page_history.col_to']()}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left font-medium">
-                      {m['page_history.col_author']()}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left font-medium">
-                      {m['page_history.col_created']()}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-left font-medium">
-                      {m['page_history.col_revision']()}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {revisions.map((rev, i) => {
-                    // When the revision was made via the collab
-                    // `crowi:save` flow, `savedBy` holds the user who
-                    // triggered the checkpoint and `contributors`
-                    // lists the peers who had a live cursor on the
-                    // page since the previous Save. Pre-RFC-0003
-                    // revisions have neither, so we fall back to
-                    // `author` (which v1.x already populated for
-                    // every revision).
-                    const savedBy = rev.savedBy ?? rev.author ?? null;
-                    const allContributors = rev.contributors ?? [];
-                    // Defensive de-dup: the server already filters
-                    // savedBy out of contributors before persisting,
-                    // but legacy data + future Hocuspocus changes
-                    // could re-introduce the duplicate — strip it
-                    // here so the UI never repeats "Saved by Alice
-                    // (with Alice, Bob)". `Intl.ListFormat` then
-                    // handles locale separators (English ", and";
-                    // Japanese 「、」).
-                    const contributors = savedBy ? allContributors.filter((c) => c._id !== savedBy._id) : allContributors;
-                    const contributorNames = listFormatter.format(contributors.map((c) => c.name));
-                    const isFrom = pendingFrom === rev._id;
-                    const isTo = pendingTo === rev._id;
-                    // Keep the from → to direction: `from` can't be newer
-                    // than `to`, and `to` can't be older than `from`.
-                    const fromDisabled = isTo || (toIndex !== -1 && i < toIndex);
-                    const toDisabled = isFrom || (fromIndex !== -1 && i > fromIndex);
+      {!isLoading && !isError && entries.length > 0 && (
+        <section aria-label={m['page_history.timeline_label']()}>
+          <div className="rounded-md border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-3 py-2 text-center font-medium w-16">
+                    {m['page_history.col_from']()}
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-center font-medium w-16">
+                    {m['page_history.col_to']()}
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">
+                    {m['page_history.col_author']()}
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">
+                    {m['page_history.col_created']()}
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">
+                    {m['page_history.col_revision']()}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, entryIndex) => {
+                  const boundary = entryIndex === trackingBoundaryIndex && (
+                    <tr className="border-t bg-muted/40">
+                      <td colSpan={5} className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+                        {m['page_history.tracking_boundary']()}
+                      </td>
+                    </tr>
+                  );
+                  if (entry.type === 'page_event') {
                     return (
-                      <tr key={rev._id} className="border-t">
+                      <Fragment key={entry.id}>
+                        {boundary}
+                        <PageEventRow event={entry} />
+                      </Fragment>
+                    );
+                  }
+
+                  const contentIndex = contentIndexById.get(entry.id) ?? -1;
+                  const isFrom = selectedFrom === entry.id;
+                  const isTo = selectedTo === entry.id;
+                  const fromDisabled = isTo || (toIndex !== -1 && contentIndex < toIndex);
+                  const toDisabled = isFrom || (fromIndex !== -1 && contentIndex > fromIndex);
+                  const savedBy = entry.savedBy ?? entry.actor ?? null;
+                  const allContributors = entry.contributors ?? [];
+                  const contributors = savedBy ? allContributors.filter((contributor) => contributor._id !== savedBy._id) : allContributors;
+                  const contributorNames = listFormatter.format(contributors.map((contributor) => contributor.name));
+                  return (
+                    <Fragment key={entry.id}>
+                      {boundary}
+                      <tr className="border-t">
                         <td className="px-3 py-2 text-center">
                           <input
                             type="radio"
                             name="rev-from"
-                            value={rev._id}
+                            value={entry.id}
                             checked={isFrom}
                             disabled={fromDisabled}
-                            onChange={() => setPendingFrom(rev._id)}
-                            aria-label={`Select revision ${rev._id.slice(-8)} as from`}
+                            onChange={() => setSelectedFrom(entry.id)}
+                            aria-label={m['page_history.select_from']({ revision: entry.revisionId.slice(-8) })}
                           />
                         </td>
                         <td className="px-3 py-2 text-center">
                           <input
                             type="radio"
                             name="rev-to"
-                            value={rev._id}
+                            value={entry.id}
                             checked={isTo}
                             disabled={toDisabled}
-                            onChange={() => setPendingTo(rev._id)}
-                            aria-label={`Select revision ${rev._id.slice(-8)} as to`}
+                            onChange={() => setSelectedTo(entry.id)}
+                            aria-label={m['page_history.select_to']({ revision: entry.revisionId.slice(-8) })}
                           />
                         </td>
                         <td className="px-3 py-2">
@@ -238,7 +193,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                             <div className="flex items-center gap-2">
                               <UserAvatar user={savedBy} size="sm" />
                               <span className="truncate">{savedBy.name}</span>
-                              {(rev.editVia === 'oauth' || rev.editVia === 'pat') && <ApiEditChip />}
+                              {(entry.editVia === 'oauth' || entry.editVia === 'pat') && <ApiEditChip />}
                               {contributors.length > 0 && (
                                 <span className="text-muted-foreground ml-1 text-xs">{m['collab.history_with_others']({ names: contributorNames })}</span>
                               )}
@@ -248,38 +203,45 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <span title={formatDateTime(rev.createdAt)}>{formatDistanceToNow(rev.createdAt)}</span>
+                          <span title={formatDateTime(entry.occurredAt)}>{formatHistoryDate(entry.occurredAt)}</span>
                         </td>
                         <td className="px-3 py-2 font-mono text-xs">
                           <Link
-                            href={`${pagePath}?revision_id=${rev._id}`}
+                            href={`${pagePath}?revision_id=${entry.revisionId}`}
                             className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                            title={`Open revision ${rev._id}`}
+                            title={m['page_history.open_revision']({ revision: entry.revisionId })}
                           >
-                            {rev._id.slice(-8)}
+                            {entry.revisionId.slice(-8)}
                           </Link>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-            <div className="flex items-center justify-end gap-2 mt-3">
-              <Button onClick={handleCompare} disabled={!canCompare} type="button" size="sm">
-                <GitCompare className="h-4 w-4 mr-1" />
-                {isPairDirty ? m['page_history.update_diff']() : m['page_history.compare']()}
+          {hasNextPage && (
+            <div className="flex items-center justify-end mt-3">
+              <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} type="button" size="sm">
+                {isFetchingNextPage ? m['page_history.loading_more']() : m['page_history.load_more']()}
               </Button>
             </div>
-          </section>
-
-          {activePair && (
-            <section aria-label="Revision diff" className="border-t pt-6">
-              <RevisionDiff fromId={activePair.from} toId={activePair.to} />
-            </section>
           )}
-        </>
+        </section>
+      )}
+
+      {!isLoading && !isError && contentRows.length === 1 && !hasNextPage && (
+        <section aria-label={m['page_history.diff_region_label']()}>
+          <RevisionDiff fromId={null} toId={contentRows[0].revisionId} />
+        </section>
+      )}
+
+      {!isLoading && !isError && contentRows.length >= 2 && selectedFromRow && selectedToRow && (
+        <section aria-label={m['page_history.diff_region_label']()} className="border-t pt-6">
+          <RevisionDiff fromId={selectedFromRow.revisionId} toId={selectedToRow.revisionId} />
+        </section>
       )}
     </div>
   );

@@ -79,6 +79,7 @@ import type { z } from 'zod';
 import { adminAppRoutes } from './contracts/admin/app';
 import { adminAuthRoutes } from './contracts/admin/auth';
 import { adminMailRoutes } from './contracts/admin/mail';
+import { adminPageDeletionRoutes } from './contracts/admin/page-deletion';
 import { adminPluginsRoutes } from './contracts/admin/plugins';
 import { adminSearchRoutes } from './contracts/admin/search';
 import { adminSecurityRoutes } from './contracts/admin/security';
@@ -101,6 +102,7 @@ import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
 import { pagePreviewRoutes } from './contracts/page-preview';
 import { presenceRoutes } from './contracts/presence';
+import { getPageHistoryRoute } from './contracts/page-history';
 import { revisionRoutes } from './contracts/revision';
 import { adminCryptoRoutes } from './contracts/admin-crypto';
 import { searchRoutes } from './contracts/search';
@@ -152,6 +154,7 @@ import type {
   SeenUsersResponseSchema,
   WatchStatusResponseSchema,
 } from './schemas/page';
+import type { PageHistoryResponseSchema } from './schemas/page-history';
 import type { PreviewPageResponseSchema } from './schemas/page-preview';
 import type { LikersResponseSchema, PresenceTokenResponseSchema } from './schemas/presence';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
@@ -232,6 +235,7 @@ type ListCommentsResponse = z.infer<typeof ListCommentsResponseSchema>;
 type AddCommentResponse = z.infer<typeof AddCommentResponseSchema>;
 type DeleteCommentResponse = z.infer<typeof DeleteCommentResponseSchema>;
 type ListRevisionsResponse = z.infer<typeof ListRevisionsResponseSchema>;
+type PageHistoryResponse = z.infer<typeof PageHistoryResponseSchema>;
 type GetRevisionResponse = z.infer<typeof GetRevisionResponseSchema>;
 type GetRevisionsResponse = z.infer<typeof GetRevisionsResponseSchema>;
 type SearchPagesResponse = z.infer<typeof SearchPagesResponseSchema>;
@@ -440,6 +444,7 @@ const stubComment = {
 const stubAddComment: AddCommentResponse = { comment: stubComment, newlyWatching: false };
 const stubDeleteComment: DeleteCommentResponse = { ok: true };
 const stubListRevisions: ListRevisionsResponse = { revisions: [], pager: stubPager };
+const stubPageHistory: PageHistoryResponse = { entries: [], nextCursor: null, tracking: { state: 'untracked' } };
 const stubRevision = {
   _id: '',
   path: '',
@@ -689,7 +694,11 @@ const bookmarkBacklinkCommentRevisionChain = new OpenAPIHono()
   // to match the runtime chain — see the contract file header for why
   // ordering matters.
   .openapi(revisionRoutes.getRevisionsRoute, (c) => c.json(stubGetRevisions, 200))
-  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200));
+  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200))
+  // RFC-0021 Phase 3 — the merged timeline sits with the revision routes: it is
+  // the same page-scoped read, and this is the shallower of the two `/pages/*`
+  // chains (the split exists to keep the inferred types under TS2589).
+  .openapi(getPageHistoryRoute, (c) => c.json(stubPageHistory, 200));
 
 // page / page-preview / pageCollab / presence — 18 routes. Page CRUD
 // registers AFTER revision in the runtime chain so the shared
@@ -832,6 +841,11 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminPluginsRoutes.clearRenderCacheAllRoute, (c) => c.json(stubClearRenderCache, 200))
   .openapi(adminPluginsRoutes.clearRenderCachePluginRoute, (c) => c.json(stubClearRenderCache, 200));
 
+const adminPageDeletionContractApp = new OpenAPIHono()
+  .openapi(adminPageDeletionRoutes.listPageDeletionsRoute, (c) => c.json({ records: [] }, 200))
+  .openapi(adminPageDeletionRoutes.getPageDeletionsByPathRoute, (c) => c.json({ records: [] }, 200))
+  .openapi(adminPageDeletionRoutes.erasePageDeletionRoute, (c) => c.json({ deletedCount: 0 }, 200));
+
 /**
  * OAuth 2.0 authorization-server endpoints (RFC-0010 Phase 3) plus the
  * self-service OAuth session list/revoke endpoints — 10 routes. Kept on
@@ -901,6 +915,7 @@ export type PageChain = typeof pageChain;
 export type LateContractApp = typeof lateContractApp;
 export type AdminSettingsContractApp = typeof adminSettingsContractApp;
 export type AdminUsersPluginsContractApp = typeof adminUsersPluginsContractApp;
+export type AdminPageDeletionContractApp = typeof adminPageDeletionContractApp;
 export type OAuthContractApp = typeof oauthContractApp;
 export type FederatedAuthContractApp = typeof federatedAuthContractApp;
 export type FederatedRegistrationContractApp = typeof federatedRegistrationContractApp;
@@ -941,6 +956,7 @@ export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
   ReturnType<typeof hc<LateContractApp>> &
   ReturnType<typeof hc<AdminSettingsContractApp>> &
   ReturnType<typeof hc<AdminUsersPluginsContractApp>> &
+  ReturnType<typeof hc<AdminPageDeletionContractApp>> &
   ReturnType<typeof hc<OAuthContractApp>> &
   ReturnType<typeof hc<FederatedAuthContractApp>> &
   ReturnType<typeof hc<FederatedRegistrationContractApp>>;

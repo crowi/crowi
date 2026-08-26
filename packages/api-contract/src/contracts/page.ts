@@ -52,10 +52,14 @@ import {
   ListPageChildrenResponseSchema,
   ListPagesRequestSchema,
   ListPagesResponseSchema,
+  IdempotencyKeyConflictErrorSchema,
+  IdempotencyKeyRequiredErrorSchema,
   PageNotFoundErrorSchema,
   PageNotGrantedErrorSchema,
   PageRevisionErrorSchema,
   PageSchema,
+  PageTransitionInProgressErrorSchema,
+  PageTransitionIncompleteErrorSchema,
   RenamePageRequestSchema,
   RenamePageResponseSchema,
   RenameSubtreeRequestSchema,
@@ -519,6 +523,11 @@ export const deletePageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Soft-delete (or hard-delete with completely=true) a page',
   request: {
+    // RFC-0021 Phase 2c-2a — required by the SOFT branch only, and enforced in
+    // the handler for the same reason as rename: a required header in zod is
+    // rejected before the handler runs, and the shared defaultHook's
+    // VALIDATION_ERROR does not name the header. Hard delete never reads it.
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: DeletePageRequestSchema } },
     },
@@ -529,8 +538,12 @@ export const deletePageRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'PAGE_DELETE_FAILED',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description: 'PAGE_DELETE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE',
+      content: {
+        'application/json': {
+          schema: z.union([PageBadRequestErrorSchema, IdempotencyKeyRequiredErrorSchema, PageTransitionIncompleteErrorSchema]),
+        },
+      },
     },
     401: {
       description: 'Authentication required',
@@ -541,8 +554,12 @@ export const deletePageRoute = createRoute({
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
     },
     409: {
-      description: 'Stale revision_id',
-      content: { 'application/json': { schema: PageRevisionErrorSchema } },
+      description: 'Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS',
+      content: {
+        'application/json': {
+          schema: z.union([PageRevisionErrorSchema, IdempotencyKeyConflictErrorSchema, PageTransitionInProgressErrorSchema]),
+        },
+      },
     },
   },
 });
@@ -554,6 +571,9 @@ export const revertDeletedPageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Revert a soft-deleted page (restore from /trash/...)',
   request: {
+    // RFC-0021 Phase 2c-2a — optional here, enforced in the handler (see the
+    // rename route for why).
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RevertDeletedPageRequestSchema } },
     },
@@ -564,8 +584,12 @@ export const revertDeletedPageRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'PAGE_REVERT_FAILED',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description: 'PAGE_REVERT_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE',
+      content: {
+        'application/json': {
+          schema: z.union([PageBadRequestErrorSchema, IdempotencyKeyRequiredErrorSchema, PageTransitionIncompleteErrorSchema]),
+        },
+      },
     },
     401: {
       description: 'Authentication required',
@@ -574,6 +598,14 @@ export const revertDeletedPageRoute = createRoute({
     404: {
       description: 'Page not found (also covers grant-denied)',
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
+    409: {
+      description: 'IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS',
+      content: {
+        'application/json': {
+          schema: z.union([IdempotencyKeyConflictErrorSchema, PageTransitionInProgressErrorSchema]),
+        },
+      },
     },
   },
 });
@@ -616,6 +648,10 @@ export const renamePageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Rename (move) a page — optionally together with its subtree',
   request: {
+    // Required for both single-page and include_descendants renames. It stays
+    // optional in the schema because the handler returns the specific
+    // IDEMPOTENCY_KEY_REQUIRED error instead of defaultHook's VALIDATION_ERROR.
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RenamePageRequestSchema } },
     },
@@ -626,10 +662,10 @@ export const renamePageRoute = createRoute({
       content: { 'application/json': { schema: RenamePageResponseSchema } },
     },
     400: {
-      description: 'PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED',
+      description: 'PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE',
       content: {
         'application/json': {
-          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema, IdempotencyKeyRequiredErrorSchema, PageTransitionIncompleteErrorSchema]),
         },
       },
     },
@@ -642,8 +678,12 @@ export const renamePageRoute = createRoute({
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
     },
     409: {
-      description: 'Stale revision_id',
-      content: { 'application/json': { schema: PageRevisionErrorSchema } },
+      description: 'Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS',
+      content: {
+        'application/json': {
+          schema: z.union([PageRevisionErrorSchema, IdempotencyKeyConflictErrorSchema, PageTransitionInProgressErrorSchema]),
+        },
+      },
     },
   },
 });
@@ -655,6 +695,9 @@ export const renameSubtreeRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Rename (move) a whole subtree by path (for portal-less folders)',
   request: {
+    // Required at runtime. Kept optional here so the handler can return the
+    // specific IDEMPOTENCY_KEY_REQUIRED error for a missing header.
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RenameSubtreeRequestSchema } },
     },
@@ -665,16 +708,20 @@ export const renameSubtreeRoute = createRoute({
       content: { 'application/json': { schema: RenameSubtreeResponseSchema } },
     },
     400: {
-      description: 'PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)',
+      description: 'PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED',
       content: {
         'application/json': {
-          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema, IdempotencyKeyRequiredErrorSchema]),
         },
       },
     },
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    409: {
+      description: 'IDEMPOTENCY_KEY_CONFLICT',
+      content: { 'application/json': { schema: IdempotencyKeyConflictErrorSchema } },
     },
   },
 });

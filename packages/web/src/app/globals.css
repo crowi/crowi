@@ -152,20 +152,20 @@
   /* Page-grant accent — applied to a thin strip under the header,
      the lock / link icon next to the title, and the grant chip's
      border and text. `transparent` for PUBLIC produces no visible
-     signal. PageView sets data-page-grant on <html> from
-     page.grant. */
+     signal. PageView scopes the current grant on <html>; history
+     chips re-scope it on themselves because one row can show two grants. */
   --page-grant-accent: transparent;
 }
 
 /* OWNER (4) — "just me", dark cool gray.
    SPECIFIED (3) — same tone as OWNER per the isPrivate grouping. */
-html[data-page-grant="4"],
-html[data-page-grant="3"] {
+[data-page-grant="4"],
+[data-page-grant="3"] {
   --page-grant-accent: oklch(0.35 0.015 250);
 }
 
 /* RESTRICTED (2) — link-only, dark purple. */
-html[data-page-grant="2"] {
+[data-page-grant="2"] {
   --page-grant-accent: oklch(0.4 0.13 295);
 }
 

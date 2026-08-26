@@ -48,3 +48,13 @@ export interface CollabModels {
  * `executeSave` only needs the call to have happened.
  */
 export type CollabContentSequenceAllocator = (pageId: Types.ObjectId, revisionId: Types.ObjectId) => Promise<unknown>;
+
+/**
+ * RFC-0021 §6.3/DC-6 (Phase 2c-1) — the api-side draft-publish command,
+ * injected in exactly the same shape as {@link CollabContentSequenceAllocator}
+ * (and for the same reason: `@crowi/collab` never depends on `@crowi/api`).
+ * The return value is `unknown` because collab never inspects it — a
+ * publish failure is logged and swallowed by the save flow, never surfaced
+ * as a save failure (DC-1/F-5 step 5).
+ */
+export type CollabDraftPublisher = (pageId: Types.ObjectId, actorId: Types.ObjectId | null) => Promise<unknown>;

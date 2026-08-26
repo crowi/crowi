@@ -50,6 +50,23 @@ describe('Routes /api/auth/activate (Hono)', () => {
       expect(reloaded?.emailConfirmedAt).toBeTruthy();
     });
 
+    it('AC-15: creates the canonical user page without recording the internal repair rename', async () => {
+      const { user, token } = await createUnconfirmedUser('activate-user-page@example.com');
+      const Page = crowi.model('Page');
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const userPagePath = Page.getUserPagePath(user);
+      const manualPage = await Page.createPage(userPagePath, 'manual page', user, {});
+
+      const res = await request(app).post('/api/auth/activate').set(jsonHeaders).send({ token });
+      await crowi.drainSideEffects();
+
+      expect(res.status).toBe(200);
+      const canonicalPage = await Page.findOne({ path: userPagePath });
+      expect(canonicalPage).toBeTruthy();
+      expect(canonicalPage?._id.toString()).not.toBe(manualPage._id.toString());
+      expect(await PageHistoryEvent.countDocuments({ page: manualPage._id })).toBe(0);
+    });
+
     it('rejects an invalid token with 401', async () => {
       const res = await request(app).post('/api/auth/activate').set(jsonHeaders).send({ token: 'bogus' });
       expect(res.status).toBe(401);

@@ -4,7 +4,8 @@ import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPage
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
-import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
+import { errorMessage } from './error-message';
+import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
 /**
@@ -16,7 +17,8 @@ import { draftsKeys } from './use-drafts';
  *   - `PAGE_LIST_FAMILY_ROOT` — the list / portal family (`usePageList` →
  *                               `pageListKeys`) AND the sidebar tree
  *                               (`usePageChildrenLevels` → `pageChildrenKeys`)
- *   - `revisionsKeys.all`     — the page-history list (a save pushes a new revision)
+ *   - `pageHistoryKeys.all`   — the merged timeline, which shows those revisions
+ *                               alongside metadata events
  *   - `draftsKeys.all`        — the "creating pages" list (a first save publishes a draft)
  *
  * Both save paths route through here — the realtime `crowi:save` flow
@@ -32,7 +34,7 @@ import { draftsKeys } from './use-drafts';
 export function invalidatePageContentQueries(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: pageKeys.all });
   queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
-  queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
+  queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
   queryClient.invalidateQueries({ queryKey: draftsKeys.all });
 }
 
@@ -191,6 +193,7 @@ export function useSetPageGrant() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
       // A grant change directly changes who can see the page in the
       // /user/<username>/ subpages listing.
       invalidateUserSubpagesQueries(queryClient);
@@ -205,17 +208,31 @@ export function useSetPageGrant() {
  *  - completely=true: the page is gone from the DB; the body still echoes the
  *    original page object for client-side feedback, but a refetch will 404.
  */
+/**
+ * A delete request plus the key identifying this attempt. Required for the same
+ * reason as {@link RenamePageVariables} — and required even for a hard delete,
+ * which ignores it, so a caller never has to know which branch it is taking.
+ */
+export type DeletePageVariables = DeletePageRequest & { idempotencyKey: string };
+
 export function useDeletePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: DeletePageRequest): Promise<PageWithRevision> => {
-      const response = await apiClient.pages.$delete({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: DeletePageVariables): Promise<PageWithRevision> => {
+      const response = await apiClient.pages.$delete({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
       }
       if (response.status === 409) {
+        // Same three-way split as rename: only the stale-revision case is an
+        // edit conflict. See `useRenamePage`.
+        const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        const code = body?.error?.code;
+        if (code === 'PAGE_TRANSITION_IN_PROGRESS' || code === 'IDEMPOTENCY_KEY_CONFLICT') {
+          throw new Error(errorMessage(code));
+        }
         throw new PageRevisionConflictError(m['errors.revision_conflict_edit']());
       }
       if (response.status === 404) {
@@ -236,6 +253,7 @@ export function useDeletePage() {
       });
       // A deleted page must also drop out of /user/<username>/ subpages.
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
@@ -245,15 +263,24 @@ export function useDeletePage() {
  * The page document's path/status are restored and the redirect stub at the
  * original path is removed.
  */
+/** A restore request plus the key identifying this attempt. See {@link RenamePageVariables}. */
+export type RevertDeletedPageVariables = RevertDeletedPageRequest & { idempotencyKey: string };
+
 export function useRevertDeletedPage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RevertDeletedPageRequest): Promise<PageWithRevision> => {
-      const response = await apiClient.pages.revert.$post({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: RevertDeletedPageVariables): Promise<PageWithRevision> => {
+      const response = await apiClient.pages.revert.$post({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
+      }
+      if (response.status === 409) {
+        // Restore has no revision check, so every 409 here is a transition or
+        // key condition — none of them is an edit conflict.
+        const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        throw new Error(errorMessage(body?.error?.code));
       }
       if (response.status === 404) {
         // 404 covers grant-denied as well (existence-leak guard).
@@ -270,6 +297,7 @@ export function useRevertDeletedPage() {
       });
       // A restored page reappears in /user/<username>/ subpages.
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
@@ -303,14 +331,23 @@ export function useRevertToRevision() {
       // The revert can be triggered from a portal listing, so refresh the
       // page lists too: the portal document now sits at a new latest revision.
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
-      // A new revision was stacked — refresh the page-history list so the
-      // reverted revision shows immediately. Without this the history view
-      // serves the pre-revert revisions off the 60s default staleTime and the
-      // new one only appears after a full browser reload.
-      queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
+      // A new revision was stacked — refresh the merged history so it shows
+      // immediately rather than serving the pre-revert timeline from cache.
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
+
+/**
+ * A rename request plus the key that identifies this attempt.
+ *
+ * The key belongs to the caller, not to this hook: a retry of the *same*
+ * intent has to reuse it to be recognised as a replay, while a fresh attempt
+ * has to bring a new one. Minting it here would make every call a new
+ * operation and defeat the point.
+ */
+export type RenamePageVariables = RenamePageRequest & { idempotencyKey: string };
+export type RenameSubtreeVariables = RenameSubtreeRequest & { idempotencyKey: string };
 
 /**
  * Rename (move) a page to a new path. May also unlink an existing redirect
@@ -320,8 +357,8 @@ export function useRenamePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RenamePageRequest): Promise<RenamePageResult> => {
-      const response = await apiClient.pages.rename.$post({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: RenamePageVariables): Promise<RenamePageResult> => {
+      const response = await apiClient.pages.rename.$post({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return {
@@ -330,6 +367,15 @@ export function useRenamePage() {
         };
       }
       if (response.status === 409) {
+        // Three different things arrive as 409 here. Only the stale-revision
+        // one means "someone edited underneath you" — reporting a page that is
+        // merely mid-move, or a reused key, with that message would send the
+        // user off to reconcile an edit conflict that does not exist.
+        const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        const code = body?.error?.code;
+        if (code === 'PAGE_TRANSITION_IN_PROGRESS' || code === 'IDEMPOTENCY_KEY_CONFLICT') {
+          throw new Error(errorMessage(code));
+        }
         throw new PageRevisionConflictError(m['errors.revision_conflict_update']());
       }
       if (response.status === 404) {
@@ -352,14 +398,12 @@ export function useRenamePage() {
     },
     // `onSettled` (not `onSuccess`): `renameTree` (subtree rename) has no
     // transaction and moves pages individually with limited concurrency, so
-    // a mid-way failure can leave SOME pages already moved while the
-    // mutation still rejects with a structured 400 (`partial: true` via
-    // `RenameTreeConflictError`). A mounted Subpages tab must refetch and
-    // converge on the true (partially-moved) membership/order even in that
-    // failure case — `onSuccess` alone would leave it showing the pre-rename
-    // state until the next 60s staleTime lapse.
+    // a mid-way failure can leave some pages already moved while the mutation
+    // rejects with a structured 400 (`partial: true`). Mounted subtree and
+    // history views must refetch and converge in that case.
     onSettled: () => {
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }
@@ -373,8 +417,8 @@ export function useRenameSubtree() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RenameSubtreeRequest): Promise<number> => {
-      const response = await apiClient.pages['rename-subtree'].$post({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: RenameSubtreeVariables): Promise<number> => {
+      const response = await apiClient.pages['rename-subtree'].$post({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return body.renamed_count;
@@ -390,11 +434,12 @@ export function useRenameSubtree() {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
     },
-    // `onSettled`, not `onSuccess` — see `useRenamePage`'s comment: a
-    // subtree rename can partially move pages before failing, and the
-    // mounted Subpages tab must refetch to converge either way.
+    // `onSettled`, not `onSuccess` — a structured partial failure can arrive
+    // after some members moved, so mounted subtree and history views must
+    // refetch either way.
     onSettled: () => {
       invalidateUserSubpagesQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }

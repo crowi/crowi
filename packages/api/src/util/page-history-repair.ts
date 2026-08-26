@@ -1,4 +1,15 @@
 import type Crowi from 'src/crowi';
+import { resumeRenameCommand } from 'src/service/page-history/commands/rename';
+import { resumeSubtreeMemberCommand, settleSubtreeRootAfterMember } from 'src/service/page-history/commands/subtree-rename';
+import { resumeRestoreCommand } from 'src/service/page-history/commands/restore';
+import { resumeTrashCommand } from 'src/service/page-history/commands/trash';
+import {
+  type StrandedTransitionResumer,
+  type StrandedTransitionScanResult,
+  type StrandedTransitionInspector,
+  type StrandedTransitionTerminalHook,
+  resumeStrandedTransitions,
+} from 'src/service/page-history/operation';
 import { redactErrorReason, repairPendingEntries, scanUnsequencedRevisions } from 'src/service/page-history/repair';
 
 /**
@@ -63,21 +74,88 @@ export interface PageHistoryRepairSummary {
     failed: { pageId: string; revisionId?: string; sequence?: number; reason: string }[];
     lastPageId: string | null;
   };
+  transitions?: StrandedTransitionScanResult;
 }
 
 export interface RunPageHistoryRepairOptions {
   outbox?: boolean;
   scan?: boolean;
+  /** RFC-0021 Phase 2c-2a — sweep the path-move operations that never reached a terminal result. Off by default, like the other non-outbox scans. */
+  transitions?: boolean;
   /** Bounds Pages loaded per round-trip for whichever scan(s) run — threaded to `repair.ts`'s `RepairScanOptions`. */
   batchSize?: number;
   /** Resume a previous (possibly interrupted) run — only Pages with `_id > resumeAfterId` are visited, for whichever scan(s) run. */
   resumeAfterId?: string;
+  /**
+   * Resume cursor for the transition sweep. Separate from `resumeAfterId`
+   * because that one indexes Pages and this one indexes operations — one cursor
+   * for two collections would resume whichever scan ran second at a meaningless
+   * offset.
+   */
+  resumeAfterOperationId?: string;
+  /** Grace window before the transition sweep may turn an unentered operation into terminal failure. */
+  minAgeMs?: number;
+  /** Lets the sweep finish a transition its operation still holds. Without it, those are reported, never silently left as landed. */
+  resumeCommand?: StrandedTransitionResumer;
 }
 
+/**
+ * Which command finishes a stalled transition, keyed by the `kind` the entering
+ * CAS recorded on the page.
+ *
+ * This layer owns the table because it is the one place that may import the
+ * command services: they import the operation service, so the sweep itself
+ * cannot reach back for them. A `kind` with no entry is reported rather than
+ * guessed at — the sweep never invents a way to finish a command it does not
+ * know.
+ */
+type RepairCommandHandler = {
+  inspect?: (crowi: Crowi, operation: Parameters<StrandedTransitionInspector>[0]) => ReturnType<StrandedTransitionInspector>;
+  resume?: (crowi: Crowi, operation: Parameters<StrandedTransitionResumer>[0]) => ReturnType<StrandedTransitionResumer>;
+  onTerminal?: (crowi: Crowi, operation: Parameters<StrandedTransitionTerminalHook>[0]) => ReturnType<StrandedTransitionTerminalHook>;
+};
+
+const REPAIR_COMMANDS: Partial<Record<string, RepairCommandHandler>> = {
+  rename: { resume: resumeRenameCommand },
+  subtree_rename: {
+    inspect: async (crowi, operation) =>
+      (await settleSubtreeRootAfterMember(crowi, operation))
+        ? { action: 'completed', reason: 'subtree-root-settled' }
+        : { action: 'blocked', reason: 'subtree-root-members-incomplete' },
+  },
+  subtree_rename_member: {
+    resume: resumeSubtreeMemberCommand,
+    onTerminal: async (crowi, operation) => {
+      await settleSubtreeRootAfterMember(crowi, operation);
+    },
+  },
+  trash: { resume: resumeTrashCommand },
+  restore: { resume: resumeRestoreCommand },
+};
+
+const defaultInspectOperation =
+  (crowi: Crowi): StrandedTransitionInspector =>
+  async (operation) =>
+    REPAIR_COMMANDS[operation.command]?.inspect?.(crowi, operation) ?? null;
+
+const defaultResumeCommand =
+  (crowi: Crowi): StrandedTransitionResumer =>
+  async (operation) => {
+    const resume = REPAIR_COMMANDS[operation.command]?.resume;
+    return resume == null ? 'blocked' : resume(crowi, operation);
+  };
+
+const defaultTerminalHook =
+  (crowi: Crowi): StrandedTransitionTerminalHook =>
+  async (operation) => {
+    await REPAIR_COMMANDS[operation.command]?.onTerminal?.(crowi, operation);
+  };
+
 export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRepairOptions = {}): Promise<PageHistoryRepairSummary> {
-  // Neither flag given -> outbox repair only (the always-safe default).
-  const runOutbox = opts.outbox === true || opts.scan !== true;
+  // No flag given -> outbox repair only (the always-safe default).
+  const runOutbox = opts.outbox === true || (opts.scan !== true && opts.transitions !== true);
   const runScan = opts.scan === true;
+  const runTransitions = opts.transitions === true;
   const scanOptions = { batchSize: opts.batchSize, resumeAfterId: opts.resumeAfterId };
 
   const summary: PageHistoryRepairSummary = {};
@@ -105,6 +183,17 @@ export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRep
       failed: result.failed,
       lastPageId: result.lastPageId,
     };
+  }
+
+  if (runTransitions) {
+    summary.transitions = await resumeStrandedTransitions(crowi, {
+      batchSize: opts.batchSize,
+      resumeAfterOperationId: opts.resumeAfterOperationId,
+      inspectOperation: defaultInspectOperation(crowi),
+      resumeCommand: opts.resumeCommand ?? defaultResumeCommand(crowi),
+      onTerminalResult: defaultTerminalHook(crowi),
+      minAgeMs: opts.minAgeMs,
+    });
   }
 
   return summary;

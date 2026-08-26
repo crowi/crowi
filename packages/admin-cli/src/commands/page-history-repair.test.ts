@@ -229,6 +229,56 @@ describe('formatRepairReport', () => {
  * injected `redact` function returns ends up in the printed line — without
  * needing a real Mongoose error or this file's CLI boot ceremony.
  */
+describe('transitions (RFC-0021 Phase 2c-2a)', () => {
+  it('exits 0 and reports what it settled', () => {
+    const { lines, exitCode } = formatRepairReport({
+      transitions: {
+        scannedOperations: 2,
+        reports: [
+          { operationId: 'op-1', pageId: 'page-1', path: '/moved', action: 'completed', reason: 'transition-already-settled' },
+          { operationId: 'op-2', pageId: 'page-2', path: '/held', action: 'resumed', reason: 'transition-held-by-operation' },
+        ],
+        failed: [],
+        lastOperationId: 'op-2',
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(lines).toContain('transition sweep: scanned=2 resumed=1 completed=1 blocked=0 failed=0 lastOperationId=op-2');
+    expect(lines).toContain('    operation op-1 page page-1 path /moved: completed — transition-already-settled');
+  });
+
+  it('AC-25/AC-27: names the blocked operation, page and path, and exits 2', () => {
+    // The identifiers are the point: an operator who cannot name the stuck page
+    // cannot act on it. Only driver text is withheld, and the service redacts
+    // that before it ever reaches here.
+    const { lines, exitCode } = formatRepairReport({
+      transitions: {
+        scannedOperations: 1,
+        reports: [{ operationId: 'op-stuck', pageId: 'page-stuck', path: '/stuck', action: 'blocked', reason: 'unrecognised-page-state' }],
+        failed: [],
+        lastOperationId: 'op-stuck',
+      },
+    });
+    expect(exitCode).toBe(2);
+    expect(lines).toContain('  blocked transitions (needs manual investigation, NOT auto-repaired):');
+    expect(lines).toContain('    operation op-stuck page page-stuck path /stuck: unrecognised-page-state');
+  });
+
+  it('AC-27: reports a sweep failure by operation id and exits 2', () => {
+    const { lines, exitCode } = formatRepairReport({
+      transitions: {
+        scannedOperations: 1,
+        reports: [],
+        failed: [{ operationId: 'op-broken', reason: 'cast failed: page: [redacted]' }],
+        lastOperationId: 'op-broken',
+      },
+    });
+    expect(exitCode).toBe(2);
+    expect(lines).toContain('  transition sweep failures (needs manual investigation):');
+    expect(lines).toContain('    operation op-broken: cast failed: page: [redacted]');
+  });
+});
+
 describe('formatFatalErrorLine', () => {
   it('routes the error through the provided redaction function and never touches err.message/stack directly', () => {
     const secretLookingValue = 'someone-secret@example.com';

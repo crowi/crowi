@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { adminAppRoutes } from './app';
 import { adminAuthRoutes } from './auth';
 import { adminMailRoutes } from './mail';
+import { adminPageDeletionRoutes } from './page-deletion';
 import { adminPluginsRoutes } from './plugins';
 import { adminSearchRoutes } from './search';
 import { adminSecurityRoutes } from './security';
@@ -26,6 +27,7 @@ const allAdminRoutes = [
   ...Object.entries(adminAuthRoutes),
   ...Object.entries(adminSecurityRoutes),
   ...Object.entries(adminMailRoutes),
+  ...Object.entries(adminPageDeletionRoutes),
   ...Object.entries(adminStorageRoutes),
   ...Object.entries(adminSearchRoutes),
   ...Object.entries(adminUsersRoutes),

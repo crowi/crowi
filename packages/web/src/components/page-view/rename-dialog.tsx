@@ -193,6 +193,7 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
           old_path: basePath,
           new_path: newPath,
           create_redirect: true,
+          idempotencyKey: crypto.randomUUID().replaceAll('-', ''),
         });
         onOpenChange(false);
         notify.info(m['page.rename.success_tree']({ count }));
@@ -209,6 +210,10 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
         // Match legacy behaviour: always create a redirect page from the old path.
         create_redirect: true,
         include_descendants: includeDescendants,
+        // One key per submit. A user who clicks again after a failure means a
+        // fresh attempt, not "replay the one that failed" — reusing the key
+        // would answer from the earlier operation instead of retrying.
+        idempotencyKey: crypto.randomUUID().replaceAll('-', ''),
       });
 
       onOpenChange(false);

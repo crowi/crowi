@@ -1,25 +1,21 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup, screen } from '@testing-library/react';
+import type { PageHistoryContentRow, PageHistoryEntry, PageHistoryEventRow, PageUser } from '@crowi/api-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement, type PropsWithChildren } from 'react';
-import type { RevisionMeta, UserPublic } from '@crowi/api-contract';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PageHistory } from './page-history';
 
-// Stub out the revisions data hook + the diff viewer so we focus the
-// test on the list-table renderer's contributors path. The diff
-// viewer pulls its own ts-rest queries; rendering it would force
-// MSW / additional mocks that aren't necessary here.
-const usePageRevisionsMock = vi.fn();
-vi.mock('@/lib/use-page-revisions', () => ({
-  usePageRevisions: () => usePageRevisionsMock(),
+const usePageHistoryMock = vi.fn();
+vi.mock('@/lib/use-page-history', () => ({
+  usePageHistory: () => usePageHistoryMock(),
 }));
 vi.mock('./revision-diff', () => ({
-  RevisionDiff: () => null,
+  RevisionDiff: ({ fromId, toId }: { fromId: string | null; toId: string }) => <output data-testid="revision-diff">{`${fromId ?? 'empty'}:${toId}`}</output>,
 }));
 
 afterEach(() => {
   cleanup();
-  usePageRevisionsMock.mockReset();
+  usePageHistoryMock.mockReset();
 });
 
 function makeWrapper() {
@@ -29,92 +25,240 @@ function makeWrapper() {
   };
 }
 
-const baseUser = (overrides: Partial<UserPublic>): UserPublic => ({
-  _id: overrides._id ?? 'user-1',
-  username: overrides.username ?? 'alice',
-  name: overrides.name ?? 'Alice',
-  email: overrides.email ?? 'alice@example.com',
-  image: overrides.image ?? null,
-  createdAt: overrides.createdAt ?? new Date().toISOString(),
+type ContentRowFixture = PageHistoryContentRow & {
+  savedBy?: PageUser | null;
+  contributors?: PageUser[];
+  editVia?: 'web' | 'oauth' | 'pat';
+};
+
+const baseUser = (id: string, name: string): PageUser => ({
+  _id: id,
+  id,
+  username: name.toLowerCase(),
+  name,
+  email: `${name.toLowerCase()}@example.com`,
+  image: null,
+  createdAt: '2026-08-20T00:00:00.000Z',
 });
 
-const baseRevision = (overrides: Partial<RevisionMeta>): RevisionMeta => ({
-  _id: overrides._id ?? 'rev-1',
-  path: '/some/page',
-  author: overrides.author ?? null,
+const baseContentRow = (overrides: Partial<ContentRowFixture> = {}): ContentRowFixture => ({
+  id: overrides.id ?? 'content-1',
+  type: 'content_revision',
+  revisionId: overrides.revisionId ?? 'rev-1',
+  sequence: overrides.sequence === undefined ? 1 : overrides.sequence,
+  occurredAt: overrides.occurredAt ?? '2026-08-20T00:00:00.000Z',
+  actor: overrides.actor ?? null,
   savedBy: overrides.savedBy,
   contributors: overrides.contributors,
-  createdAt: overrides.createdAt ?? new Date().toISOString(),
+  editVia: overrides.editVia,
+  pending: overrides.pending,
 });
 
-describe('PageHistory contributors rendering', () => {
-  it('shows just the author name when contributors are absent (v1.x revision)', () => {
-    const alice = baseUser({ _id: 'alice-id', name: 'Alice', username: 'alice' });
-    usePageRevisionsMock.mockReturnValue({
-      revisions: [baseRevision({ _id: 'rev-A', author: alice }), baseRevision({ _id: 'rev-B', author: alice })],
-      isLoading: false,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+const baseEventRow = (overrides: Partial<PageHistoryEventRow> = {}): PageHistoryEventRow => ({
+  id: overrides.id ?? 'event-1',
+  type: 'page_event',
+  kind: overrides.kind ?? 'page_renamed',
+  payload: overrides.payload ?? {},
+  operationId: overrides.operationId ?? null,
+  sequence: overrides.sequence ?? 1,
+  occurredAt: overrides.occurredAt ?? '2026-08-20T00:00:00.000Z',
+  actor: overrides.actor ?? null,
+  subtree: overrides.subtree,
+  pending: overrides.pending,
+});
+
+function mockHistory(entries: PageHistoryEntry[], overrides: Partial<ReturnType<typeof usePageHistoryMock>> = {}) {
+  usePageHistoryMock.mockReturnValue({
+    entries,
+    tracking: { state: 'untracked' },
+    isLoading: false,
+    isError: false,
+    error: null,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+    ...overrides,
+  });
+}
+
+describe('PageHistory merged timeline', () => {
+  it('shows different authors on adjacent revision and event rows', () => {
+    const alice = baseUser('alice-id', 'Alice');
+    const bob = baseUser('bob-id', 'Bob');
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new', savedBy: alice }),
+      baseEventRow({ id: 'event-between', kind: 'visibility_changed', actor: bob }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old', savedBy: alice }),
+    ]);
 
     render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
 
-    expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
-    // No "with ..." suffix at all
-    expect(screen.queryByText(/with /)).toBeNull();
+    const revisionAuthor = screen.getAllByText('Alice')[0];
+    const eventActor = screen.getByText('Bob');
+    expect(revisionAuthor.closest('tr')).not.toBe(eventActor.closest('tr'));
   });
 
-  it('renders savedBy + "with N..." for collab-flow revisions', () => {
-    const alice = baseUser({ _id: 'alice-id', name: 'Alice', username: 'alice' });
-    const bob = baseUser({ _id: 'bob-id', name: 'Bob', username: 'bob' });
-    const carol = baseUser({ _id: 'carol-id', name: 'Carol', username: 'carol' });
-    usePageRevisionsMock.mockReturnValue({
-      revisions: [
-        baseRevision({ _id: 'rev-collab', author: alice, savedBy: alice, contributors: [bob, carol] }),
-        baseRevision({ _id: 'rev-legacy', author: alice }),
-      ],
-      isLoading: false,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+  it('renders metadata events without a subtree badge when no subtree operation exists', () => {
+    mockHistory([
+      baseEventRow({ id: 'rename-event', kind: 'page_renamed', actor: null }),
+      baseContentRow({ id: 'content-new', revisionId: 'rev-new' }),
+      baseContentRow({ id: 'content-old', revisionId: 'rev-old' }),
+    ]);
 
     render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
 
-    // Saved-by name (Alice) appears at least twice — once in the
-    // collab row, once in the legacy row.
-    expect(screen.getAllByText('Alice').length).toBeGreaterThanOrEqual(2);
-    // Contributors appended via `Intl.ListFormat`. Locale-specific
-    // separator (", and" in en, 「、」 in ja) makes a strict regex
-    // fragile, so assert on the locale-neutral presence of both
-    // contributor names inside the row's "with others" span.
-    const withOthersText = screen.getByText(/Bob.*Carol|Carol.*Bob/);
-    expect(withOthersText).toBeDefined();
+    expect(screen.getByText('不明なユーザー')).toBeDefined();
+    expect(screen.getByText('ページ名を変更しました')).toBeDefined();
+    expect(screen.queryByText('サブツリー')).toBeNull();
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('rev-old:rev-new');
   });
 
-  it('de-duplicates savedBy from the contributors list', () => {
-    const alice = baseUser({ _id: 'alice-id', name: 'Alice', username: 'alice' });
-    const bob = baseUser({ _id: 'bob-id', name: 'Bob', username: 'bob' });
-    usePageRevisionsMock.mockReturnValue({
-      revisions: [
-        // Defensive case: server returned savedBy duplicated inside contributors.
-        baseRevision({ _id: 'rev-dup', author: alice, savedBy: alice, contributors: [alice, bob] }),
-        baseRevision({ _id: 'rev-second', author: alice }),
-      ],
-      isLoading: false,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+  it('keeps metadata rows out of revision selection and uses stable content ids for the default pair', () => {
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
+      baseEventRow({ id: 'event-between', kind: 'visibility_changed' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old' }),
+    ]);
 
     render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
 
-    // Bob must appear in the "with" suffix; Alice must NOT appear
-    // there a second time as a contributor. We confirm by checking
-    // the suffix span — it should not contain the substring "Alice".
-    const withSuffix = screen.getByText(/Bob/);
-    expect(withSuffix.textContent).not.toMatch(/Alice/);
-    expect(withSuffix.textContent).toMatch(/Bob/);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+    expect(screen.queryByRole('radio', { name: /event-between/i })).toBeNull();
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('revision-old:revision-new');
+    const selectedTo = screen.getByRole('radio', { name: 'リビジョン sion-new を To に選択' });
+    const selectedFrom = screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' });
+    expect(selectedTo).toBeChecked();
+    expect((selectedTo as HTMLInputElement).value).toBe('content-new');
+    expect(selectedFrom).toBeChecked();
+    expect((selectedFrom as HTMLInputElement).value).toBe('content-old');
+  });
+
+  it('initializes a default pair after loading an older content row on the next page', () => {
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'revision-new' })], { hasNextPage: true });
+
+    const { rerender } = render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+    expect(screen.queryByTestId('revision-diff')).toBeNull();
+
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'revision-new' }), baseContentRow({ id: 'content-old', revisionId: 'revision-old' })]);
+    rerender(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }));
+
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('revision-old:revision-new');
+  });
+
+  it('compares a lone content row against empty only after pagination is exhausted', () => {
+    mockHistory([baseContentRow({ id: 'content-only', revisionId: 'revision-only' })]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('empty:revision-only');
+  });
+
+  it('updates the compared pair as soon as a revision radio changes', () => {
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
+      baseContentRow({ id: 'content-middle', revisionId: 'revision-middle' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old' }),
+    ]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' }));
+
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('revision-old:revision-new');
+  });
+
+  it('does not render a compare button', () => {
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'revision-new' }), baseContentRow({ id: 'content-old', revisionId: 'revision-old' })]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.queryByRole('button', { name: '比較' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '差分を更新' })).toBeNull();
+  });
+
+  it('keeps the selected pair when an older page appends more content rows', () => {
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
+      baseContentRow({ id: 'content-middle', revisionId: 'revision-middle' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old' }),
+    ]);
+
+    const { rerender } = render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' }));
+
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
+      baseContentRow({ id: 'content-middle', revisionId: 'revision-middle' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old' }),
+      baseContentRow({ id: 'content-ancient', revisionId: 'revision-ancient' }),
+    ]);
+    rerender(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }));
+
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('revision-old:revision-new');
+    expect(screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' })).toBeChecked();
+  });
+
+  it('disables choices that would invert the older-to-newer diff direction', () => {
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
+      baseContentRow({ id: 'content-middle', revisionId: 'revision-middle' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old' }),
+    ]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.getByRole('radio', { name: 'リビジョン sion-new を From に選択' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'リビジョン sion-old を To に選択' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' })).toBeEnabled();
+    expect(screen.getByRole('radio', { name: 'リビジョン sion-new を To に選択' })).toBeEnabled();
+  });
+
+  it('shows the tracking boundary before legacy content rows', () => {
+    mockHistory(
+      [
+        baseContentRow({ id: 'tracked', revisionId: 'revision-tracked', sequence: 1 }),
+        baseContentRow({ id: 'legacy', revisionId: 'revision-legacy', sequence: null }),
+      ],
+      { tracking: { state: 'ready', trackingStartedAt: '2026-08-20T00:00:00.000Z' } },
+    );
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.getByText('これより前は記録開始前の履歴です')).toBeDefined();
+  });
+
+  it('preserves saved-by, contributors, and API-token attribution on content rows', () => {
+    const alice = baseUser('alice-id', 'Alice');
+    const bob = baseUser('bob-id', 'Bob');
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new', actor: bob, savedBy: alice, contributors: [alice, bob], editVia: 'oauth' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old', actor: bob }),
+    ]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.getByText('Alice')).toBeDefined();
+    const withOthers = screen.getByText('(Bob と共同)');
+    expect(withOthers.textContent).not.toContain('Alice');
+    expect(screen.getByLabelText('OAuth トークンを用いた API 経由での更新です')).toBeDefined();
+  });
+
+  it('links each content row to its revision deep link', () => {
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'revision-new' }), baseContentRow({ id: 'content-old', revisionId: 'revision-old' })]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.getByRole('link', { name: 'sion-new' })).toHaveAttribute('href', '/some/page?revision_id=revision-new');
+  });
+
+  it('loads the next page of timeline entries', () => {
+    const fetchNextPage = vi.fn();
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'revision-new' })], { hasNextPage: true, fetchNextPage });
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByRole('button', { name: '履歴をさらに読み込む' }));
+
+    expect(fetchNextPage).toHaveBeenCalledOnce();
   });
 });

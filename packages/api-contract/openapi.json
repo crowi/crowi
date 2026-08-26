@@ -73,6 +73,10 @@
           "PAGE_REVISION_ERROR",
           "PAGE_TWIN_EXISTS",
           "INVALID_GRANT",
+          "IDEMPOTENCY_KEY_REQUIRED",
+          "IDEMPOTENCY_KEY_CONFLICT",
+          "PAGE_TRANSITION_IN_PROGRESS",
+          "PAGE_TRANSITION_INCOMPLETE",
           "COMMENT_NOT_FOUND",
           "NOTIFICATION_NOT_FOUND",
           "USER_NOT_FOUND",
@@ -7577,6 +7581,354 @@
           "collab",
           "collab:redis",
           "link-card"
+        ]
+      },
+      "PageHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageHistoryEntry"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tracking": {
+            "$ref": "#/components/schemas/PageHistoryTracking"
+          }
+        },
+        "required": [
+          "entries",
+          "nextCursor",
+          "tracking"
+        ]
+      },
+      "PageHistoryEntry": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PageHistoryContentRow"
+          },
+          {
+            "$ref": "#/components/schemas/PageHistoryEventRow"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "content_revision": "#/components/schemas/PageHistoryContentRow",
+            "page_event": "#/components/schemas/PageHistoryEventRow"
+          }
+        }
+      },
+      "PageHistoryContentRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "66a1f2c3d4e5f60718293a4b"
+          },
+          "sequence": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "image": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_id",
+              "username",
+              "name",
+              "email",
+              "createdAt"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "content_revision"
+            ]
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "savedBy": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "image": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_id",
+              "username",
+              "name",
+              "email",
+              "createdAt"
+            ]
+          },
+          "contributors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "image": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "username",
+                "name",
+                "email",
+                "createdAt"
+              ]
+            }
+          },
+          "editVia": {
+            "type": "string",
+            "enum": [
+              "web",
+              "oauth",
+              "pat"
+            ]
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "occurredAt",
+          "actor",
+          "type",
+          "revisionId"
+        ]
+      },
+      "PageHistoryEventRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "66a1f2c3d4e5f60718293a4b"
+          },
+          "sequence": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "image": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_id",
+              "username",
+              "name",
+              "email",
+              "createdAt"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "page_event"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "page_created",
+              "page_renamed",
+              "visibility_changed",
+              "page_trashed",
+              "page_restored",
+              "draft_published"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "operationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subtree": {
+            "type": "boolean"
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "occurredAt",
+          "actor",
+          "type",
+          "kind",
+          "payload",
+          "operationId"
+        ]
+      },
+      "PageHistoryTracking": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "ready"
+                ]
+              },
+              "trackingStartedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "state",
+              "trackingStartedAt"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "untracked"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          }
         ]
       }
     },
@@ -22805,6 +23157,245 @@
         }
       }
     },
+    "/pages/{pageId}/history": {
+      "get": {
+        "tags": [
+          "page"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "A page's content revisions and metadata events as one timeline, newest first",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$",
+              "example": "66a1f2c3d4e5f60718293a4b"
+            },
+            "required": true,
+            "name": "pageId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the timeline, plus a cursor when more remains",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed page id, cursor, or query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not grant pages:read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INSUFFICIENT_SCOPE"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "requiredScope": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "requiredScope"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found (also covers grant-denied)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Page not found"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The timeline could not be read — includes the page identifier so an operator can run the repair",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "pageId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "pageId"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pages": {
       "get": {
         "tags": [
@@ -24706,6 +25297,16 @@
           }
         ],
         "summary": "Soft-delete (or hard-delete with completely=true) a page",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -25211,30 +25812,86 @@
             }
           },
           "400": {
-            "description": "PAGE_DELETE_FAILED",
+            "description": "PAGE_DELETE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_REQUIRED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_TRANSITION_INCOMPLETE"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "error"
                   ]
                 }
               }
@@ -25316,33 +25973,89 @@
             }
           },
           "409": {
-            "description": "Stale revision_id",
+            "description": "Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "PAGE_REVISION_ERROR"
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_REVISION_ERROR"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
                           ]
-                        },
-                        "message": {
-                          "type": "string"
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_TRANSITION_IN_PROGRESS"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "error"
                   ]
                 }
               }
@@ -30423,6 +31136,16 @@
           }
         ],
         "summary": "Revert a soft-deleted page (restore from /trash/...)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -30922,30 +31645,86 @@
             }
           },
           "400": {
-            "description": "PAGE_REVERT_FAILED",
+            "description": "PAGE_REVERT_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_REQUIRED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_TRANSITION_INCOMPLETE"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "error"
                   ]
                 }
               }
@@ -31021,6 +31800,69 @@
                   },
                   "required": [
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_TRANSITION_IN_PROGRESS"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    }
                   ]
                 }
               }
@@ -31661,6 +32503,16 @@
           }
         ],
         "summary": "Rename (move) a page — optionally together with its subtree",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -32177,7 +33029,7 @@
             }
           },
           "400": {
-            "description": "PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED",
+            "description": "PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE",
             "content": {
               "application/json": {
                 "schema": {
@@ -32249,6 +33101,58 @@
                             "code",
                             "message",
                             "conflicts"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_REQUIRED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_TRANSITION_INCOMPLETE"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
                           ]
                         }
                       },
@@ -32337,33 +33241,89 @@
             }
           },
           "409": {
-            "description": "Stale revision_id",
+            "description": "Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "PAGE_REVISION_ERROR"
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_REVISION_ERROR"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
                           ]
-                        },
-                        "message": {
-                          "type": "string"
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_TRANSITION_IN_PROGRESS"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "error"
                   ]
                 }
               }
@@ -32383,6 +33343,16 @@
           }
         ],
         "summary": "Rename (move) a whole subtree by path (for portal-less folders)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -32427,7 +33397,7 @@
             }
           },
           "400": {
-            "description": "PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)",
+            "description": "PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED",
             "content": {
               "application/json": {
                 "schema": {
@@ -32505,6 +33475,32 @@
                       "required": [
                         "error"
                       ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "IDEMPOTENCY_KEY_REQUIRED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
                     }
                   ]
                 }
@@ -32534,6 +33530,39 @@
                           ]
                         },
                         "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_CONFLICT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "IDEMPOTENCY_KEY_CONFLICT"
+                          ]
+                        },
+                        "message": {
                           "type": "string"
                         }
                       },
@@ -37498,6 +38527,813 @@
                         },
                         "message": {
                           "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/page-deletions": {
+      "get": {
+        "tags": [
+          "admin.page-deletions"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List recent page deletion records or find them by deleted page id",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            },
+            "required": false,
+            "name": "pageId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page deletion records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-fA-F]{24}$"
+                          },
+                          "pageId": {
+                            "type": "string",
+                            "pattern": "^[0-9a-fA-F]{24}$"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "actor": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[0-9a-fA-F]{24}$"
+                          },
+                          "deletedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "user_hard_delete"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "pageId",
+                          "path",
+                          "actor",
+                          "deletedAt",
+                          "mode"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "records"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "fieldErrors": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "formErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "fieldErrors",
+                            "formErrors"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "ADMIN_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Admin permission required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin.page-deletions"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Erase one deletion record or every record for one exact path",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "recordId": {
+                        "type": "string",
+                        "pattern": "^[0-9a-fA-F]{24}$"
+                      }
+                    },
+                    "required": [
+                      "recordId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Number of erased records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deletedCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "deletedCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A recordId or path selector is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "fieldErrors": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "formErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "fieldErrors",
+                            "formErrors"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "ADMIN_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Admin permission required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching deletion record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/page-deletions/by-path": {
+      "get": {
+        "tags": [
+          "admin.page-deletions"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List deletion records for one exact historical path",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page deletion records for the path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-fA-F]{24}$"
+                          },
+                          "pageId": {
+                            "type": "string",
+                            "pattern": "^[0-9a-fA-F]{24}$"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "actor": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[0-9a-fA-F]{24}$"
+                          },
+                          "deletedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "user_hard_delete"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "pageId",
+                          "path",
+                          "actor",
+                          "deletedAt",
+                          "mode"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "records"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "fieldErrors": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "formErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "fieldErrors",
+                            "formErrors"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "ADMIN_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Admin permission required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
                         }
                       },
                       "required": [

@@ -38,7 +38,9 @@ export function DeletePageDialog({ pageId, pagePath, revisionId, open, onOpenCha
 
   const handleConfirm = () => {
     mutate(
-      { page_id: pageId, revision_id: revisionId, completely: completely || undefined },
+      // One key per confirmation — a repeat click is a fresh attempt, not a
+      // replay of the one that failed.
+      { page_id: pageId, revision_id: revisionId, completely: completely || undefined, idempotencyKey: crypto.randomUUID().replaceAll('-', '') },
       {
         onSuccess: () => {
           onOpenChange(false);

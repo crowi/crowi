@@ -58,7 +58,7 @@ export { createOnDisconnect, type OnDisconnectDeps } from './hooks/on-disconnect
 // Shared types — model bag, renderer interface, hook context, and
 // the auxiliary surfaces (ws token verify, editor cap counter, page
 // event publisher).
-export type { CollabModels, CollabRenderer, CollabContentSequenceAllocator } from './models';
+export type { CollabModels, CollabRenderer, CollabContentSequenceAllocator, CollabDraftPublisher } from './models';
 export {
   type CollabContext,
   type CollabWsTokenUtil,

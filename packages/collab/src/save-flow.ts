@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 import type { ContributorsTracker } from './contributors';
 import type { DocBaseRevisionStore } from './doc-base-revision';
 import type { DocEpochStore } from './doc-epoch';
-import type { CollabContentSequenceAllocator, CollabModels } from './models';
+import type { CollabContentSequenceAllocator, CollabDraftPublisher, CollabModels } from './models';
 import { DELETED_STATUS, DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { persistYjsState } from './persist-yjs-state';
 import type { CollabPageEventPublisher } from './types';
@@ -89,6 +89,14 @@ export interface CreateSaveFlowOptions {
    * option existed.
    */
   contentSequenceAllocator?: CollabContentSequenceAllocator;
+  /**
+   * RFC-0021 §6.3/DC-6 (Phase 2c-1) — the api-side `publishDraftPage`
+   * command, injected the same way `contentSequenceAllocator` is. Optional:
+   * unset (every pre-Phase-2c-1 test config, and any standalone collab
+   * setup) falls back to the inline `updateOne` step 6b already ran before
+   * this option existed — behaviour is byte-for-byte unchanged.
+   */
+  draftPublisher?: CollabDraftPublisher;
 }
 
 /**
@@ -262,6 +270,7 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
   const docBaseRevisions = opts.docBaseRevisions;
   const docEpochRevisions = opts.docEpochRevisions;
   const contentSequenceAllocator = opts.contentSequenceAllocator;
+  const draftPublisher = opts.draftPublisher;
 
   return {
     async executeSave({ pageId, userId, document, message }) {
@@ -540,27 +549,44 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         console.warn(`[crowi:collab] save: yjsState write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
       }
 
-      // Step 6b: publish-on-save (RFC-0005 Phase 1). A `draft` page
-      // transitions to `published` on its first successful save. The
-      // save itself is already durable on disk (step 5 persisted the
-      // Revision; step 6 wrote the collab pointer), so flipping the
-      // status here is strictly additive — it never gates or rolls
-      // back the save. A failure is logged and swallowed: the page
-      // simply stays a draft and the *next* save retries the flip
-      // (the transition is idempotent — `updateOne` filtered on
-      // `status: DRAFT_STATUS` is a no-op once published). Already-
+      // Step 6b: publish-on-save (RFC-0005 Phase 1; RFC-0021 §6.3/DC-6 —
+      // Phase 2c-1). A `draft` page transitions to `published` on its
+      // first successful save. The save itself is already durable on disk
+      // (step 5 persisted the Revision; step 6 wrote the collab pointer),
+      // so flipping the status here is strictly additive — it never gates
+      // or rolls back the save. A failure is logged and swallowed: the
+      // page simply stays a draft and the *next* save retries the flip
+      // (both the injected publisher's CAS and the fallback `updateOne`
+      // are idempotent — a no-op once already published). Already-
       // published pages match `page.status !== DRAFT_STATUS` and skip
       // the write entirely.
       if (page.status === DRAFT_STATUS) {
-        try {
-          await Page.updateOne({ _id: pageId, status: DRAFT_STATUS }, { $set: { status: PUBLISHED_STATUS } }).exec();
-          debug('publish-on-save: page %s transitioned draft -> published', pageId);
-        } catch (err) {
-          // Recoverable on the next save — don't fail the save itself.
-          console.warn(
-            `[crowi:collab] save: publish-on-save status flip failed for page ${pageId}; page stays draft, retried on next save.`,
-            (err as Error).message,
-          );
+        if (draftPublisher) {
+          try {
+            await draftPublisher(page._id as Types.ObjectId, user._id as Types.ObjectId);
+            debug('publish-on-save: draftPublisher invoked for page %s', pageId);
+          } catch (err) {
+            // `draftPublisher` (bound to `publishDraftPage`, a `runPageEventCommand`
+            // caller) never rejects in production — its Error-semantics contract
+            // collapses every failure to a returned outcome, never a throw (DC-1).
+            // A rejection here is therefore an unexpected internal failure, not a
+            // routine "publish didn't commit" — same posture as `contentSequenceAllocator`
+            // above (§D-7): debug-only (never `console.warn`), since the caught
+            // value could carry an unredacted internal error message the spec's
+            // output contract keeps out of default-visible logs.
+            debug('executeSave: draftPublisher unexpected rejection for page %s', pageId);
+          }
+        } else {
+          try {
+            await Page.updateOne({ _id: pageId, status: DRAFT_STATUS }, { $set: { status: PUBLISHED_STATUS } }).exec();
+            debug('publish-on-save: page %s transitioned draft -> published', pageId);
+          } catch (err) {
+            // Recoverable on the next save — don't fail the save itself.
+            console.warn(
+              `[crowi:collab] save: publish-on-save status flip failed for page ${pageId}; page stays draft, retried on next save.`,
+              (err as Error).message,
+            );
+          }
         }
       }
 

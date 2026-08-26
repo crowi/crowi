@@ -6397,6 +6397,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pages/{pageId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page's content revisions and metadata events as one timeline, newest first */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    pageId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the timeline, plus a cursor when more remains */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PageHistoryResponse"];
+                    };
+                };
+                /** @description Malformed page id, cursor, or query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description The access token does not grant pages:read */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Page not found (also covers grant-denied) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description The timeline could not be read — includes the page identifier so an operator can run the repair */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                pageId: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pages": {
         parameters: {
             query?: never;
@@ -6971,7 +7092,9 @@ export interface paths {
         delete: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -7101,7 +7224,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_DELETE_FAILED */
+                /** @description PAGE_DELETE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -7110,6 +7233,18 @@ export interface paths {
                         "application/json": {
                             error: {
                                 code: string;
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_INCOMPLETE";
                                 message: string;
                             };
                         };
@@ -7148,7 +7283,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Stale revision_id */
+                /** @description Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -7158,6 +7293,18 @@ export interface paths {
                             error: {
                                 /** @enum {string} */
                                 code: "PAGE_REVISION_ERROR";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_IN_PROGRESS";
                                 message: string;
                             };
                         };
@@ -8846,7 +8993,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -8974,7 +9123,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_REVERT_FAILED */
+                /** @description PAGE_REVERT_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -8983,6 +9132,18 @@ export interface paths {
                         "application/json": {
                             error: {
                                 code: string;
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_INCOMPLETE";
                                 message: string;
                             };
                         };
@@ -9017,6 +9178,27 @@ export interface paths {
                                 code: "PAGE_NOT_FOUND";
                                 /** @enum {string} */
                                 message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_IN_PROGRESS";
+                                message: string;
                             };
                         };
                     };
@@ -9239,7 +9421,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -9372,7 +9556,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED */
+                /** @description PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -9393,6 +9577,18 @@ export interface paths {
                                     reasons: string[];
                                 }[];
                                 partial?: boolean;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_INCOMPLETE";
+                                message: string;
                             };
                         };
                     };
@@ -9430,7 +9626,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Stale revision_id */
+                /** @description Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -9440,6 +9636,18 @@ export interface paths {
                             error: {
                                 /** @enum {string} */
                                 code: "PAGE_REVISION_ERROR";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_IN_PROGRESS";
                                 message: string;
                             };
                         };
@@ -9466,7 +9674,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -9491,7 +9701,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure) */
+                /** @description PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -9513,6 +9723,12 @@ export interface paths {
                                 }[];
                                 partial?: boolean;
                             };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
                         };
                     };
                 };
@@ -9529,6 +9745,21 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Authentication is required";
                                 redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_CONFLICT */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
                             };
                         };
                     };
@@ -11731,6 +11962,364 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/page-deletions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent page deletion records or find them by deleted page id */
+        get: {
+            parameters: {
+                query?: {
+                    pageId?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Page deletion records */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            records: {
+                                _id: string;
+                                pageId: string;
+                                path: string;
+                                actor: string | null;
+                                /** Format: date-time */
+                                deletedAt: string;
+                                /** @enum {string} */
+                                mode: "user_hard_delete";
+                            }[];
+                        };
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Erase one deletion record or every record for one exact path */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        recordId: string;
+                    } | {
+                        path: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Number of erased records */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deletedCount: number;
+                        };
+                    };
+                };
+                /** @description A recordId or path selector is required */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No matching deletion record */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/page-deletions/by-path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deletion records for one exact historical path */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Page deletion records for the path */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            records: {
+                                _id: string;
+                                pageId: string;
+                                path: string;
+                                actor: string | null;
+                                /** Format: date-time */
+                                deletedAt: string;
+                                /** @enum {string} */
+                                mode: "user_hard_delete";
+                            }[];
+                        };
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -15762,7 +16351,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "IDEMPOTENCY_KEY_REQUIRED" | "IDEMPOTENCY_KEY_CONFLICT" | "PAGE_TRANSITION_IN_PROGRESS" | "PAGE_TRANSITION_INCOMPLETE" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -17567,6 +18156,97 @@ export interface components {
         };
         /** @enum {string} */
         Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis" | "link-card";
+        PageHistoryResponse: {
+            entries: components["schemas"]["PageHistoryEntry"][];
+            nextCursor: string | null;
+            tracking: components["schemas"]["PageHistoryTracking"];
+        };
+        PageHistoryEntry: components["schemas"]["PageHistoryContentRow"] | components["schemas"]["PageHistoryEventRow"];
+        PageHistoryContentRow: {
+            /** @example 66a1f2c3d4e5f60718293a4b */
+            id: string;
+            sequence: number | null;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            } | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "content_revision";
+            revisionId: string;
+            savedBy?: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            } | null;
+            contributors?: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            }[];
+            /** @enum {string} */
+            editVia?: "web" | "oauth" | "pat";
+            pending?: boolean;
+        };
+        PageHistoryEventRow: {
+            /** @example 66a1f2c3d4e5f60718293a4b */
+            id: string;
+            sequence: number | null;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: {
+                _id: string;
+                id?: string;
+                username: string;
+                name: string;
+                /** Format: email */
+                email: string;
+                image?: string | null;
+                createdAt: string;
+            } | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "page_event";
+            /** @enum {string} */
+            kind: "page_created" | "page_renamed" | "visibility_changed" | "page_trashed" | "page_restored" | "draft_published";
+            payload: {
+                [key: string]: unknown;
+            };
+            operationId: string | null;
+            subtree?: boolean;
+            pending?: boolean;
+        };
+        PageHistoryTracking: {
+            /** @enum {string} */
+            state: "ready";
+            /** Format: date-time */
+            trackingStartedAt: string;
+        } | {
+            /** @enum {string} */
+            state: "untracked";
+        };
     };
     responses: never;
     parameters: never;

@@ -225,9 +225,14 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
 
   const handleConfirm = () => {
     if (confirmKind === 'restore') {
-      revert.mutate({ page_id: pageId }, { onSuccess: () => setConfirmKind(null) });
+      revert.mutate({ page_id: pageId, idempotencyKey: crypto.randomUUID().replaceAll('-', '') }, { onSuccess: () => setConfirmKind(null) });
     } else if (confirmKind === 'delete-forever') {
-      remove.mutate({ page_id: pageId, completely: true }, { onSuccess: () => setConfirmKind(null) });
+      remove.mutate(
+        // One key per confirmation. Hard delete ignores it, but the caller does
+        // not have to know which branch the server takes.
+        { page_id: pageId, completely: true, idempotencyKey: crypto.randomUUID().replaceAll('-', '') },
+        { onSuccess: () => setConfirmKind(null) },
+      );
     }
   };
 

@@ -3,8 +3,11 @@ import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
+import { changePageVisibility } from 'src/service/page-history/commands/visibility';
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
+import { deletePageWithMode, PageCleanupIncompleteError, type PageDeletionInput } from 'src/service/page-history/deletion';
 import { escapeRegExp } from 'src/util/regex';
+import { mapWithConcurrency, RENAME_TREE_CONCURRENCY } from 'src/util/map-with-concurrency';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 import {
   PAGE_HISTORY_EVENT_KINDS,
@@ -26,6 +29,7 @@ import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
 export { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR };
+export { PageCleanupIncompleteError };
 
 export const STATUS_WIP = 'wip';
 export const STATUS_PUBLISHED = 'published';
@@ -43,7 +47,31 @@ export const STATUS_DEPRECATED = 'deprecated';
  * + `@crowi/collab` `onAuthenticate`).
  */
 export const STATUS_DRAFT = 'draft';
-export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT] as const;
+/**
+ * RFC-0021 Phase 2c-2: the Page is between the entering and leaving CAS of a
+ * path-moving command. Unlike every other status this one is transient and
+ * belongs to no user-visible lifecycle — it exists so ordinary readers can skip
+ * a Page whose path is momentarily ambiguous.
+ *
+ * It never carries ownership: which command owns the transition is
+ * `historyTransition`'s job, and code asking "may I proceed?" must consult that
+ * rather than the status.
+ */
+export const STATUS_RENAMING = 'renaming';
+export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT, STATUS_RENAMING] as const;
+
+/**
+ * Statuses that mean "mid-transition, not a settled state". Readers exclude
+ * these; the exclusion itself lands with the writers that produce them.
+ *
+ * Kept as one array plus one predicate so a future transitional status is added
+ * in a single place instead of in every reader's inline string comparison.
+ */
+export const PAGE_TRANSITIONAL_STATUSES = [STATUS_RENAMING] as const;
+
+export function isTransitionalPageStatus(status: string | null | undefined): boolean {
+  return status != null && (PAGE_TRANSITIONAL_STATUSES as readonly string[]).includes(status);
+}
 
 /**
  * A user's home page (`/user/<username>`). Its path is bound to the
@@ -170,27 +198,6 @@ function pageNotFoundError(): Error {
   return error;
 }
 
-/** Max simultaneous per-page operations during a subtree rename (renameTree). */
-const RENAME_TREE_CONCURRENCY = 8;
-
-/**
- * Run `fn` over `items` with at most `limit` in flight at once, preserving
- * result order. Rejects on the first error (like `Promise.all`); in-flight
- * siblings are not cancelled but no new work is started after a rejection.
- */
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await fn(items[index]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 export const TYPE_PORTAL = 'portal';
 export const TYPE_USER = 'user';
 export const TYPE_PUBLIC = 'public';
@@ -271,6 +278,8 @@ export interface PageDocument extends Document {
   historyTracking: HistoryTracking;
   /** RFC-0021 §5.5 (Phase 1) — see `PendingHistoryEntry`'s doc comment above. */
   pendingHistoryEntry?: PendingHistoryEntry | null;
+  /** RFC-0021 Phase 2c-2 — see `PageHistoryTransition`'s doc comment above. */
+  historyTransition?: PageHistoryTransition | null;
 
   // dynamic fields
   latestRevision?: Types.ObjectId;
@@ -366,7 +375,6 @@ export interface PageModel extends Model<PageDocument> {
   isNonExistentUserPage(path: string): Promise<boolean>;
   isNonExistentUserTrashPage(path: string): Promise<boolean>;
   findListByPageIds(ids, options, viewerId?: Types.ObjectId | string): any;
-  findPageByRedirectTo(path): any;
   findPagesByIds(ids): any;
   findListByCreator(user, option, currentUser): any;
   getStreamOfFindAll(options?): any;
@@ -401,18 +409,26 @@ export interface PageModel extends Model<PageDocument> {
   findUnfurlablePagesByIds(ids): any;
   findUnfurlablePagesByPaths(paths): any;
   updatePageProperty(page, updateData, options?: { advanceEpoch?: boolean }): any;
-  updateGrant(page, grant, userData): any;
+  /**
+   * RFC-0021 Phase 2c-2a — exposed as statics so the path-moving commands can
+   * run them. Both close over `crowi`, so lifting them to module scope would
+   * mean threading it through by hand; the command services already hold the
+   * Page model, so reaching them here costs nothing.
+   */
+  invalidateLiveCollabDoc(pageId: Types.ObjectId | string, reason?: InvalidateReason): void;
+  purgeCollabLineage(pageId: Types.ObjectId | string): Promise<void>;
+  updateGrant(page, grant, userData, options?: { source?: string }): any;
   pushToGrantedUsers(page, userData): any;
   pushRevision(pageData, newRevision, user, options?: PushRevisionOptions): any;
   createPage(path, body, user, options): any;
   updatePage(pageData: PageDocument, body, user, options: UpdatePageOptions): any;
   deletePage(pageData: PageDocument, user): any;
   revertDeletedPage(pageData: PageDocument, user): Promise<PageDocument>;
-  completelyDeletePage(pageData: PageDocument, user?: UserDocument | null, options?: PageRemovalInvalidationOption): Promise<PageDocument>;
-  removePage(pageData: PageDocument, options?: PageRemovalInvalidationOption): any;
-  removePageById(pageId, options?: PageRemovalInvalidationOption): any;
-  removePageByPath(pagePath, options?: PageRemovalInvalidationOption): any;
-  removeRedirectOriginPageByPath(pagePath): any;
+  completelyDeletePage(pageData: PageDocument, user: UserDocument | null | undefined, options: PageRemovalInvalidationOption): Promise<PageDocument>;
+  removePage(pageData: PageDocument, options: PageRemovalInvalidationOption): any;
+  removePageById(pageId, options: PageRemovalInvalidationOption): any;
+  removePageByPath(pagePath, options: PageRemovalInvalidationOption): any;
+  removeRedirectOriginPageByPath(pagePath, deletion: Pick<PageDeletionInput, 'actor' | 'mode'>): any;
   rename(pageData, newPagePath, user, options: RenameOptions): any;
   getPathMap(paths, search, replace): any;
   checkPagesRenamable(paths, user): any;
@@ -448,14 +464,33 @@ export interface RenameOptions {
 }
 
 /**
- * `Page.completelyDeletePage` / `removePage*` optional invalidation override.
- * Defaults documented at each call site below — `completelyDeletePage`
- * defaults to `emit` (the typed user-facing hard-delete call); `removePage`
- * family defaults to `skip` (internal cleanup is the common case; the one
- * user-facing caller — draft cancel — opts into `emit` explicitly).
+ * `Page.completelyDeletePage` / `removePage*` deletion options. Invalidation
+ * retains its wrapper-specific default, while deletion intent and actor are
+ * mandatory so no caller can silently select a non-recording mode.
  */
 export interface PageRemovalInvalidationOption {
   invalidation?: PageRemovalInvalidation;
+  deletion: Pick<PageDeletionInput, 'actor' | 'mode'>;
+}
+
+/** Accumulator for `completelyDeletePage`'s outer sibling-step aggregation (see `PageCleanupIncompleteError`'s doc comment). */
+type CleanupFailures = { steps: string[]; causes: unknown[] };
+
+/** Runs one sibling cleanup step, recording `step` + the error into `failures` on failure instead of throwing — the caller keeps going to the next step either way. */
+async function attemptCleanupStep(failures: CleanupFailures, step: string, fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    failures.steps.push(step);
+    failures.causes.push(err);
+  }
+}
+
+/** Throws the aggregated `PageCleanupIncompleteError` if any step recorded into `failures`; no-op otherwise. */
+function throwIfCleanupIncomplete(pageId: Types.ObjectId, failures: CleanupFailures): void {
+  if (failures.steps.length > 0) {
+    throw new PageCleanupIncompleteError(pageId, failures.steps, { cause: failures.causes.length === 1 ? failures.causes[0] : failures.causes });
+  }
 }
 
 /** RFC-0017 Phase 1 §D8 — `renameTree` allSettled-style outcome. */
@@ -485,6 +520,24 @@ export interface HistoryTracking {
   trackingStartedAt?: Date | null;
   migrationOwner?: string | null;
   migrationLeaseUntil?: Date | null;
+}
+
+/**
+ * RFC-0021 Phase 2c-2 — which command currently owns this Page's path-moving
+ * transition, or absent when none does.
+ *
+ * This field IS the mutual exclusion: the entering CAS pins it null and writes
+ * its own `operationId`, the leaving CAS pins that same `operationId` and puts
+ * it back to null. A second command therefore cannot enter a Page that is
+ * already mid-transition, and a resumed execution can tell "my transition" from
+ * "someone else's" without a second document to keep in sync.
+ *
+ * `kind` records which command it is, so recovery knows what to finish rather
+ * than inferring it from the paths.
+ */
+export interface PageHistoryTransition {
+  operationId: string;
+  kind: string;
 }
 
 /**
@@ -597,6 +650,15 @@ const pendingHistoryEventMirrorSchema = new Schema({
  * clears it with a CAS matched ONLY on `entryId` (see `PendingHistoryEntry`'s
  * doc comment above) after materialization.
  */
+/** RFC-0021 Phase 2c-2 — see `PageHistoryTransition`'s doc comment above. */
+const historyTransitionSchema = new Schema<PageHistoryTransition>(
+  {
+    operationId: { type: String, required: true },
+    kind: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const pendingHistoryEntrySchema = new Schema(
   {
     entryId: { type: Schema.Types.ObjectId, required: true },
@@ -806,6 +868,12 @@ export default (crowi: Crowi) => {
       // and Mongo's `{ pendingHistoryEntry: null }` filter matches both
       // "absent" and "explicitly null" for the CAS-based claim/drain queries.
       pendingHistoryEntry: { type: pendingHistoryEntrySchema },
+      // RFC-0021 Phase 2c-2 — no default, for the same reason as
+      // `pendingHistoryEntry`: absent means "no transition", and the entering
+      // CAS pins `{ historyTransition: null }`, which Mongo matches against
+      // both absent and explicitly-null. A default would also make every
+      // legacy Page write the field back on its next unrelated `save()`.
+      historyTransition: { type: historyTransitionSchema },
     },
     {
       toJSON: { getters: true },
@@ -981,7 +1049,7 @@ export default (crowi: Crowi) => {
     if (this.isUnlinkable(userData)) {
       debug('Unlink page', this._id, this.path);
       try {
-        const redirectPage = await Page.removePageById(this._id);
+        const redirectPage = await Page.removePageById(this._id, { deletion: { mode: 'redirect_stub_cleanup', actor: null } });
         debug('Redirect Page deleted', redirectPage.path);
       } catch (err: any) {
         debug('Error occured while get setting', err, err.stack);
@@ -1270,6 +1338,15 @@ export default (crowi: Crowi) => {
       throw pageNotFoundError();
     }
 
+    // RFC-0021 Phase 2c-2: a Page between the entering and leaving CAS of a
+    // path-moving command has an ambiguous path — collapse it into not-found
+    // for the same reason as a draft above, rather than serving a `renaming`
+    // projection. The check sits here rather than in the shared
+    // `findPageById` so it reaches only the readers DC-5 names.
+    if (isTransitionalPageStatus(pageData.status)) {
+      throw pageNotFoundError();
+    }
+
     if (userData && !pageData.isGrantedFor(userData)) {
       throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
     }
@@ -1370,7 +1447,9 @@ export default (crowi: Crowi) => {
 
   // find page and check if granted user
   pageSchema.statics.findPage = async function (path, userData, revisionId, ignoreNotFound) {
-    const pageData = await Page.findOne({ path });
+    // RFC-0021 Phase 2c-2: skip a Page mid-move. `$nin` also matches documents
+    // with no `status` field at all, so legacy pages keep resolving.
+    const pageData = await Page.findOne({ path, status: { $nin: PAGE_TRANSITIONAL_STATUSES } });
 
     if (pageData === null) {
       if (ignoreNotFound) {
@@ -1481,7 +1560,9 @@ export default (crowi: Crowi) => {
     const limit = options.limit || 50;
     const offset = options.skip || 0;
 
-    const query: Record<string, unknown> = { _id: { $in: ids } };
+    // RFC-0021 Phase 2c-2: mid-move pages are skipped here too (`$nin` still
+    // matches a missing `status`, so legacy pages are unaffected).
+    const query: Record<string, unknown> = { _id: { $in: ids }, status: { $nin: PAGE_TRANSITIONAL_STATUSES } };
     // Defense-in-depth (SEC-SEARCH-DELEGATED): when a viewer is given,
     // re-apply the grant filter here rather than trusting the caller's
     // `ids` to already be authorization-checked (e.g. a pluggable search
@@ -1503,20 +1584,12 @@ export default (crowi: Crowi) => {
     );
   };
 
-  pageSchema.statics.findPageByRedirectTo = async function (path) {
-    const pageData = await Page.findOne({ redirectTo: path });
-
-    if (pageData === null) {
-      throw new Error('Page not found');
-    }
-
-    return pageData;
-  };
-
   pageSchema.statics.findPagesByIds = function (ids) {
     const query: any = {
       _id: { $in: ids },
       redirectTo: null,
+      // RFC-0021 Phase 2c-2 — skip mid-move pages (see `findPage`).
+      status: { $nin: PAGE_TRANSITIONAL_STATUSES },
     };
 
     return Page.find(query)
@@ -1552,7 +1625,9 @@ export default (crowi: Crowi) => {
    */
   pageSchema.statics.getStreamOfFindAll = function (options = {}) {
     const publicOnly = options.publicOnly !== false;
-    const criteria: any = { redirectTo: null };
+    // RFC-0021 Phase 2c-2 — a full search reindex must not pick up a page
+    // mid-move; it would be indexed under a path it may not keep.
+    const criteria: any = { redirectTo: null, status: { $nin: PAGE_TRANSITIONAL_STATUSES } };
 
     if (publicOnly) {
       criteria.grant = GRANT_PUBLIC;
@@ -1852,6 +1927,12 @@ export default (crowi: Crowi) => {
     return Page.findUnfurlablePages('path', paths, [GRANT_PUBLIC]);
   };
 
+  // RFC-0021 Phase 2c-2a — the same closures the lifecycle writes above use,
+  // reachable from the path-moving command services. The bodies stay where
+  // they are so they keep their `crowi` capture.
+  pageSchema.statics.invalidateLiveCollabDoc = (pageId: Types.ObjectId | string, reason?: InvalidateReason) => invalidateLiveCollabDoc(pageId, reason);
+  pageSchema.statics.purgeCollabLineage = (pageId: Types.ObjectId | string) => purgeCollabLineage(pageId);
+
   pageSchema.statics.updatePageProperty = function (page, updateData, options?: { advanceEpoch?: boolean }) {
     // RFC-0017 Phase 1 §D1/§D10 — a lifecycle caller (rename / soft delete /
     // revert) folds the `collabLifecycleVersion` epoch `$inc` into THIS SAME
@@ -1863,23 +1944,65 @@ export default (crowi: Crowi) => {
     return Page.updateOne({ _id: page._id }, update);
   };
 
-  pageSchema.statics.updateGrant = async function (page, grant, userData) {
-    page.grant = grant;
-    page.grantedUsers = [];
-    if (grant !== GRANT_PUBLIC) {
-      page.grantedUsers.addToSet(userData._id);
-      // Keep the creator granted even when someone else (e.g. an admin) is
-      // the one changing the grant, so `grantedUsers` never drifts out of
-      // sync with `visiblePageGrantOr`'s creator clause / `isGrantedFor`'s
-      // `isCreator` shortcut.
-      page.grantedUsers.addToSet(page.creator);
+  /**
+   * RFC-0021 §6.2 DC-10/DC-12 (Phase 2c-1) — delegates to `changePageVisibility`
+   * so `PUT /pages/grant` and `updatePage`'s body+grant branch both go
+   * through the same CAS-and-event command. `page` is left untouched until
+   * the CAS commits (DC-12: `updatePage`'s failure path fires body-driven
+   * side effects off the ORIGINAL `pageData`, which must still reflect the
+   * DB's grant when that happens — there is no early mutation to undo).
+   *
+   * Populates `revision`/`creator` on the committed after-document before
+   * returning it — `registerBacklinks` (`events/page.ts`, unconditional on
+   * every 'update') needs `data.revision`/`data.creator` populated to
+   * re-register backlinks, and a bare `findOneAndUpdate` result has
+   * neither field populated. A populate failure here must not fail an
+   * already-durable grant change (same "state change already committed,
+   * don't fail the command over it" posture as DC-1's materialize-failure
+   * handling) — it degrades to the unpopulated document, the same shape
+   * `Page.rename`'s own 'update' emit already tolerates.
+   *
+   * Throws on every non-`committed` outcome so both existing callers
+   * (which only ever used the resolved value, never a status) keep their
+   * try/catch contract: `not-found` maps to the exact string
+   * `hono/handlers/page.ts` already matches for its 404 branch;
+   * `contended`/`rejected` map to a distinct, retry-hinting message so
+   * that failure falls through to the handlers' generic 400.
+   * `changePageVisibility`'s plan always rebuilds `grantedUsers`, even for
+   * a same-grant call, so it never returns `noop`; that branch is
+   * unreachable defense-in-depth.
+   */
+  pageSchema.statics.updateGrant = async function (page, grant, userData, options) {
+    const outcome = await changePageVisibility(crowi, {
+      pageId: page._id,
+      toGrant: grant,
+      actor: userData._id,
+      source: options?.source,
+    });
+
+    if (outcome.status === 'not-found') {
+      throw new Error('Page not found');
+    }
+    if (outcome.status !== 'committed') {
+      throw new Error('Page grant update was not committed — retry');
     }
 
-    const data = await page.save();
+    let responsePage = outcome.page;
+    try {
+      responsePage = await responsePage.populate([
+        { path: 'revision', model: 'Revision' },
+        { path: 'creator', model: 'User' },
+      ]);
+    } catch (err) {
+      debug('Page.updateGrant: failed to populate the committed document for page %s: %s', String(page._id), (err as Error)?.message ?? err);
+    }
 
-    debug('Page.updateGrant, saved grantedUsers.', (data && data.path) || {});
+    page.grant = responsePage.grant;
+    page.grantedUsers = responsePage.grantedUsers;
 
-    return data;
+    debug('Page.updateGrant, saved grantedUsers.', responsePage.path);
+
+    return responsePage;
   };
 
   // Instance method でいいのでは
@@ -2048,10 +2171,28 @@ export default (crowi: Crowi) => {
     // metadata-only 'update' emits). updatePage always goes through
     // pushRevision above, so this path is always a new revision.
     if (grant != pageData.grant) {
-      const data = await Page.updateGrant(pageData, grant, user);
-      pageEvent.emit('update', data, user, bookmarkCount, true);
-      invalidateLiveCollabDoc(pageData._id);
-      return data;
+      try {
+        const data = await Page.updateGrant(pageData, grant, user, { source: options.editVia });
+        pageEvent.emit('update', data, user, bookmarkCount, true);
+        invalidateLiveCollabDoc(pageData._id);
+        return data;
+      } catch (err) {
+        // RFC-0021 §6.2 DC-12 — the body write above (`pushRevision`) is
+        // already durable by this point, so a grant-command failure
+        // (`contended`/`rejected`, surfaced by `Page.updateGrant` as a
+        // thrown `Error`) must not skip the body-driven side effects every
+        // OTHER updatePage path fires unconditionally (search reindex,
+        // backlinks, auto-watch, UPDATE notification, mention dispatch,
+        // live-collab invalidation). `pageData` still reflects the DB's
+        // grant here — `Page.updateGrant` never mutates it before its own
+        // CAS commits — so emitting off it, then rethrowing, keeps
+        // "the body saved" and "the grant didn't change" both true at
+        // once: the response is 400, but everything the durable body
+        // write is supposed to drive still ran.
+        pageEvent.emit('update', pageData, user, bookmarkCount, true);
+        invalidateLiveCollabDoc(pageData._id);
+        throw err;
+      }
     }
     pageEvent.emit('update', pageData, user, bookmarkCount, true);
     // feature-editor-preview-reliability G1 — this external edit just nulled
@@ -2121,7 +2262,10 @@ export default (crowi: Crowi) => {
 
     // §D9/AC-28 — the redirect-origin stub cleanup is internal repair, not a
     // user-facing hard delete: skip its own `page-deleted` prompt.
-    await Page.completelyDeletePage(originPageData, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
+    await Page.completelyDeletePage(originPageData, user, {
+      invalidation: { mode: 'skip', reason: 'revert-deleted' },
+      deletion: { mode: 'redirect_stub_cleanup', actor: user?._id ?? null },
+    });
     // §D1 — status flip epoch-advances (same `updateOne`). This is the
     // correctness-load-bearing advance: once it lands, the pre-delete
     // yjsState/PageYjsUpdate lineage is stamped with a stale epoch and can
@@ -2166,27 +2310,48 @@ export default (crowi: Crowi) => {
     await Bookmark.removeBookmarksByPageId(pageId);
     await Attachment.removeAttachmentsByPageId(pageId);
     await Comment.removeCommentsByPageId(pageId);
-    // This method is the coalescing boundary (§D9: "completelyDeletePage は
-    // removePageById(pageId, { mode: 'skip' }) を呼び自分の境界で1回
-    // coalesced emit") — the inner `removePageById` never emits on its own,
-    // avoiding a double-fire.
-    await Page.removePageById(pageId, { invalidation: { mode: 'skip', reason: 'internal-cleanup' } });
-    // AC-26 — emit right after the target row is gone, BEFORE the
-    // redirect-origin / activity cleanup below (which may throw without
-    // suppressing the already-fired prompt; the row is physically deleted
-    // either way, so there is nothing left for an epoch predicate to guard).
-    emitInvalidationIfRequested(pageId, invalidation);
-    await Page.removeRedirectOriginPageByPath(pageData.path);
-    await Activity.removeByPage(pageId);
+
+    // RFC-0021 §5.1/§5.6, DC-5 — same aggregation discipline as
+    // `removePage` (see `attemptCleanupStep`/`throwIfCleanupIncomplete`),
+    // applied to this method's own outer steps. `removePageById` (below) can
+    // throw a `PageCleanupIncompleteError` even though the Page row IS
+    // gone (its own inner cleanup partially failed) — that must not skip
+    // THIS method's redirect-origin / Activity cleanup or the `delete`
+    // event, so it is folded in below rather than left to propagate. Any
+    // OTHER exception here means the Page row itself is not gone (the
+    // failure happened before `deletePageWithMode`'s own `Page.deleteOne`) — that
+    // still propagates immediately, and none of the steps below run.
+    const failures: CleanupFailures = { steps: [], causes: [] };
+
+    try {
+      // Pass the outer invalidation through so `removePage` can emit at the
+      // Page-deletion boundary, before cleanup that may hang or fail. Keeping
+      // the emit at that single inner boundary also prevents a double-fire.
+      await Page.removePageById(pageId, {
+        invalidation,
+        deletion: options.deletion,
+      });
+    } catch (err) {
+      if (!(err instanceof PageCleanupIncompleteError)) {
+        throw err;
+      }
+      failures.steps.push(...err.steps);
+      failures.causes.push(err);
+    }
+
+    await attemptCleanupStep(failures, 'redirect-origin', () =>
+      Page.removeRedirectOriginPageByPath(pageData.path, { mode: 'redirect_stub_cleanup', actor: user?._id ?? null }),
+    );
+    await attemptCleanupStep(failures, 'activity', () => Activity.removeByPage(pageId));
 
     pageEvent.emit('delete', pageData, user); // update as renamed page
+
+    throwIfCleanupIncomplete(pageId, failures);
 
     return pageData;
   };
 
   pageSchema.statics.removePage = async function (pageData, options) {
-    const Revision = crowi.model('Revision');
-    const PageYjsUpdate = crowi.model('PageYjsUpdate');
     const { _id } = pageData;
     // §D9/AC-27 — default `skip`: most callers are internal cleanup
     // (`completelyDeletePage`'s own coalesced boundary,
@@ -2194,31 +2359,20 @@ export default (crowi: Crowi) => {
     // caller (draft cancel, `hono/handlers/draft.ts`) opts into `emit`
     // explicitly.
     const invalidation: PageRemovalInvalidation = options?.invalidation ?? { mode: 'skip', reason: 'internal-cleanup' };
+    const deletion = options.deletion;
 
     debug('Remove phisically, the page', _id);
-    try {
-      await Page.deleteOne({ _id });
-    } catch (err) {
-      debug(' --> error', _id);
-      throw err;
-    }
-    emitInvalidationIfRequested(_id, invalidation);
-    // §D9/AC-27 — privacy: the page row is gone, so any residual append-log
-    // rows are now orphaned and would otherwise stay readable (raw
-    // collection scan) until the 1h TTL sweeps them. Deleted unconditionally
-    // (independent of emit/skip — this is hygiene, not a prompt). Best-
-    // effort: the row is already physically removed, so a failure here can
-    // never re-expose it (every collab load path rejects a missing page
-    // before it would read `PageYjsUpdate`).
-    try {
-      await PageYjsUpdate.deleteMany({ pageId: _id }).exec();
-    } catch (err) {
-      debug('removePage: PageYjsUpdate.deleteMany failed for page %s: %s', String(_id), (err as Error)?.message ?? err);
-    }
-    // DC-5: id-based, so a path later reused by a different page can never
-    // cause this to delete the wrong page's revisions (see
-    // `Revision.removeRevisionsByPageId`'s doc comment).
-    await Revision.removeRevisionsByPageId(pageData._id);
+    await deletePageWithMode(
+      crowi,
+      {
+        pageId: _id,
+        path: pageData.path,
+        actor: deletion.actor,
+        mode: deletion.mode,
+      },
+      () => emitInvalidationIfRequested(_id, invalidation),
+    );
+
     return pageData;
   };
 
@@ -2244,22 +2398,20 @@ export default (crowi: Crowi) => {
    *
    * @param {string} pagePath
    */
-  pageSchema.statics.removeRedirectOriginPageByPath = function (pagePath) {
-    return Page.findPageByRedirectTo(pagePath)
-      .then((redirectOriginPageData) => {
-        // remove
-        return (
-          Page.removePageById(redirectOriginPageData.id)
-            // remove recursive
-            .then(() => {
-              return Page.removeRedirectOriginPageByPath(redirectOriginPageData.path);
-            })
-        );
-      })
-      .catch((err) => {
-        // do nothing if origin page doesn't exist
-        return Promise.resolve();
-      });
+  // RFC-0021 §5.1/§5.6 (DC-5) — only "nothing redirects to this path" is a
+  // terminal, swallowable case of the recursion; a failure from removing an
+  // origin page (including `PageCleanupIncompleteError`, e.g. when that
+  // origin page's own history-event purge fails) must propagate to the
+  // caller's cleanup aggregation, not be folded into the same catch as
+  // "doesn't exist".
+  pageSchema.statics.removeRedirectOriginPageByPath = async function (pagePath, deletion) {
+    const redirectOriginPageData = await Page.findOne({ redirectTo: pagePath });
+    if (redirectOriginPageData === null) {
+      return;
+    }
+
+    await Page.removePageById(redirectOriginPageData.id, { deletion });
+    await Page.removeRedirectOriginPageByPath(redirectOriginPageData.path, deletion);
   };
 
   pageSchema.statics.rename = async function (pageData, newPagePath, user, options: RenameOptions) {

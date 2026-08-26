@@ -21,6 +21,7 @@ export * from './comment';
 export * from './revision';
 export * from './notification';
 export * from './page';
+export * from './page-history';
 export * from './page-preview';
 export * from './page-collab';
 export * from './presence';
