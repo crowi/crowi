@@ -1,5 +1,10 @@
 import ConfigService, { type ConfigChangeListener, deriveChangedNamespaces } from './config';
 
+/** Yields to the macrotask queue — lets an in-flight promise chain (e.g. a queued write's turn) advance past its next `await` before the caller continues. */
+function tick(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 /** Shared by `ConfigService listener API` + the `saveConfig(Value)` describe blocks below. */
 function makeService(
   overrides: {
@@ -207,7 +212,7 @@ describe('ConfigService.saveConfig (feature-config-write-reconciliation)', () =>
     return { db, updateConfigByNamespace, loadAllConfig };
   }
 
-  it('AC-1/AC-2: reloads from Mongo after a partial-write failure, converging memory to what landed, and notifies/publishes the attempted namespaces', async () => {
+  it('AC-1/AC-2/AC-8/AC-9: reloads from Mongo after a partial-write failure, converging memory to what landed, publishing to Redis, and notifying local listeners tagged "remote" so they reconfigure themselves', async () => {
     const { updateConfigByNamespace, loadAllConfig } = makePartialWriteDb();
     const svc = makeService({ updateConfigByNamespace, loadAllConfig });
     svc.config.crowi = { 'app:title': 'Old Title' };
@@ -225,7 +230,11 @@ describe('ConfigService.saveConfig (feature-config-write-reconciliation)', () =>
     // value and not the attempted (never-persisted) `app:confidential`.
     expect(svc.config.crowi).toEqual({ 'app:title': 'New Title' });
     expect(loadAllConfig).toHaveBeenCalledTimes(1);
-    expect(calls).toEqual([{ ns: ['crowi'], source: 'local' }]);
+    // Tagged 'remote', not 'local': nobody else is going to call
+    // reconfigureAffected for a write that never returned successfully,
+    // so PluginManager.handleConfigChange must reconfigure right here,
+    // the same as it would for a change it received over pub/sub.
+    expect(calls).toEqual([{ ns: ['crowi'], source: 'remote' }]);
 
     expect(publish).toHaveBeenCalledTimes(1);
     const [channel, payload] = publish.mock.calls[0];
@@ -283,6 +292,263 @@ describe('ConfigService.saveConfig (feature-config-write-reconciliation)', () =>
 
     expect(svc.config.crowi).toEqual({ 'app:title': 'New Title', 'security:registrationMode': 'Restricted' });
     expect(svc.config.crowi['app:confidential']).toBeUndefined();
+  });
+});
+
+/**
+ * feature-config-reconciliation-safety §2 — `saveConfig` / `saveConfigValue`
+ * / `saveConfigAtomicGroup` / `deleteConfig` are the public entry points
+ * that change config; they now run one at a time within a process so a
+ * failing write's reload-then-set can't land in the middle of a different
+ * write's own set(). Internal calls (`update`, `load`, `notifyUpdated`)
+ * deliberately do NOT go through the same queue (AC-7).
+ */
+describe('ConfigService write-queue serialization (feature-config-reconciliation-safety)', () => {
+  it('AC-5: a second entry point does not start its write until an in-flight one has fully finished', async () => {
+    let inFlight = 0;
+    let overlapped = false;
+    let releaseFirst: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    const updateConfigByNamespace = jest.fn(async () => {
+      inFlight += 1;
+      if (inFlight > 1) overlapped = true;
+      await gate;
+      inFlight -= 1;
+    });
+    const updateConfig = jest.fn(async () => {
+      inFlight += 1;
+      if (inFlight > 1) overlapped = true;
+      inFlight -= 1;
+    });
+    const svc = makeService({ updateConfigByNamespace, updateConfig });
+
+    const first = svc.saveConfig('crowi', { 'app:title': 'New Title' });
+    // Let the first turn actually start (and block on the gate) before
+    // firing the second — otherwise both could start in the same tick
+    // and the assertion below wouldn't discriminate serialized from
+    // concurrent.
+    await tick();
+    const second = svc.saveConfigValue('crowi', 'app:confidential', 'secret');
+
+    releaseFirst!();
+    await Promise.all([first, second]);
+
+    expect(overlapped).toBe(false);
+    expect(updateConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC-6: a save that succeeds while an earlier save is still reconciling after its own failure is not rolled back by that reconciliation', async () => {
+    let releaseReload: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseReload = resolve;
+    });
+
+    const updateConfigByNamespace = jest.fn(async (_ns: string, config: Record<string, unknown>) => {
+      if ('app:confidential' in config) {
+        throw new Error('mongo write failed: app:confidential');
+      }
+    });
+    // Deliberately stale: this snapshot predates the second save below.
+    // Without serialization, `set()`-ing it after the second save has
+    // already applied its own fresh value would roll that value back.
+    const loadAllConfig = jest.fn(async () => {
+      await gate;
+      return { crowi: { 'app:title': 'Old Title' } };
+    });
+    const updateConfig = jest.fn(async () => undefined);
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig, updateConfig });
+    svc.config.crowi = { 'app:title': 'Old Title' };
+
+    const firstSave = svc.saveConfig('crowi', { 'app:confidential': 'Internal only' }).catch((err: Error) => err);
+
+    await tick();
+
+    const secondSave = svc.saveConfigValue('crowi', 'app:title', 'New Title');
+    let secondSettled = false;
+    secondSave.then(() => {
+      secondSettled = true;
+    });
+    await tick();
+    // Still queued behind the first save's still-open (gated) turn.
+    expect(secondSettled).toBe(false);
+
+    releaseReload!();
+    await firstSave;
+    await secondSave;
+
+    expect(svc.config.crowi['app:title']).toBe('New Title');
+  });
+
+  it('AC-7: a public entry point does not deadlock on its own internal update() call', async () => {
+    const svc = makeService();
+
+    const result = await Promise.race([
+      svc.saveConfigAtomicGroup('crowi', '@crowi/plugin-google', 'clientCredentials', { clientId: 'id', clientSecret: 'secret' }),
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('deadlock: saveConfigAtomicGroup never resolved')), 1000)),
+    ]);
+
+    expect(result).toBeUndefined();
+  });
+
+  it("AC-7: a config-change listener that writes back from inside the failure-path notification (e.g. a plugin's reconfigure(ctx) calling ctx.setConfig()) does not deadlock on the turn that is still notifying it", async () => {
+    const updateConfigByNamespace = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const updateConfig = jest.fn(async () => undefined);
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig: jest.fn(async () => ({ crowi: {} })), updateConfig });
+
+    let nestedWriteRan = false;
+    svc.onConfigChange(async (_ns, source) => {
+      if (source !== 'remote') return;
+      // Mirrors PluginContext.setConfig(): a listener reacting to this
+      // failure-path notification writing back through the same public
+      // entry points saveConfig serializes against.
+      await svc.saveConfigValue('crowi', 'app:title', 'reconfigured');
+      nestedWriteRan = true;
+    });
+
+    const result = await Promise.race([
+      svc.saveConfig('crowi', { 'app:confidential': 'secret' }).catch((err: Error) => err),
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('deadlock: saveConfig never settled')), 1000)),
+    ]);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toBe('mongo write failed');
+    expect(nestedWriteRan).toBe(true);
+    expect(updateConfig).toHaveBeenCalledWith('crowi', 'app:title', 'reconfigured');
+  });
+
+  it("does not let a later write start until the failure-path notify — and whatever a listener does in response, e.g. a plugin's reconfigure(ctx) — has fully finished, not merely until the write+reload have", async () => {
+    const updateConfigByNamespace = jest.fn(async (_ns: string, config: Record<string, unknown>) => {
+      if ('app:confidential' in config) {
+        throw new Error('mongo write failed: app:confidential');
+      }
+    });
+    const loadAllConfig = jest.fn(async () => ({ crowi: {} }));
+    const events: string[] = [];
+    const updateConfig = jest.fn(async () => {
+      events.push('second-write-start');
+    });
+    const svc = makeService({ updateConfigByNamespace, loadAllConfig, updateConfig });
+
+    let releaseNotify: (() => void) | undefined;
+    const notifyGate = new Promise<void>((resolve) => {
+      releaseNotify = resolve;
+    });
+    svc.onConfigChange(async (_ns, source) => {
+      // Stands in for a slow plugin reconfigure(ctx) reacting to the
+      // failure-path notification.
+      if (source !== 'remote') return;
+      events.push('notify-start');
+      await notifyGate;
+      events.push('notify-end');
+    });
+
+    const firstSave = svc.saveConfig('crowi', { 'app:confidential': 'secret' }).catch((err: Error) => err);
+
+    // Let the first turn run: the write fails, the reload lands, and the
+    // notify reaches (and blocks on) the gate above.
+    await tick();
+    await tick();
+    expect(events).toEqual(['notify-start']);
+
+    const secondSave = svc.saveConfigValue('crowi', 'app:title', 'New Title');
+    await tick();
+
+    // Still queued behind the first turn's still-open notification. A
+    // turn that released the queue right after the write+reload (before
+    // notify) would let this start here already — that gap is exactly
+    // what let two turns' reconfigure calls finish in either order.
+    expect(updateConfig).not.toHaveBeenCalled();
+    expect(events).toEqual(['notify-start']);
+
+    releaseNotify!();
+    await firstSave;
+    await secondSave;
+
+    expect(events).toEqual(['notify-start', 'notify-end', 'second-write-start']);
+  });
+
+  it("AC-5/AC-10: a config-change listener that writes back from inside a SUCCESSFUL save's notification (e.g. a plugin's reconfigure(ctx) calling ctx.setConfig()) does not deadlock on the turn that is still notifying it", async () => {
+    const updateConfigByNamespace = jest.fn(async () => undefined);
+    const updateConfig = jest.fn(async () => undefined);
+    const svc = makeService({ updateConfigByNamespace, updateConfig });
+
+    let handled = false;
+    let nestedWriteRan = false;
+    svc.onConfigChange(async (_ns, source) => {
+      if (source !== 'local' || handled) return;
+      // Guard against the nested write's OWN success notify re-entering
+      // this same listener — it also fires with source 'local'.
+      handled = true;
+      // Mirrors PluginContext.setConfig(): a listener reacting to this
+      // successful save writing back through the same public entry
+      // points saveConfig serializes against.
+      await svc.saveConfigValue('crowi', 'app:title', 'reconfigured');
+      nestedWriteRan = true;
+    });
+
+    const result = await Promise.race([
+      svc.saveConfig('crowi', { 'app:confidential': 'secret' }),
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('deadlock: saveConfig never settled')), 1000)),
+    ]);
+
+    expect(result).toBeUndefined();
+    expect(nestedWriteRan).toBe(true);
+    expect(updateConfig).toHaveBeenCalledWith('crowi', 'app:title', 'reconfigured');
+  });
+
+  it("AC-5: does not let a later write start until a SUCCESSFUL save's notify — and whatever a listener does in response — has fully finished, not merely until the write+memory-update have", async () => {
+    const updateConfigByNamespace = jest.fn(async () => undefined);
+    const events: string[] = [];
+    const updateConfig = jest.fn(async () => {
+      events.push('second-write-start');
+    });
+    const svc = makeService({ updateConfigByNamespace, updateConfig });
+
+    let releaseNotify: (() => void) | undefined;
+    const notifyGate = new Promise<void>((resolve) => {
+      releaseNotify = resolve;
+    });
+    // Gate only the FIRST local notify (the one under test) — the second
+    // save below also notifies with source 'local' on its own success,
+    // and must not be mistaken for a second reaction to the first save.
+    let gatedOnce = false;
+    svc.onConfigChange(async (_ns, source) => {
+      if (source !== 'local' || gatedOnce) return;
+      gatedOnce = true;
+      events.push('notify-start');
+      await notifyGate;
+      events.push('notify-end');
+    });
+
+    const firstSave = svc.saveConfig('crowi', { 'app:title': 'New Title' });
+
+    // Let the first turn's write land, its memory update apply, and its
+    // (still-gated) local notify start.
+    await tick();
+    await tick();
+    expect(events).toEqual(['notify-start']);
+
+    const secondSave = svc.saveConfigValue('crowi', 'app:confidential', 'secret');
+    await tick();
+
+    // Still queued behind the first save's still-open local notify — a
+    // turn that released the queue right after the write+memory-update
+    // (before notify) would let this start here already, and that gap is
+    // exactly what let two turns' reconfigure calls finish in either
+    // order regardless of which one actually holds the newer config.
+    expect(updateConfig).not.toHaveBeenCalled();
+    expect(events).toEqual(['notify-start']);
+
+    releaseNotify!();
+    await firstSave;
+    await secondSave;
+
+    expect(events).toEqual(['notify-start', 'notify-end', 'second-write-start']);
   });
 });
 
