@@ -1310,9 +1310,10 @@ describe('PUT /api/admin/plugins/config — live verification (feature-plugin-co
     expect(row).toBeNull();
   });
 
-  it('AC-3: a single request touching both an atomic-group field and an ordinary field saves the atomic group first, and swallows an ordinary write failure exactly as before this feature (200, cache still updated)', async () => {
+  it('AC-3/AC-7 (feature-config-write-durability): a single request touching both an atomic-group field and an ordinary field saves the atomic group first, but an ordinary write failure now 500s instead of being swallowed — the atomic pair stays persisted+cached, the ordinary field is neither', async () => {
     const LABEL_KEY = 'plugin:@crowi/plugin-synth-verified-atomic-test:label';
     const ATOMIC_KEY = 'plugin:@crowi/plugin-synth-verified-atomic-test:__atomic:credentials';
+    const CLIENT_ID_KEY = 'plugin:@crowi/plugin-synth-verified-atomic-test:clientId';
     const atomicPlugin: CrowiPlugin = {
       name: '@crowi/plugin-synth-verified-atomic-test',
       version: '0.0.0',
@@ -1324,14 +1325,20 @@ describe('PUT /api/admin/plugins/config — live verification (feature-plugin-co
         })
         .strict(),
       configAtomicGroups: [{ name: 'credentials', keys: ['clientId', 'clientSecret'], sensitive: true }],
+      reconfigure: async () => {
+        reconfigureOrder.push('reconfigure');
+      },
       verifyConfig,
     };
     setLoadedPlugins([atomicPlugin]);
 
     const Config = crowi.model('Config');
+    const manager = crowi.pluginManager!;
     const configService = crowi.getConfigService();
     const saveAtomicSpy = jest.spyOn(configService, 'saveConfigAtomicGroup');
     const saveConfigSpy = jest.spyOn(configService, 'saveConfig');
+    const reconfigureSpy = jest.spyOn(manager, 'reconfigureAffected');
+    const verifySpy = jest.spyOn(manager, 'verifyAffectedConfig');
     // Only the ordinary field's own Mongo write fails — the atomic group
     // write (a separate `updateByParams` call, on its own `__atomic:` key)
     // goes through untouched, so the two outcomes stay independently
@@ -1348,27 +1355,38 @@ describe('PUT /api/admin/plugins/config — live verification (feature-plugin-co
       .set(authHeaders(adminToken))
       .send({ values: { clientId: 'id-1', clientSecret: 'secret-1', label: 'ordinary-value' } });
 
-    // The ordinary write's Mongo failure is swallowed exactly as it always
-    // was (`updateConfigByNamespace` catches and never rethrows) — this
-    // feature must not change that into a failed save.
-    expect(res.status).toBe(200);
+    // feature-config-write-durability: the ordinary write's Mongo failure
+    // now propagates instead of being swallowed — the whole PUT 500s, and
+    // nothing past the save (reconfigure, verification) ever runs.
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
+    expect(res.body.verificationResults).toBeUndefined();
     expect(saveAtomicSpy).toHaveBeenCalledTimes(1);
     expect(saveConfigSpy).toHaveBeenCalledTimes(1);
     // Atomic-first, ordinary-second: the atomic call completes before the
     // ordinary one even starts.
     expect(saveAtomicSpy.mock.invocationCallOrder[0]).toBeLessThan(saveConfigSpy.mock.invocationCallOrder[0]);
+    expect(reconfigureSpy).not.toHaveBeenCalled();
+    expect(verifySpy).not.toHaveBeenCalled();
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(reconfigureOrder).toEqual([]);
 
+    // The atomic group's own write succeeded before the ordinary write
+    // was even attempted, so it stays persisted...
     const atomicRow = await Config.findOne({ ns: 'crowi', key: ATOMIC_KEY }).exec();
     expect(atomicRow).not.toBeNull();
+    // ...and its fields DID reach the in-memory cache — saveConfigAtomicGroup
+    // already ran its own update()/notify before the ordinary save even
+    // started (partial acceptance is allowed across independent calls; see
+    // spec §2).
+    expect(crowi.getConfig().crowi[CLIENT_ID_KEY]).toBe('id-1');
 
     // The ordinary field's Mongo write really did fail (nothing persisted)...
     const labelRow = await Config.findOne({ ns: 'crowi', key: LABEL_KEY }).exec();
     expect(labelRow).toBeNull();
-    // ...yet the in-memory cache reflects it anyway, per the pre-existing
-    // swallow semantics — `crowi.getConfig()` is the live in-process cache,
-    // not a Mongo reload, so this observes exactly what the save handler's
-    // response was built from.
-    expect(crowi.getConfig().crowi[LABEL_KEY]).toBe('ordinary-value');
+    // ...and — unlike before this feature — the in-memory cache does NOT
+    // reflect it either: `saveConfig` never reached `this.update(...)`.
+    expect(crowi.getConfig().crowi[LABEL_KEY]).toBeUndefined();
   });
 
   it('AC-3/AC-13: an unconfirmed 409 (linked identities) never invokes verifyConfig, and the confirmed resend runs it normally', async () => {
