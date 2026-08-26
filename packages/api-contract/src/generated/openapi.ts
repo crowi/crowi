@@ -11892,6 +11892,22 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
             };
         };
         post?: never;
@@ -12401,6 +12417,22 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Admin permission required";
                                 redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
                             };
                         };
                     };

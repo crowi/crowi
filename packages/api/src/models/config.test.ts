@@ -46,6 +46,96 @@ describe('Config model test', () => {
     });
   });
 
+  describe('write durability (feature-config-write-durability)', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('AC-1: updateConfig propagates a write failure instead of swallowing it', async () => {
+      jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed'));
+
+      await expect(Config.updateConfig('crowi', 'durability:single', 'value')).rejects.toThrow('mongo write failed');
+    });
+
+    test('AC-1/AC-2: updateConfigByNamespace waits for every key to settle before throwing, and a key that succeeded stays persisted while the failed one does not', async () => {
+      await Config.deleteMany({ ns: 'crowi', key: { $in: ['durability:a', 'durability:b'] } }).exec();
+
+      let releaseB: (() => void) | undefined;
+      const bGate = new Promise<void>((resolve) => {
+        releaseB = resolve;
+      });
+      let bWritten = false;
+
+      const originalUpdateByParams = Config.updateByParams.bind(Config);
+      jest.spyOn(Config, 'updateByParams').mockImplementation(async (ns: string, key: string, value: string) => {
+        if (key === 'durability:a') {
+          throw new Error('mongo write failed: a');
+        }
+        if (key === 'durability:b') {
+          // Held open deliberately: this is what distinguishes
+          // Promise.allSettled from Promise.all. Under Promise.all the
+          // rejection above would win the race and the overall call would
+          // already have rejected by the time this resolves; under
+          // Promise.allSettled the call must still be pending here.
+          await bGate;
+          await originalUpdateByParams(ns, key, value);
+          bWritten = true;
+          return;
+        }
+        return originalUpdateByParams(ns, key, value);
+      });
+
+      const pending = Config.updateConfigByNamespace('crowi', {
+        'durability:a': 'a-value',
+        'durability:b': 'b-value',
+      });
+      let settled = false;
+      pending.catch(() => {
+        settled = true;
+      });
+
+      // Let key a's rejection's microtasks flush; the wrapper call must
+      // still be unsettled because key b has not been released yet.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(settled).toBe(false);
+      expect(bWritten).toBe(false);
+
+      releaseB!();
+      await expect(pending).rejects.toThrow('mongo write failed: a');
+      expect(bWritten).toBe(true);
+
+      const [aRow, bRow] = await Promise.all([
+        Config.findOne({ ns: 'crowi', key: 'durability:a' }).exec(),
+        Config.findOne({ ns: 'crowi', key: 'durability:b' }).exec(),
+      ]);
+      expect(aRow).toBeNull();
+      expect(bRow).not.toBeNull();
+
+      await Config.deleteMany({ ns: 'crowi', key: { $in: ['durability:a', 'durability:b'] } }).exec();
+    });
+
+    test('AC-8: applicationInstall does not return successfully when the seeding write fails', async () => {
+      // The fixtures seeded in beforeAll already populate `ns: 'crowi'`,
+      // which would make applicationInstall throw its OWN "already
+      // installed" guard before ever attempting a write — clear it so the
+      // injected write failure is what actually gets exercised, then
+      // restore the fixture rows for the rest of the file.
+      const existingCrowiRows = await Config.find({ ns: 'crowi' }).lean().exec();
+      await Config.deleteMany({ ns: 'crowi' }).exec();
+
+      try {
+        jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during install'));
+
+        await expect(Config.applicationInstall()).rejects.toThrow('mongo write failed during install');
+      } finally {
+        await Config.deleteMany({ ns: 'crowi' }).exec();
+        if (existingCrowiRows.length > 0) {
+          await Config.insertMany(existingCrowiRows);
+        }
+      }
+    });
+  });
+
   describe('encryption of sensitive values', () => {
     const originalKey = process.env.CROWI_ENCRYPTION_KEY;
 

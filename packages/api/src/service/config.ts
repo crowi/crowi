@@ -130,6 +130,22 @@ export default class ConfigService {
     await this.notifyListeners(changedNamespaces, source);
   }
 
+  /**
+   * Persists every key of `config` to `ns`, then (and ONLY then) updates
+   * local memory, notifies change listeners, and publishes to Redis.
+   *
+   * `configModel.updateConfigByNamespace` propagates a write failure
+   * (`models/config.ts`) instead of swallowing it, so a rejection here
+   * throws straight through to the caller — the admin PUT handler's own
+   * try/catch → 500 — BEFORE `this.update(...)` runs. Zero memory
+   * mutation, zero listener call, zero Redis publish on failure: no
+   * replica, local or remote, can observe a value the database does not
+   * hold. Some keys may still have persisted individually (the model
+   * write is not atomic across keys — see `updateConfigByNamespace`'s own
+   * doc), but a later resend of the same full `config` re-writes them
+   * anyway (`updateByParams` upserts), which is what makes DB and memory
+   * converge again.
+   */
   async saveConfig(ns: string, config: Record<string, any>) {
     debug('Save config', ns, config);
     await this.configModel.updateConfigByNamespace(ns, config);
@@ -138,36 +154,16 @@ export default class ConfigService {
     await this.update({ ...this.config, [ns]: { ...this.config[ns], ...config } }, changed);
   }
 
+  /**
+   * Single-key counterpart of `saveConfig` — same fail-propagating
+   * contract. `configModel.updateConfig` no longer swallows a Mongo
+   * failure, so a rejection reaches the caller before
+   * `applyLocalValueUpdate` (in-memory mutation + listener notify + Redis
+   * publish) ever runs.
+   */
   async saveConfigValue(ns: string, key: string, value: any) {
     debug('Save config value', ns, key, value);
     await this.configModel.updateConfig(ns, key, value);
-    await this.applyLocalValueUpdate(ns, key, value);
-  }
-
-  /**
-   * Fail-propagating sibling of `saveConfigValue` (feature-renderer-
-   * plugin-boundary Phase 3 spec §6.2) for config fields whose write
-   * MUST NOT silently swallow a Mongo failure — today, only
-   * `security:linkCardEnabled`.
-   *
-   * `saveConfigValue`/`saveConfig` go through `configModel.updateConfig`
-   * / `updateConfigByNamespace`, which THEMSELVES catch-and-debug-log
-   * write errors (`models/config.ts`) — a Mongo outage there silently
-   * leaves the DB unwritten while the caller still proceeds as if it had
-   * succeeded. This method instead calls `configModel.updateByParams`
-   * directly — the ONE model static that does NOT catch — so a write
-   * failure throws straight through to the caller (the admin PUT
-   * handler's own try/catch → 500) BEFORE any of the following runs:
-   * local in-memory `this.config` mutation, `notifyListeners`, or the
-   * Redis publish (`update()` → `notifyUpdated()`). Zero memory
-   * mutation, zero publish, zero effect on any other replica on
-   * failure. On success, behaves exactly like `saveConfigValue` (local
-   * memory update + notify, response-before-remote-replica-reload
-   * semantics unchanged).
-   */
-  async saveConfigValueDurable(ns: string, key: string, value: any) {
-    debug('Save config value (durable)', ns, key, value);
-    await this.configModel.updateByParams(ns, key, value);
     await this.applyLocalValueUpdate(ns, key, value);
   }
 
@@ -199,7 +195,7 @@ export default class ConfigService {
     await this.update({ ...this.config, [ns]: { ...this.config[ns], ...flat } }, [`plugin:${pluginName}`]);
   }
 
-  /** Shared local-memory-update + notify tail of `saveConfigValue` / `saveConfigValueDurable` — see each for the write-path difference that precedes this call. */
+  /** Shared local-memory-update + notify tail of `saveConfigValue`, run only after the write it follows has already succeeded. */
   private async applyLocalValueUpdate(ns: string, key: string, value: any) {
     const changed = deriveChangedNamespaces(ns, [key]);
     await this.update({ ...this.config, [ns]: { ...this.config[ns], [key]: value } }, changed);

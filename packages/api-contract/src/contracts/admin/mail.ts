@@ -28,7 +28,7 @@ import {
   UpdateMailSettingsRequestSchema,
   UpdateMailSettingsResponseSchema,
 } from '../../schemas/admin/mail';
-import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../../schemas/common';
+import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../../schemas/common';
 
 const mailSettingsValidationHook = (result: { success: boolean; error?: ZodError }, c: Context): Response | undefined => {
   if (result.success) return;
@@ -97,6 +97,10 @@ export const updateMailSettingsRoute = createRoute({
     403: {
       description: 'Admin permission required',
       content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });
