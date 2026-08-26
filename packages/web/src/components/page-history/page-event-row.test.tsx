@@ -1,4 +1,4 @@
-import type { PageHistoryEventRow } from '@crowi/api-contract';
+import type { PageHistoryEventRow, PageUser } from '@crowi/api-contract';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -29,6 +29,36 @@ function renderEvent(event: PageHistoryEventRow) {
     </table>,
   );
 }
+
+const actor = (name: string): PageUser => ({
+  _id: `${name.toLowerCase()}-id`,
+  id: `${name.toLowerCase()}-id`,
+  username: name.toLowerCase(),
+  name,
+  email: `${name.toLowerCase()}@example.com`,
+  image: null,
+  createdAt: '2026-08-20T00:00:00.000Z',
+});
+
+describe('PageEventRow table structure', () => {
+  it('keeps empty From and To cells and an empty revision cell', () => {
+    renderEvent(eventRow());
+
+    const cells = within(screen.getByRole('row')).getAllByRole('cell');
+    expect(cells).toHaveLength(5);
+    expect(cells[0]).toBeEmptyDOMElement();
+    expect(cells[1]).toBeEmptyDOMElement();
+    expect(cells[4]).toBeEmptyDOMElement();
+    expect(cells.every((cell) => !cell.hasAttribute('colspan'))).toBe(true);
+  });
+
+  it('renders the actor name as its own visible text', () => {
+    renderEvent(eventRow({ actor: actor('Alice') }));
+
+    expect(screen.getByText('Alice')).toBeVisible();
+    expect(screen.getByLabelText('Alice')).toBeVisible();
+  });
+});
 
 describe('PageEventRow detail', () => {
   it('renders both paths for a rename', () => {
@@ -107,7 +137,8 @@ describe('PageEventRow detail', () => {
   it('degrades to the summary when a required payload field is missing', () => {
     renderEvent(eventRow({ payload: { fromPath: '/before' } }));
 
-    expect(screen.getByText('不明なユーザーがページ名を変更しました')).toBeInTheDocument();
+    expect(screen.getByText('不明なユーザー')).toBeInTheDocument();
+    expect(screen.getByText('ページ名を変更しました')).toBeInTheDocument();
     expect(screen.queryByTestId('event-detail')).toBeNull();
   });
 
@@ -132,7 +163,8 @@ describe('PageEventRow detail', () => {
   it('degrades to the summary when either visibility grant is unknown', () => {
     renderEvent(eventRow({ kind: 'visibility_changed', payload: { fromGrant: 1, toGrant: 99 } }));
 
-    expect(screen.getByText('不明なユーザーが公開範囲を変更しました')).toBeInTheDocument();
+    expect(screen.getByText('不明なユーザー')).toBeInTheDocument();
+    expect(screen.getByText('公開範囲を変更しました')).toBeInTheDocument();
     expect(screen.queryByTestId('event-detail')).toBeNull();
   });
 

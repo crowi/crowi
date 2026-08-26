@@ -83,6 +83,22 @@ function mockHistory(entries: PageHistoryEntry[], overrides: Partial<ReturnType<
 }
 
 describe('PageHistory merged timeline', () => {
+  it('shows different authors on adjacent revision and event rows', () => {
+    const alice = baseUser('alice-id', 'Alice');
+    const bob = baseUser('bob-id', 'Bob');
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new', savedBy: alice }),
+      baseEventRow({ id: 'event-between', kind: 'visibility_changed', actor: bob }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old', savedBy: alice }),
+    ]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    const revisionAuthor = screen.getAllByText('Alice')[0];
+    const eventActor = screen.getByText('Bob');
+    expect(revisionAuthor.closest('tr')).not.toBe(eventActor.closest('tr'));
+  });
+
   it('renders metadata events without a subtree badge when no subtree operation exists', () => {
     mockHistory([
       baseEventRow({ id: 'rename-event', kind: 'page_renamed', actor: null }),
@@ -92,7 +108,8 @@ describe('PageHistory merged timeline', () => {
 
     render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
 
-    expect(screen.getByText('不明なユーザーがページ名を変更しました')).toBeDefined();
+    expect(screen.getByText('不明なユーザー')).toBeDefined();
+    expect(screen.getByText('ページ名を変更しました')).toBeDefined();
     expect(screen.queryByText('サブツリー')).toBeNull();
     expect(screen.getByTestId('revision-diff')).toHaveTextContent('rev-old:rev-new');
   });
