@@ -193,8 +193,11 @@ final class RenderedAstFallbackTests: XCTestCase {
     }
 
     /// The schema-version pin itself: Phase 4 must NOT have bumped the read
-    /// cache schema (nothing new is persisted).
+    /// cache schema (nothing new is persisted). The baseline moved from 2 to
+    /// 3 when RFC-0021 changed `CachedRevisionSummary`'s stored shape — an
+    /// unrelated, legitimate bump — so this only pins that Phase 4 itself
+    /// added no further bump on top of that.
     func testReadCacheSchemaVersionIsUntouchedByPhase4() {
-        XCTAssertEqual(WorkspaceReadCacheSchema.schemaVersion, 2, "Phase 4 persists nothing new — a bump means the §16 policy was violated")
+        XCTAssertEqual(WorkspaceReadCacheSchema.schemaVersion, 3, "Phase 4 persists nothing new — a bump means the §16 policy was violated")
     }
 }

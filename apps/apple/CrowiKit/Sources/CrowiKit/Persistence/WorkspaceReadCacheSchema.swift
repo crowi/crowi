@@ -9,7 +9,12 @@ import SwiftData
 /// rebuilds on next launch, per §7.3's no-migration-plan policy, rather than
 /// launch-crashing.
 public enum WorkspaceReadCacheSchema {
-    public static let schemaVersion = 2
+    /// Bumped to 3 when `CachedRevisionSummary`'s stored shape changed from
+    /// the meta-only revisions list to the RFC-0021 merged timeline — an old
+    /// store's `CachedRevisionSummary` rows would otherwise decode to `[]`
+    /// forever rather than repopulating, since nothing else ever bumps this
+    /// marker for them. Drop-and-rebuild (§7.3) instead.
+    public static let schemaVersion = 3
 
     public static let models: [any PersistentModel.Type] = [
         CachedPage.self,

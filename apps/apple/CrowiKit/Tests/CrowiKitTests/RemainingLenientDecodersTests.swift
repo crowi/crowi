@@ -74,79 +74,6 @@ final class RemainingLenientDecodersTests: XCTestCase {
 
     // MARK: - Revisions
 
-    func testListRevisionsDecodesAuthorAndCreatedAt() throws {
-        let json = """
-        { "revisions": [ { "_id": "r1", "path": "/x", "author": { "username": "sotarok", "name": "Sotaro" }, "createdAt": "2026-01-01" } ], "pager": { "prev": null, "next": null, "offset": 0 } }
-        """
-        let response = try ListRevisionsResponseLenient.decode(Data(json.utf8))
-
-        XCTAssertEqual(response.revisions.first?.authorUsername, "sotarok")
-    }
-
-    /// `savedBy ?? author`, applied to the WHOLE user — a revision carrying
-    /// both must not print one person's name beside the other's avatar. This
-    /// is the web's own rule (`page-history.tsx`), made once at the wire
-    /// boundary so the row cannot re-derive it differently.
-    func testTheRowShowsSavedByAsOneWholePersonNotAMixOfTwo() throws {
-        let json = """
-        { "revisions": [ { "_id": "r1", "path": "/x",
-          "author": { "username": "old", "name": "Old Author", "image": "/old.png" },
-          "savedBy": { "username": "sotarok", "name": "Sotaro", "image": "/new.png" },
-          "createdAt": "2026-01-01" } ] }
-        """
-        let revision = try XCTUnwrap(ListRevisionsResponseLenient.decode(Data(json.utf8)).revisions.first)
-
-        XCTAssertEqual(revision.displayName, "Sotaro")
-        XCTAssertEqual(revision.authorUsername, "sotarok")
-        XCTAssertEqual(revision.authorImage, "/new.png", "the avatar must come from the same person as the name")
-    }
-
-    /// A v1.x revision has no `savedBy` at all; the row falls back to
-    /// `author` whole.
-    func testARevisionWithoutSavedByFallsBackToTheAuthor() throws {
-        let json = """
-        { "revisions": [ { "_id": "r1", "path": "/x", "author": { "username": "old", "name": "Old Author", "image": "/old.png" }, "createdAt": "2026-01-01" } ] }
-        """
-        let revision = try XCTUnwrap(ListRevisionsResponseLenient.decode(Data(json.utf8)).revisions.first)
-
-        XCTAssertEqual(revision.displayName, "Old Author")
-        XCTAssertEqual(revision.authorImage, "/old.png")
-    }
-
-    /// The "app" chip: set for the token paths, absent for the web editor,
-    /// and absent — not crashing, not defaulting to true — for a channel this
-    /// build has never heard of.
-    func testTheAppChipMarksTokenAuthoredRevisionsOnly() throws {
-        func revision(_ editVia: String?) throws -> RevisionMetaLenient {
-            let via = editVia.map { "\"editVia\": \"\($0)\"," } ?? ""
-            let json = """
-            { "revisions": [ { "_id": "r1", "path": "/x", \(via) "createdAt": "2026-01-01" } ] }
-            """
-            return try XCTUnwrap(ListRevisionsResponseLenient.decode(Data(json.utf8)).revisions.first)
-        }
-
-        XCTAssertTrue(try revision("oauth").isAPIEdit)
-        XCTAssertTrue(try revision("pat").isAPIEdit)
-        XCTAssertFalse(try revision("web").isAPIEdit)
-        XCTAssertFalse(try revision(nil).isAPIEdit, "a pre-RFC-0010 revision has no channel to report")
-        XCTAssertFalse(try revision("carrier-pigeon").isAPIEdit, "an unknown channel degrades to no chip")
-    }
-
-    /// The type gained fields after it was already being cached as JSON.
-    /// Every one is optional so a blob written before they existed still
-    /// decodes — losing the cached history on upgrade would empty the screen
-    /// for anyone offline.
-    func testARevisionCachedBeforeTheNewFieldsExistedStillDecodes() throws {
-        let legacyBlob = """
-        [ { "revisionId": "r1", "authorName": "Sotaro", "authorUsername": "sotarok", "createdAt": "2026-01-01" } ]
-        """
-        let revisions = try JSONDecoder().decode([RevisionMetaLenient].self, from: Data(legacyBlob.utf8))
-
-        XCTAssertEqual(revisions.first?.displayName, "Sotaro")
-        XCTAssertNil(revisions.first?.authorImage)
-        XCTAssertFalse(try XCTUnwrap(revisions.first).isAPIEdit)
-    }
-
     func testGetRevisionDecodesBody() throws {
         let json = """
         { "revision": { "_id": "r1", "path": "/x", "body": "# past revision" } }
@@ -154,6 +81,17 @@ final class RemainingLenientDecodersTests: XCTestCase {
         let response = try GetRevisionResponseLenient.decode(Data(json.utf8))
 
         XCTAssertEqual(response.revision.body, "# past revision")
+    }
+
+    /// The diff view's source: batch-by-ids, each WITH `body`.
+    func testGetRevisionsDecodesBothBodiesForCompare() throws {
+        let json = """
+        { "revisions": [ { "_id": "r1", "path": "/x", "body": "old" }, { "_id": "r2", "path": "/x", "body": "new" } ] }
+        """
+        let response = try GetRevisionsResponseLenient.decode(Data(json.utf8))
+
+        XCTAssertEqual(response.revisions.first(where: { $0.revisionId == "r1" })?.body, "old")
+        XCTAssertEqual(response.revisions.first(where: { $0.revisionId == "r2" })?.body, "new")
     }
 
     // MARK: - Profile
@@ -230,7 +168,8 @@ final class RemainingLenientDecodersTests: XCTestCase {
         XCTAssertThrowsError(try ListCommentsResponseLenient.decode(Data("[]".utf8)))
         XCTAssertThrowsError(try BookmarkResponseLenient.decode(Data("[]".utf8)))
         XCTAssertThrowsError(try GetBacklinksResponseLenient.decode(Data("[]".utf8)))
-        XCTAssertThrowsError(try ListRevisionsResponseLenient.decode(Data("[]".utf8)))
+        XCTAssertThrowsError(try GetRevisionsResponseLenient.decode(Data("[]".utf8)))
+        XCTAssertThrowsError(try PageHistoryResponseLenient.decode(Data("[]".utf8)))
         XCTAssertThrowsError(try ProfileLenient.decode(Data("[]".utf8)))
         XCTAssertThrowsError(try RecentlyViewedPagesResponseLenient.decode(Data("[]".utf8)))
     }

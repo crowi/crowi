@@ -179,6 +179,10 @@ public enum CrowiMetrics {
     /// screen's cards, since the cards inside a panel are already inset from
     /// the screen by the panel itself.
     public static let sheetHorizontalMargin: CGFloat = 8
+    /// The diff sheet's collapsed "peek" detent: tall enough for its header
+    /// plus roughly two source lines, so a sliver of the diff itself (not
+    /// just a title bar) invites the drag up to `.large`.
+    public static let diffSheetPeekHeight: CGFloat = 220
     /// Air under the last card, above the home indicator's own clearance.
     /// Air over the first card, under the grabber.
     /// The panel's own top corners. Larger than a card's 16 so the cards
