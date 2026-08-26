@@ -1,12 +1,16 @@
 import ConfigService, { type ConfigChangeListener, deriveChangedNamespaces } from './config';
 
-/** Shared by `ConfigService listener API` + `ConfigService.saveConfigValueDurable` below. */
-function makeService(overrides: { updateByParams?: jest.Mock; updateAtomicConfigGroup?: jest.Mock } = {}): ConfigService {
+/** Shared by `ConfigService listener API` + the `saveConfig(Value)` describe blocks below. */
+function makeService(
+  overrides: { updateByParams?: jest.Mock; updateAtomicConfigGroup?: jest.Mock; updateConfig?: jest.Mock; updateConfigByNamespace?: jest.Mock } = {},
+): ConfigService {
   const writes: Array<{ ns: string; config: Record<string, unknown> }> = [];
-  const updateConfigByNamespace = jest.fn(async (ns: string, config: Record<string, unknown>) => {
-    writes.push({ ns, config });
-  });
-  const updateConfig = jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
+  const updateConfigByNamespace =
+    overrides.updateConfigByNamespace ??
+    jest.fn(async (ns: string, config: Record<string, unknown>) => {
+      writes.push({ ns, config });
+    });
+  const updateConfig = overrides.updateConfig ?? jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
   const updateByParams = overrides.updateByParams ?? jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
   const updateAtomicConfigGroup =
     overrides.updateAtomicConfigGroup ?? jest.fn(async (_ns: string, _plugin: string, _group: string, _values: Record<string, string>) => undefined);
@@ -110,42 +114,42 @@ describe('ConfigService listener API', () => {
 });
 
 /**
- * feature-renderer-plugin-boundary Phase 3 spec §6.2 — the fail-
- * propagating durable write path used ONLY for `security:linkCardEnabled`.
- * Unlike `saveConfigValue`/`saveConfig` (whose underlying model statics
- * catch-and-log write errors, so they never throw), `saveConfigValueDurable`
- * calls `configModel.updateByParams` directly — the one static that
- * propagates. These are unit-level (mocked model), so they run
- * everywhere (unlike `config.smoke.test.ts`'s real-Redis cross-replica
- * variant, which is gated behind `crowi-test-redis` availability).
+ * feature-config-write-durability — `saveConfigValue` is now the
+ * fail-propagating default: its underlying model static
+ * (`configModel.updateConfig`) no longer catches a Mongo write failure
+ * (see `models/config.ts`), so a rejection reaches the caller before any
+ * local memory mutation or listener notification. These are unit-level
+ * (mocked model), so they run everywhere (unlike
+ * `config.smoke.test.ts`'s real-Redis cross-replica variant, which is
+ * gated behind `crowi-test-redis` availability).
  */
-describe('ConfigService.saveConfigValueDurable', () => {
-  it('success: calls updateByParams, updates local memory, and notifies listeners', async () => {
+describe('ConfigService.saveConfigValue (AC-3: fail-propagating by default)', () => {
+  it('success: calls updateConfig, updates local memory, and notifies listeners', async () => {
     const svc = makeService();
     const calls: Array<{ ns: string[]; source: string }> = [];
     svc.onConfigChange((ns, source) => {
       calls.push({ ns, source });
     });
 
-    await svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+    await svc.saveConfigValue('crowi', 'security:linkCardEnabled', false);
 
     expect(svc.config.crowi?.['security:linkCardEnabled']).toBe(false);
     expect(calls).toEqual([{ ns: ['crowi'], source: 'local' }]);
   });
 
   it('failure: propagates the rejection, leaves local memory unmutated, and never notifies listeners', async () => {
-    const updateByParams = jest.fn(async () => {
+    const updateConfig = jest.fn(async () => {
       throw new Error('mongo write failed');
     });
-    const svc = makeService({ updateByParams });
+    const svc = makeService({ updateConfig });
     const calls: unknown[] = [];
     svc.onConfigChange((ns, source) => {
       calls.push({ ns, source });
     });
 
-    await expect(svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
+    await expect(svc.saveConfigValue('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
 
-    expect(updateByParams).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
+    expect(updateConfig).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
     // Zero local memory mutation — the namespace was never populated.
     expect(svc.config.crowi).toBeUndefined();
     // Zero notification/publish.
@@ -153,15 +157,83 @@ describe('ConfigService.saveConfigValueDurable', () => {
   });
 
   it('failure leaves a PRE-EXISTING value in local memory untouched (not just absent)', async () => {
-    const updateByParams = jest.fn(async () => {
+    const updateConfig = jest.fn(async () => {
       throw new Error('mongo write failed');
     });
-    const svc = makeService({ updateByParams });
+    const svc = makeService({ updateConfig });
     svc.config.crowi = { 'security:linkCardEnabled': true };
 
-    await expect(svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
+    await expect(svc.saveConfigValue('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
 
     expect(svc.config.crowi['security:linkCardEnabled']).toBe(true);
+  });
+});
+
+/**
+ * feature-config-write-durability §2/§3 — `saveConfig`'s underlying
+ * model static (`configModel.updateConfigByNamespace`) propagates a write
+ * failure instead of swallowing it, so a rejection reaches the caller
+ * before `this.update(...)` (local memory mutation, listener notify,
+ * Redis publish) ever runs (AC-3), and a resend of the SAME full config
+ * after a partial failure re-writes every key and converges memory with
+ * the database (AC-9).
+ */
+describe('ConfigService.saveConfig (AC-3/AC-9: fail-propagating by default, resend converges)', () => {
+  it('AC-3: failure propagates the rejection, leaves local memory unmutated, and never notifies listeners', async () => {
+    const updateConfigByNamespace = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const svc = makeService({ updateConfigByNamespace });
+    svc.config.crowi = { 'app:title': 'Old Title' };
+    const calls: unknown[] = [];
+    svc.onConfigChange((ns) => {
+      calls.push(ns);
+    });
+
+    await expect(svc.saveConfig('crowi', { 'app:title': 'New Title' })).rejects.toThrow('mongo write failed');
+
+    expect(svc.config.crowi['app:title']).toBe('Old Title');
+    expect(calls).toEqual([]);
+  });
+
+  it('AC-9: resending the SAME full config after a partial-write failure ends with memory and the underlying store in agreement', async () => {
+    // Mimics the model layer's own Promise.allSettled semantics: only
+    // `app:confidential`'s write actually fails on the first attempt —
+    // `app:title`'s succeeds and lands in `db` even though the overall
+    // call still rejects.
+    const db: Record<string, unknown> = {};
+    let failConfidential = true;
+    const updateConfigByNamespace = jest.fn(async (_ns: string, config: Record<string, unknown>) => {
+      const shouldFail = failConfidential && 'app:confidential' in config;
+      for (const [key, value] of Object.entries(config)) {
+        if (shouldFail && key === 'app:confidential') continue;
+        db[key] = value;
+      }
+      if (shouldFail) {
+        throw new Error('mongo write failed: app:confidential');
+      }
+    });
+    const svc = makeService({ updateConfigByNamespace });
+
+    const fullConfig = { 'app:title': 'New Title', 'app:confidential': 'Internal only' };
+
+    await expect(svc.saveConfig('crowi', fullConfig)).rejects.toThrow('mongo write failed: app:confidential');
+    // Memory was never touched by the failed attempt — this is exactly
+    // what forces a resend to recompute from the pre-failure (stale)
+    // state and resubmit every key, not just the one that failed.
+    expect(svc.config.crowi).toBeUndefined();
+    expect(db).toEqual({ 'app:title': 'New Title' });
+
+    failConfidential = false;
+    await svc.saveConfig('crowi', fullConfig);
+
+    expect(db).toEqual(fullConfig);
+    expect(svc.config.crowi).toEqual(fullConfig);
+    // The resend re-sent BOTH keys, not a diff against the failed
+    // attempt — upsert-idempotency on the key that already persisted is
+    // what makes this self-healing rather than merely "eventually mostly
+    // correct".
+    expect(updateConfigByNamespace).toHaveBeenNthCalledWith(2, 'crowi', fullConfig);
   });
 });
 

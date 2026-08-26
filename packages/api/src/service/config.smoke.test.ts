@@ -52,13 +52,13 @@ const SMOKE_REDIS_KEY_PREFIX = 'config-smoke';
 function fakeCrowi(
   loadAllConfig: jest.Mock,
   setupMailer: jest.Mock,
-  updateByParams: jest.Mock = jest.fn(async () => undefined),
+  updateConfig: jest.Mock = jest.fn(async () => undefined),
   instanceSlug: string = SMOKE_REDIS_KEY_PREFIX,
 ): unknown {
   return {
     redisOpts: buildRedisOpts(REDIS_SMOKE_URLS.config, true),
     redis: {}, // truthy — setupPubSub only null-checks this field
-    model: () => ({ loadAllConfig, updateByParams }),
+    model: () => ({ loadAllConfig, updateConfig }),
     setupMailer,
     getBaseUrl: () => null,
     getEnv: () => ({ REDIS_KEY_PREFIX: instanceSlug }) as unknown as NodeJS.ProcessEnv,
@@ -163,33 +163,33 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
   }, 20000);
 
   /**
-   * feature-renderer-plugin-boundary Phase 3 spec §6.2/AC5 — the
-   * `security:linkCardEnabled` toggle's durable write path
-   * (`ConfigService.saveConfigValueDurable`), exercised cross-replica
-   * for real over the dedicated `crowi-test-redis` pub/sub channel:
-   * a successful durable write on instance A updates A's own memory
+   * feature-config-write-durability — `security:linkCardEnabled`'s write
+   * (`ConfigService.saveConfigValue`, fail-propagating by default now
+   * that `models/config.ts` no longer swallows a write error), exercised
+   * cross-replica for real over the dedicated `crowi-test-redis` pub/sub
+   * channel: a successful write on instance A updates A's own memory
    * immediately (before any publish round-trip) and drives instance B's
    * subscriber to reload + reflect the same value once its `load()`
    * fires — same "handling replica updates first, remote replica
    * catches up after pub/sub reload" contract the AC requires.
    */
-  it("instance A's successful saveConfigValueDurable() flips A's own memory immediately and drives instance B to the same value after pub/sub reload", async () => {
-    const updateByParamsA = jest.fn(async () => undefined);
+  it("instance A's successful saveConfigValue() flips A's own memory immediately and drives instance B to the same value after pub/sub reload", async () => {
+    const updateConfigA = jest.fn(async () => undefined);
     const loadAllConfigA = jest.fn(async () => ({ crowi: {} }));
     const setupMailerA = jest.fn(async () => undefined);
     const loadAllConfigB = jest.fn(async () => ({ crowi: { 'security:linkCardEnabled': false } }));
     const setupMailerB = jest.fn(async () => undefined);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, updateByParamsA) as any);
+    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, updateConfigA) as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const serviceB = new ConfigService(fakeCrowi(loadAllConfigB, setupMailerB) as any);
 
     try {
       await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
 
-      await serviceA.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
-      expect(updateByParamsA).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
+      await serviceA.saveConfigValue('crowi', 'security:linkCardEnabled', false);
+      expect(updateConfigA).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
       // Handling replica's own memory flips synchronously, before any
       // remote round-trip.
       expect(serviceA.config.crowi?.['security:linkCardEnabled']).toBe(false);
@@ -202,7 +202,7 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
   }, 20000);
 
   it('a rejected Mongo write propagates, leaves memory unmutated, and never reaches instance B (zero publish on failure)', async () => {
-    const updateByParamsA = jest.fn(async () => {
+    const updateConfigA = jest.fn(async () => {
       throw new Error('mongo down');
     });
     const loadAllConfigA = jest.fn(async () => ({ crowi: {} }));
@@ -211,14 +211,14 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
     const setupMailerB = jest.fn(async () => undefined);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, updateByParamsA) as any);
+    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, updateConfigA) as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const serviceB = new ConfigService(fakeCrowi(loadAllConfigB, setupMailerB) as any);
 
     try {
       await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
 
-      await expect(serviceA.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo down');
+      await expect(serviceA.saveConfigValue('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo down');
       expect(serviceA.config.crowi).toBeUndefined();
 
       // Give any (incorrect) publish a moment to arrive at B before
