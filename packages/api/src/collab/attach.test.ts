@@ -168,6 +168,14 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
     expect(lastFakeHocuspocus).not.toBeNull();
   });
 
+  it('passes a draftPublisher function to createCollabServer (RFC-0021 §6.3/DC-6/AC-18)', () => {
+    // Half of the AC-18 wiring proof — the OTHER hop (createCollabServer ->
+    // createSaveFlow) is covered in `packages/collab/src/__tests__/server-draft-publisher-wiring.test.ts`,
+    // which never imports the real `@hocuspocus/server` this file mocks.
+    expect(lastCreateOpts).not.toBeNull();
+    expect(typeof lastCreateOpts.draftPublisher).toBe('function');
+  });
+
   it('passes an empty extensions array to createCollabServer when crowi.redis is null', () => {
     // Phase 9 contract: with no Redis wired (test fixture sets
     // `crowi.redis = null`), the Redis extension MUST NOT be

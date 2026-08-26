@@ -45,6 +45,26 @@ describe('PageHistoryOperation (RFC-0021 §5.3/§5.5a, feature-page-history-phas
     expect(doc.expiresAt).toBeNull();
   });
 
+  test('the single-page command input has no schema defaults', async () => {
+    // Phase 2c-2's command writes all of these at insert time, and recovery
+    // reads them back to rebuild the entering CAS — including whether the Page
+    // had a `status` field at all. A default would make "the command never
+    // wrote this" indistinguishable from "the command wrote the default",
+    // which is precisely the distinction `fromStatusPresent` exists to carry.
+    const doc = await PageHistoryOperation.create({
+      actor: null,
+      command: 'rename',
+      idempotencyKey: validKey(),
+      operationId: 'op-no-defaults',
+      requestFingerprint: 'fp-no-defaults',
+    });
+
+    const raw = await PageHistoryOperation.collection.findOne({ _id: doc._id });
+    for (const field of ['page', 'fromPath', 'toPath', 'fromStatus', 'fromStatusPresent', 'toStatus', 'createRedirect', 'source']) {
+      expect(field in raw).toBe(false);
+    }
+  });
+
   describe('Idempotency-Key validation (16-128 URL-safe characters)', () => {
     test.each([
       ['too short', 'a'.repeat(15)],

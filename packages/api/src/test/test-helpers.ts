@@ -34,6 +34,24 @@ export const authHeaders = (token: string): Record<string, string> => ({
   'Content-Type': 'application/json',
 });
 
+let idempotencyKeySeq = 0;
+
+/**
+ * A fresh, well-formed `Idempotency-Key` (16-128 URL-safe characters).
+ *
+ * RFC-0021 Phase 2c-2a made the header mandatory on the single-page rename, so
+ * a test that means to exercise the rename itself has to carry one. Unique per
+ * call: reusing a key is a *replay*, which answers from the existing operation
+ * record instead of running the command again.
+ */
+export const idempotencyKey = (): string => `test-idem-key-${String(idempotencyKeySeq++).padStart(8, '0')}`;
+
+/** Auth headers plus a fresh idempotency key, for routes that require one. */
+export const idempotentAuthHeaders = (token: string): Record<string, string> => ({
+  ...authHeaders(token),
+  'Idempotency-Key': idempotencyKey(),
+});
+
 /**
  * Bearer-token-only headers — no Content-Type.
  * Use this for multipart / binary uploads where Content-Type must not be set

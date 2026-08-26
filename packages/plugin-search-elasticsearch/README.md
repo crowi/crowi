@@ -39,6 +39,12 @@ Open `/admin/plugins` and edit `@crowi/plugin-search-elasticsearch`:
 - **`requestTimeout`** — per-request timeout in ms (default `5000`).
 - **`analyzer`** — `default` / `kuromoji` / `sudachi` (see below).
 
+## Post-save connectivity verification
+
+Saving `url` / `requestTimeout` / the other connection settings from `/admin/plugins` triggers a non-blocking check after the save already succeeded and hot-reload has already run: a throwaway client (built from exactly the values you just saved, capped at a 10-second request timeout and no retries) calls the cluster's `info` API once, then closes. The admin UI shows the outcome ("saved, but verification failed" plus a fixed reason — unreachable / authentication failed / not found / unknown) without undoing the save.
+
+This is an **info-only** check: it never touches an index, a document, or the `<indexName>-current` alias, and it never reflects whether the selected `analyzer` is actually usable on the cluster — analyzer plugin availability only surfaces when you run a rebuild (see the Caveats section above). It confirms the cluster is reachable and the credentials in `url` are accepted, nothing more. The result reflects only the api instance that handled your save request — it is not aggregated across replicas.
+
 ## Hot-reload (no restart needed)
 
 This plugin implements `reconfigure`, so **saving connection settings

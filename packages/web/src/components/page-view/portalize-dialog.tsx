@@ -96,6 +96,9 @@ function PortalizeDialogBody({ page, onOpenChange }: { page: PageWithRevision; o
         // is hidden from listings and ignored by the `/x` ↔ `/x/` twin guard.
         create_redirect: true,
         include_descendants: false,
+        // One key per submit — see the rename dialog for why a repeat click
+        // must not reuse it.
+        idempotencyKey: crypto.randomUUID().replaceAll('-', ''),
       });
       onOpenChange(false);
       router.push(pagePathToHref(result.page.path));

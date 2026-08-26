@@ -12,6 +12,7 @@ import { useProfile } from '@/lib/use-profile';
 import { AccessTokensSection } from './access-tokens-section';
 import { LinkedAccountsSection, type PendingLinkCompletion, PendingLinkCompletionContainer } from './linked-accounts-section';
 import { McpSetupSection } from './mcp-setup-section';
+import { OAuthSessionsSection } from './oauth-sessions-section';
 import { PasswordForm } from './password-form';
 import { ProfileForm } from './profile-form';
 import { ProfilePicture } from './profile-picture';
@@ -207,6 +208,16 @@ function ProfileSettingsLayout({ profile, dateLocale }: { profile: NonNullable<R
             </CardHeader>
             <CardContent>
               <AccessTokensSection />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{m['me.oauth_sessions.heading']()}</CardTitle>
+              <CardDescription>{m['me.oauth_sessions.lead']()}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OAuthSessionsSection />
             </CardContent>
           </Card>
         </div>

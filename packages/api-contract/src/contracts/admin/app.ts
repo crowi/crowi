@@ -28,7 +28,7 @@ import {
   UpdateAppSettingsRequestSchema,
   UpdateAppSettingsResponseSchema,
 } from '../../schemas/admin/app';
-import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../../schemas/common';
+import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../../schemas/common';
 
 /**
  * Per-route validation hook: emit the `AppSettingsValidationErrorSchema`
@@ -102,6 +102,10 @@ export const updateAppSettingsRoute = createRoute({
     403: {
       description: 'Admin permission required',
       content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });

@@ -29,6 +29,7 @@ import { coerceBoolean, coerceString, getCrowiConfigNamespace } from 'src/util/a
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
+import { INTERNAL_ERROR_BODY } from '../_helpers/errors';
 import { registrationMode } from 'src/models/config';
 
 const debug = Debug('crowi:hono:handlers:admin:app');
@@ -74,7 +75,12 @@ export const registerAdminAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
 
       if (Object.keys(updates).length > 0) {
         debug('updateAppSettings keys=%o', Object.keys(updates));
-        await crowi.getConfigService().saveConfig('crowi', updates);
+        try {
+          await crowi.getConfigService().saveConfig('crowi', updates);
+        } catch (err) {
+          debug('Error saving app settings:', (err as Error).message);
+          return c.json(INTERNAL_ERROR_BODY, 500);
+        }
       }
 
       return c.json({ ok: true as const }, 200);

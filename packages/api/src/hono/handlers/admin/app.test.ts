@@ -51,6 +51,7 @@ describe('Routes /api/admin/app (Hono, post-storage-extraction)', () => {
   });
 
   afterEach(async () => {
+    jest.restoreAllMocks();
     await Config.deleteMany({ ns: 'crowi', key: { $in: APP_KEYS } });
     await reloadConfigCache();
   });
@@ -158,6 +159,33 @@ describe('Routes /api/admin/app (Hono, post-storage-extraction)', () => {
       expect(res.body).toEqual({ ok: true });
       const after = await Config.countDocuments({ ns: 'crowi' }).exec();
       expect(after).toBe(before);
+    });
+
+    /**
+     * feature-config-write-durability AC-5 — a write failure must reach
+     * the caller as a 500, not a false-success 200. Injected at the
+     * model layer (`Config.updateByParams`) so the test fails on main
+     * (where the model swallowed the error and the handler always got a
+     * resolved promise) and only passes once the propagation fix lands.
+     */
+    it('returns 500 and does not persist the update when the underlying write fails', async () => {
+      const updateByParamsSpy = jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed'));
+
+      const res = await request(app)
+        .put('/api/admin/app')
+        .set(authHeaders(adminToken))
+        .send({ app: { title: 'Should Not Persist' } });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
+      expect(updateByParamsSpy).toHaveBeenCalledTimes(1);
+
+      const get = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
+      expect(get.status).toBe(200);
+      expect(get.body.app.title).not.toBe('Should Not Persist');
+
+      const row = await Config.findOne({ ns: 'crowi', key: 'app:title' }).exec();
+      expect(row).toBeNull();
     });
   });
 });

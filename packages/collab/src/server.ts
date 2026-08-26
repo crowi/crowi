@@ -12,7 +12,7 @@ import { createOnLoadDocument } from './hooks/on-load-document';
 import { createOnStateless } from './hooks/on-stateless';
 import { createOnStoreDocument } from './hooks/on-store-document';
 import { createInvalidatedPagesStore, createPageInvalidator, type PageInvalidator } from './invalidation';
-import type { CollabContentSequenceAllocator, CollabModels } from './models';
+import type { CollabContentSequenceAllocator, CollabDraftPublisher, CollabModels } from './models';
 import { noopPresenceHooks, type PresenceHooks } from './presence';
 import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
 import { createSaveFlow, type SaveFlow } from './save-flow';
@@ -112,6 +112,13 @@ export interface CreateCollabServerOptions {
    * sequence (existing tests / stub configs run unchanged).
    */
   contentSequenceAllocator?: CollabContentSequenceAllocator;
+  /**
+   * RFC-0021 §6.3/DC-6 (Phase 2c-1) — threaded straight through to
+   * `createSaveFlow`, same pass-through shape as `contentSequenceAllocator`.
+   * The api host process (`attachCollabServer`) injects the real command;
+   * unset means step 6b falls back to the pre-Phase-2c-1 inline `updateOne`.
+   */
+  draftPublisher?: CollabDraftPublisher;
 }
 
 /**
@@ -172,6 +179,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
       docBaseRevisions,
       docEpochRevisions,
       contentSequenceAllocator: opts.contentSequenceAllocator,
+      draftPublisher: opts.draftPublisher,
     });
 
   const compactor = createCompactor({

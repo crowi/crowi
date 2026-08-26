@@ -9,7 +9,9 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Readable as ReadableType } from 'node:stream';
 import { Readable } from 'node:stream';
-import { createLocalDriver } from '@crowi/plugin-storage-local';
+import plugin, { classifyLocalStorageError, createLocalDriver, probeStorageDriver } from '@crowi/plugin-storage-local';
+import { CONFIG_VERIFICATION_KEY_PREFIX } from '@crowi/plugin-api';
+import type { PluginConfigVerificationSnapshot } from '@crowi/plugin-api';
 import { chunkOf } from './chunk-string';
 
 /** Absolute path to the `tsx` CLI entry — already a devDependency of @crowi/api (same helper `collab/redis-smoke-harness-client.ts` uses to spawn a separate-process harness). */
@@ -285,5 +287,232 @@ describe('@crowi/plugin-storage-local driver', () => {
       const entries = await fs.readdir(tmpDir);
       expect(entries.some((name) => name.endsWith('.tmp'))).toBe(false);
     }, 30000);
+  });
+
+  describe('verifyConfig (feature-plugin-config-live-verification, AC-5/AC-11)', () => {
+    const fakeSnapshot = (rootDir: string): PluginConfigVerificationSnapshot => ({
+      config: <T>() => ({ rootDir }) as T,
+      dependencyConfig: () => {
+        throw new Error('local storage has no dependencies');
+      },
+    });
+
+    it('AC-5: round-trips a real put/get/delete under the reserved verification prefix, never under attachment/, and leaves nothing behind', async () => {
+      const result = await plugin.verifyConfig!(fakeSnapshot(tmpDir), { timeoutMs: 10_000 });
+      expect(result).toEqual({ status: 'ok' });
+
+      // Cleanup is fire-and-forget (not awaited by verifyConfig itself) —
+      // give it a turn to actually run before asserting on disk state.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const verificationDir = path.join(tmpDir, CONFIG_VERIFICATION_KEY_PREFIX.replace(/\/$/, ''));
+      await expect(fs.readdir(verificationDir)).resolves.toEqual([]);
+      await expect(fs.access(path.join(tmpDir, 'attachment'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('a put failure is classified and no cleanup is attempted (nothing was written)', async () => {
+      const err = Object.assign(new Error('nope'), { code: 'EACCES' });
+      const putSpy = jest.fn(async () => {
+        throw err;
+      });
+      const deleteSpy = jest.fn(async () => {});
+      const result = await probeStorageDriver({ put: putSpy, get: jest.fn(), delete: deleteSpy }, classifyLocalStorageError);
+
+      expect(result).toEqual({ status: 'failed', reason: 'write-denied' });
+      expect(deleteSpy).not.toHaveBeenCalled();
+    });
+
+    it('a get failure after a successful put is classified, and the independent cleanup delete still runs', async () => {
+      const err = Object.assign(new Error('gone'), { code: 'ENOENT' });
+      const putSpy = jest.fn(async (key: string) => ({ key }));
+      const getSpy = jest.fn(async () => {
+        throw err;
+      });
+      const deleteSpy = jest.fn(async () => {});
+      const result = await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+
+      expect(result).toEqual({ status: 'failed', reason: 'resource-missing' });
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('a payload mismatch on read-back is reported as unknown (not a classified driver exception), and cleanup still runs', async () => {
+      const putSpy = jest.fn(async (key: string) => ({ key }));
+      const getSpy = jest.fn(async () => Readable.from([Buffer.from('not-the-payload')]));
+      const deleteSpy = jest.fn(async () => {});
+      const result = await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+
+      expect(result).toEqual({ status: 'failed', reason: 'unknown' });
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('a put() that reports storing under a different key than requested is reported as unknown, even though the payload round-trips correctly', async () => {
+      let written: Buffer | undefined;
+      const putSpy = jest.fn(async (_key: string, body: unknown) => {
+        written = body as Buffer;
+        return { key: 'some-other-key' };
+      });
+      const getSpy = jest.fn(async () => Readable.from([written as Buffer]));
+      const deleteSpy = jest.fn(async () => {});
+      const result = await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+
+      expect(result).toEqual({ status: 'failed', reason: 'unknown' });
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('AC-11: even when get() only settles after a short delay, cleanup waits for it (put -> get -> delete ordering preserved in the common case)', async () => {
+      const putSpy = jest.fn(async (key: string) => ({ key }));
+      const deleteSpy = jest.fn(async () => {});
+      let releaseGet: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        releaseGet = resolve;
+      });
+      const getSpy = jest.fn(async () => {
+        await gate;
+        throw Object.assign(new Error('gone'), { code: 'ENOENT' });
+      });
+
+      // A generous cleanup budget (well beyond how long this test holds
+      // `get()` gated) — cleanup should still be waiting on `get()`, not
+      // racing ahead of it, for a delay this far under the budget.
+      const resultPromise = probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError, 5_000);
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(deleteSpy).not.toHaveBeenCalled();
+
+      releaseGet?.();
+      const result = await resultPromise;
+
+      expect(result).toEqual({ status: 'failed', reason: 'resource-missing' });
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('AC-11: a rejecting cleanup delete does not alter a successful verdict', async () => {
+      // `probeStorageDriver` derives the expected payload internally
+      // (random 32 bytes), so drive `getSpy` off whatever `putSpy` actually
+      // received rather than a fixed literal.
+      let written: Buffer | undefined;
+      const putSpy = jest.fn(async (key: string, body: unknown) => {
+        written = body as Buffer;
+        return { key };
+      });
+      const getSpy = jest.fn(async () => Readable.from([written as Buffer]));
+      const deleteSpy = jest.fn(async () => {
+        throw Object.assign(new Error('cleanup delete failed'), { code: 'EACCES' });
+      });
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+      expect(result).toEqual({ status: 'ok' });
+
+      // The cleanup delete is fire-and-forget — give its rejection a turn
+      // to be caught before asserting nothing propagated out of the probe.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it('AC-11: a rejecting cleanup delete does not alter an already-failed verdict', async () => {
+      const putSpy = jest.fn(async (key: string) => ({ key }));
+      const getSpy = jest.fn(async () => {
+        throw Object.assign(new Error('gone'), { code: 'ENOENT' });
+      });
+      const deleteSpy = jest.fn(async () => {
+        throw Object.assign(new Error('cleanup delete failed too'), { code: 'EACCES' });
+      });
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+
+      // `get()`'s own ENOENT decides the verdict — the ALSO-rejecting
+      // cleanup delete must not downgrade/override it to `unknown` or
+      // anything else.
+      expect(result).toEqual({ status: 'failed', reason: 'resource-missing' });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it('the happy path calls delete exactly once, after a successful matching read-back', async () => {
+      let written: Buffer | undefined;
+      const putSpy = jest.fn(async (key: string, body: unknown) => {
+        written = body as Buffer;
+        return { key };
+      });
+      const getSpy = jest.fn(async () => Readable.from([written as Buffer]));
+      const deleteSpy = jest.fn(async () => {});
+
+      const result = await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+
+      expect(result).toEqual({ status: 'ok' });
+      expect(putSpy).toHaveBeenCalledTimes(1);
+      expect(getSpy).toHaveBeenCalledTimes(1);
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses a fresh, reserved-prefix key on every call — two probes never collide', async () => {
+      const seenKeys: string[] = [];
+      const bufByKey = new Map<string, Buffer>();
+      const putSpy = jest.fn(async (key: string, body: unknown) => {
+        seenKeys.push(key);
+        bufByKey.set(key, body as Buffer);
+        return { key };
+      });
+      const getSpy = jest.fn(async (key: string) => Readable.from([bufByKey.get(key) as Buffer]));
+      const deleteSpy = jest.fn(async () => {});
+
+      await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+      await probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError);
+
+      expect(seenKeys).toHaveLength(2);
+      expect(seenKeys[0]).not.toBe(seenKeys[1]);
+      for (const key of seenKeys) expect(key.startsWith(CONFIG_VERIFICATION_KEY_PREFIX)).toBe(true);
+    });
+
+    it('AC-11: cleanup delete fires within its own budget even when get() is still gated well past it — the delete is NOT sequenced strictly after get() settling', async () => {
+      const putSpy = jest.fn(async (key: string) => ({ key }));
+      const deleteSpy = jest.fn(async () => {});
+      let releaseGet: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        releaseGet = resolve;
+      });
+      const getSpy = jest.fn(async () => {
+        // Simulates a `get()` far slower than the caller (the manager's
+        // 10s hook race) would ever wait for — but not aborted (§3): the
+        // underlying probe keeps running and eventually settles.
+        await gate;
+        return Readable.from([Buffer.from('irrelevant-by-then')]);
+      });
+
+      // A short cleanup budget so the test doesn't need real multi-second
+      // waits or fake timers (which don't mix well with async-iterable
+      // stream reads).
+      const resultPromise = probeStorageDriver({ put: putSpy, get: getSpy, delete: deleteSpy }, classifyLocalStorageError, 30);
+
+      // `get()` is still gated (never released yet) when the cleanup
+      // budget elapses — delete must fire anyway.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+
+      releaseGet?.();
+      await resultPromise;
+    });
+
+    describe('classifyLocalStorageError', () => {
+      it.each([
+        ['ENOENT', 'resource-missing'],
+        ['EACCES', 'write-denied'],
+        ['EPERM', 'write-denied'],
+        ['EROFS', 'write-denied'],
+        ['ECONNREFUSED', 'unknown'],
+      ] as const)('maps %s to %s', (code, expected) => {
+        const err = Object.assign(new Error('boom'), { code });
+        expect(classifyLocalStorageError(err)).toBe(expected);
+      });
+
+      it('maps a non-errno error (no .code) to unknown', () => {
+        expect(classifyLocalStorageError(new Error('boom'))).toBe('unknown');
+      });
+    });
   });
 });

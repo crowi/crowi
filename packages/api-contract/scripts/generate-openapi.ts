@@ -39,6 +39,7 @@ import {
   adminAuthRoutes,
   adminCryptoRoutes,
   adminMailRoutes,
+  adminPageDeletionRoutes,
   adminPluginsRoutes,
   adminSearchRoutes,
   adminSecurityRoutes,
@@ -57,6 +58,7 @@ import {
   inviteAcceptRoutes,
   meRoutes,
   accessTokenRoutes,
+  oauthSessionRoutes,
   oauthRoutes,
   notificationRoutes,
   pageCollabRoutes,
@@ -64,6 +66,8 @@ import {
   pageRoutes,
   presenceRoutes,
   revisionRoutes,
+  // RFC-0021 Phase 3 — the merged timeline; a page-scoped read like revisions.
+  pageHistoryRoutes,
   searchRoutes,
   tokenAuthRoutes,
   userRoutes,
@@ -102,6 +106,8 @@ import {
   InviteUsersResponseSchema,
   ListAdminUsersRequestSchema,
   ListAdminUsersResponseSchema,
+  ListOAuthSessionsResponseSchema,
+  OAuthSessionSchema,
   ListAttachmentsResponseSchema,
   ListDraftsResponseSchema,
   ListPagesRequestSchema,
@@ -211,6 +217,10 @@ const schemas = [
   ['DeviceInfoResponse', DeviceInfoResponseSchema],
   ['DeviceVerifyRequest', DeviceVerifyRequestSchema],
   ['DeviceVerifyResponse', DeviceVerifyResponseSchema],
+
+  // OAuth session list/revoke
+  ['OAuthSession', OAuthSessionSchema],
+  ['ListOAuthSessionsResponse', ListOAuthSessionsResponseSchema],
 
   // oauth client-info (RFC-0016 Phase 0)
   ['ClientInfoResponse', ClientInfoResponseSchema],
@@ -328,6 +338,10 @@ const routeGroups = [
   // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
   // right after meRoutes to mirror the buildHonoApp chain.
   accessTokenRoutes,
+  // Self-service OAuth session list/revoke, also under `/me/*`.
+  // Registered right after access-token and before oauth to mirror the
+  // buildHonoApp chain.
+  oauthSessionRoutes,
   // RFC-0010 Phase 3 — OAuth authorization-server endpoints (authorize /
   // token / revoke / discovery). Registered after access-token to mirror
   // the buildHonoApp chain.
@@ -337,6 +351,9 @@ const routeGroups = [
   backlinkRoutes,
   commentRoutes,
   revisionRoutes,
+  // RFC-0021 Phase 3 — the merged timeline, a page-scoped read registered
+  // alongside revisions.
+  pageHistoryRoutes,
   // page registers AFTER revision so the spec `paths{}` ordering
   // matches the runtime handler chain (revision -> page -> page-preview
   // -> pageCollab -> presence -> notification — see
@@ -362,6 +379,7 @@ const routeGroups = [
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
   // admin-only (first time `createJwtAdminRequired` lands on Hono).
   adminCryptoRoutes,
+  adminPageDeletionRoutes,
   // Batch 9 — the 8 admin sub-contracts (app / auth / security / mail
   // / storage / search / users / plugins). Spec ordering
   // mirrors the buildHonoApp chain.

@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { STATUS_DELETED, visiblePageGrantOr } from 'src/models/page';
+import { STATUS_DELETED, STATUS_PUBLISHED, STATUS_RENAMING, STATUSES, isTransitionalPageStatus, visiblePageGrantOr } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 
 describe('Page', () => {
@@ -266,6 +266,52 @@ describe('Page', () => {
       const asBuffer = Buffer.isBuffer(reloaded.yjsState) ? reloaded.yjsState : Buffer.from((reloaded.yjsState as any).buffer);
       expect(asBuffer.equals(snapshot)).toBe(true);
       expect(reloaded.yjsCheckpointAt?.toISOString()).toBe('2026-05-14T00:00:00.000Z');
+    });
+  });
+
+  describe('RFC-0021 Phase 2c-2 transition fields', () => {
+    test('historyTransition has no schema default, so an untouched page never stores the field', async () => {
+      // Load-bearing: the entering CAS pins `{ historyTransition: null }`,
+      // which Mongo matches against absent AND explicitly-null. A default
+      // would put a value on every legacy page the moment it is hydrated, and
+      // the next unrelated `save()` would write it back — quietly turning
+      // "never transitioned" into a stored state. Read raw, because hydration
+      // is exactly what would hide the difference.
+      const page = await Page.findOne({ path: '/grant/public' });
+      page.body = 'touch me';
+      await page.save();
+
+      const raw = await Page.collection.findOne({ _id: page._id });
+      expect('historyTransition' in raw).toBe(false);
+    });
+
+    test('creating a page writes no history event, and the first content write is sequence 1', async () => {
+      // RFC-0021 Phase 2c-2a deliberately does NOT record `page_created`. There
+      // is no correct place for it: before the page is promoted the command
+      // skeleton has no sequence to hand out, and after promotion the seed
+      // revision has already taken sequence 1 — so a creation event would sort
+      // AFTER the first body, which is backwards. Recording that here means a
+      // future attempt to add it has to change this test deliberately rather
+      // than discover the ordering problem in the timeline.
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const Revision = crowi.model('Revision');
+      const created = await Page.createPage('/history-create/no-event', 'seed body', createdUsers[0], {});
+
+      expect(await PageHistoryEvent.countDocuments({ page: created._id })).toBe(0);
+
+      const reloaded = await Page.findById(created._id);
+      expect(reloaded.historySequence).toBe(1);
+      const seed = await Revision.findById(reloaded.revision).lean();
+      expect(seed.historySequence).toBe(1);
+    });
+
+    test('renaming is a known status and reads as transitional', () => {
+      expect(STATUSES).toContain(STATUS_RENAMING);
+      expect(isTransitionalPageStatus(STATUS_RENAMING)).toBe(true);
+      // Settled statuses must not be mistaken for a transition in progress.
+      expect(isTransitionalPageStatus(STATUS_PUBLISHED)).toBe(false);
+      expect(isTransitionalPageStatus(null)).toBe(false);
+      expect(isTransitionalPageStatus(undefined)).toBe(false);
     });
   });
 
@@ -1558,7 +1604,7 @@ describe('Page', () => {
       const pageA = await Page.createPage(path, 'body A', user, {});
       const pageAId = pageA._id;
 
-      await Page.removePage(pageA);
+      await Page.removePage(pageA, { deletion: { mode: 'internal_cleanup', actor: null } });
       expect(await Page.findById(pageAId).exec()).toBeNull();
       expect(await Revision.countDocuments({ page: pageAId })).toBe(0);
 
@@ -1570,6 +1616,30 @@ describe('Page', () => {
       const revisionsForB = await Revision.find({ page: pageB._id }).lean();
       expect(revisionsForB).toHaveLength(1);
       expect(revisionsForB[0].body).toBe('body B');
+    });
+
+    test('redirect-origin recursion uses redirect_stub_cleanup for every stub and writes no user deletion records', async () => {
+      const target = await Page.createPage('/deletion-record/redirect-target', 'target', user, {});
+      const first = await Page.createPage('/deletion-record/redirect-first', 'first', user, {});
+      const second = await Page.createPage('/deletion-record/redirect-second', 'second', user, {});
+      await Page.updatePageProperty(first, { redirectTo: second.path });
+      await Page.updatePageProperty(second, { redirectTo: target.path });
+
+      const redirectCleanupSpy = jest.spyOn(Page, 'removeRedirectOriginPageByPath');
+      let cleanupDeletions: Array<{ actor?: unknown; mode?: string }> = [];
+      try {
+        await Page.completelyDeletePage(target, user, { deletion: { mode: 'internal_cleanup', actor: null } });
+        cleanupDeletions = redirectCleanupSpy.mock.calls.map(([, deletion]) => deletion);
+      } finally {
+        redirectCleanupSpy.mockRestore();
+      }
+
+      expect(cleanupDeletions.map(({ mode }) => mode)).toEqual(['redirect_stub_cleanup', 'redirect_stub_cleanup', 'redirect_stub_cleanup']);
+      expect(cleanupDeletions.map(({ actor }) => String(actor))).toEqual([user._id.toString(), user._id.toString(), user._id.toString()]);
+
+      const PageDeletionRecord = crowi.model('PageDeletionRecord');
+      expect(await Page.find({ _id: { $in: [target._id, first._id, second._id] } })).toHaveLength(0);
+      expect(await PageDeletionRecord.countDocuments({ pageId: { $in: [target._id, first._id, second._id] } })).toBe(0);
     });
   });
 
@@ -1778,6 +1848,152 @@ describe('Page', () => {
         const secondDrain = await Page.updateOne(identityFilter, { $unset: { pendingHistoryEntry: '' } });
         expect(secondDrain.modifiedCount).toBe(0);
       });
+    });
+  });
+
+  describe('Metadata command wiring (RFC-0021 Phase 2c-1, DC-12)', () => {
+    let Revision;
+    let PageHistoryEvent;
+    let Backlink;
+    let actor;
+
+    beforeAll(() => {
+      Revision = crowi.model('Revision');
+      PageHistoryEvent = crowi.model('PageHistoryEvent');
+      Backlink = crowi.model('Backlink');
+      actor = createdUsers[0];
+    });
+
+    afterEach(async () => {
+      const filter = { path: { $regex: '^/dc12' } };
+      const pages = await Page.find(filter).select('_id').lean();
+      const pageIds = pages.map((p) => p._id);
+      await Promise.all([
+        Page.deleteMany(filter),
+        Revision.deleteMany(filter),
+        PageHistoryEvent.deleteMany({ page: { $in: pageIds } }),
+        Backlink.deleteMany({ $or: [{ page: { $in: pageIds } }, { fromPage: { $in: pageIds } }] }),
+      ]);
+    });
+
+    // Same stub shape as `page-lifecycle-epoch.test.ts`'s `withInvalidateSpy`.
+    const withInvalidateSpy = async (fn: (invalidatePages: jest.Mock) => Promise<void>) => {
+      const invalidatePages = jest.fn(async () => undefined);
+      const previous = crowi.collabAttachment;
+      crowi.collabAttachment = { invalidatePages, shutdown: async () => undefined };
+      try {
+        await fn(invalidatePages);
+      } finally {
+        crowi.collabAttachment = previous;
+      }
+    };
+
+    // A well-formed-but-permanently-undrainable `page_event` outbox entry:
+    // `event.page` deliberately names a DIFFERENT page than the one it's
+    // staged in, so `materializePendingEntry` throws on it every time
+    // ("outbox entry claims page X but is stored in page Y's slot"),
+    // exhausting the grant command's drain-assist budget. Must stay
+    // schema-VALID (unlike `page-event-command.test.ts`'s simpler
+    // missing-`event` version) because this describe block calls
+    // `Page.updatePage`, whose `pushRevision` step runs a full
+    // `pageData.save()` — which DOES run `pendingHistoryEntrySchema`'s
+    // `pre('validate')` hook, unlike the raw `findOneAndUpdate` the command
+    // layer uses.
+    const stageJammedOutbox = async (pageId) => {
+      await Page.updateOne(
+        { _id: pageId },
+        {
+          $set: {
+            pendingHistoryEntry: {
+              entryId: new Types.ObjectId(),
+              type: 'page_event',
+              event: {
+                _id: new Types.ObjectId(),
+                page: new Types.ObjectId(),
+                sequence: 1,
+                kind: 'visibility_changed',
+                actor: null,
+                occurredAt: new Date(),
+                operationId: 'stuck-op',
+                source: 'system',
+                payload: { fromGrant: Page.GRANT_PUBLIC, toGrant: Page.GRANT_RESTRICTED },
+              },
+            },
+          },
+        },
+      );
+    };
+
+    test('AC-24: a contended grant command still fires the body-driven update emit + live-collab invalidation, in order, before throwing — and never mutates the grant (DB or in-memory)', async () => {
+      await withInvalidateSpy(async (invalidatePages) => {
+        const created = await Page.createPage('/dc12/contended-grant', 'before', actor, {});
+        // `allocateContentSequence` promotes the Page via a SEPARATE write
+        // after `pushRevision` commits — re-fetch rather than trust the
+        // in-memory object `createPage` resolved with.
+        expect((await Page.findById(created._id).lean())?.historyTracking?.state).toBe('ready');
+        await stageJammedOutbox(created._id);
+
+        const pageEvent = crowi.event('Page');
+        const onUpdate = jest.fn();
+        pageEvent.once('update', onUpdate);
+
+        const pageData = await Page.findById(created._id);
+        await expect(Page.updatePage(pageData, 'after', actor, { grant: Page.GRANT_RESTRICTED })).rejects.toThrow(
+          'Page grant update was not committed — retry',
+        );
+
+        // The body-driven side effect fired exactly once, off the ORIGINAL grant.
+        expect(onUpdate).toHaveBeenCalledTimes(1);
+        const [emittedPage] = onUpdate.mock.calls[0];
+        expect(emittedPage.grant).toBe(Page.GRANT_PUBLIC);
+        expect(invalidatePages).toHaveBeenCalledWith([String(created._id)], 'page-body-replaced');
+
+        // DC-12 requires this exact order (emit, then invalidate) on BOTH
+        // the success and the failure path — a reversed order would still
+        // satisfy the two assertions above, so pin the order explicitly.
+        expect(onUpdate.mock.invocationCallOrder[0]).toBeLessThan(invalidatePages.mock.invocationCallOrder[0]);
+
+        // `pageData` (the caller's own object) was never mutated with the
+        // failed grant, and the DB grant is unchanged too.
+        expect(pageData.grant).toBe(Page.GRANT_PUBLIC);
+        const reloaded = await Page.findById(created._id).select('grant').lean();
+        expect(reloaded?.grant).toBe(Page.GRANT_PUBLIC);
+
+        // The body write itself IS durable — this is "body saved, grant
+        // unchanged", not a full rollback.
+        const revision = await Revision.findById(emittedPage.revision).lean();
+        expect(revision?.body).toBe('after');
+      });
+    });
+
+    // Not a numbered AC, but load-bearing: `Page.updateGrant`'s delegated
+    // implementation reads the committed grant back from a fresh
+    // `findOneAndUpdate` (unpopulated `revision`/`creator`) rather than
+    // reusing the caller's in-memory-populated `pageData` the pre-delegation
+    // implementation returned. Without re-populating before returning,
+    // `registerBacklinks` (`events/page.ts`, unconditional on every 'update')
+    // silently stops re-registering backlinks for every body+grant save —
+    // pins the fix.
+    test('a body+grant simultaneous save still registers backlinks for links in the new body', async () => {
+      const targetPath = '/dc12/backlink-target';
+      const sourcePath = '/dc12/backlink-source';
+      const target = await Page.createPage(targetPath, '# target', actor, {});
+      const source = await Page.createPage(sourcePath, 'no links yet', actor, {});
+
+      const pageData = await Page.findById(source._id);
+      await Page.updatePage(pageData, `link: <${targetPath}>`, actor, { grant: Page.GRANT_RESTRICTED });
+
+      const reloadedSource = await Page.findById(source._id).select('grant').lean();
+      expect(reloadedSource?.grant).toBe(Page.GRANT_RESTRICTED);
+
+      await crowi.drainSideEffects();
+      let backlinks;
+      for (let i = 0; i < 50; i += 1) {
+        backlinks = await Backlink.find({ page: target._id, fromPage: source._id });
+        if (backlinks.length === 1) break;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      expect(backlinks).toHaveLength(1);
     });
   });
 });

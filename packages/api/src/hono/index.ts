@@ -28,6 +28,7 @@ import { registerActivationRoutes } from './handlers/activation';
 import { registerAdminAppRoutes } from './handlers/admin/app';
 import { registerAdminAuthRoutes } from './handlers/admin/auth';
 import { registerAdminMailRoutes } from './handlers/admin/mail';
+import { registerPageDeletionRoutes } from './handlers/admin/page-deletion';
 import { registerAdminPluginsRoutes } from './handlers/admin/plugins';
 import { registerAdminSearchRoutes } from './handlers/admin/search';
 import { registerAdminSecurityRoutes } from './handlers/admin/security';
@@ -48,11 +49,13 @@ import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
 import { registerOAuthRoutes } from './handlers/oauth';
+import { registerOAuthSessionRoutes } from './handlers/oauth-session';
 import { registerPageRoutes } from './handlers/page';
 import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
 import { registerPasswordResetRoutes } from './handlers/password-reset';
 import { registerPresenceRoutes } from './handlers/presence';
+import { registerPageHistoryRoutes } from './handlers/page-history';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/token-auth';
@@ -203,13 +206,18 @@ export const buildHonoApp = (crowi: Crowi) => {
   // `registerMeRoutes`: it rides that handler's broad `/me/*` jwtAuth
   // apply rather than installing its own (avoids a second User.findById).
   const withAccessToken = registerAccessTokenRoutes(withMe, crowi);
+  // Self-service OAuth session (refresh-token rotation-chain tip) list/revoke
+  // (`/me/oauth-sessions`). Also rides `registerMeRoutes`'s broad `/me/*`
+  // jwtAuth apply, so it registers right after `registerAccessTokenRoutes`
+  // for the same reason.
+  const withOAuthSession = registerOAuthSessionRoutes(withAccessToken, crowi);
   // RFC-0010 Phase 3/4 — OAuth authorization-server endpoints. `/oauth/token`,
   // `/oauth/revoke`, `/.well-known/oauth-authorization-server`,
   // `/oauth/device/authorize` and `GET /oauth/device` are public;
   // `/oauth/authorize` and `/oauth/device/verify` install their own per-path
   // `createJwtAuth` (no prefix overlap with any other handler's broad apply,
   // so they are self-contained).
-  const withOAuth = registerOAuthRoutes(withAccessToken, crowi);
+  const withOAuth = registerOAuthRoutes(withOAuthSession, crowi);
   const withUser = registerUserRoutes(withOAuth, crowi);
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);
@@ -221,7 +229,11 @@ export const buildHonoApp = (crowi: Crowi) => {
   // reference — re-installing would cost a second JWT verify +
   // User.findById per request).
   const withRevision = registerRevisionRoutes(withComment, crowi);
-  const withPage = registerPageRoutes(withRevision, crowi);
+  // RFC-0021 Phase 3 — registered between revision and page so it reuses the
+  // `/pages/*` auth apply revision installs, and so its `{pageId}/history` path
+  // is matched before the bare `/pages` CRUD routes.
+  const withPageHistory = registerPageHistoryRoutes(withRevision, crowi);
+  const withPage = registerPageRoutes(withPageHistory, crowi);
   const withPagePreview = registerPagePreviewRoutes(withPage, crowi);
   // pageCollab (RFC-0003 wsToken) + presence (RFC-0005 token + likers)
   // both attach `/pages/{id}/<suffix>` endpoints under the shared
@@ -266,13 +278,14 @@ export const buildHonoApp = (crowi: Crowi) => {
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
   // admin-only (first time `createJwtAdminRequired` lands on Hono).
   const withAdminCrypto = registerAdminCryptoRoutes(withSearch, crowi);
+  const withPageDeletion = registerPageDeletionRoutes(withAdminCrypto, crowi);
   // Batch 9 — the 8 admin sub-contracts (app / auth / security / mail /
   // storage / search / users / plugins). Each handler installs
   // `createJwtAdminRequired(crowi)` broadly on its `/admin/<sub>/*`
   // prefix + the bare `/admin/<sub>` path. No prefix overlap between
   // sub-contracts (every one owns a distinct second-segment literal),
   // so the broad apply pattern is safe.
-  const withAdminApp = registerAdminAppRoutes(withAdminCrypto, crowi);
+  const withAdminApp = registerAdminAppRoutes(withPageDeletion, crowi);
   const withAdminAuth = registerAdminAuthRoutes(withAdminApp, crowi);
   const withAdminSecurity = registerAdminSecurityRoutes(withAdminAuth, crowi);
   const withAdminMail = registerAdminMailRoutes(withAdminSecurity, crowi);

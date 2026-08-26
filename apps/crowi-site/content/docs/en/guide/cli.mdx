@@ -66,9 +66,9 @@ features need extra scopes granted at login:
 
 | Command | Scope to add at login |
 | --- | --- |
-| `comment` (list / add / delete) | `comments:read comments:write` |
+| `comment` (list / add) | `comments:read comments:write` |
 | `attach` (list / add / download) | `attachments:read attachments:write` |
-| `bookmark` (get / list / add / remove) | `bookmarks:read bookmarks:write` |
+| `bookmark` (list / add / remove) | `bookmarks:read bookmarks:write` |
 | `watch` (get / set) | none — rides the default `pages:*` |
 
 `--scope` **replaces** the default set, so include `pages:read pages:write` if

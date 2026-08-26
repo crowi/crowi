@@ -203,7 +203,7 @@ describe('GET /api/app/info (Hono)', () => {
     });
 
     it('is present when explicitly true', async () => {
-      await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', true);
+      await crowi.getConfigService().saveConfigValue('crowi', 'security:linkCardEnabled', true);
 
       const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
@@ -211,7 +211,7 @@ describe('GET /api/app/info (Hono)', () => {
     });
 
     it('is absent when explicitly false', async () => {
-      await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+      await crowi.getConfigService().saveConfigValue('crowi', 'security:linkCardEnabled', false);
 
       const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);

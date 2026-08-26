@@ -1,9 +1,10 @@
-import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
+import { PageGrantEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { PropsWithChildren, ReactElement } from 'react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GrantChip } from '@/components/grant-chip';
 import { matchMediaImpl } from '@/lib/test-utils/mocks';
 import { WIDE_VIEWPORT_QUERY } from '@/lib/use-wide-viewport';
 
@@ -120,6 +121,20 @@ function renderHeader(ui: ReactElement) {
   const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
   return render(ui, { wrapper });
 }
+
+describe('GrantChip', () => {
+  it('does not render a chip for a public page', () => {
+    const { container } = render(<GrantChip grant={PageGrantEnum.PUBLIC} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('keeps the public visibility signal absent from the page header', () => {
+    renderHeader(<PageHeader page={makePage({ grant: PageGrantEnum.PUBLIC })} />);
+
+    expect(screen.queryByText('公開')).toBeNull();
+  });
+});
 
 describe('PageHeader — expanded state', () => {
   it('renders the expanded header (no compact bar) when sticky is enabled but not scrolled', () => {

@@ -1,5 +1,5 @@
 {
-  "rule": "An attribute-less `<br>` / `<br/>` / `<br />` HTML tag (ASCII tag-name case-insensitive) that sits inside a `paragraph` / `heading` / `tableCell` phrasing subtree, and whose subtree contains NO OTHER raw `html` node, is normalized from an mdast `html` node into the canonical mdast `break` node (RENDERER_PIPELINE_VERSION 1.3.0+) — the same wire type `remark-breaks` already produces for a soft line break. A single non-bare `html` node ANYWHERE in that phrasing unit's subtree (an attribute, another tag, mixed text, a multi-tag value) blocks EVERY replacement in that unit, so a bare `<br>` sharing a unit with unrelated raw HTML stays `html`. Contamination is judged per `tableCell`, never per `tableRow`/`table` — one raw-HTML cell does not block its clean sibling cells. A bare `<br>` at FLOW position (a direct child of `root` / `blockquote` / `listItem`, not one of the 3 units above) is never touched.",
+  "rule": "An attribute-less `<br>` HTML tag in any spelling the parser produces (ASCII tag-name case-insensitive; zero or more space / tab / CR / LF before an optional `/`, so `<br>`, `<br >`, `<br/>`, `<br />` and `<br\\t/>` are all the same tag — whitespace AFTER the `/` is outside the grammar and never appears) that sits inside a `paragraph` / `heading` / `tableCell` phrasing subtree, and whose subtree contains NO OTHER raw `html` node, is normalized from an mdast `html` node into the canonical mdast `break` node (RENDERER_PIPELINE_VERSION 1.3.0+) — the same wire type `remark-breaks` already produces for a soft line break. A single non-bare `html` node ANYWHERE in that phrasing unit's subtree (an attribute, another tag, mixed text, a multi-tag value) blocks EVERY replacement in that unit, so a bare `<br>` sharing a unit with unrelated raw HTML stays `html`. Contamination is judged per `tableCell`, never per `tableRow`/`table` — one raw-HTML cell does not block its clean sibling cells. A bare `<br>` at FLOW position (a direct child of `root` / `blockquote` / `listItem`, not one of the 3 units above) is never touched.",
   "why": "Non-web clients (RFC-0023 §4.1) treat `html` as opaque content and show a visible placeholder for it, even though an attribute-less `<br>` has a fully known meaning. `break` is an EXISTING v1 closed-registry type (`packages/api-contract/src/schemas/rendered-ast.ts`) that every native decoder already understands — this corpus fixes the NEW wire fact that `break` can now appear directly under `tableCell` (previously only possible under `paragraph` from `remark-breaks` or the GitHub Alerts marker delimiter), plus the producer-side contamination boundary that decides when a `<br>` is left as `html` instead. Pinning both the stored shape and the v1 envelope in the SAME case (not two independently-green halves) is what proves the producer (`core/break-normalization.ts`) and the projection (`sanitize-ast.ts`) agree on one wire contract.",
   "consumers": [
     "packages/api/src/renderer/golden-corpus.test.ts",
@@ -236,6 +236,84 @@
       "name": "case-and-self-closing-variants-normalized",
       "why": "positive — the 3 accepted value forms (`<br>` / `<br/>` / `<br />`) and ASCII tag-name case-insensitivity (`<BR>` / `<Br/>`) all normalize inside an ordinary paragraph, with the surrounding text order preserved.",
       "markdown": "x<BR>y<Br/>z<br />w\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "value": "x"
+              },
+              {
+                "type": "break"
+              },
+              {
+                "type": "text",
+                "value": "y"
+              },
+              {
+                "type": "break"
+              },
+              {
+                "type": "text",
+                "value": "z"
+              },
+              {
+                "type": "break"
+              },
+              {
+                "type": "text",
+                "value": "w"
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "x"
+                },
+                {
+                  "type": "break"
+                },
+                {
+                  "type": "text",
+                  "value": "y"
+                },
+                {
+                  "type": "break"
+                },
+                {
+                  "type": "text",
+                  "value": "z"
+                },
+                {
+                  "type": "break"
+                },
+                {
+                  "type": "text",
+                  "value": "w"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "whitespace-variants-normalized",
+      "why": "CommonMark's open-tag grammar allows an unbounded whitespace run before the optional slash, so `<br >` / `<br  />` / `<br\\t/>` are the same attribute-less break as `<br>` and a reader cannot tell them apart. Pins that every spelling reaches non-web clients as a `break` rather than a placeholder — the narrower three-form set this transform originally accepted left the rest opaque.",
+      "markdown": "x<br >y<br  />z<br\t/>w\n",
       "expectedAst": {
         "type": "root",
         "children": [

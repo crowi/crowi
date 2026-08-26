@@ -5,7 +5,7 @@
  *       with portalize-self (/x → /x/) allowed.
  */
 import { app, crowi } from 'src/test/setup';
-import { authHeaders, createPageViaApi, createTestUser } from 'src/test/test-helpers';
+import { authHeaders, createPageViaApi, createTestUser, idempotencyKey } from 'src/test/test-helpers';
 import request from 'supertest';
 
 const cleanupPathPrefix = (prefix: string) => {
@@ -206,7 +206,11 @@ describe('Routes /api/pages/rename (Hono renamePage — §6 twin guard)', () => 
     await createPageViaApi(accessToken, existingTwin, '# existing twin');
     const source = await createPageViaApi(accessToken, fromPath, '# source');
 
-    const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: source._id, new_path: destPortal });
+    const res = await request(app)
+      .post('/api/pages/rename')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ page_id: source._id, new_path: destPortal });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PAGE_TWIN_EXISTS');
 
@@ -222,7 +226,11 @@ describe('Routes /api/pages/rename (Hono renamePage — §6 twin guard)', () => 
 
     const page = await createPageViaApi(accessToken, contentPath, '# portalize me');
 
-    const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath });
+    const res = await request(app)
+      .post('/api/pages/rename')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ page_id: page._id, new_path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.page.path).toBe(portalPath);
 
@@ -244,7 +252,11 @@ describe('Routes /api/pages/rename (Hono renamePage — §6 twin guard)', () => 
 
     // This is what PortalizeDialog sends — a portal destination MUST still
     // honour create_redirect (it used to be skipped for `/`-suffixed targets).
-    const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath, create_redirect: true });
+    const res = await request(app)
+      .post('/api/pages/rename')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ page_id: page._id, new_path: portalPath, create_redirect: true });
     expect(res.status).toBe(200);
     expect(res.body.page.path).toBe(portalPath);
 

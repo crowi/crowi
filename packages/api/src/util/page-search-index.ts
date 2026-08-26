@@ -1,6 +1,6 @@
 import type { SearchableDoc } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
-import { STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT, STATUS_WIP } from 'src/models/page';
+import { STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT, STATUS_WIP, isTransitionalPageStatus } from 'src/models/page';
 import Debug from 'debug';
 import { isPopulatedUser, toStringId } from './ts-rest-helpers';
 import { type PageLike, isPopulatedRevision } from './page-response';
@@ -13,9 +13,15 @@ const debug = Debug('crowi:util:page-search-index');
  * own-draft) minus the always-excluded `draft` (search has no per-viewer
  * draft-author filter, unlike list). `deleted` / `wip` / `deprecated` are
  * all excluded from the index — see the `indexPageInSearch` doc comment.
+ *
+ * RFC-0021 Phase 2c-2 adds the transitional statuses. A page between the
+ * entering and leaving CAS of a path move would otherwise be indexed under a
+ * path it may not keep. Because this predicate drives a `remove` rather than a
+ * skip, entering the transition drops the page from the index and settling it
+ * puts it back — no separate bookkeeping needed.
  */
 const isExcludedFromIndexByStatus = (status: string | null | undefined): boolean =>
-  status === STATUS_DELETED || status === STATUS_DRAFT || status === STATUS_WIP || status === STATUS_DEPRECATED;
+  status === STATUS_DELETED || status === STATUS_DRAFT || status === STATUS_WIP || status === STATUS_DEPRECATED || isTransitionalPageStatus(status);
 
 /**
  * Push a page into the active search driver after a save / rename.

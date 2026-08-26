@@ -87,20 +87,12 @@ ready for merge な worktree を取り込む。
 
 `.feature-state/specs/*.md` を 1 つずつ評価する (read-only 中心)。
 
-各 spec について、repo root で
-`bash .claude/skills/_shared/validate-implementation-spec.sh <spec>` を実行する。
-ready 条件の正本は `.claude/skills/_shared/spec-contract.md` + validator であり、
-lane B 独自の簡易判定を持たない。依存(他 spec / 他機能)の解決状況だけは machine-readable
-でない場合があるため、validator green 後に追加確認する。
+各 spec について、repo root で `bash .claude/skills/_shared/validate-implementation-spec.sh <spec>` を実行する。ready 条件の正本は `.claude/skills/_shared/spec-contract.md` + validator であり、lane B 独自の簡易判定を持たない。依存(他 spec / 他機能)の解決状況だけは machine-readable でない場合があるため、validator green 後に追加確認する。exit 0 は `WARN:` が stderr に出ていても ready(symbol 粒度の freshness 判定が共有ファイルへの無関係な変更を soft に落としたもの)。1 回の scan の間、各 spec の validator 実行について **stdout・stderr・exit status を当該 spec id と対応づけて**保持し(spec をまたいで混ざらないようにするため)、走査した spec id ごとにその `WARN:` 行を保持しておく。
 
 分類して報告:
 
-- **着手 ready**: validator green かつ依存解決済み → 「`<id>` は implementation-ready」と報告。
-  必要なら「`/crowi-kickoff <id>` で worktree を切って実装に着手できます」と
-  提案する (worktree 作成・実装着手は user 判断、ここでは提案まで)。
-- **not ready**: validator の `ERROR:` と未解決依存を列挙する。legacy contract /
-  path-symbol map 欠落 / AC-test 対応欠落 / stale も not ready。
-  自動補完・安価なモデルでの再設計はしない。
+- **着手 ready**: validator green (exit 0) かつ依存解決済み → 「`<id>` は implementation-ready」と報告。`WARN:` があれば同じ報告に spec id ごとグループ化して raw `WARN:` 行を原文のまま添える(要約・書き換えしない)。必要なら「`/crowi-kickoff <id>` で worktree を切って実装に着手できます」と提案する (worktree 作成・実装着手は user 判断、ここでは提案まで)。
+- **not ready**: validator の `ERROR:`(exit 1)と未解決依存を列挙する。legacy contract / path-symbol map 欠落 / AC-test 対応欠落 / stale(symbol line hard stale、または path-only・5 条件不成立の file-level hard stale)も not ready。自動補完・安価なモデルでの再設計はしない。
 - **stale 削除候補 (提案のみ・自動削除しない)**: 対応機能が main に integrate 済みに
   見える spec。判定根拠の例: 同名 task が `COMMITTED` かつ worktree が既に無い、かつ
   機能コードが main に存在。→ 「`<id>` は削除候補 (根拠: …)」と提示し、**削除は
@@ -335,6 +327,7 @@ act 後(報告した後)に `knownFlakyTestIssues` を **現況の open flaky-te
   化石 task が出た、C で review を実行した (指摘あり)、D で新規 advisory が出た、
   E で停滞の出入りがあった、または F で flaky-test issue の新規/更新があった場合のみ、
   簡潔に報告。
+- **staleness warnings**(B の `WARN:`)はそれ単独では出力条件にしない。`WARN:` は再 ground されるまで毎回の validation で出続けるので、条件に含めると orchestrate が毎 tick 報告し続け、「新規イベントのみ / 変化なし」の契約を壊す。B が ready / stale を新規報告するときに、その spec id の `WARN:` があれば**添えて**出す(spec id ごとにグループ化した raw `WARN:` 行)。
 - どれも変化なしなら「変化なし」一言で終える (毎 tick の冗長な列挙はしない)。
 
 ## loop との組み合わせ

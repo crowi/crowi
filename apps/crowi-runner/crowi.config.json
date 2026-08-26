@@ -3,7 +3,6 @@
     "@crowi/plugin-storage-aws-s3",
     "@crowi/plugin-storage-gcs",
     "@crowi/plugin-search-elasticsearch",
-    "@crowi/plugin-renderer-plantuml",
     "@crowi/plugin-renderer-katex",
     "@crowi/plugin-renderer-mermaid",
     "@crowi/plugin-slack",

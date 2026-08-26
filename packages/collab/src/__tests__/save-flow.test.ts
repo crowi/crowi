@@ -601,6 +601,147 @@ describe('createSaveFlow.executeSave', () => {
   });
 
   /**
+   * RFC-0021 §6.3/DC-6 (Phase 2c-1) — the injected `draftPublisher` option
+   * step 6b delegates to when present. Same shape as the
+   * `contentSequenceAllocator` describe above: `@crowi/collab` never
+   * imports the real `publishDraftPage` (it lives in `@crowi/api`), so
+   * these tests use a jest mock in its place.
+   */
+  describe('draftPublisher (RFC-0021 §6.3, Phase 2c-1)', () => {
+    /**
+     * `executeSave` calls `Page.updateOne` for several UNRELATED reasons
+     * (step 5b's pointer CAS, step 6's yjsState mirror) — a bare "was
+     * updateOne called" spy can't isolate step 6b's status-flip fallback
+     * from those. Recognise the fallback call by its distinctive filter
+     * shape (`{ _id: pageId, status: 'draft' }`, matching the literal
+     * `save-flow.ts` step 6b call) instead.
+     */
+    const isFallbackStatusFlipCall = (filter: unknown, pageId: string): boolean =>
+      typeof filter === 'object' &&
+      filter !== null &&
+      (filter as Record<string, unknown>)._id === pageId &&
+      (filter as Record<string, unknown>).status === 'draft';
+
+    test('AC-17: when injected, draftPublisher is called (pageId, actorId) instead of the inline updateOne, and the draft still publishes', async () => {
+      const draftPublisher = jest.fn().mockImplementation(async (pageId: Types.ObjectId) => {
+        // Mirrors the real bound `publishDraftPage`'s write primitive
+        // (`runPageEventCommand`'s CAS is a `findOneAndUpdate`, never the
+        // `updateOne` the save-flow's OWN fallback branch below uses) — this
+        // keeps `updateOneSpy` an unambiguous signal of the fallback branch,
+        // never this mock's own commit.
+        await models.Page.findOneAndUpdate({ _id: pageId, status: 'draft' }, { $set: { status: 'published' } }).exec();
+        return { status: 'committed' };
+      });
+      const updateOneSpy = jest.spyOn(models.Page, 'updateOne');
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions: createDocBaseRevisionStore(),
+        draftPublisher,
+      });
+      const { pageId } = await fixtures.seedPage({ status: 'draft' });
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      try {
+        await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+        expect(draftPublisher).toHaveBeenCalledTimes(1);
+        const [calledPageId, calledActorId] = draftPublisher.mock.calls[0];
+        expect(calledPageId.toString()).toBe(pageId);
+        expect(calledActorId.toString()).toBe(user._id.toString());
+
+        // AC-17: an injected draftPublisher REPLACES the inline fallback —
+        // its status-flip `updateOne` call must never fire, proving
+        // delegation (the OTHER `updateOne` calls executeSave always makes —
+        // the pointer CAS, the yjsState mirror — are expected and ignored).
+        const fallbackCalls = updateOneSpy.mock.calls.filter(([filter]) => isFallbackStatusFlipCall(filter, pageId));
+        expect(fallbackCalls).toHaveLength(0);
+      } finally {
+        updateOneSpy.mockRestore();
+      }
+
+      expect((await models.Page.findById(pageId).exec()).status).toBe('published');
+    });
+
+    test('AC-17: when NOT injected, the inline updateOne fallback still publishes (unchanged behaviour)', async () => {
+      const updateOneSpy = jest.spyOn(models.Page, 'updateOne');
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions: createDocBaseRevisionStore(),
+        // draftPublisher intentionally omitted.
+      });
+      const { pageId } = await fixtures.seedPage({ status: 'draft' });
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      try {
+        await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+        // AC-17: with no draftPublisher injected, the inline fallback IS the
+        // write that flips status — pin the exact call (not just the end
+        // state, which an unrelated write, e.g. the pointer CAS, could also
+        // produce), ignoring the OTHER unrelated `updateOne` calls
+        // `executeSave` always makes.
+        const fallbackCalls = updateOneSpy.mock.calls.filter(([filter]) => isFallbackStatusFlipCall(filter, pageId));
+        expect(fallbackCalls).toHaveLength(1);
+        expect(fallbackCalls[0]).toEqual([{ _id: pageId, status: 'draft' }, { $set: { status: 'published' } }]);
+      } finally {
+        updateOneSpy.mockRestore();
+      }
+
+      expect((await models.Page.findById(pageId).exec()).status).toBe('published');
+    });
+
+    test('AC-17: a rejecting draftPublisher does not fail the save — it still resolves with the new revisionId, and the page stays draft', async () => {
+      const draftPublisher = jest.fn().mockRejectedValue(new Error('publisher boom'));
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions: createDocBaseRevisionStore(),
+        draftPublisher,
+      });
+      const { pageId } = await fixtures.seedPage({ status: 'draft' });
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      const result = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+      expect(result.revisionId).toBeTruthy();
+      expect(draftPublisher).toHaveBeenCalledTimes(1);
+
+      expect((await models.Page.findById(pageId).exec()).status).toBe('draft'); // AC-10: publish failed, save didn't
+    });
+
+    test('AC-17: an already-published page never calls draftPublisher', async () => {
+      const draftPublisher = jest.fn().mockResolvedValue({ status: 'noop', reason: 'not-draft' });
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions: createDocBaseRevisionStore(),
+        draftPublisher,
+      });
+      // `fixtures.seedPage` defaults to status: 'published'.
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+      expect(draftPublisher).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
    * RFC-0017 Phase 1 §4.1/AC-1..8 — the collab lifecycle epoch fold into
    * `executeSave`'s atomic pointer CAS. This is the correctness core: a
    * stale save must be rejected the instant a lifecycle transition

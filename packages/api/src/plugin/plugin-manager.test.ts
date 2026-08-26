@@ -1,5 +1,5 @@
 import { createOAuth2Driver, createOidcDriver } from '@crowi/plugin-api';
-import type { CrowiPlugin } from '@crowi/plugin-api';
+import type { CrowiPlugin, PluginConfigVerificationResult } from '@crowi/plugin-api';
 import { CrowiConfigFileSchema } from '@crowi/runner';
 import { z } from 'zod/v3';
 import { z as zV4 } from 'zod';
@@ -262,6 +262,320 @@ describe('PluginManager.reconfigureAffected', () => {
     expect(aReconfigure).toHaveBeenCalled();
     expect(bReconfigure).toHaveBeenCalled();
     expect(result).toEqual({ attempted: 2, succeeded: 2 });
+  });
+});
+
+describe('PluginManager.createVerificationPlan / verifyAffectedConfig (feature-plugin-config-live-verification)', () => {
+  const AwsConfigSchema = z.object({ region: z.string().default('') }).strict();
+  const S3ConfigSchema = z.object({ bucket: z.string().default('') }).strict();
+
+  function makeAwsPlugin(overrides: Partial<CrowiPlugin> = {}): CrowiPlugin {
+    return stubPlugin({ name: 'aws', configSchema: AwsConfigSchema, exposesConfigToDependents: true, ...overrides });
+  }
+
+  it('AC-1: a plugin with no verifyConfig produces no plan entry and no outcome', async () => {
+    const noHook = stubPlugin({ name: 'no-hook' });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [noHook]);
+
+    const plan = manager.createVerificationPlan(['plugin:no-hook'], {});
+    expect(plan.entries).toHaveLength(0);
+
+    const outcomes = await manager.verifyAffectedConfig(plan);
+    expect(outcomes).toEqual([]);
+  });
+
+  it('AC-1: a hook-declaring plugin with no override reads its live-cache config through the snapshot', async () => {
+    const verifyConfig = jest.fn(async (snapshot) => {
+      expect(snapshot.config()).toEqual({ bucket: 'stored-bucket' });
+      return { status: 'ok' } satisfies PluginConfigVerificationResult;
+    });
+    const plugin = stubPlugin({ name: 's3', configSchema: S3ConfigSchema, verifyConfig });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'plugin:s3:bucket': 'stored-bucket' }));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:s3'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(verifyConfig).toHaveBeenCalledTimes(1);
+    expect(outcomes).toEqual([{ pluginName: 's3', result: { status: 'ok' } }]);
+  });
+
+  it('AC-2: fan-out reaches the changed plugin and its transitive dependent, and results are ordered by loadedPlugins topo order regardless of hook resolution order', async () => {
+    const order: string[] = [];
+    let releaseSlow: (() => void) | undefined;
+    const slowGate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+
+    // Loaded in topo order: `aws` (no requires) before `s3` (requires aws)
+    // — `loadPluginsInto` sets `loadedPlugins` verbatim (no re-sort), so
+    // this array order IS the order results must come back in.
+    const aws = makeAwsPlugin({
+      verifyConfig: async () => {
+        await slowGate; // resolves LAST, deliberately
+        order.push('aws');
+        return { status: 'ok' };
+      },
+    });
+    const s3 = stubPlugin({
+      name: 's3',
+      requires: ['aws'],
+      configSchema: S3ConfigSchema,
+      verifyConfig: async () => {
+        order.push('s3'); // resolves FIRST
+        return { status: 'ok' };
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'plugin:aws:region': 'r1' }));
+    loadPluginsInto(manager, [aws, s3]);
+
+    const plan = manager.createVerificationPlan(['plugin:aws'], {});
+    const outcomesPromise = manager.verifyAffectedConfig(plan);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(order).toEqual(['s3']); // s3's hook already resolved; aws's is still gated
+
+    releaseSlow?.();
+    const outcomes = await outcomesPromise;
+
+    expect(order).toEqual(['s3', 'aws']); // confirms s3 really did resolve first
+    // ...yet the RESULTS are in loadedPlugins order (aws, s3), not resolution order.
+    expect(outcomes.map((o) => o.pluginName)).toEqual(['aws', 's3']);
+  });
+
+  it("AC-2: a plan freezes both the changed plugin's override and its dependency values at creation time — a cache write made after the plan exists never leaks in", async () => {
+    const seenBucket: unknown[] = [];
+    const seenRegion: unknown[] = [];
+    const s3 = stubPlugin({
+      name: 's3',
+      requires: ['aws'],
+      configSchema: S3ConfigSchema,
+      verifyConfig: async (snapshot) => {
+        seenBucket.push(snapshot.config<{ bucket: string }>().bucket);
+        seenRegion.push(snapshot.dependencyConfig<{ region: string }>('aws').region);
+        return { status: 'ok' };
+      },
+    });
+    const aws = makeAwsPlugin();
+    const namespace: Record<string, unknown> = { 'plugin:aws:region': 'region-1' };
+    const manager = new PluginManager(makeFakeCrowiWithNamespace(namespace));
+    loadPluginsInto(manager, [aws, s3]);
+
+    // Request A: s3 is being saved with bucket='bucket-A'.
+    const planA = manager.createVerificationPlan(['plugin:s3'], { s3: { bucket: 'bucket-A' } });
+
+    // A second, later admin save lands before A's plan is executed: aws's
+    // region changes AND s3's stored bucket changes too (as if a request B
+    // had already persisted bucket='bucket-B').
+    namespace['plugin:aws:region'] = 'region-2';
+    namespace['plugin:s3:bucket'] = 'bucket-B';
+
+    await manager.verifyAffectedConfig(planA);
+
+    expect(seenBucket).toEqual(['bucket-A']);
+    expect(seenRegion).toEqual(['region-1']);
+  });
+
+  it('AC-2: snapshot.dependencyConfig() throws the same capability-check errors as PluginContext.dependencyConfig()', async () => {
+    const closedDep = stubPlugin({ name: 'closed', configSchema: z.object({ secret: z.string().default('') }).strict() }); // no exposesConfigToDependents
+    const caught: Record<string, unknown> = {};
+    const main = stubPlugin({
+      name: 'reader',
+      requires: ['closed'],
+      configSchema: S3ConfigSchema,
+      verifyConfig: async (snapshot) => {
+        try {
+          snapshot.dependencyConfig('closed');
+        } catch (err) {
+          caught.notExposed = err;
+        }
+        try {
+          snapshot.dependencyConfig('never-required');
+        } catch (err) {
+          caught.notRequired = err;
+        }
+        return { status: 'ok' };
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [closedDep, main]);
+
+    const plan = manager.createVerificationPlan(['plugin:reader'], {});
+    await manager.verifyAffectedConfig(plan);
+
+    expect((caught.notExposed as Error).message).toContain("did not declare 'exposesConfigToDependents'");
+    expect((caught.notRequired as Error).message).toContain("did not list it in 'requires'");
+  });
+
+  it("AC-1/AC-4: a hook-declaring plugin whose OWN stored config fails schema parsing is skipped — hook never called, reported as 'unknown'", async () => {
+    const verifyConfig = jest.fn(async () => ({ status: 'ok' }) satisfies PluginConfigVerificationResult);
+    const plugin = stubPlugin({ name: 'broken-own', configSchema: z.object({ n: z.number() }).strict(), verifyConfig });
+    // Stored value is the wrong type -> safeParse fails.
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'plugin:broken-own:n': 'not-a-number' }));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:broken-own'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([{ pluginName: 'broken-own', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-2/AC-4: a hook-declaring plugin whose DEPENDENCY config fails schema parsing is also skipped, even though its own config parses fine', async () => {
+    const verifyConfig = jest.fn(async () => ({ status: 'ok' }) satisfies PluginConfigVerificationResult);
+    const dep = makeAwsPlugin();
+    const main = stubPlugin({ name: 'dependent', requires: ['aws'], configSchema: S3ConfigSchema, verifyConfig });
+    // Wrong type for aws.region -> safeParse fails for the dependency.
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'plugin:aws:region': 12345 }));
+    loadPluginsInto(manager, [dep, main]);
+
+    const plan = manager.createVerificationPlan(['plugin:dependent'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([{ pluginName: 'dependent', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-1/AC-4: a hook-declaring plugin whose OWN configSchema.safeParse THROWS (not just returns !success — a transform/refine callback is ordinary user code, not guaranteed to only ever return/reject cleanly) is skipped without escaping plan creation, never turning an optional feature into a 500 on the triggering save', async () => {
+    const verifyConfig = jest.fn(async () => ({ status: 'ok' }) satisfies PluginConfigVerificationResult);
+    const throwingSchema = {
+      safeParse: () => {
+        throw new Error('transform blew up');
+      },
+    } as unknown as CrowiPlugin['configSchema'];
+    const plugin = stubPlugin({ name: 'throws-on-parse', configSchema: throwingSchema, verifyConfig });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'plugin:throws-on-parse:n': 1 }));
+    loadPluginsInto(manager, [plugin]);
+
+    let plan: ReturnType<typeof manager.createVerificationPlan> | undefined;
+    expect(() => {
+      plan = manager.createVerificationPlan(['plugin:throws-on-parse'], {});
+    }).not.toThrow();
+    const outcomes = await manager.verifyAffectedConfig(plan!);
+
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([{ pluginName: 'throws-on-parse', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-1/AC-4: an override value structuredClone cannot clone (e.g. a function) is also skipped rather than throwing out of plan creation — covers the override path, which bypasses safeParse entirely and hits deep-freeze-clone directly', async () => {
+    const verifyConfig = jest.fn(async () => ({ status: 'ok' }) satisfies PluginConfigVerificationResult);
+    const plugin = stubPlugin({ name: 'uncloneable', configSchema: S3ConfigSchema, verifyConfig });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+
+    let plan: ReturnType<typeof manager.createVerificationPlan> | undefined;
+    expect(() => {
+      plan = manager.createVerificationPlan(['plugin:uncloneable'], { uncloneable: { bucket: (() => 'not-cloneable') as unknown as string } });
+    }).not.toThrow();
+    const outcomes = await manager.verifyAffectedConfig(plan!);
+
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([{ pluginName: 'uncloneable', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-4: a hook that never resolves within the timeout normalizes to unreachable', async () => {
+    const plugin = stubPlugin({
+      name: 'slow',
+      configSchema: z.object({}).strict(),
+      verifyConfig: () => new Promise<PluginConfigVerificationResult>(() => {}),
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+    // biome-ignore lint/suspicious/noExplicitAny: test access to a private field, same pattern as `selectedDrivers` above
+    (manager as any).verificationTimeoutMs = 10;
+
+    const plan = manager.createVerificationPlan(['plugin:slow'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(outcomes).toEqual([{ pluginName: 'slow', result: { status: 'failed', reason: 'unreachable' } }]);
+  });
+
+  it('AC-4: a hook that throws synchronously normalizes to unknown', async () => {
+    const plugin = stubPlugin({
+      name: 'throws-sync',
+      configSchema: z.object({}).strict(),
+      verifyConfig: () => {
+        throw new Error('boom');
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:throws-sync'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(outcomes).toEqual([{ pluginName: 'throws-sync', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-4: a rejected hook promise normalizes to unknown', async () => {
+    const plugin = stubPlugin({
+      name: 'rejects',
+      configSchema: z.object({}).strict(),
+      verifyConfig: async () => {
+        throw new Error('boom');
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:rejects'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(outcomes).toEqual([{ pluginName: 'rejects', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-4: a malformed (non-object) result normalizes to unknown', async () => {
+    const plugin = stubPlugin({
+      name: 'malformed',
+      configSchema: z.object({}).strict(),
+      verifyConfig: async () => 'not-an-object' as unknown as PluginConfigVerificationResult,
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:malformed'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(outcomes).toEqual([{ pluginName: 'malformed', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it("AC-4: an unrecognized `reason` on a failed result normalizes to 'unknown'", async () => {
+    const plugin = stubPlugin({
+      name: 'bogus-reason',
+      configSchema: z.object({}).strict(),
+      verifyConfig: async () => ({ status: 'failed', reason: 'totally-made-up' }) as unknown as PluginConfigVerificationResult,
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:bogus-reason'], {});
+    const outcomes = await manager.verifyAffectedConfig(plan);
+
+    expect(outcomes).toEqual([{ pluginName: 'bogus-reason', result: { status: 'failed', reason: 'unknown' } }]);
+  });
+
+  it('AC-4: a result whose `status` getter throws on access normalizes to unknown instead of rejecting verifyAffectedConfig', async () => {
+    const throwingResult = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('getter exploded');
+        },
+      },
+    );
+    const plugin = stubPlugin({
+      name: 'throwing-getter',
+      configSchema: z.object({}).strict(),
+      verifyConfig: async () => throwingResult as unknown as PluginConfigVerificationResult,
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    loadPluginsInto(manager, [plugin]);
+
+    const plan = manager.createVerificationPlan(['plugin:throwing-getter'], {});
+
+    await expect(manager.verifyAffectedConfig(plan)).resolves.toEqual([{ pluginName: 'throwing-getter', result: { status: 'failed', reason: 'unknown' } }]);
   });
 });
 

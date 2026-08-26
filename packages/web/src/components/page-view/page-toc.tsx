@@ -133,18 +133,20 @@ export function TocList({ toc, activeId, onNavigate }: { toc: TocEntryResponse[]
 }
 
 /**
- * Right-rail TOC. Rendered as an in-flow sticky `<aside>` inside the
- * page-view's centered `[spacer | content | toc]` flex (see
- * `PageView`); the flex column wrapper owns the responsive show/hide
- * (visible from the 1280px breakpoint up), so this component only owns
- * the sticky positioning + the list. Returns null below 2 entries — a
+ * Right-rail TOC. Rendered as an `<aside>` inside the page-view's
+ * centered `[spacer | content | toc]` flex (see `PageView`); the rail
+ * column owns the responsive show/hide (visible from the 1280px
+ * breakpoint up) AND the sticky positioning, so this component only owns
+ * the scrollable list. Scrolling lives here rather than on the sticky
+ * wrapper so a heading-heavy page scrolls its entries while the rail's
+ * actions below stay pinned. Returns null below 2 entries — a
  * single-heading page has nothing worth a rail.
  */
 export function PageToc({ toc, activeId }: PageTocProps) {
   if (toc.length < 2) return null;
 
   return (
-    <aside aria-label={m['page.toc_heading']()} className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
+    <aside aria-label={m['page.toc_heading']()} className="min-h-0 overflow-y-auto">
       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">{m['page.toc_heading']()}</div>
       <TocList toc={toc} activeId={activeId} />
     </aside>

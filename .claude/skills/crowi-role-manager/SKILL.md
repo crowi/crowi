@@ -43,7 +43,7 @@ description: crowi の manager ロールでセッションを起動/再起動し
 - **main-write lock**: integrate / main-direct commit の前に取得し、完了・中断のどの経路でも必ず解放。busy は奪わず保持者を報告(CLAUDE.md「main write lock」が正本)。
 - **integrate Step 8 の grep と rm は別 Bash 呼び出し**: stale spec/task 掃除の「参照チェック(Call A)」と「rm(Call B)」を1コマンドに連結しない(散文の注意では2度破られた実績あり — 構造で分離)。
 - **check:openapi は merge commit 後に回す**: 再生成物を HEAD と比較するため、no-commit merge 中に回すと必ず drift 判定で落ちる。Step 4 では staged と一致だけ確認し、本体は commit 後。
-- **web type-check は hermetic**: `next typegen && tsc`(dev サーバ生成の stale `.next/types` を読まない)。
+- **web type-check は `pnpm --filter @crowi/web type-check` を使う**: この script が `pretype-check` で paraglide を compile してから `next typegen && tsc` を回す。`next typegen && tsc` だけを手で叩くと paraglide の生成物が前回のまま残り、merge で入った新しい i18n キーが `me.oauth_sessions.* does not exist` の型エラーとして出る(退行に見えるが世代ずれ)。
 - **確認すべき state ファイル**: `.feature-state/tasks/*.json`(status)/ `main-write.lock` / `kickoff-chain.json` / `orchestrate-state.json`(`lastReviewedMainSha` = C レーン review の基点)。
 - **自分の作っていない working-tree の WIP / untracked は温存**する(別セッション由来。上書き・削除しない — CLAUDE.md)。
 - **「flaky test 検知」の agmsg を受けても自分で root-cause を追わない**: worktree セッションからの flaky 報告(crowi-complete-feature の「テスト系ゲート (6・9・10) が flaky で落ちたら」手順由来)に対し、manager がその場で flake の原因を推論・修正するのは禁止(CLAUDE.md の flake/CI-infra rule)。Agent tool で適切な model を割り当てた subagent(診断は Codex `--tier sol`、または Fable model の Agent)を dispatch し、`/crowi-fix`(または `/dev-fix`)を repro → root cause → fix → gates → commit まで end-to-end で走らせる。manager 自身の仕事は triage(優先度・今対応するかの判断)と dispatch のみで、hands-on の修正はしない。

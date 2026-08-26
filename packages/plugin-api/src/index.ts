@@ -12,6 +12,14 @@
  */
 
 export type { AppInfo, PageMetadataAccessor, PluginContext, PluginLogger, StateCell } from './context';
+export { CONFIG_VERIFICATION_KEY_PREFIX } from './config-verification';
+export type {
+  PluginConfigVerificationOptions,
+  PluginConfigVerificationResult,
+  PluginConfigVerificationSnapshot,
+  ReadonlyDeep,
+  VerificationFailureReason,
+} from './config-verification';
 export type { EventBus, PluginEvents } from './events';
 export { escapeHtml } from './html';
 export type { CrowiPlugin, PluginConfigAtomicGroup, PluginReadinessDeclaration } from './plugin';

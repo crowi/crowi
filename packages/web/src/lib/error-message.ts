@@ -73,6 +73,13 @@ export const ERROR_MESSAGE_KEYS = {
   PAGE_REVISION_ERROR: m['errors.page_revision_error'],
   PAGE_TWIN_EXISTS: m['errors.page_twin_exists'],
   INVALID_GRANT: m['errors.invalid_grant'],
+  // page history commands (RFC-0021 Phase 2c-2). The two 409s below are
+  // deliberately distinct from PAGE_REVISION_ERROR's 409: that one means "your
+  // edit raced another edit", these mean "the page itself is being moved".
+  IDEMPOTENCY_KEY_REQUIRED: m['errors.idempotency_key_required'],
+  IDEMPOTENCY_KEY_CONFLICT: m['errors.idempotency_key_conflict'],
+  PAGE_TRANSITION_IN_PROGRESS: m['errors.page_transition_in_progress'],
+  PAGE_TRANSITION_INCOMPLETE: m['errors.page_transition_incomplete'],
   // comment / notification
   COMMENT_NOT_FOUND: m['errors.comment_not_found'],
   NOTIFICATION_NOT_FOUND: m['errors.notification_not_found'],
@@ -106,6 +113,10 @@ export const ERROR_MESSAGE_KEYS = {
   MAIL_TEST_FAILED: m['errors.mail_test_failed'],
   PLUGIN_NOT_FOUND: m['errors.plugin_not_found'],
   PLUGIN_CONFIG_VALIDATION_FAILED: m['errors.plugin_config_validation_failed'],
+  // Generic fallback for LINKED_IDENTITIES_EXIST; the primary UI path
+  // (plugin-config-form.tsx's confirmation dialog) renders its own
+  // count-bearing message instead of this parameterless one.
+  LINKED_IDENTITIES_EXIST: m['errors.linked_identities_exist'],
 } satisfies Record<ErrorCode, MessageFn>;
 
 const isKnownCode = (code: string): code is ErrorCode => code in ERROR_MESSAGE_KEYS;

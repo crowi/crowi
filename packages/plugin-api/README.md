@@ -109,6 +109,40 @@ const myPlugin: CrowiPlugin = {
 export default myPlugin;
 ```
 
+## Post-save connectivity verification (`verifyConfig`)
+
+A plugin whose config change needs a real connectivity/permission check (a storage bucket, a search cluster, …) can implement `verifyConfig`. The runtime calls it once after an admin save has already persisted and `reconfigure` has already run — never before, and never as a condition for the save itself:
+
+```ts
+import type { CrowiPlugin, PluginConfigVerificationSnapshot, PluginConfigVerificationOptions, PluginConfigVerificationResult } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  // ...
+
+  verifyConfig: async (
+    snapshot: PluginConfigVerificationSnapshot,
+    options: PluginConfigVerificationOptions,
+  ): Promise<PluginConfigVerificationResult> => {
+    const config = snapshot.config<{ endpoint: string; accessKey: string }>();
+    try {
+      await probeMyBackend(config);
+      return { status: 'ok' };
+    } catch (err) {
+      return { status: 'failed', reason: classifyMyError(err) };
+    }
+  },
+};
+```
+
+A few things make this different from every other `register*` / `reconfigure` callback:
+
+- **Snapshot, not `PluginContext`.** `verifyConfig` receives a `PluginConfigVerificationSnapshot` — a read-only, point-in-time view of this plugin's own config (and any declared, `exposesConfigToDependents` dependency's config), frozen at the moment the triggering save was about to persist. It is NOT the live `PluginContext`: there is no `setConfig`, `model`, `state`, or `pageMetadata` on it, and calling `snapshot.config()` later never reflects a different admin request's save that lands while your hook is still running.
+- **Fans out to dependents.** If plugin B `requires` plugin A and B implements `verifyConfig`, saving A's config also re-verifies B (same affected-set walk `reconfigure` uses). B's hook only sees A's dependency config if A also set `exposesConfigToDependents: true`.
+- **Non-blocking, always.** A failing (or throwing, or never-resolving) `verifyConfig` never fails the save — the save already succeeded by the time this hook runs. `options.timeoutMs` (currently 10 seconds) is a NOTICE the caller stops waiting on your promise after, not a cancellation signal: there is no `AbortSignal` anywhere in this contract, and none is threaded down into any `StorageDriver` call your hook makes. Design your hook's own I/O with a bounded retry/attempt policy (e.g. a single attempt, no retries) so it settles well within that budget on its own.
+- **Result is a closed, safe union.** Return `{ status: 'ok' }` or `{ status: 'failed', reason }`, where `reason` is one of `'unreachable' | 'auth-failed' | 'resource-missing' | 'write-denied' | 'unknown'`. Never put raw SDK error text, a stack trace, an endpoint, or credential material anywhere in the result (or in anything you log) — the runtime reports this straight to the admin API response. Anything your hook returns outside this shape is normalized to `{ status: 'failed', reason: 'unknown' }` by the caller, so prefer an honest `'unknown'` yourself over guessing a more specific reason you can't actually confirm.
+- **Optional.** A plugin with no `verifyConfig` is completely unaffected — no extra work at boot or save time, no entry in the response's `verificationResults`.
+- **Instance-local, not cluster-wide.** The runtime calls `verifyConfig` on whichever api process handled the save request and reports only that process's outcome. It never coordinates with other replicas, so a result reflects reachability/permissions from that one instance at that moment — not the deployment as a whole. If your hook's I/O (network reachability, IAM/role assumption, DNS) can differ between replicas, document that for operators; don't imply a passing result means every replica can reach the backend.
+
 ## See also
 
 - [Plugin development guide](https://crowi.wiki/docs/plugins/developing) —

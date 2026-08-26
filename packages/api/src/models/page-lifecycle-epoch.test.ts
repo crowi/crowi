@@ -167,7 +167,7 @@ describe('Page lifecycle — RFC-0017 Phase 1 collabLifecycleVersion contract', 
       const page = await Page().createPage('/epoch-hard-delete', 'body', user, {});
       await PageYjsUpdate().create({ pageId: page._id, payload: Buffer.from([1]), createdAt: new Date() });
 
-      await Page().completelyDeletePage(page, user);
+      await Page().completelyDeletePage(page, user, { deletion: { mode: 'user_hard_delete', actor: user._id } });
 
       const gone = await Page().findById(page._id).exec();
       expect(gone).toBeNull();
@@ -183,7 +183,10 @@ describe('Page lifecycle — RFC-0017 Phase 1 collabLifecycleVersion contract', 
       const user = await seedUser('hard-delete-skip');
       const page = await Page().createPage('/epoch-hard-delete-skip', 'body', user, {});
 
-      await Page().completelyDeletePage(page, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
+      await Page().completelyDeletePage(page, user, {
+        invalidation: { mode: 'skip', reason: 'revert-deleted' },
+        deletion: { mode: 'redirect_stub_cleanup', actor: user._id },
+      });
       await Promise.resolve();
       expect(invalidatePages).not.toHaveBeenCalled();
     });
@@ -195,7 +198,10 @@ describe('Page lifecycle — RFC-0017 Phase 1 collabLifecycleVersion contract', 
       const page = await Page().createPage('/epoch-draft-cancel', 'body', user, { grant: 1 });
       await PageYjsUpdate().create({ pageId: page._id, payload: Buffer.from([1]), createdAt: new Date() });
 
-      await Page().removePage(page, { invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' } });
+      await Page().removePage(page, {
+        invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' },
+        deletion: { mode: 'creation_cancel', actor: user._id },
+      });
 
       expect(await Page().findById(page._id).exec()).toBeNull();
       expect(await PageYjsUpdate().countDocuments({ pageId: page._id }).exec()).toBe(0);
@@ -204,14 +210,74 @@ describe('Page lifecycle — RFC-0017 Phase 1 collabLifecycleVersion contract', 
     });
   });
 
-  test('AC-27: Page.removePage defaults to mode:"skip" (internal cleanup does not over-fire)', async () => {
+  test('AC-27: Page.removePage with explicit internal cleanup does not over-fire', async () => {
     await withInvalidateSpy(async (invalidatePages) => {
       const user = await seedUser('remove-default-skip');
       const page = await Page().createPage('/epoch-remove-default-skip', 'body', user, {});
 
-      await Page().removePage(page);
+      await Page().removePage(page, { deletion: { mode: 'internal_cleanup', actor: null } });
       await Promise.resolve();
       expect(invalidatePages).not.toHaveBeenCalled();
+    });
+  });
+
+  test('AC-27: draft-cancel invalidation fires immediately after Page deletion while later cleanup is still pending', async () => {
+    await withInvalidateSpy(async (invalidatePages) => {
+      const user = await seedUser('draft-cancel-order');
+      const page = await Page().createPage('/epoch-draft-cancel-order', 'body', user, { grant: 1 });
+      const Revision = crowi.model('Revision');
+      let resolveCleanup: (() => void) | undefined;
+      let markCleanupStarted: (() => void) | undefined;
+      const cleanupStarted = new Promise<void>((resolve) => {
+        markCleanupStarted = resolve;
+      });
+      const cleanupGate = new Promise<void>((resolve) => {
+        resolveCleanup = resolve;
+      });
+      const revisionSpy = jest.spyOn(Revision, 'removeRevisionsByPageId').mockImplementationOnce(() => {
+        markCleanupStarted?.();
+        return cleanupGate;
+      });
+
+      try {
+        const deletion = Page().removePage(page, {
+          invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' },
+          deletion: { mode: 'creation_cancel', actor: user._id },
+        });
+        await cleanupStarted;
+
+        expect(await Page().findById(page._id).exec()).toBeNull();
+        expect(invalidatePages).toHaveBeenCalledWith([page._id.toString()], 'page-deleted');
+
+        resolveCleanup?.();
+        await deletion;
+      } finally {
+        resolveCleanup?.();
+        revisionSpy.mockRestore();
+      }
+    });
+  });
+
+  test('AC-27: draft-cancel invalidation does not fire when Page deletion fails', async () => {
+    await withInvalidateSpy(async (invalidatePages) => {
+      const user = await seedUser('draft-cancel-delete-failure');
+      const page = await Page().createPage('/epoch-draft-cancel-delete-failure', 'body', user, { grant: 1 });
+      const deleteSpy = jest.spyOn(Page(), 'deleteOne').mockRejectedValueOnce(new Error('delete failed'));
+
+      try {
+        await expect(
+          Page().removePage(page, {
+            invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' },
+            deletion: { mode: 'creation_cancel', actor: user._id },
+          }),
+        ).rejects.toThrow('delete failed');
+
+        await Promise.resolve();
+        expect(invalidatePages).not.toHaveBeenCalled();
+        expect(await Page().findById(page._id).exec()).not.toBeNull();
+      } finally {
+        deleteSpy.mockRestore();
+      }
     });
   });
 

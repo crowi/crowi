@@ -72,7 +72,9 @@
  *     ever recompute for their own response), NOT something a dedicated
  *     drain / traffic-isolation gate exists for.
  *   - 1.3.0  feature-renderer-break-normalization — an attribute-less
- *     `<br>` / `<br/>` / `<br />` `html` node inside an uncontaminated
+ *     `<br>` in any spelling CommonMark accepts (`<br>` / `<br >` /
+ *     `<br/>` / `<br />` / `<br\t/>` — the whitespace run before the
+ *     optional slash is unbounded) as an `html` node inside an uncontaminated
  *     `paragraph` / `heading` / `tableCell` phrasing subtree is
  *     normalized to a canonical mdast `break` by a new bundled
  *     transform (`core/break-normalization.ts`'s

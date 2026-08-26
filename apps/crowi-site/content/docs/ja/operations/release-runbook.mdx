@@ -48,7 +48,7 @@ for d in packages/*/package.json apps/*/package.json; do
 done | sort
 ```
 
-2026-08 時点では 21 パッケージです:
+2026-08 時点では 22 パッケージです:
 
 ```
 @crowi/admin-cli
@@ -70,6 +70,7 @@ done | sort
 @crowi/plugin-search-opensearch
 @crowi/plugin-slack
 @crowi/plugin-storage-aws-s3
+@crowi/plugin-storage-gcs
 @crowi/plugin-storage-local
 @crowi/runner
 ```
@@ -139,7 +140,7 @@ OIDC publish の前提は次の組合せです（CI 設定済み・参考情報�
 
   changesets は pre mode のとき、パッケージごとに dist tag を選びます。公開済みバージョンが
   すべて pre tag（`alpha`）付きのプレリリースなら `latest` へ、1 つでもそれ以外があれば
-  「通常リリース済み」とみなして pre tag へ publish します。21 パッケージ中 20 個は前者ですが、
+  「通常リリース済み」とみなして pre tag へ publish します。22 パッケージ中 21 個は前者ですが、
   `@crowi/plugin-slack` には alpha より前に手動 publish された `0.1.0-dev` があるため後者に
   分類され、**`latest` が初回公開版のまま止まります**。放置すると
   `npm i @crowi/plugin-slack` が数か月前のコードを入れます。

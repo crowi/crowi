@@ -107,3 +107,59 @@ describe('useUpdateAdminPluginConfig — readiness invalidation', () => {
     expect(client.getQueryState(adminPluginsKeys.readiness())?.isInvalidated).toBe(false);
   });
 });
+
+describe('useUpdateAdminPluginConfig — verificationResults wire normalization (feature-plugin-config-live-verification AC-6)', () => {
+  it('passes an already-present verificationResults array through unchanged', async () => {
+    updateConfigPut.mockResolvedValue(
+      makeApiResponse(200, {
+        ok: true,
+        hotReloaded: true,
+        reconfigureFailed: false,
+        verificationResults: [{ plugin: '@crowi/plugin-storage-aws-s3', status: 'ok' }],
+      }),
+    );
+
+    const { result } = renderHook(() => useUpdateAdminPluginConfig('@crowi/plugin-storage-aws-s3'), {
+      wrapper: wrapperFor(makeClient()),
+    });
+
+    let response: unknown;
+    await act(async () => {
+      response = await result.current.mutateAsync({ values: { bucket: 'my-bucket' } });
+    });
+
+    expect(response).toMatchObject({ verificationResults: [{ plugin: '@crowi/plugin-storage-aws-s3', status: 'ok' }] });
+  });
+
+  it('normalizes a NEW-api empty array through unchanged (no verification ran)', async () => {
+    updateConfigPut.mockResolvedValue(makeApiResponse(200, { ok: true, hotReloaded: true, reconfigureFailed: false, verificationResults: [] }));
+
+    const { result } = renderHook(() => useUpdateAdminPluginConfig('@crowi/plugin-storage-aws-s3'), {
+      wrapper: wrapperFor(makeClient()),
+    });
+
+    let response: unknown;
+    await act(async () => {
+      response = await result.current.mutateAsync({ values: { bucket: 'my-bucket' } });
+    });
+
+    expect(response).toMatchObject({ verificationResults: [] });
+  });
+
+  it('normalizes an OLD-api 200 response missing the field entirely to an empty array (rolling-deploy compat)', async () => {
+    // No `verificationResults` key at all — exactly what an api replica
+    // that predates this feature sends.
+    updateConfigPut.mockResolvedValue(makeApiResponse(200, { ok: true, hotReloaded: true, reconfigureFailed: false }));
+
+    const { result } = renderHook(() => useUpdateAdminPluginConfig('@crowi/plugin-storage-aws-s3'), {
+      wrapper: wrapperFor(makeClient()),
+    });
+
+    let response: unknown;
+    await act(async () => {
+      response = await result.current.mutateAsync({ values: { bucket: 'my-bucket' } });
+    });
+
+    expect(response).toMatchObject({ verificationResults: [] });
+  });
+});

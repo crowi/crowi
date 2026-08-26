@@ -105,10 +105,35 @@ join 済みか確認 → 済みなら:
 
 manager 不在・未 join・スクリプト不在は skip(報告に明記)。
 
+### Step 5.5: agmsg role を drop する(通知を送った後)
+
+crowi-kickoff は起動時に `/agmsg actas <id>` でこのセッションの受信を自分宛だけに
+絞っている。中断するならその role はもう不要なので落とす:
+
+```
+/agmsg drop <id>
+```
+
+**Step 5 の後**に置くこと。通知はこの role を差出人として送るので、先に drop すると
+送れなくなる。
+
+**なぜ中断側にも要るか**: role を落とす地点は「このセッションの仕事が終わった」宣言と
+一致していなければならない。完走側は `/crowi-complete-feature` が持つが、ESCALATE や
+中断で終わるセッションはそこを通らないので、この skill が対になる終端になる。
+`actas` の排他ロックはセッション ID に紐づくため、main 側から外して回ることはできない。
+
+role が登録されていない(kickoff 経由でない・手動起動)場合、`drop` は該当なしで
+何もしないので無条件に実行してよい。失敗しても HANDOFF ファイルは既に書けているので
+**handoff 自体は失敗させない** — 報告に 1 行残して進む。
+
+なお、セッションが異常終了して drop を通らなかった場合、role は残る。これは次に同じ
+名前を使うとき `actas-claim.sh` が `status=held owner=<sid>` で弾いて人間に見せるので、
+残骸は取り違えではなく明示的な衝突として現れる(自動回収はしない)。
+
 ### Step 6: 報告
 
-HANDOFF path / memory 書けたか / 通知したか /(Step 2 で complete した場合)
-signal が立った旨、を簡潔に。
+HANDOFF path / memory 書けたか / 通知したか / agmsg role を drop したか /
+(Step 2 で complete した場合)signal が立った旨、を簡潔に。
 
 ## 鉄則
 

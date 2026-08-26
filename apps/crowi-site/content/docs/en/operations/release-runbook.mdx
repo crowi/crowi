@@ -49,7 +49,7 @@ for d in packages/*/package.json apps/*/package.json; do
 done | sort
 ```
 
-As of 2026-08 that is 21 packages:
+As of 2026-08 that is 22 packages:
 
 ```
 @crowi/admin-cli
@@ -71,6 +71,7 @@ As of 2026-08 that is 21 packages:
 @crowi/plugin-search-opensearch
 @crowi/plugin-slack
 @crowi/plugin-storage-aws-s3
+@crowi/plugin-storage-gcs
 @crowi/plugin-storage-local
 @crowi/runner
 ```
@@ -146,7 +147,7 @@ reference).
   In pre mode changesets picks the dist tag per package: a package whose every published
   version is a prerelease carrying the pre tag (`alpha`) goes to `latest`; one with even a
   single version outside that counts as having had a regular release and goes to the pre tag
-  instead. Twenty of the twenty-one are the former. `@crowi/plugin-slack` is not, because a
+  instead. Twenty-one of the twenty-two are the former. `@crowi/plugin-slack` is not, because a
   `0.1.0-dev` was published by hand before its alphas — so **its `latest` stays frozen at its
   first published version**, and `npm i @crowi/plugin-slack` installs months-old code.
 

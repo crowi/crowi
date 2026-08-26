@@ -1,7 +1,7 @@
 # Development infrastructure + opt-in application services.
 #
 # Default (`docker compose up -d`) starts only the dev infra dependencies
-# (MongoDB / Redis / Elasticsearch / PlantUML / Mailpit). Run `pnpm dev` on
+# (MongoDB / Redis / Elasticsearch / Mailpit). Run `pnpm dev` on
 # the host to start @crowi/api and @crowi/web against this infra.
 #
 # To bring up the full stack inside Docker (api + web + infra), use the
@@ -143,13 +143,6 @@ services:
       memlock:
         soft: -1
         hard: -1
-
-  plantuml:
-    image: plantuml/plantuml-server:latest
-    container_name: crowi-plantuml
-    restart: unless-stopped
-    ports:
-      - 8080:8080
 
   # Local mail catcher. Captures everything sent by @crowi/plugin-mail-smtp
   # so you can inspect the rendered email (from / subject / body / headers)

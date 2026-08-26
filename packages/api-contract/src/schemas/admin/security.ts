@@ -34,11 +34,11 @@ export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;
  * OGP metadata from external URLs. Missing / non-boolean stored values
  * read as `true` (default ON) — see
  * `packages/api/src/util/admin-config.ts`'s `coerceBoolean(value, true)`
- * call at every read site. Writing this field goes through a dedicated
- * fail-propagating persistence path
- * (`ConfigService.saveConfigValueDurable`), NOT the same best-effort
- * batch write as `registrationMode` / `registrationWhiteList` — see
- * `packages/api/src/hono/handlers/admin/security.ts`.
+ * call at every read site. Writing this field runs as its own
+ * `ConfigService.saveConfigValue` call, BEFORE the batched write that
+ * persists `registrationMode` / `registrationWhiteList`, so a failure
+ * here short-circuits the whole PUT before any of it partially persists
+ * — see `packages/api/src/hono/handlers/admin/security.ts`.
  */
 export const SecuritySettingsSchema = z.object({
   registrationMode: RegistrationModeSchema,

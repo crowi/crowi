@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { m } from '@paraglide/messages.js';
+import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
-import { Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { DiffMethod } from 'react-diff-viewer-continued';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useRevisionPair } from '@/lib/use-page-revisions';
-import { m } from '@paraglide/messages.js';
 
 // react-diff-viewer-continued depends on @emotion which uses browser-only APIs
 // at module load time, so we render it client-side only.
@@ -31,7 +31,7 @@ interface RevisionDiffProps {
 }
 
 export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
-  const { revisions, isLoading, isError, error, refetch } = useRevisionPair(fromId, toId);
+  const { revisions, displayedFromId, displayedToId, isLoading, isFetching, isError, error, refetch } = useRevisionPair(fromId, toId);
   const [splitView, setSplitView] = useState(true);
   // GitHub-style fold: by default only the changed lines (+3 lines of
   // surrounding context) render, and unchanged regions collapse behind a
@@ -58,10 +58,10 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { fromRevision, toRevision } = useMemo(() => {
     if (!revisions) return { fromRevision: null, toRevision: null };
     return {
-      fromRevision: fromId == null ? null : (revisions.find((r) => r._id === fromId) ?? null),
-      toRevision: revisions.find((r) => r._id === toId) ?? null,
+      fromRevision: displayedFromId == null ? null : (revisions.find((r) => r._id === displayedFromId) ?? null),
+      toRevision: revisions.find((r) => r._id === displayedToId) ?? null,
     };
-  }, [revisions, fromId, toId]);
+  }, [revisions, displayedFromId, displayedToId]);
 
   if (isLoading) {
     return (
@@ -88,7 +88,7 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
     );
   }
 
-  if (!toRevision || (fromId != null && !fromRevision)) {
+  if (!toRevision || (displayedFromId != null && !fromRevision)) {
     return (
       <Alert>
         <AlertTitle>{m['page_history.diff_revisions_unavailable_title']()}</AlertTitle>
@@ -116,6 +116,13 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
           <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{toRevision._id.slice(-8)}</code>
         </div>
         <div className="flex items-center gap-2">
+          <span
+            className="inline-flex size-4 shrink-0 items-center justify-center"
+            role={isFetching ? 'status' : undefined}
+            aria-label={isFetching ? m['page_history.diff_loading_revisions']() : undefined}
+          >
+            {isFetching && <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />}
+          </span>
           {!hasNoChanges && (
             <Button variant="outline" size="sm" onClick={() => setShowAllLines((v) => !v)} type="button">
               {showAllLines ? m['page_history.diff_show_changes_only']() : m['page_history.diff_show_all_lines']()}

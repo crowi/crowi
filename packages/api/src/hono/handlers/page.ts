@@ -20,9 +20,12 @@
  *   itself. Phase 6 will revisit this implicit ordering when the
  *   Express bridge is removed.
  */
+import { createHash, randomUUID } from 'node:crypto';
+
 import {
   claimPageLinkAccessRoute,
   createPageRoute,
+  IDEMPOTENCY_KEY_PATTERN,
   deletePageRoute,
   getPageRoute,
   getSeenUsersRoute,
@@ -48,8 +51,24 @@ import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
-import { type PageDocument, type PageModel, creatorPageListMatch, startWithPageListMatch, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
+import {
+  type PageDocument,
+  type PageModel,
+  creatorPageListMatch,
+  isTransitionalPageStatus,
+  STATUS_DELETED,
+  STATUS_PUBLISHED,
+  startWithPageListMatch,
+  visiblePageGrantOr,
+  visiblePageStatusOr,
+} from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
+import { renamePageCommand } from 'src/service/page-history/commands/rename';
+import { restorePageCommand } from 'src/service/page-history/commands/restore';
+import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-history/commands/subtree-rename';
+import { trashPageCommand } from 'src/service/page-history/commands/trash';
+import { completeOperation, createPageHistoryOperation, hasOperationCompletionEvidence, resolvePageHistoryOperation } from 'src/service/page-history/operation';
+import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { indexPageInSearchById } from 'src/util/page-search-index';
@@ -106,14 +125,12 @@ const toConflicts = (errorsByPath: Record<string, string[]>): { path: string; re
     .filter(([, reasons]) => reasons.length > 0)
     .map(([path, reasons]) => ({ path, reasons }));
 
-// A4-2 — the validate ("checkPagesRenamable") → execute ("renameTree") →
-// success/failure classification core shared by both subtree-rename routes
-// (by-page-id `include_descendants` branch and by-path `/pages/rename-subtree`).
-// Deliberately does NOT build a `c.json(...)` response or emit a debug log —
-// the two callers' debug strings differ (see below), so each caller maps
-// this discriminated result onto its own response/log.
+// Both HTTP routes must cross this boundary so validation cannot drift to
+// after the history command has durably sealed its target set. Replays pass a
+// null map because their original preflight already completed before sealing.
 type SubtreeRenameResult =
-  | { ok: true }
+  | { ok: true; outcome: Awaited<ReturnType<typeof subtreeRenameCommand>> & { status: 'completed' } }
+  | { ok: false; kind: 'fingerprint-mismatch' }
   | { ok: false; kind: 'validation'; conflicts: { path: string; reasons: string[] }[] }
   | { ok: false; kind: 'execution'; message: string };
 
@@ -122,39 +139,30 @@ type SubtreeRenameResult =
 // `crowi.model('Page')` inside `registerPageRoutes`. So this module-level
 // helper takes it as an argument rather than closing over a module import.
 async function executeSubtreeRename(
+  crowi: Crowi,
   Page: PageModel,
-  pathMap: Record<string, string>,
+  pathMap: Record<string, string> | null,
   user: UserDocument,
-  opts: { createRedirectPage: boolean; preserveUpdatedAt: boolean },
+  input: SubtreeRenameInput,
 ): Promise<SubtreeRenameResult> {
-  const newPaths = Object.values(pathMap);
-
-  // Up-front validation: name legality + destination collisions.
-  const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
-  if (hasError) {
-    return { ok: false, kind: 'validation', conflicts: toConflicts(errorsByPath) };
+  if (pathMap != null) {
+    const [hasError, errorsByPath] = (await Page.checkPagesRenamable(Object.values(pathMap), user)) as [boolean, Record<string, string[]>];
+    if (hasError) {
+      return { ok: false, kind: 'validation', conflicts: toConflicts(errorsByPath) };
+    }
   }
 
-  // Execute. Non-transactional best-effort: a mid-way failure may leave
-  // some pages already moved.
-  //
-  // RFC-0017 Phase 1 §D8 — `Page.renameTree` reports per-item outcomes
-  // (`{ successes, failures }`) instead of throwing on the first failure,
-  // so a sibling rename that completes AFTER an earlier one failed is never
-  // lost from the report (see `Page.renameTree`'s doc comment). A non-empty
-  // `failures` array is the same "some pages may already have been moved"
-  // partial-failure case this 400 has always covered — the message stays a
-  // representative summary (first failure) so the wire shape is unchanged.
   try {
-    const result = await Page.renameTree(pathMap, user, opts);
-    if (result.failures.length > 0) {
-      return { ok: false, kind: 'execution', message: result.failures[0].error };
+    const outcome = await subtreeRenameCommand(crowi, input);
+    if (outcome.status === 'fingerprint-mismatch') return { ok: false, kind: 'fingerprint-mismatch' };
+    if (outcome.failures.length > 0) {
+      return { ok: false, kind: 'execution', message: outcome.failures[0].error };
     }
+    return { ok: true, outcome };
   } catch (err) {
     const error = err as Error;
     return { ok: false, kind: 'execution', message: error.message };
   }
-  return { ok: true };
 }
 
 export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
@@ -725,7 +733,9 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          const updated = (await Page.updateGrant(pageData, grant, user)) as PageDocument;
+          // RFC-0021 §6.2 DC-10 — the edit channel (web / oauth / pat)
+          // becomes the `visibility_changed` event's `source`.
+          const updated = (await Page.updateGrant(pageData, grant, user, { source: c.get('authContext').kind })) as PageDocument;
           // feature-restricted-grant-share-banner §6 — symmetric with the
           // claim handler above: `updateGrant` resets `grantedUsers` to just
           // the actor, so any link-invited co-editors indexed by a prior
@@ -936,7 +946,9 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           if (completely === true) {
             // Hard delete bypasses the revision check (legacy parity).
-            await Page.completelyDeletePage(pageData, user);
+            await Page.completelyDeletePage(pageData, user, {
+              deletion: { mode: 'user_hard_delete', actor: user._id },
+            });
             // The document is gone from Mongo; echo the in-memory snapshot
             // so the client knows what was deleted.
             return c.json({ page: pageToResponse(pageData) }, 200);
@@ -946,12 +958,97 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(pageRevisionConflictBody(), 409);
           }
 
-          // Page.deletePage mutates `pageData` (status -> deleted, path
-          // -> /trash/<path>); the returned value is the *redirect* page
-          // (a quirk of the legacy model). Re-populate the mutated
-          // pageData so the response reflects the soft-deleted page
-          // itself, which is what clients want.
-          await Page.deletePage(pageData, user);
+          // RFC-0021 Phase 2c-2a — soft delete runs as a recorded operation.
+          // The hard branch above returns before this and is untouched.
+          const trashKey = c.req.header('idempotency-key');
+          if (!trashKey) {
+            return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+          }
+          if (!IDEMPOTENCY_KEY_PATTERN.test(trashKey)) {
+            return c.json(pageBadRequestBody('PAGE_DELETE_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+          }
+
+          const trashSource = toPageHistoryEventSource(c.get('authContext')?.kind);
+          const trashFingerprint = createHash('sha256')
+            .update(JSON.stringify({ page_id: String(pageData._id), completely: false }))
+            .digest('hex');
+          const trashKeyTuple = { actor: user._id, command: 'trash' as const, idempotencyKey: trashKey };
+          const inProgressBody = { error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } };
+          const keyConflictBody = {
+            error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' },
+          };
+
+          const replayTrash = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
+            if (operation.result?.status === 'failed') {
+              const code = operation.result.code ?? 'PAGE_TRANSITION_INCOMPLETE';
+              return c.json({ error: { code, message: operation.result.message ?? 'The delete did not complete.' } } as never, 400);
+            }
+            const current = (await Page.findById(pageData._id)) as PageDocument | null;
+            if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            if (isTransitionalPageStatus(current.status)) return c.json(inProgressBody, 409);
+            const populatedReplay = await Page.populatePageData(current, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedReplay) }, 200);
+          };
+
+          const trashResolution = await resolvePageHistoryOperation(crowi, trashKeyTuple, trashFingerprint);
+          if (trashResolution.kind === 'fingerprint-mismatch') return c.json(keyConflictBody, 409);
+          if (trashResolution.kind === 'settled') return replayTrash(trashResolution.operation);
+          if (trashResolution.kind === 'in-flight') return c.json(inProgressBody, 409);
+
+          // Only a first delivery validates deletability, for the same reason
+          // rename resolves first: a replay runs against a page already sitting
+          // in `/trash/`, where the answer would differ.
+          const isNonExistentUserPage = await Page.isNonExistentUserPage(pageData.path);
+          if (!Page.isDeletableName(pageData.path) && !isNonExistentUserPage) {
+            return c.json(pageBadRequestBody('PAGE_DELETE_FAILED', 'Page is not deletable.'), 400);
+          }
+
+          const trashOperationId = randomUUID();
+          const trashCreated = await createPageHistoryOperation(crowi, {
+            ...trashKeyTuple,
+            operationId: trashOperationId,
+            requestFingerprint: trashFingerprint,
+            page: pageData._id,
+            fromPath: pageData.path,
+            toPath: Page.getDeletedPageName(pageData.path),
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            toStatus: STATUS_DELETED,
+            createRedirect: true,
+            source: trashSource,
+          });
+          if (trashCreated.kind === 'lost') {
+            if (trashCreated.resolution.kind === 'fingerprint-mismatch') return c.json(keyConflictBody, 409);
+            if (trashCreated.resolution.kind === 'settled') return replayTrash(trashCreated.resolution.operation);
+            return c.json(inProgressBody, 409);
+          }
+
+          const trashOutcome = await trashPageCommand(crowi, {
+            page: pageData,
+            fromPath: pageData.path,
+            toPath: Page.getDeletedPageName(pageData.path),
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            operationId: trashOperationId,
+            actor: user._id,
+            user,
+            source: trashSource,
+          });
+
+          if (trashOutcome.status === 'owned-elsewhere' || trashOutcome.status === 'contended') return c.json(inProgressBody, 409);
+          if (trashOutcome.status === 'page-missing') {
+            await completeOperation(crowi, trashOperationId, { status: 'moot' });
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (trashOutcome.status === 'incomplete') {
+            const message = 'The page was moved but the delete did not finish. Ask an administrator to run the page-history repair.';
+            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
+          }
+
+          if (await hasOperationCompletionEvidence(crowi, trashCreated.operation)) {
+            await completeOperation(crowi, trashOperationId, { status: 'succeeded' });
+          }
           // Soft delete does not flow through a page event (see the
           // corrected comment in events/page.ts's onDelete), so nothing
           // else removes this now-trashed page from the search index.
@@ -959,7 +1056,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // reindex calls above; tracked via `trackSideEffect` so tests can
           // `drainSideEffects()` before asserting on the search driver.
           crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
-          const populated = await Page.populatePageData(pageData, null);
+          const populated = await Page.populatePageData(trashOutcome.page, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -986,10 +1083,116 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          // Mutates pageData (path -> non-trash, status -> published)
-          // and removes the redirect stub at the original /trash path.
-          await Page.revertDeletedPage(pageData, user);
-          const populated = await Page.populatePageData(pageData, null);
+          // RFC-0021 Phase 2c-2a — restore runs as a recorded operation.
+          const restoreKey = c.req.header('idempotency-key');
+          if (!restoreKey) {
+            return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+          }
+          if (!IDEMPOTENCY_KEY_PATTERN.test(restoreKey)) {
+            return c.json(pageBadRequestBody('PAGE_REVERT_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+          }
+
+          const restoreSource = toPageHistoryEventSource(c.get('authContext')?.kind);
+          const restoreFingerprint = createHash('sha256')
+            .update(JSON.stringify({ page_id: String(pageData._id) }))
+            .digest('hex');
+          const restoreKeyTuple = { actor: user._id, command: 'restore' as const, idempotencyKey: restoreKey };
+          const restoreInProgress = { error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } };
+          const restoreKeyConflict = {
+            error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' },
+          };
+
+          const replayRestore = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
+            if (operation.result?.status === 'failed') {
+              const code = operation.result.code ?? 'PAGE_TRANSITION_INCOMPLETE';
+              return c.json({ error: { code, message: operation.result.message ?? 'The restore did not complete.' } } as never, 400);
+            }
+            const current = (await Page.findById(pageData._id)) as PageDocument | null;
+            if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            if (isTransitionalPageStatus(current.status)) return c.json(restoreInProgress, 409);
+            const populatedReplay = await Page.populatePageData(current, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedReplay) }, 200);
+          };
+
+          const restoreResolution = await resolvePageHistoryOperation(crowi, restoreKeyTuple, restoreFingerprint);
+          if (restoreResolution.kind === 'fingerprint-mismatch') return c.json(restoreKeyConflict, 409);
+          if (restoreResolution.kind === 'settled') return replayRestore(restoreResolution.operation);
+          if (restoreResolution.kind === 'in-flight') return c.json(restoreInProgress, 409);
+
+          // First delivery only: clear the destination. This is destructive and
+          // deliberately sits BEFORE the operation record exists — if it fails
+          // partway, nothing was recorded, and the exposure is identical to the
+          // legacy restore's (the stub is gone, the page is still in the trash,
+          // and asking again finds no occupant). A replay short-circuits above,
+          // so it never re-runs against a page that already came back.
+          const restoreToPath = Page.getRevertDeletedPageName(pageData.path);
+          if (await Page.isNonExistentUserPage(restoreToPath)) {
+            return c.json(pageBadRequestBody('PAGE_REVERT_FAILED', 'Cannot revert non existent user page.'), 400);
+          }
+          const occupant = (await Page.findPageByPath(restoreToPath)) as PageDocument | null;
+          if (occupant != null) {
+            // Only the stub this page's own delete left behind may be removed.
+            // Anything else means the data is inconsistent and is not ours to
+            // destroy.
+            if (occupant.redirectTo !== pageData.path) {
+              return c.json(
+                pageBadRequestBody('PAGE_REVERT_FAILED', 'The new page of to revert is exists and the redirect path of the page is not the deleted page.'),
+                400,
+              );
+            }
+            // Internal repair, not a user-facing hard delete — no prompt.
+            await Page.completelyDeletePage(occupant, user, {
+              invalidation: { mode: 'skip', reason: 'revert-deleted' },
+              deletion: { mode: 'redirect_stub_cleanup', actor: user._id },
+            });
+          }
+
+          const restoreOperationId = randomUUID();
+          const restoreCreated = await createPageHistoryOperation(crowi, {
+            ...restoreKeyTuple,
+            operationId: restoreOperationId,
+            requestFingerprint: restoreFingerprint,
+            page: pageData._id,
+            fromPath: pageData.path,
+            toPath: restoreToPath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            toStatus: STATUS_PUBLISHED,
+            createRedirect: false,
+            source: restoreSource,
+          });
+          if (restoreCreated.kind === 'lost') {
+            if (restoreCreated.resolution.kind === 'fingerprint-mismatch') return c.json(restoreKeyConflict, 409);
+            if (restoreCreated.resolution.kind === 'settled') return replayRestore(restoreCreated.resolution.operation);
+            return c.json(restoreInProgress, 409);
+          }
+
+          const restoreOutcome = await restorePageCommand(crowi, {
+            page: pageData,
+            fromPath: pageData.path,
+            toPath: restoreToPath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            operationId: restoreOperationId,
+            actor: user._id,
+            source: restoreSource,
+          });
+
+          if (restoreOutcome.status === 'owned-elsewhere' || restoreOutcome.status === 'contended') return c.json(restoreInProgress, 409);
+          if (restoreOutcome.status === 'page-missing') {
+            await completeOperation(crowi, restoreOperationId, { status: 'moot' });
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (restoreOutcome.status === 'incomplete') {
+            const message = 'The page was moved but the restore did not finish. Ask an administrator to run the page-history repair.';
+            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
+          }
+
+          if (await hasOperationCompletionEvidence(crowi, restoreCreated.operation)) {
+            await completeOperation(crowi, restoreOperationId, { status: 'succeeded' });
+          }
+          const populated = await Page.populatePageData(restoreOutcome.page, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -1075,6 +1278,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
         debug('renamePage called with:', { page_id, new_path, revision_id, create_redirect, include_descendants, userId: user._id });
 
+        const subtreeIdempotencyKey = include_descendants ? c.req.header('idempotency-key') : undefined;
+        if (include_descendants && !subtreeIdempotencyKey) {
+          return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+        }
+        if (subtreeIdempotencyKey && !IDEMPOTENCY_KEY_PATTERN.test(subtreeIdempotencyKey)) {
+          return c.json(pageBadRequestBody('PAGE_RENAME_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+        }
+
         // Normalise the destination path first so obviously-bad inputs
         // are rejected without touching the DB.
         const newPagePath = Page.normalizePath(new_path);
@@ -1085,6 +1296,65 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         // can't be hijacked by renaming another page onto it.
         if (!Page.isCreatableName(newPagePath) || !Page.isRenamableName(newPagePath)) {
           return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `Cannot rename to this page name (${newPagePath})`), 400);
+        }
+
+        const subtreeFingerprint = include_descendants
+          ? createHash('sha256')
+              .update(JSON.stringify({ page_id: String(page_id), new_path: newPagePath, create_redirect: Boolean(create_redirect) }))
+              .digest('hex')
+          : undefined;
+        if (include_descendants) {
+          const rootResolution = await resolvePageHistoryOperation(
+            crowi,
+            { actor: user._id, command: 'subtree_rename', idempotencyKey: subtreeIdempotencyKey! },
+            subtreeFingerprint!,
+          );
+          if (rootResolution.kind === 'fingerprint-mismatch') {
+            return c.json(
+              { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+              409,
+            );
+          }
+          if (rootResolution.kind !== 'miss') {
+            // Re-entry must bypass the granted-page helper because that helper
+            // intentionally hides transitional pages. A root-only crash still
+            // needs this raw document to create its first member; once the root
+            // member exists, the command can resume even if the page vanished.
+            const replayRootPage = (await Page.findById(page_id)) as PageDocument | null;
+            const result = await executeSubtreeRename(crowi, Page, null, user, {
+              page: replayRootPage,
+              pageId: new Types.ObjectId(page_id),
+              toPath: newPagePath,
+              actor: user._id,
+              user,
+              source: toPageHistoryEventSource(c.get('authContext')?.kind),
+              idempotencyKey: subtreeIdempotencyKey!,
+              requestFingerprint: subtreeFingerprint!,
+              createRedirectPage: Boolean(create_redirect),
+            });
+            if (!result.ok) {
+              if (result.kind === 'fingerprint-mismatch') {
+                return c.json(
+                  { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                  409,
+                );
+              }
+              if (result.kind === 'validation') {
+                return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
+              }
+              debug('Error renaming subtree:', result.message);
+              return c.json(
+                renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${result.message})`, [], true),
+                400,
+              );
+            }
+            const { outcome } = result;
+            const movedRoot = outcome.successes.find((page) => page._id.equals(page_id)) ?? ((await Page.findById(page_id)) as PageDocument | null);
+            if (!movedRoot) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            const populated = await Page.populatePageData(movedRoot, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populated), renamed_count: outcome.successes.length }, 200);
+          }
         }
 
         try {
@@ -1109,44 +1379,41 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           }
 
           // ------------------------------------------------------------
-          // Subtree move (renameTree) — root + grant-visible descendants.
+          // Subtree move — root + grant-visible descendants.
           // ------------------------------------------------------------
           if (include_descendants) {
             const oldStripped = pageData.path.replace(/\/+$/, '');
-
-            // Grant-filtered subtree under the root. `findListByStartWith`
-            // also returns the un-slashed twin of a portal path, and the
-            // root itself — drop both so `descendants` is only the subtree.
-            // Mirrors rename-dialog.tsx:85-94 on the client side.
             const descendantRoot = pageData.path.endsWith('/') ? pageData.path : `${pageData.path}/`;
             const selfPaths = new Set([pageData.path, oldStripped]);
-            const subtree = await Page.findListByStartWith(descendantRoot, user, { limit: 0 });
-            const descendants = subtree.filter((p) => !selfPaths.has(p.path));
-
-            // Build old→new for the root + every visible descendant.
-            // `getPathMap` strips the trailing slash on `search` itself but
-            // only `normalizePath`s `replace` (which keeps a trailing slash),
-            // so a portal destination ('/foo/') would yield '/foo//child'.
-            // Strip it here for the descendant base to match the client
-            // preview (rename-dialog.tsx:104).
+            const subtree = (await Page.findListByStartWith(descendantRoot, user, { limit: 0 })) as PageDocument[];
+            const descendants = subtree.filter((page) => !selfPaths.has(page.path));
             const newBase = newPagePath.replace(/\/+$/, '');
-            const pathMap = Page.getPathMap([{ path: pageData.path }, ...descendants.map((p) => ({ path: p.path }))], pageData.path, newBase) as Record<
+            const pathMap = Page.getPathMap([{ path: pageData.path }, ...descendants.map((page) => ({ path: page.path }))], pageData.path, newBase) as Record<
               string,
               string
             >;
-            // The root preserves the caller's portal intent (trailing slash);
-            // renameTree skips redirect creation for portal destinations, so
-            // restore the slash on the root entry the single-page path keeps.
-            if (newPageIsPortal) {
-              pathMap[pageData.path] = newPagePath;
-            }
-            const newPaths = Object.values(pathMap);
+            if (newPageIsPortal) pathMap[pageData.path] = newPagePath;
 
-            const result = await executeSubtreeRename(Page, pathMap, user, {
+            const result = await executeSubtreeRename(crowi, Page, pathMap, user, {
+              page: pageData,
+              pageId: pageData._id,
+              memberPages: [pageData, ...descendants],
+              fromPath: pageData.path,
+              toPath: newPagePath,
+              actor: user._id,
+              user,
+              source: toPageHistoryEventSource(c.get('authContext')?.kind),
+              idempotencyKey: subtreeIdempotencyKey!,
+              requestFingerprint: subtreeFingerprint!,
               createRedirectPage: Boolean(create_redirect),
-              preserveUpdatedAt: true,
             });
             if (!result.ok) {
+              if (result.kind === 'fingerprint-mismatch') {
+                return c.json(
+                  { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                  409,
+                );
+              }
               if (result.kind === 'validation') {
                 return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
               }
@@ -1157,18 +1424,81 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               );
             }
 
-            const movedRoot = (await Page.findPageByPath(newPagePath)) as PageDocument | null;
-            const populated = movedRoot ? await Page.populatePageData(movedRoot, null) : await Page.populatePageData(pageData, null);
-            return c.json({ page: pageToResponse(populated), renamed_count: newPaths.length }, 200);
+            const { outcome } = result;
+            const movedRoot = outcome.successes.find((page) => page._id.equals(pageData._id)) ?? ((await Page.findById(pageData._id)) as PageDocument | null);
+            if (!movedRoot) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            const populated = await Page.populatePageData(movedRoot, null);
+            if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populated), renamed_count: outcome.successes.length }, 200);
           }
 
           // ------------------------------------------------------------
           // Single-page rename (default / back-compat).
           // ------------------------------------------------------------
+          // Honour `create_redirect` regardless of the destination's
+          // portal-ness. Portalizing `/x` → `/x/` leaves a redirect at the
+          // old content path so existing links / bookmarks to `/x` keep
+          // resolving (to the new portal) — the same behaviour every other
+          // rename already has (RenameDialog always requests a redirect). The
+          // redirect stub has `redirectTo` set, so `findExistingTwin` (which
+          // filters `redirectTo: null`) does not treat it as a `/x` ↔ `/x/`
+          // twin, and it is hidden from listings (also `redirectTo: null`).
+          // RFC-0021 Phase 2c-2a — the single-page rename runs as a recorded
+          // operation from here on.
+          const idempotencyKey = c.req.header('idempotency-key');
+          if (!idempotencyKey) {
+            return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+          }
+          if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+            return c.json(pageBadRequestBody('PAGE_RENAME_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+          }
+
+          const source = toPageHistoryEventSource(c.get('authContext')?.kind);
+          const fingerprint = createHash('sha256')
+            .update(JSON.stringify({ page_id: String(pageData._id), new_path: newPagePath, create_redirect: Boolean(create_redirect) }))
+            .digest('hex');
+          const operationKey = { actor: user._id, command: 'rename' as const, idempotencyKey };
+
+          const replay = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
+            // A settled operation answers from the page as it is now — the
+            // original response body is not stored, so there is nothing else
+            // truthful to return.
+            if (operation.result?.status === 'failed') {
+              const code = operation.result.code ?? 'PAGE_TRANSITION_INCOMPLETE';
+              return c.json({ error: { code, message: operation.result.message ?? 'The rename did not complete.' } } as never, 400);
+            }
+            const current = (await Page.findById(pageData._id)) as PageDocument | null;
+            if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            if (isTransitionalPageStatus(current.status)) {
+              return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+            }
+            const populatedReplay = await Page.populatePageData(current, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedReplay), renamed_count: 1 }, 200);
+          };
+
+          const resolution = await resolvePageHistoryOperation(crowi, operationKey, fingerprint);
+          if (resolution.kind === 'fingerprint-mismatch') {
+            return c.json(
+              { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+              409,
+            );
+          }
+          if (resolution.kind === 'settled') return replay(resolution.operation);
+          if (resolution.kind === 'in-flight') {
+            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          }
+
+          // Only a first delivery validates the destination. A replay must not:
+          // by then the page is already sitting at that destination, so the
+          // collision check would see the page itself and answer PAGE_EXISTS to
+          // a request that in fact succeeded. Core's flow resolves before it
+          // validates for exactly this reason.
+          //
           // §6 — block the `/x` ↔ `/x/` double-state: refuse to move onto a
-          // path whose trailing-slash twin already exists as a real page.
-          // The source page itself is excluded, so portalizing `/x` → `/x/`
-          // (where the twin `/x` IS the page being moved) is allowed.
+          // path whose trailing-slash twin already exists as a real page. The
+          // source page itself is excluded, so portalizing `/x` → `/x/` (where
+          // the twin IS the page being moved) is allowed.
           const twinAtNewPath = await Page.findExistingTwin(newPagePath, { excludeId: pageData._id });
           if (twinAtNewPath) {
             return c.json(pageTwinExistsBody(twinAtNewPath.path), 400);
@@ -1190,21 +1520,62 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
           }
 
-          // Honour `create_redirect` regardless of the destination's
-          // portal-ness. Portalizing `/x` → `/x/` leaves a redirect at the
-          // old content path so existing links / bookmarks to `/x` keep
-          // resolving (to the new portal) — the same behaviour every other
-          // rename already has (RenameDialog always requests a redirect). The
-          // redirect stub has `redirectTo` set, so `findExistingTwin` (which
-          // filters `redirectTo: null`) does not treat it as a `/x` ↔ `/x/`
-          // twin, and it is hidden from listings (also `redirectTo: null`).
-          const options = {
+          const operationId = randomUUID();
+          const created = await createPageHistoryOperation(crowi, {
+            ...operationKey,
+            operationId,
+            requestFingerprint: fingerprint,
+            page: pageData._id,
+            fromPath: pageData.path,
+            toPath: newPagePath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            toStatus: pageData.status ?? null,
+            createRedirect: Boolean(create_redirect),
+            source,
+          });
+          if (created.kind === 'lost') {
+            if (created.resolution.kind === 'fingerprint-mismatch') {
+              return c.json(
+                { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                409,
+              );
+            }
+            if (created.resolution.kind === 'settled') return replay(created.resolution.operation);
+            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          }
+
+          const outcome = await renamePageCommand(crowi, {
+            page: pageData,
+            fromPath: pageData.path,
+            toPath: newPagePath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            operationId,
+            actor: user._id,
+            user,
+            source,
             createRedirectPage: Boolean(create_redirect),
-          };
+          });
 
-          await Page.rename(pageData, newPagePath, user, options);
+          if (outcome.status === 'owned-elsewhere' || outcome.status === 'contended') {
+            // The page is mid-move for someone else. Leave our record open: it
+            // is still a request nobody answered, and repair can classify it.
+            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          }
+          if (outcome.status === 'page-missing') {
+            await completeOperation(crowi, operationId, { status: 'moot' });
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (outcome.status === 'incomplete') {
+            const message = 'The page was moved but the rename did not finish. Ask an administrator to run the page-history repair.';
+            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
+          }
 
-          const populated = await Page.populatePageData(pageData, null);
+          if (await hasOperationCompletionEvidence(crowi, created.operation)) {
+            await completeOperation(crowi, operationId, { status: 'succeeded' });
+          }
+          const populated = await Page.populatePageData(outcome.page, null);
           return c.json({ page: pageToResponse(populated), renamed_count: 1 }, 200);
         } catch (err) {
           const error = err as Error;
@@ -1231,6 +1602,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
         debug('renameSubtree called with:', { old_path, new_path, create_redirect, userId: user._id });
 
+        const idempotencyKey = c.req.header('idempotency-key');
+        if (!idempotencyKey) {
+          return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+        }
+        if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+          return c.json(pageBadRequestBody('PAGE_RENAME_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+        }
+
         const newPagePath = Page.normalizePath(new_path);
         const oldBase = old_path.replace(/\/+$/, '');
         const newBase = newPagePath.replace(/\/+$/, '');
@@ -1239,6 +1618,49 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         // descendant would be rewritten with an empty base.
         if (newBase === '' || !Page.isCreatableName(newBase)) {
           return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `Cannot move the subtree to this path (${newPagePath})`), 400);
+        }
+
+        const requestFingerprint = createHash('sha256')
+          .update(JSON.stringify({ old_path: oldBase, new_path: newBase, create_redirect: Boolean(create_redirect) }))
+          .digest('hex');
+        const rootResolution = await resolvePageHistoryOperation(crowi, { actor: user._id, command: 'subtree_rename', idempotencyKey }, requestFingerprint);
+        if (rootResolution.kind === 'fingerprint-mismatch') {
+          return c.json(
+            { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+            409,
+          );
+        }
+        if (rootResolution.kind !== 'miss') {
+          const result = await executeSubtreeRename(crowi, Page, null, user, {
+            page: null,
+            pageId: null,
+            fromPath: oldBase,
+            toPath: newBase,
+            actor: user._id,
+            user,
+            source: toPageHistoryEventSource(c.get('authContext')?.kind),
+            idempotencyKey,
+            requestFingerprint,
+            createRedirectPage: Boolean(create_redirect),
+          });
+          if (!result.ok) {
+            if (result.kind === 'fingerprint-mismatch') {
+              return c.json(
+                { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                409,
+              );
+            }
+            if (result.kind === 'validation') {
+              return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
+            }
+            debug('Error renaming subtree by path:', result.message);
+            return c.json(
+              renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${result.message})`, [], true),
+              400,
+            );
+          }
+          c.header('Idempotency-Replayed', 'true');
+          return c.json({ renamed_count: result.outcome.successes.length }, 200);
         }
 
         try {
@@ -1273,13 +1695,26 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             oldBase,
             newBase,
           ) as Record<string, string>;
-          const newPaths = Object.values(pathMap);
-
-          const result = await executeSubtreeRename(Page, pathMap, user, {
+          const result = await executeSubtreeRename(crowi, Page, pathMap, user, {
+            page: null,
+            pageId: null,
+            memberPages: descendants,
+            fromPath: oldBase,
+            toPath: newBase,
+            actor: user._id,
+            user,
+            source: toPageHistoryEventSource(c.get('authContext')?.kind),
+            idempotencyKey,
+            requestFingerprint,
             createRedirectPage: Boolean(create_redirect),
-            preserveUpdatedAt: true,
           });
           if (!result.ok) {
+            if (result.kind === 'fingerprint-mismatch') {
+              return c.json(
+                { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                409,
+              );
+            }
             if (result.kind === 'validation') {
               return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
             }
@@ -1290,7 +1725,8 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             );
           }
 
-          return c.json({ renamed_count: newPaths.length }, 200);
+          if (result.outcome.replayed) c.header('Idempotency-Replayed', 'true');
+          return c.json({ renamed_count: result.outcome.successes.length }, 200);
         } catch (err) {
           const error = err as Error;
           debug('Error renaming subtree by path:', error.message);

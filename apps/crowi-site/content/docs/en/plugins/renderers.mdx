@@ -150,13 +150,15 @@ blocks by sending them to an operator-configured PlantUML server. The
 diagram source is deflate + base64 encoded, and the SVG (sanitised) or
 PNG returned by the server is embedded.
 
-This plugin requires an external server. Crowi's `docker-compose.yml`
-ships a PlantUML server (`:8080`). Note that the plugin's default
-`serverUrl` is `http://plantuml:8080` — the compose-internal hostname,
-which is only resolvable from inside the compose network. With the
-standard `pnpm dev` setup (the api running on the host), set `serverUrl`
-to `http://localhost:8080` in the admin UI instead. The output format
-(`svg` / `png`) is also selectable there.
+This plugin requires an external server, and you have to run one
+yourself — Crowi's `docker-compose.yml` no longer ships a PlantUML
+service (the bundled dev renderer is Mermaid, which needs no server).
+The plugin's default `serverUrl` is `http://plantuml:8080`, a
+compose-internal hostname that only resolves from inside a compose
+network, so point `serverUrl` at your own server in the admin UI —
+`http://localhost:8080` if you run `plantuml/plantuml-server` on the
+host next to `pnpm dev`. The output format (`svg` / `png`) is also
+selectable there.
 Render results are cached with a 1-hour TTL, and failures such as
 network errors are cached as errors for 5 minutes. If a diagram rendered
 successfully before, a briefly unreachable PlantUML server keeps the last

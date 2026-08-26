@@ -116,8 +116,36 @@ export type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
  */
 export const UpdatePluginConfigRequestSchema = z.object({
   values: z.record(z.string(), z.unknown()),
+  confirmLinkedIdentities: z.boolean().optional(),
 });
 export type UpdatePluginConfigRequest = z.infer<typeof UpdatePluginConfigRequestSchema>;
+
+/**
+ * feature-plugin-config-live-verification — the closed set of reasons a
+ * post-save verification probe can fail with. Never a raw SDK/driver error
+ * string: a driver that can't confidently classify its own failure reports
+ * `'unknown'` rather than guessing.
+ */
+export const PluginVerificationFailureReasonSchema = z.enum(['unreachable', 'auth-failed', 'resource-missing', 'write-denied', 'unknown']);
+export type PluginVerificationFailureReason = z.infer<typeof PluginVerificationFailureReasonSchema>;
+
+/**
+ * One plugin's non-blocking, post-save verification outcome
+ * (feature-plugin-config-live-verification). `plugin` names which loaded
+ * plugin's `verifyConfig` hook produced this result — a save can affect
+ * more than one plugin (the changed plugin plus every plugin that
+ * `requires` it), so `verificationResults` on the response is an array.
+ *
+ * This result reflects ONLY the api instance that handled this request: a
+ * remote replica reloads config via Redis pub/sub but never re-runs
+ * verification (see `UpdatePluginConfigResponseSchema.verificationResults`
+ * doc) — it is never a cluster-wide aggregate.
+ */
+export const PluginVerificationResultSchema = z.discriminatedUnion('status', [
+  z.object({ plugin: z.string(), status: z.literal('ok') }),
+  z.object({ plugin: z.string(), status: z.literal('failed'), reason: PluginVerificationFailureReasonSchema }),
+]);
+export type PluginVerificationResult = z.infer<typeof PluginVerificationResultSchema>;
 
 export const UpdatePluginConfigResponseSchema = z.object({
   ok: z.literal(true),
@@ -138,6 +166,24 @@ export const UpdatePluginConfigResponseSchema = z.object({
    * process couldn't apply them. UI surfaces a warning toast.
    */
   reconfigureFailed: z.boolean(),
+  /**
+   * feature-plugin-config-live-verification — non-blocking connectivity /
+   * permission probe results for the changed plugin and every dependent
+   * plugin that declares `verifyConfig`, run AFTER this save already
+   * persisted and reconfigured. Empty when nothing was actually persisted
+   * (a no-op save), when the save didn't reach the persist step (409/422),
+   * or when no affected plugin declares `verifyConfig`. Never affects
+   * whether the save itself succeeded — a `'failed'` entry here still sits
+   * on a `200` response.
+   *
+   * Optional on the wire (not just "possibly empty") so a request answered
+   * by an older api replica during a rolling deploy — which never sends
+   * this field at all — still parses; `undefined` and `[]` mean the same
+   * thing to every consumer. Reflects only the instance that handled this
+   * request (see `PluginVerificationResultSchema` doc) — never aggregated
+   * across replicas.
+   */
+  verificationResults: z.array(PluginVerificationResultSchema).optional(),
 });
 export type UpdatePluginConfigResponse = z.infer<typeof UpdatePluginConfigResponseSchema>;
 
@@ -162,6 +208,20 @@ export const PluginConfigValidationErrorSchema = z.object({
   }),
 });
 export type PluginConfigValidationError = z.infer<typeof PluginConfigValidationErrorSchema>;
+
+/**
+ * Deliberately its own schema rather than the shared `ConflictErrorSchema`
+ * (fixed `code: 'CONFLICT'`) — this needs the `count` field and its own
+ * literal code.
+ */
+export const LinkedIdentitiesExistErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('LINKED_IDENTITIES_EXIST'),
+    message: z.string(),
+    count: z.number().int().nonnegative(),
+  }),
+});
+export type LinkedIdentitiesExistError = z.infer<typeof LinkedIdentitiesExistErrorSchema>;
 
 /**
  * Response shape for the Phase 4 "clear render cache" endpoints. The

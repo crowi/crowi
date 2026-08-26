@@ -317,6 +317,14 @@ No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
   happen.
 </Callout>
 
+**The same coordinated swap is required for page history.** Renaming a page, moving it to the trash and restoring it now pass through a new "moving" state. A replica running the older version does not know that state, treats a page mid-move as an ordinary page, and can start a second move on top of it. Neither move then finishes, and the page is left stranded mid-move.
+
+If you have already mixed versions, replace every replica and then run:
+
+```bash
+crowi-admin page-history repair --transitions
+```
+
 ## Summary
 
 | Topology | Browser → api HTTP | Browser → api WS | Inline images / files | Rebuild to change api host? |

@@ -42,6 +42,11 @@ export const ERROR_CODES = [
   'PAGE_REVISION_ERROR',
   'PAGE_TWIN_EXISTS',
   'INVALID_GRANT',
+  // --- page history commands (RFC-0021 Phase 2c-2) ---
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'IDEMPOTENCY_KEY_CONFLICT',
+  'PAGE_TRANSITION_IN_PROGRESS',
+  'PAGE_TRANSITION_INCOMPLETE',
   // --- comment / notification domain ---
   'COMMENT_NOT_FOUND',
   'NOTIFICATION_NOT_FOUND',
@@ -75,6 +80,7 @@ export const ERROR_CODES = [
   'MAIL_TEST_FAILED',
   'PLUGIN_NOT_FOUND',
   'PLUGIN_CONFIG_VALIDATION_FAILED',
+  'LINKED_IDENTITIES_EXIST',
 ] as const;
 
 export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi('ErrorCode');

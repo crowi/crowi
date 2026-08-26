@@ -26,9 +26,138 @@ if [[ ! -f "$SPEC_PATH" ]]; then
 fi
 
 ERRORS=()
+WARNINGS=()
 
 add_error() {
   ERRORS+=("$1")
+}
+
+add_warning() {
+  WARNINGS+=("$1")
+}
+
+# invocation-private scratch space for blob reads and matching-line output.
+# Reused (overwritten) across paths/symbols rather than named per path/symbol,
+# since processing is sequential and the performance contract only promises
+# "linear in the 2 blobs + matching outputs being processed concurrently" —
+# not one file per path or symbol.
+STALENESS_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/crowi-spec-staleness.XXXXXX" 2>/dev/null)"
+if [[ -z "$STALENESS_TMP_DIR" || ! -d "$STALENESS_TMP_DIR" ]]; then
+  echo "ERROR: staleness check failed: unable to create a temp directory" >&2
+  exit 1
+fi
+trap 'rm -rf "$STALENESS_TMP_DIR"' EXIT
+GROUNDED_BLOB_FILE="$STALENESS_TMP_DIR/grounded-blob"
+HEAD_BLOB_FILE="$STALENESS_TMP_DIR/head-blob"
+GROUNDED_MATCH_FILE="$STALENESS_TMP_DIR/grounded-match"
+HEAD_MATCH_FILE="$STALENESS_TMP_DIR/head-match"
+
+# VALIDATION_HEAD is the single fixed commit every committed-side comparison
+# in this invocation uses instead of a live "HEAD" — a standalone leaf fixes
+# it once at start; an umbrella fixes it once and hands it to every child via
+# CROWI_SPEC_VALIDATION_HEAD so a single invocation never compares two
+# children against two different HEADs. The env var is internal (umbrella ->
+# child) but is validated fully regardless of who sets it: it must be a full
+# commit object id that resolves to a real commit, otherwise it is rejected
+# exactly like a missing worktree.
+VALIDATION_HEAD=""
+resolve_validation_head() {
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    add_error "freshness check requires a git worktree"
+    return
+  fi
+  if [[ -n "${CROWI_SPEC_VALIDATION_HEAD:-}" ]]; then
+    local supplied="$CROWI_SPEC_VALIDATION_HEAD"
+    if [[ ! "$supplied" =~ ^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$ ]]; then
+      add_error "CROWI_SPEC_VALIDATION_HEAD must be a full commit object id"
+      return
+    fi
+    if ! git cat-file -e "${supplied}^{commit}" >/dev/null 2>&1; then
+      add_error "CROWI_SPEC_VALIDATION_HEAD does not resolve to a commit: $supplied"
+      return
+    fi
+    VALIDATION_HEAD="$supplied"
+  else
+    VALIDATION_HEAD="$(git rev-parse HEAD 2>/dev/null)"
+    if [[ -z "$VALIDATION_HEAD" ]]; then
+      add_error "staleness check failed: unable to resolve HEAD"
+    fi
+  fi
+}
+resolve_validation_head
+
+# recheck_validation_head_unchanged: re-reads HEAD and records an error if it
+# no longer matches VALIDATION_HEAD. Callers only invoke this once every
+# earlier check has passed (no error recorded yet) — a stale HEAD found now
+# means something moved HEAD during this invocation, which invalidates every
+# comparison already made against VALIDATION_HEAD.
+recheck_validation_head_unchanged() {
+  local recheck_head
+  recheck_head="$(git rev-parse HEAD 2>/dev/null)"
+  if [[ -z "$recheck_head" ]]; then
+    add_error "staleness check failed: unable to re-read HEAD"
+  elif [[ "$recheck_head" != "$VALIDATION_HEAD" ]]; then
+    add_error "staleness check failed: HEAD changed during validation; rerun validator"
+  fi
+}
+
+# read_tree_entry <commit> <path>: prints the path's tree-entry mode at
+# <commit> (the blob object id is never needed by any caller, so it is not
+# part of this contract). Exit 0 = found (output populated); a non-regular
+# mode (submodule/tree/symlink) is a normal, expected output here — the
+# caller decides what a mode means, this only does the checked read. Exit 1 =
+# `git ls-tree` ran fine but the path has no entry at that commit (the path
+# does not exist there — a legitimate mode-mismatch-shaped condition, not an
+# inspection failure). Exit 2 = `git ls-tree` itself failed to execute; the
+# caller must treat that as inspection-failed, not as a mode mismatch, per
+# the "git/od/cmp の実行失敗は判定不能 ERROR" contract.
+read_tree_entry() {
+  local commit="$1" path="$2" line status
+  line="$(git ls-tree "$commit" -- "$path" 2>/dev/null)"
+  status=$?
+  [[ "$status" -eq 0 ]] || return 2
+  [[ -n "$line" ]] || return 1
+  awk '{print $1}' <<<"$line"
+}
+
+# read_git_blob <commit> <path> <output>: checked read of a blob into a
+# normal file. Failure (missing path, git error) is the caller's signal to
+# treat the path as inspection-failed rather than silently comparing empty
+# content.
+read_git_blob() {
+  local commit="$1" path="$2" output="$3"
+  git show "${commit}:${path}" >"$output" 2>/dev/null
+}
+
+# blob_has_nul <file>: 0 = contains a NUL byte (binary), 1 = no NUL byte
+# (text), 2 = could not be inspected. Detected via od byte tokens rather than
+# a shell-variable NUL search because bash strings cannot hold a NUL byte at
+# all, so no shell-level comparison could ever see one.
+blob_has_nul() {
+  local file="$1"
+  LC_ALL=C od -An -v -tx1 -- "$file" 2>/dev/null | grep -qw '00'
+  # Capture the whole array in one assignment: each subsequent simple command
+  # (including a second `local` line) overwrites PIPESTATUS with its own
+  # single-command result, so reading od's and grep's status via two
+  # separate `local` assignments would silently lose the first one.
+  local statuses=("${PIPESTATUS[@]}")
+  local od_status="${statuses[0]}"
+  local grep_status="${statuses[1]}"
+  [[ "$od_status" -eq 0 ]] || return 2
+  case "$grep_status" in
+    0) return 0 ;;
+    1) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# extract_matching_lines <input> <symbol> <output>: writes the fixed-string
+# matching-line sequence to <output> and returns grep's exit status (0 =
+# non-empty sequence, 1 = empty sequence — both normal; >=2 is
+# inspection-failed, handled by the caller).
+extract_matching_lines() {
+  local input="$1" symbol="$2" output="$3"
+  LC_ALL=C grep -F -- "$symbol" "$input" >"$output" 2>/dev/null
 }
 
 frontmatter_value_of() {
@@ -166,14 +295,28 @@ if [[ "$KIND" == "umbrella" ]]; then
         add_error "umbrella phase must be an implementation spec, not another umbrella: $phase"
         continue
       fi
-      if ! phase_errors="$(bash "$VALIDATOR" $([[ "$STRUCTURE_ONLY" -eq 1 ]] && echo --structure-only) "$phase_path" 2>&1 >/dev/null)"; then
+      phase_stderr_file="$STALENESS_TMP_DIR/phase-stderr-$phase"
+      : >"$phase_stderr_file"
+      phase_structure_only_flag=""
+      [[ "$STRUCTURE_ONLY" -eq 1 ]] && phase_structure_only_flag="--structure-only"
+      if ! CROWI_SPEC_VALIDATION_HEAD="$VALIDATION_HEAD" bash "$VALIDATOR" ${phase_structure_only_flag:+"$phase_structure_only_flag"} "$phase_path" >/dev/null 2>"$phase_stderr_file"; then
         while IFS= read -r line; do
           [[ -n "$line" ]] && add_error "phase $phase: ${line#ERROR: }"
-        done <<<"$phase_errors"
+        done <"$phase_stderr_file"
       else
         VALIDATED_PHASES=$((VALIDATED_PHASES + 1))
+        while IFS= read -r line; do
+          [[ "$line" == WARN:\ * ]] && add_warning "phase $phase: ${line#WARN: }"
+        done <"$phase_stderr_file"
       fi
     done
+  fi
+
+  # A phase-level failure already means "not ready"; re-checking our own HEAD
+  # cannot change that outcome, so it only runs on the success path. Skipped
+  # under --structure-only along with every other freshness recheck.
+  if [[ "${#ERRORS[@]}" -eq 0 && "$STRUCTURE_ONLY" -eq 0 && -n "$VALIDATION_HEAD" ]]; then
+    recheck_validation_head_unchanged
   fi
 
   if [[ "${#ERRORS[@]}" -gt 0 ]]; then
@@ -182,6 +325,9 @@ if [[ "$KIND" == "umbrella" ]]; then
     done
     exit 1
   fi
+  for warning in "${WARNINGS[@]}"; do
+    echo "WARN: $warning" >&2
+  done
   echo "READY: umbrella spec v2 ($SPEC_PATH) — $VALIDATED_PHASES phase specs validated"
   exit 0
 fi
@@ -247,6 +393,21 @@ fi
 
 CHANGE_PATHS=()
 REFERENCE_PATHS=()
+REFERENCE_SYMBOLS=()
+declare -A SEEN_REFERENCE_PAIRS=()
+
+# add_reference <path> <symbol>: registers a freshness reference. <symbol>
+# empty means a strict (path-only) record; non-empty means a symbol record
+# for that path. Exact (path, symbol) pairs are deduped so a symbol named by
+# both a Change entry and a reuse target isn't checked twice.
+add_reference() {
+  local path="$1" symbol="$2" key
+  key="$path"$'\x1f'"$symbol"
+  [[ -n "${SEEN_REFERENCE_PAIRS[$key]:-}" ]] && return
+  SEEN_REFERENCE_PAIRS["$key"]=1
+  REFERENCE_PATHS+=("$path")
+  REFERENCE_SYMBOLS+=("$symbol")
+}
 
 is_repo_relative_path() {
   local path="$1"
@@ -268,7 +429,6 @@ is_repo_relative_path() {
 while IFS=$'\034' read -r path status symbols reuse; do
   [[ -z "$path" ]] && continue
   CHANGE_PATHS+=("$path")
-  REFERENCE_PATHS+=("$path")
 
   if ! is_repo_relative_path "$path"; then
     add_error "implementation map path must be repository-relative: $path"
@@ -284,12 +444,23 @@ while IFS=$'\034' read -r path status symbols reuse; do
         if ! grep -Fq -- "$symbol" "$path"; then
           add_error "existing symbol is not grounded in $path: $symbol"
         fi
+        # Registered as a symbol record even if ungrounded: an ungrounded
+        # symbol already fails the invocation via the error above, so this
+        # only affects output on a path that would otherwise error anyway.
+        add_reference "$path" "$symbol"
       done < <(
         awk -F'`' '{ for (i = 2; i <= NF; i += 2) print $i }' <<<"$symbols"
       )
     fi
-  elif [[ "$status" == "new" && -e "$path" ]]; then
-    add_error "implementation map marks an existing path as new: $path"
+  elif [[ "$status" == "new" ]]; then
+    if [[ -e "$path" ]]; then
+      add_error "implementation map marks an existing path as new: $path"
+    fi
+    # Change status: new is always a strict record (design decision 2) — a
+    # not-yet-created path has no symbol lines to compare, and freshness for
+    # it just falls back to the existing diff/dirty check like any strict
+    # reference.
+    add_reference "$path" ""
   fi
 
   reuse_lower="$(printf '%s' "$reuse" | tr '[:upper:]' '[:lower:]')"
@@ -313,11 +484,17 @@ while IFS=$'\034' read -r path status symbols reuse; do
       add_error "reuse path must be repository-relative: $reuse_path"
       continue
     fi
-    REFERENCE_PATHS+=("$reuse_path")
     if [[ ! -f "$reuse_path" ]]; then
       add_error "reuse path does not exist: $reuse_path"
-    elif [[ -n "$reuse_symbol" ]] && ! grep -Fq -- "$reuse_symbol" "$reuse_path"; then
-      add_error "reuse symbol is not grounded in $reuse_path: $reuse_symbol"
+    else
+      if [[ -n "$reuse_symbol" ]] && ! grep -Fq -- "$reuse_symbol" "$reuse_path"; then
+        add_error "reuse symbol is not grounded in $reuse_path: $reuse_symbol"
+      fi
+      # path#symbol -> symbol record, path-only -> strict record (design
+      # decision 2). Registered even if the symbol above failed to ground —
+      # that already fails the invocation via the error, so this only
+      # affects output on a path that would otherwise error anyway.
+      add_reference "$reuse_path" "$reuse_symbol"
     fi
   done < <(
     awk -F'`' '{ for (i = 2; i <= NF; i += 2) print $i }' <<<"$reuse"
@@ -446,7 +623,9 @@ while IFS=$'\034' read -r ac_id test_file test_case test_level; do
     if ! is_repo_relative_path "$test_file"; then
       TEST_ROW_ERRORS="${TEST_ROW_ERRORS}${TEST_ROW_ERRORS:+$'\n'}test plan Test file must be repository-relative for $ac_id: $test_file"
     else
-      REFERENCE_PATHS+=("$test_file")
+      # Test file is always a strict record (design decision 2) — freshness
+      # for it stays the existing whole-file diff/dirty check.
+      add_reference "$test_file" ""
     fi
   fi
   if [[ -z "$test_case" ]]; then
@@ -535,11 +714,11 @@ if [[ -n "$OPEN_QUESTION_ERRORS" ]]; then
 fi
 
 if [[ "$GROUNDED_AT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    add_error "freshness check requires a git worktree"
+  if [[ -z "$VALIDATION_HEAD" ]]; then
+    : # resolve_validation_head already recorded why (no worktree / bad env var).
   elif ! git cat-file -e "${GROUNDED_AT}^{commit}" >/dev/null 2>&1; then
     add_error "grounded_at commit does not exist: $GROUNDED_AT"
-  elif ! git merge-base --is-ancestor "$GROUNDED_AT" HEAD >/dev/null 2>&1; then
+  elif ! git merge-base --is-ancestor "$GROUNDED_AT" "$VALIDATION_HEAD" >/dev/null 2>&1; then
     add_error "spec is stale: grounded_at is not an ancestor of HEAD"
   elif [[ "$STRUCTURE_ONLY" -eq 1 ]]; then
     : # structure-only: grounded_at 自体の存在・ancestry は確認済み。ここから先の
@@ -564,25 +743,209 @@ if [[ "$GROUNDED_AT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
       [[ -n "$path" ]] && UNIQUE_REFERENCE_PATHS+=("$path")
     done < <(printf '%s\n' "${REFERENCE_PATHS[@]}" | awk '!seen[$0]++' |
       grep -Ev "$GENERATED_ARTIFACT_RE" || true)
+
+    # Per-path strict/symbol categorization (design decision 2): a path with
+    # even one strict (empty-symbol) record is strict as a whole — symbol
+    # granularity never applies to it, mixing does not soften the check.
+    declare -A IS_STRICT_PATH=()
+    declare -A PATH_SYMBOLS=()
+    for ref_idx in "${!REFERENCE_PATHS[@]}"; do
+      ref_path="${REFERENCE_PATHS[$ref_idx]}"
+      ref_symbol="${REFERENCE_SYMBOLS[$ref_idx]}"
+      if [[ -z "$ref_symbol" ]]; then
+        IS_STRICT_PATH["$ref_path"]=1
+      elif [[ -n "${PATH_SYMBOLS[$ref_path]:-}" ]]; then
+        PATH_SYMBOLS["$ref_path"]="${PATH_SYMBOLS[$ref_path]}"$'\x1e'"$ref_symbol"
+      else
+        PATH_SYMBOLS["$ref_path"]="$ref_symbol"
+      fi
+    done
+
     # An empty pathspec would make git diff report the WHOLE tree, turning
     # "every reference was a generated artifact" into a guaranteed false
     # stale. Skip the check instead.
     if [[ "${#UNIQUE_REFERENCE_PATHS[@]}" -gt 0 ]]; then
-      # git's exit status must be checked, not just its output: a pathspec it
-      # rejects makes it fail with empty stdout, which is indistinguishable
-      # from "nothing changed" and would pass the spec without checking it.
-      if ! CHANGED_REFERENCES="$(git diff --name-only "$GROUNDED_AT"..HEAD -- "${UNIQUE_REFERENCE_PATHS[@]}" 2>/dev/null)"; then
-        add_error "staleness check failed: git rejected the spec's reference paths"
-      elif [[ -n "$CHANGED_REFERENCES" ]]; then
-        add_error "spec is stale: referenced paths changed after grounded_at: $(echo "$CHANGED_REFERENCES" | tr '\n' ' ')"
+      DIRTY_REFERENCE_PATHS=()
+      STALE_REFERENCE_PATHS=()
+      # Paths that would otherwise succeed (unchanged, or changed with an
+      # identical symbol sequence) — re-verified clean as a batch right
+      # before output (see below), since this loop checks each individually
+      # and time passes between one path's check and the last one's.
+      SUCCESS_CANDIDATE_PATHS=()
+      declare -A WARN_SYMBOLS_FOR_PATH=()
+
+      for ref_path in "${UNIQUE_REFERENCE_PATHS[@]}"; do
+        # dirty は参照 path ごとに判定する (作業ツリー全体の dirty 状態では判断
+        # しない) — index-only/working-tree-only/両方を区別せず、そのまま
+        # file-level stale にする。
+        if ! path_status="$(git status --porcelain -- "$ref_path" 2>/dev/null)"; then
+          add_error "staleness check failed: git rejected the spec's reference paths"
+          continue
+        fi
+        if [[ -n "$path_status" ]]; then
+          DIRTY_REFERENCE_PATHS+=("$ref_path")
+          continue
+        fi
+
+        if ! path_diff="$(git diff --name-only "$GROUNDED_AT".."$VALIDATION_HEAD" -- "$ref_path" 2>/dev/null)"; then
+          add_error "staleness check failed: git rejected the spec's reference paths"
+          continue
+        fi
+        if [[ -z "$path_diff" ]]; then
+          SUCCESS_CANDIDATE_PATHS+=("$ref_path")
+          continue
+        fi
+
+        if [[ -n "${IS_STRICT_PATH[$ref_path]:-}" ]]; then
+          STALE_REFERENCE_PATHS+=("$ref_path")
+          continue
+        fi
+
+        # Symbol path: conditions 2-5 (mode match, binary-free, grep-inspectable).
+        # read_tree_entry distinguishes "git ran fine, no entry" (exit 1 —
+        # file-level fallback, condition 2 genuinely fails) from "git itself
+        # failed" (exit 2 — inspection-failed, not a mode mismatch).
+        grounded_mode="$(read_tree_entry "$GROUNDED_AT" "$ref_path")"
+        grounded_entry_status=$?
+        if [[ "$grounded_entry_status" -eq 2 ]]; then
+          add_error "staleness check failed: unable to inspect tree entry for $ref_path at grounded_at"
+          continue
+        elif [[ "$grounded_entry_status" -eq 1 ]]; then
+          STALE_REFERENCE_PATHS+=("$ref_path")
+          continue
+        fi
+        head_mode="$(read_tree_entry "$VALIDATION_HEAD" "$ref_path")"
+        head_entry_status=$?
+        if [[ "$head_entry_status" -eq 2 ]]; then
+          add_error "staleness check failed: unable to inspect tree entry for $ref_path at HEAD"
+          continue
+        elif [[ "$head_entry_status" -eq 1 ]]; then
+          STALE_REFERENCE_PATHS+=("$ref_path")
+          continue
+        fi
+        case "$grounded_mode" in
+          100644 | 100755) ;;
+          *)
+            STALE_REFERENCE_PATHS+=("$ref_path")
+            continue
+            ;;
+        esac
+        if [[ "$grounded_mode" != "$head_mode" ]]; then
+          STALE_REFERENCE_PATHS+=("$ref_path")
+          continue
+        fi
+
+        if ! read_git_blob "$GROUNDED_AT" "$ref_path" "$GROUNDED_BLOB_FILE"; then
+          add_error "staleness check failed: unable to read $ref_path at grounded_at"
+          continue
+        fi
+        if ! read_git_blob "$VALIDATION_HEAD" "$ref_path" "$HEAD_BLOB_FILE"; then
+          add_error "staleness check failed: unable to read $ref_path at HEAD"
+          continue
+        fi
+
+        blob_has_nul "$GROUNDED_BLOB_FILE"
+        grounded_nul_status=$?
+        blob_has_nul "$HEAD_BLOB_FILE"
+        head_nul_status=$?
+        if [[ "$grounded_nul_status" -eq 2 || "$head_nul_status" -eq 2 ]]; then
+          add_error "staleness check failed: unable to inspect $ref_path for binary content"
+          continue
+        fi
+        if [[ "$grounded_nul_status" -eq 0 || "$head_nul_status" -eq 0 ]]; then
+          STALE_REFERENCE_PATHS+=("$ref_path")
+          continue
+        fi
+
+        IFS=$'\x1e' read -r -a path_symbols <<<"${PATH_SYMBOLS[$ref_path]:-}"
+        path_inspection_failed=0
+        path_symbol_stale=0
+        matched_symbols=()
+        for symbol in "${path_symbols[@]}"; do
+          [[ -z "$symbol" ]] && continue
+          extract_matching_lines "$GROUNDED_BLOB_FILE" "$symbol" "$GROUNDED_MATCH_FILE"
+          grounded_grep_status=$?
+          extract_matching_lines "$HEAD_BLOB_FILE" "$symbol" "$HEAD_MATCH_FILE"
+          head_grep_status=$?
+          if [[ "$grounded_grep_status" -gt 1 || "$head_grep_status" -gt 1 ]]; then
+            add_error "staleness check failed: symbol grep failed for $ref_path#$symbol"
+            path_inspection_failed=1
+            continue
+          fi
+          cmp -s "$GROUNDED_MATCH_FILE" "$HEAD_MATCH_FILE"
+          cmp_status=$?
+          case "$cmp_status" in
+            0)
+              matched_symbols+=("$symbol")
+              ;;
+            1)
+              add_error "spec is stale: referenced path changed and symbol lines differ: $ref_path#$symbol"
+              path_symbol_stale=1
+              ;;
+            *)
+              # cmp exit >=2 is an I/O failure (e.g. unreadable temp file), not
+              # a same/differ verdict — fail closed as inspection-failed per
+              # the "git/od/cmp の実行失敗は判定不能 ERROR" contract instead of
+              # silently treating it as "differs".
+              add_error "staleness check failed: unable to compare matching lines for $ref_path#$symbol"
+              path_inspection_failed=1
+              ;;
+          esac
+        done
+        if [[ "$path_inspection_failed" -eq 1 || "$path_symbol_stale" -eq 1 ]]; then
+          continue
+        fi
+        SUCCESS_CANDIDATE_PATHS+=("$ref_path")
+        WARN_SYMBOLS_FOR_PATH["$ref_path"]="$(
+          IFS=,
+          echo "${matched_symbols[*]}"
+        )"
+      done
+
+      # One ERROR per path (not one aggregated line for the whole batch): each
+      # path is independently identifiable, matching the per-path#symbol form
+      # used for symbol-level stale above rather than mixing an aggregate list
+      # form with a per-item form in the same invocation's output.
+      for ref_path in "${DIRTY_REFERENCE_PATHS[@]}"; do
+        add_error "spec is stale: referenced path has uncommitted changes: $ref_path"
+      done
+      for ref_path in "${STALE_REFERENCE_PATHS[@]}"; do
+        add_error "spec is stale: referenced path changed after grounded_at: $ref_path"
+      done
+
+      # Final clean recheck: covers every path that would otherwise succeed
+      # (warning candidates, unchanged symbol paths, unchanged strict
+      # reuse/Test file/status-new paths) in one batch, right before output.
+      # A path reported clean by its own earlier check can still have gone
+      # dirty by the time the last path in this loop was checked; only a
+      # recheck this close to output actually bounds that window (still not
+      # to zero — see the contract note on observation limits).
+      if [[ "${#ERRORS[@]}" -eq 0 && "${#SUCCESS_CANDIDATE_PATHS[@]}" -gt 0 ]]; then
+        if ! FINAL_DIRTY_REFERENCES="$(git status --porcelain -- "${SUCCESS_CANDIDATE_PATHS[@]}" 2>/dev/null)"; then
+          add_error "staleness check failed: git rejected the spec's reference paths"
+        elif [[ -n "$FINAL_DIRTY_REFERENCES" ]]; then
+          while IFS= read -r final_dirty_line; do
+            [[ -z "$final_dirty_line" ]] && continue
+            add_error "spec is stale: referenced path has uncommitted changes: ${final_dirty_line:3}"
+          done <<<"$FINAL_DIRTY_REFERENCES"
+        fi
       fi
-      if ! DIRTY_REFERENCES="$(git status --porcelain -- "${UNIQUE_REFERENCE_PATHS[@]}" 2>/dev/null)"; then
-        add_error "staleness check failed: git rejected the spec's reference paths"
-      elif [[ -n "$DIRTY_REFERENCES" ]]; then
-        add_error "spec is stale: referenced paths have uncommitted changes"
+      if [[ "${#ERRORS[@]}" -eq 0 ]]; then
+        for ref_path in "${!WARN_SYMBOLS_FOR_PATH[@]}"; do
+          add_warning "referenced path changed but grounded symbol lines are identical: $ref_path (symbols: ${WARN_SYMBOLS_FOR_PATH[$ref_path]})"
+        done
       fi
     fi
   fi
+fi
+
+# Final HEAD recheck: unconditional whenever freshness classification ran at
+# all (full validation, not --structure-only) — independent of whether this
+# spec had any non-generated reference path. A spec whose references are all
+# generated artifacts (or has none) must not skip this and emit READY without
+# ever having checked whether HEAD moved during validation.
+if [[ "${#ERRORS[@]}" -eq 0 && "$STRUCTURE_ONLY" -eq 0 && -n "$VALIDATION_HEAD" ]]; then
+  recheck_validation_head_unchanged
 fi
 
 if [[ "${#ERRORS[@]}" -gt 0 ]]; then
@@ -592,4 +955,8 @@ if [[ "${#ERRORS[@]}" -gt 0 ]]; then
   exit 1
 fi
 
+for warning in "${WARNINGS[@]}"; do
+  echo "WARN: $warning" >&2
+done
 echo "READY: implementation-ready spec v2 ($SPEC_PATH)"
+exit 0
