@@ -3,7 +3,7 @@
 import type { PageHistoryContentRow } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { getLocale } from '@paraglide/runtime.js';
-import { GitCompare, History as HistoryIcon, Loader2, Terminal } from 'lucide-react';
+import { History as HistoryIcon, Loader2, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 
@@ -51,38 +51,28 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
     return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
   }, []);
 
-  const [pendingFrom, setPendingFrom] = useState<string | null>(null);
-  const [pendingTo, setPendingTo] = useState<string | null>(null);
-  const [activePair, setActivePair] = useState<{ from: string; to: string } | null>(null);
+  const [selectedFrom, setSelectedFrom] = useState<string | null>(null);
+  const [selectedTo, setSelectedTo] = useState<string | null>(null);
   const [selectionPageId, setSelectionPageId] = useState(pageId);
   const [defaultPairInitialized, setDefaultPairInitialized] = useState(false);
 
   if (selectionPageId !== pageId) {
     setSelectionPageId(pageId);
     setDefaultPairInitialized(false);
-    setPendingFrom(null);
-    setPendingTo(null);
-    setActivePair(null);
+    setSelectedFrom(null);
+    setSelectedTo(null);
   } else if (!defaultPairInitialized && contentRows.length >= 2) {
     const latest = contentRows[0];
     const previous = contentRows[1];
     setDefaultPairInitialized(true);
-    setPendingFrom(previous.id);
-    setPendingTo(latest.id);
-    setActivePair({ from: previous.revisionId, to: latest.revisionId });
+    setSelectedFrom(previous.id);
+    setSelectedTo(latest.id);
   }
 
-  const canCompare = Boolean(pendingFrom && pendingTo && pendingFrom !== pendingTo);
-  const pendingFromRow = pendingFrom ? contentRows.find((row) => row.id === pendingFrom) : null;
-  const pendingToRow = pendingTo ? contentRows.find((row) => row.id === pendingTo) : null;
-  const fromIndex = pendingFrom ? (contentIndexById.get(pendingFrom) ?? -1) : -1;
-  const toIndex = pendingTo ? (contentIndexById.get(pendingTo) ?? -1) : -1;
-  const isPairDirty = canCompare && (!activePair || activePair.from !== pendingFromRow?.revisionId || activePair.to !== pendingToRow?.revisionId);
-
-  const handleCompare = () => {
-    if (!pendingFromRow || !pendingToRow || pendingFromRow.id === pendingToRow.id) return;
-    setActivePair({ from: pendingFromRow.revisionId, to: pendingToRow.revisionId });
-  };
+  const selectedFromRow = selectedFrom ? contentRows.find((row) => row.id === selectedFrom) : null;
+  const selectedToRow = selectedTo ? contentRows.find((row) => row.id === selectedTo) : null;
+  const fromIndex = selectedFrom ? (contentIndexById.get(selectedFrom) ?? -1) : -1;
+  const toIndex = selectedTo ? (contentIndexById.get(selectedTo) ?? -1) : -1;
 
   return (
     <div className="space-y-6">
@@ -164,8 +154,8 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                   }
 
                   const contentIndex = contentIndexById.get(entry.id) ?? -1;
-                  const isFrom = pendingFrom === entry.id;
-                  const isTo = pendingTo === entry.id;
+                  const isFrom = selectedFrom === entry.id;
+                  const isTo = selectedTo === entry.id;
                   const fromDisabled = isTo || (toIndex !== -1 && contentIndex < toIndex);
                   const toDisabled = isFrom || (fromIndex !== -1 && contentIndex > fromIndex);
                   const savedBy = entry.savedBy ?? entry.actor ?? null;
@@ -183,7 +173,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                             value={entry.id}
                             checked={isFrom}
                             disabled={fromDisabled}
-                            onChange={() => setPendingFrom(entry.id)}
+                            onChange={() => setSelectedFrom(entry.id)}
                             aria-label={m['page_history.select_from']({ revision: entry.revisionId.slice(-8) })}
                           />
                         </td>
@@ -194,7 +184,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                             value={entry.id}
                             checked={isTo}
                             disabled={toDisabled}
-                            onChange={() => setPendingTo(entry.id)}
+                            onChange={() => setSelectedTo(entry.id)}
                             aria-label={m['page_history.select_to']({ revision: entry.revisionId.slice(-8) })}
                           />
                         </td>
@@ -232,19 +222,13 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
             </table>
           </div>
 
-          <div className="flex items-center justify-end gap-2 mt-3">
-            {hasNextPage && (
+          {hasNextPage && (
+            <div className="flex items-center justify-end mt-3">
               <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} type="button" size="sm">
                 {isFetchingNextPage ? m['page_history.loading_more']() : m['page_history.load_more']()}
               </Button>
-            )}
-            {contentRows.length >= 2 && (
-              <Button onClick={handleCompare} disabled={!canCompare} type="button" size="sm">
-                <GitCompare className="h-4 w-4 mr-1" />
-                {isPairDirty ? m['page_history.update_diff']() : m['page_history.compare']()}
-              </Button>
-            )}
-          </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -254,9 +238,9 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
         </section>
       )}
 
-      {!isLoading && !isError && contentRows.length >= 2 && activePair && (
+      {!isLoading && !isError && contentRows.length >= 2 && selectedFromRow && selectedToRow && (
         <section aria-label={m['page_history.diff_region_label']()} className="border-t pt-6">
-          <RevisionDiff fromId={activePair.from} toId={activePair.to} />
+          <RevisionDiff fromId={selectedFromRow.revisionId} toId={selectedToRow.revisionId} />
         </section>
       )}
     </div>

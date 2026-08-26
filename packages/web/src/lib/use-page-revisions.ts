@@ -1,18 +1,27 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from './api-client';
 import type { Revision } from '@crowi/api-contract';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { apiClient } from './api-client';
 
 export interface UseRevisionPairResult {
   revisions: Revision[] | null;
+  displayedFromId: string | null;
+  displayedToId: string | null;
   isLoading: boolean;
+  isFetching: boolean;
   isError: boolean;
   error: Error | null;
   refetch: () => void;
 }
 
 const revisionPairKey = (idA: string, idB: string) => ['revisions-pair', { idA, idB }] as const;
+
+interface RevisionPairData {
+  revisions: Revision[];
+  fromId: string | null;
+  toId: string;
+}
 
 /**
  * Fetch two revisions in one batch call. When `idA` is null the call reduces
@@ -28,18 +37,23 @@ export function useRevisionPair(idA: string | null | undefined, idB: string | nu
   const query = useQuery({
     queryKey: revisionPairKey(idA ?? '', idB ?? ''),
     queryFn: async () => {
-      if (!ids) return [] as Revision[];
+      if (!ids) return { revisions: [], fromId: idA ?? null, toId: idB ?? '' } satisfies RevisionPairData;
       const response = await apiClient.pages.revisions.$get({ query: { ids } });
       if (!response.ok) throw new Error('Failed to fetch revisions');
       const body = await response.json();
-      return body.revisions;
+      return { revisions: body.revisions, fromId: idA ?? null, toId: idB ?? '' } satisfies RevisionPairData;
     },
     enabled,
+    // Radio changes should not collapse the diff panel while its replacement loads.
+    placeholderData: keepPreviousData,
   });
 
   return {
-    revisions: query.data ?? null,
+    revisions: query.data?.revisions ?? null,
+    displayedFromId: query.data?.fromId ?? null,
+    displayedToId: query.data?.toId ?? null,
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
     isError: query.isError,
     error: query.error as Error | null,
     refetch: query.refetch,
