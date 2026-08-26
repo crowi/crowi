@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup, screen, fireEvent } from '@testing-library/react';
-import { createElement } from 'react';
 import type { Revision } from '@crowi/api-contract';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RevisionDiff } from './revision-diff';
 
 // The real diff viewer depends on @emotion + a web worker and is loaded via
@@ -10,9 +10,11 @@ import { RevisionDiff } from './revision-diff';
 // the toggle test can assert on them without needing the real diff computation.
 vi.mock('react-diff-viewer-continued', () => ({
   DiffMethod: { LINES: 'LINES' },
-  default: (props: { showDiffOnly?: boolean; extraLinesSurroundingDiff?: number }) => (
+  default: (props: { oldValue?: string; newValue?: string; showDiffOnly?: boolean; extraLinesSurroundingDiff?: number }) => (
     <div
       data-testid="diff-viewer"
+      data-old-value={props.oldValue}
+      data-new-value={props.newValue}
       data-show-diff-only={String(props.showDiffOnly)}
       data-extra-lines-surrounding-diff={String(props.extraLinesSurroundingDiff)}
     />
@@ -39,16 +41,61 @@ const baseRevision = (overrides: Partial<Revision>): Revision => ({
 });
 
 function mockRevisions(revisions: Revision[]) {
-  useRevisionPairMock.mockReturnValue({
+  useRevisionPairMock.mockImplementation((fromId: string | null, toId: string) => ({
     revisions,
+    displayedFromId: fromId,
+    displayedToId: toId,
     isLoading: false,
+    isFetching: false,
     isError: false,
     error: null,
     refetch: vi.fn(),
-  });
+  }));
 }
 
 describe('RevisionDiff fold toggle', () => {
+  it('keeps the previous diff visible while a newly selected pair is fetching', async () => {
+    const previousRevisions = [baseRevision({ _id: 'rev-A', body: 'before' }), baseRevision({ _id: 'rev-B', body: 'previous result' })];
+    mockRevisions(previousRevisions);
+
+    const { rerender } = render(createElement(RevisionDiff, { fromId: 'rev-A', toId: 'rev-B' }));
+    expect((await screen.findByTestId('diff-viewer')).dataset.newValue).toBe('previous result');
+
+    useRevisionPairMock.mockReturnValue({
+      revisions: previousRevisions,
+      displayedFromId: 'rev-A',
+      displayedToId: 'rev-B',
+      isLoading: false,
+      isFetching: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    rerender(createElement(RevisionDiff, { fromId: 'rev-A', toId: 'rev-C' }));
+
+    expect(screen.getByTestId('diff-viewer').dataset.newValue).toBe('previous result');
+    expect(screen.getByText('rev-B')).toBeDefined();
+    expect(screen.getByRole('status', { name: 'リビジョンを読み込み中...' })).toBeDefined();
+  });
+
+  it('shows the loading state on the first load when there is no previous diff', () => {
+    useRevisionPairMock.mockReturnValue({
+      revisions: null,
+      displayedFromId: null,
+      displayedToId: null,
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(createElement(RevisionDiff, { fromId: 'rev-A', toId: 'rev-B' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('リビジョンを読み込み中...');
+    expect(screen.queryByTestId('diff-viewer')).toBeNull();
+  });
+
   it('defaults to fold view (showDiffOnly=true) and flips to showAllLines on toggle click', async () => {
     mockRevisions([baseRevision({ _id: 'rev-A', body: 'line1\nline2\nline3\n' }), baseRevision({ _id: 'rev-B', body: 'line1\nCHANGED\nline3\n' })]);
 

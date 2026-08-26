@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createElement, type PropsWithChildren } from 'react';
 import type { PageHistoryContentRow, PageHistoryEntry, PageHistoryEventRow, PageUser } from '@crowi/api-contract';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createElement, type PropsWithChildren } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PageHistory } from './page-history';
 
 const usePageHistoryMock = vi.fn();
@@ -154,7 +154,30 @@ describe('PageHistory merged timeline', () => {
     expect(screen.getByTestId('revision-diff')).toHaveTextContent('empty:revision-only');
   });
 
-  it('keeps a manually compared pair when an older page appends more content rows', () => {
+  it('updates the compared pair as soon as a revision radio changes', () => {
+    mockHistory([
+      baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
+      baseContentRow({ id: 'content-middle', revisionId: 'revision-middle' }),
+      baseContentRow({ id: 'content-old', revisionId: 'revision-old' }),
+    ]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' }));
+
+    expect(screen.getByTestId('revision-diff')).toHaveTextContent('revision-old:revision-new');
+  });
+
+  it('does not render a compare button', () => {
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'revision-new' }), baseContentRow({ id: 'content-old', revisionId: 'revision-old' })]);
+
+    render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
+
+    expect(screen.queryByRole('button', { name: '比較' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '差分を更新' })).toBeNull();
+  });
+
+  it('keeps the selected pair when an older page appends more content rows', () => {
     mockHistory([
       baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
       baseContentRow({ id: 'content-middle', revisionId: 'revision-middle' }),
@@ -163,8 +186,6 @@ describe('PageHistory merged timeline', () => {
 
     const { rerender } = render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('radio', { name: 'リビジョン sion-old を From に選択' }));
-    fireEvent.click(screen.getByRole('button', { name: '差分を更新' }));
-    expect(screen.getByTestId('revision-diff')).toHaveTextContent('revision-old:revision-new');
 
     mockHistory([
       baseContentRow({ id: 'content-new', revisionId: 'revision-new' }),
