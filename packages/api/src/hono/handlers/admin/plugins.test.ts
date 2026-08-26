@@ -1357,7 +1357,8 @@ describe('PUT /api/admin/plugins/config — live verification (feature-plugin-co
 
     // feature-config-write-durability: the ordinary write's Mongo failure
     // now propagates instead of being swallowed — the whole PUT 500s, and
-    // nothing past the save (reconfigure, verification) ever runs.
+    // neither the admin handler's own reconfigureAffected() call nor
+    // verification (both gated on the save having succeeded) ever runs.
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     expect(res.body.verificationResults).toBeUndefined();
@@ -1369,7 +1370,12 @@ describe('PUT /api/admin/plugins/config — live verification (feature-plugin-co
     expect(reconfigureSpy).not.toHaveBeenCalled();
     expect(verifySpy).not.toHaveBeenCalled();
     expect(verifyConfig).not.toHaveBeenCalled();
-    expect(reconfigureOrder).toEqual([]);
+    // feature-config-reconciliation-safety: nobody else is going to call
+    // reconfigureAffected() for a save that never returned successfully,
+    // so the plugin's own reconfigure() now runs from inside saveConfig's
+    // failure-path notification instead of leaving this replica running
+    // against a stale driver.
+    expect(reconfigureOrder).toEqual(['reconfigure']);
 
     // The atomic group's own write succeeded before the ordinary write
     // was even attempted, so it stays persisted...
