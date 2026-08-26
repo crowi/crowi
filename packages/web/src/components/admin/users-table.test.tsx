@@ -52,6 +52,13 @@ function openRowMenu() {
   fireEvent.click(trigger);
 }
 
+/** The badge wrapper around the linked-provider marks — reached via its sr-only label. */
+function linkedIdentityBadge(providers: string): HTMLElement {
+  const label = screen.getByText(m['admin.users.linked_identity_label']({ providers }));
+  if (!label.parentElement) throw new Error('linked-identity badge has no wrapper element');
+  return label.parentElement;
+}
+
 describe('UsersTable — linked-identity icon (AC-10)', () => {
   it('shows the linked-identity marker for a user with a federated identity', () => {
     render(<UsersTable users={[makeUser({ linkedProviders: ['google'] })]} pager={PAGER} onPageChange={vi.fn()} />);
@@ -69,6 +76,30 @@ describe('UsersTable — linked-identity icon (AC-10)', () => {
     render(<UsersTable users={[makeUser({ linkedProviders: ['saml'] })]} pager={PAGER} onPageChange={vi.fn()} />);
 
     expect(screen.getByText(m['admin.users.linked_identity_label']({ providers: 'saml' }))).toBeInTheDocument();
+  });
+
+  it("draws the provider's own brand mark instead of the generic link icon", () => {
+    render(<UsersTable users={[makeUser({ linkedProviders: ['google'] })]} pager={PAGER} onPageChange={vi.fn()} />);
+
+    const badge = linkedIdentityBadge('Google');
+    expect(badge.querySelectorAll('svg')).toHaveLength(1);
+    expect(badge.querySelector('.lucide-link-2')).not.toBeInTheDocument();
+  });
+
+  // A wrong logo is worse than a neutral one, so a provider we ship no mark
+  // for keeps the generic link icon.
+  it('keeps the generic link icon for a provider we ship no mark for', () => {
+    render(<UsersTable users={[makeUser({ linkedProviders: ['saml'] })]} pager={PAGER} onPageChange={vi.fn()} />);
+
+    expect(linkedIdentityBadge('saml').querySelector('.lucide-link-2')).toBeInTheDocument();
+  });
+
+  it('draws one mark per linked provider', () => {
+    render(<UsersTable users={[makeUser({ linkedProviders: ['google', 'saml'] })]} pager={PAGER} onPageChange={vi.fn()} />);
+
+    const badge = linkedIdentityBadge('Google, saml');
+    expect(badge.querySelectorAll('svg')).toHaveLength(2);
+    expect(badge.querySelectorAll('.lucide-link-2')).toHaveLength(1);
   });
 });
 

@@ -19,16 +19,27 @@ describe('OAuthRefreshToken', () => {
     await OAuthRefreshToken.deleteMany({});
   });
 
-  const create = (overrides: Partial<{ revokedAt: Date | null; rotatedTo: string | null; expiresAt: Date }> = {}) => {
+  const create = (
+    overrides: Partial<{
+      revokedAt: Date | null;
+      rotatedTo: string | null;
+      expiresAt: Date;
+      userId: InstanceType<typeof ObjectId>;
+      authorizedAt: Date;
+      createdAt: Date;
+    }> = {},
+  ) => {
     const { token, tokenHash } = OAuthRefreshToken.generateToken();
     return OAuthRefreshToken.create({
       tokenHash,
       clientId: 'crowi-cli',
-      userId: new ObjectId(),
+      userId: overrides.userId ?? new ObjectId(),
       scopes: ['pages:read'],
       expiresAt: overrides.expiresAt ?? new Date(Date.now() + 86_400_000),
       revokedAt: overrides.revokedAt ?? null,
       rotatedTo: overrides.rotatedTo ?? null,
+      ...(overrides.authorizedAt !== undefined ? { authorizedAt: overrides.authorizedAt } : {}),
+      ...(overrides.createdAt !== undefined ? { createdAt: overrides.createdAt } : {}),
     }).then((doc) => ({ token, tokenHash, doc }));
   };
 
@@ -75,5 +86,58 @@ describe('OAuthRefreshToken', () => {
     const indexes = OAuthRefreshToken.schema.indexes();
     const ttl = indexes.find(([, opts]) => (opts as { expireAfterSeconds?: number }).expireAfterSeconds === 0);
     expect(ttl).toBeDefined();
+  });
+
+  describe('authorizedAt', () => {
+    it('stores an explicit authorizedAt', async () => {
+      const authorizedAt = new Date(Date.now() - 60_000);
+      const { doc } = await create({ authorizedAt });
+      expect(doc.authorizedAt?.getTime()).toBe(authorizedAt.getTime());
+    });
+
+    it('is undefined on a legacy row that never set it (no backfill)', async () => {
+      const { doc } = await create();
+      expect(doc.authorizedAt).toBeUndefined();
+    });
+  });
+
+  describe('.listActiveByUser', () => {
+    it('returns only the caller’s own active tips, newest first', async () => {
+      const userId = new ObjectId();
+      const otherUserId = new ObjectId();
+      const now = new Date();
+
+      const older = await create({ userId, createdAt: new Date(now.getTime() - 10_000) });
+      const newer = await create({ userId, createdAt: now });
+      await create({ userId: otherUserId }); // other user — excluded
+
+      const rows = await OAuthRefreshToken.listActiveByUser(userId, now);
+      expect(rows.map((r) => r._id.toString())).toEqual([newer.doc._id.toString(), older.doc._id.toString()]);
+    });
+
+    it('excludes revoked, rotated (non-tip), and expired rows', async () => {
+      const userId = new ObjectId();
+      const now = new Date();
+
+      await create({ userId, revokedAt: now }); // revoked
+      await create({ userId, rotatedTo: 'deadbeef' }); // not a tip
+      await create({ userId, expiresAt: new Date(now.getTime() - 1000) }); // expired
+      const tip = await create({ userId });
+
+      const rows = await OAuthRefreshToken.listActiveByUser(userId, now);
+      expect(rows.map((r) => r._id.toString())).toEqual([tip.doc._id.toString()]);
+    });
+
+    it('filters expiresAt against the SAME now instant passed by the caller (not a freshly generated one)', async () => {
+      const userId = new ObjectId();
+      // A row that is active as of `past` but already expired as of `Date.now()`.
+      const past = new Date(Date.now() - 120_000);
+      const expiresSoonAfterPast = new Date(past.getTime() + 60_000);
+      await create({ userId, expiresAt: expiresSoonAfterPast });
+
+      // Using the caller-supplied `past` as `now`, the row is still active.
+      const rows = await OAuthRefreshToken.listActiveByUser(userId, past);
+      expect(rows).toHaveLength(1);
+    });
   });
 });

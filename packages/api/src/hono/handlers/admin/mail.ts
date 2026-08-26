@@ -26,6 +26,7 @@ import { coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
+import { INTERNAL_ERROR_BODY } from '../_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:admin:mail');
 
@@ -71,7 +72,12 @@ export const registerAdminMailRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
 
       if (body.from !== undefined) {
         debug('updateMailSettings from=%s', body.from);
-        await crowi.getConfigService().saveConfig('crowi', { [KEY_FROM]: body.from });
+        try {
+          await crowi.getConfigService().saveConfig('crowi', { [KEY_FROM]: body.from });
+        } catch (err) {
+          debug('Error saving mail settings:', (err as Error).message);
+          return c.json(INTERNAL_ERROR_BODY, 500);
+        }
       }
 
       return c.json({ ok: true as const }, 200);

@@ -33,6 +33,7 @@ import { initialLiveSyncBannerState, isDisplayingOld, type LiveSyncBannerEvent, 
 import { isHeadNewer, isLifecycleChanged, mergePageLevelFields, pageLevelFieldsChanged, pageUserDisplayName } from './live-sync-reconcile';
 import { PageContent } from './page-content';
 import { PageHeader } from './page-header';
+import { CopyPageMarkdownButton } from './copy-page-markdown-button';
 import { useTocScrollSpy } from './page-toc';
 import { PageTocColumns } from './page-toc-columns';
 import { PortalizeBanner } from './portalize-dialog';
@@ -732,7 +733,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // this `if (page)` block — it can never actually fall back here.
     const renderedPage = displayedPage ?? page;
     return (
-      <PageTocColumns toc={toc} activeTocId={activeTocId}>
+      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton page={renderedPage} />}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
         <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}

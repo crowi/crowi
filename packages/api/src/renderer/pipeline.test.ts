@@ -1051,3 +1051,94 @@ describe('GitHub Alerts', () => {
     });
   });
 });
+
+// feature-renderer-break-normalization — real parser + GFM end-to-end,
+// complementing `core/break-normalization.test.ts`'s isolated unit
+// coverage of the transform itself. These cases exercise things only
+// the real pipeline can prove: actual `remark-gfm` table shapes,
+// interaction with `core/github-alerts.ts`'s ordering-sensitive marker
+// check (D-5), and TOC/anchor coexistence with the transform.
+describe('break-normalization (feature-renderer-break-normalization)', () => {
+  type MdNode = { type: string; value?: string; children?: MdNode[] };
+
+  it('AC-1: converts every accepted bare `<br>` variant in a paragraph, preserving surrounding text order', async () => {
+    const { tree } = await runCore('x<br>y<br/>z<br />w');
+    const paragraph = tree.children[0] as unknown as { children: MdNode[] };
+    expect(paragraph.children.map((c) => c.type)).toEqual(['text', 'break', 'text', 'break', 'text', 'break', 'text']);
+    expect(paragraph.children.filter((c) => c.type === 'text').map((c) => c.value)).toEqual(['x', 'y', 'z', 'w']);
+  });
+
+  it('AC-1: converts the case-insensitive `<BR>` / `<Br/>` / `<bR />` variants via the real parser too, preserving text order', async () => {
+    const { tree } = await runCore('p<BR>q<Br/>r<bR />s');
+    const paragraph = tree.children[0] as unknown as { children: MdNode[] };
+    expect(paragraph.children.map((c) => c.type)).toEqual(['text', 'break', 'text', 'break', 'text', 'break', 'text']);
+    expect(paragraph.children.filter((c) => c.type === 'text').map((c) => c.value)).toEqual(['p', 'q', 'r', 's']);
+  });
+
+  it('AC-2: retains an attribute-bearing `<br class="x">` as `html` via the real parser — not one of the 3 bare forms', async () => {
+    const { tree } = await runCore('x<br class="x">y');
+    const paragraph = tree.children[0] as unknown as { children: MdNode[] };
+    expect(paragraph.children.map((c) => c.type)).toEqual(['text', 'html', 'text']);
+    expect((paragraph.children[1] as MdNode).value).toBe('<br class="x">');
+  });
+
+  it('AC-1/AC-5: converts every bare `<br>` inside a single GFM table cell, preserving text order (`a<br>b<br>c`)', async () => {
+    const md = ['| h |', '| --- |', '| a<br>b<br>c |'].join('\n');
+    const { tree } = await runCore(md);
+    const table = tree.children[0] as unknown as { children: Array<{ children: MdNode[] }> };
+    const cell = table.children[1].children[0]; // children[0] is the header row
+    expect(cell.children.map((c) => c.type)).toEqual(['text', 'break', 'text', 'break', 'text']);
+    expect(cell.children.filter((c) => c.type === 'text').map((c) => c.value)).toEqual(['a', 'b', 'c']);
+  });
+
+  it("AC-3: `- x<br>y` converts — the bare `<br>`'s direct parent is the paragraph nested inside the listItem", async () => {
+    const { tree } = await runCore('- x<br>y\n');
+    const list = tree.children[0] as unknown as { children: Array<{ children: MdNode[] }> };
+    const paragraph = list.children[0].children[0];
+    expect(paragraph.children.map((c) => c.type)).toEqual(['text', 'break', 'text']);
+  });
+
+  it("AC-3: `- foo\\n\\n  <br>\\n` retains `html` — the bare `<br>`'s direct parent is the `listItem` itself (flow position)", async () => {
+    const { tree } = await runCore('- foo\n\n  <br>\n');
+    const list = tree.children[0] as unknown as { children: MdNode[] };
+    const listItem = list.children[0];
+    expect(listItem.children?.map((c) => c.type)).toEqual(['paragraph', 'html']);
+    expect(listItem.children?.[1].value).toBe('<br>');
+  });
+
+  it('AC-4: retains a `<br>` directly co-located with a `white-space:pre` span', async () => {
+    const { tree } = await runCore('<span style="white-space:pre">x<br>y</span>');
+    const paragraph = tree.children[0] as unknown as { children: MdNode[] };
+    expect(paragraph.children.map((c) => c.type)).toEqual(['html', 'text', 'html', 'text', 'html']);
+    expect(paragraph.children[2].value).toBe('<br>');
+  });
+
+  it('AC-4: retains a `<br>` reachable only through an inline wrapper (`**strong**` sandwiched inside the same `white-space:pre` span)', async () => {
+    const { tree } = await runCore('<span style="white-space:pre">**x<br>y**</span>');
+    const paragraph = tree.children[0] as unknown as { children: MdNode[] };
+    expect(paragraph.children.map((c) => c.type)).toEqual(['html', 'strong', 'html']);
+    expect(paragraph.children[1].children?.map((c) => c.type)).toEqual(['text', 'html', 'text']);
+  });
+
+  it('AC-4/AC-5: judges contamination per `tableCell`, not per row — a raw-HTML cell stays `html` while its clean sibling in the SAME row still converts', async () => {
+    const md = ['| a | b |', '| --- | --- |', '| <b>x</b> | a<br>b |'].join('\n');
+    const { tree } = await runCore(md);
+    const table = tree.children[0] as unknown as { children: Array<{ children: MdNode[] }> };
+    const [cellA, cellB] = table.children[1].children;
+    expect(cellA.children?.map((c) => c.type)).toEqual(['html', 'text', 'html']);
+    expect(cellB.children?.map((c) => c.type)).toEqual(['text', 'break', 'text']);
+  });
+
+  it('AC-6: a GitHub Alerts marker whose next line is `> <br>` still promotes to `crowiAlert` (break-normalization runs AFTER github-alerts, D-5)', async () => {
+    const { tree } = await runCore('> [!NOTE]\n> <br>\n');
+    expect(tree.children[0].type).toBe('crowiAlert');
+  });
+
+  it('AC-6: a `<br>`-only heading still drops from the TOC and keeps a non-empty anchor, while its child is normalized to `break`', async () => {
+    const { tree, metadata } = await runCore('### <br>');
+    expect(metadata.toc).toEqual([]);
+    const heading = tree.children[0] as unknown as { children: MdNode[]; data?: { hProperties?: { id?: string } } };
+    expect(heading.data?.hProperties?.id).toBeTruthy();
+    expect(heading.children.map((c) => c.type)).toEqual(['break']);
+  });
+});

@@ -12,6 +12,7 @@ export * from './activation';
 export * from './email-change';
 export * from './me';
 export * from './access-token';
+export * from './oauth-session';
 export * from './oauth';
 export * from './user';
 export * from './bookmark';

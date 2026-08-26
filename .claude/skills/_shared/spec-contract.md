@@ -25,6 +25,28 @@ grounded_at: <git commit SHA>
 - `grounded_at` はコード調査の基準にした `git rev-parse HEAD`。参照 path がこの commit 以後に変わった場合、spec は stale。
 - **生成物は staleness 判定から除外される**(`pnpm-lock.yaml` / `**/openapi.{json,yaml}` / `**/generated/**`)。この判定は「spec が根拠にしたコードが動いた」を検出するためのもので、再生成された lockfile や OpenAPI は誰かが build を回しただけであり、設計の前提は何も無効になっていないため。除外はパスで機械的に決まるので、spec 側の宣言は要らず既存 spec にも遡及する。ただし**そもそも生成物を参照先に書かない**のが望ましい(AC が生成物の同期を要求したいなら、参照先はゲート対象のソースにして `Level` を `gate` にする)。
 
+### freshness の symbol 粒度(retroactive)
+
+参照 path が `grounded_at` 以後に変わっても、path ごとに次の 5 条件をすべて満たせば、その path は行単位の比較に落ちる(ファイル全体の diff で stale 判定しない)。1 つでも欠けば従来どおりファイル粒度の hard stale。
+
+1. その path の freshness record が `path#symbol`(symbol record)であり、同じ path に path-only record(strict record)が無い。**Change `status: existing` の各 backticked symbol と `path#symbol` 形の reuse は symbol record。path-only の reuse、Test file、Change `status: new` は strict record。同一 path に strict record が 1 件でもあれば path 全体を strict とし、symbol record との混在で判定を緩めない。**
+2. `grounded_at` と検証対象 HEAD の両方で、その path の tree entry が通常ファイル mode(`100644` または `100755`)で、mode も一致する。
+3. 両 commit の blob のどちらにも NUL バイトが無い(binary は対象外)。
+4. index と working tree に差が無く(dirty ではない)、出力直前の最終 recheck でも clean である。
+5. 両 blob に対する `symbol` の fixed-string grep が exit 0 または 1 で完了する(2 以上は検査不能)。
+
+条件 1〜4 のいずれかを欠く changed path は現行と同じファイル粒度の hard stale、条件 5 の grep 異常終了(exit 2 以上)は検査不能の `ERROR: staleness check failed: ...` になる。**current working tree で committed regular-file から submodule・ディレクトリ・削除などへ遷移していて `-f` によるライブグラウンディングそのものに失敗する path は、この 5 条件評価より前の既存 grounding `ERROR:` で終了する** — symbol 粒度の fallback ではない。**tree entry の取得(`git ls-tree`)、binary 判定(`od`)、matching-line sequence の比較(`cmp`)が、path 不在・NUL の有無・sequence 不一致ではなくコマンド自体の実行失敗で終わった場合も同じ検査不能 `ERROR:` にする** — 「path が存在しない」「NUL がある/ない」「sequence が違う」は正常系の判定結果だが、「git・od・cmp が動かせなかった」はその判定自体ができていないため、file-level fallback へも symbol-diff の hard stale へも静かに丸めない。
+
+条件を満たす path は、`grounded_at` 側と HEAD 側それぞれで symbol の fixed-string grep(`LC_ALL=C grep -F`)を実行し、出力(matching-line sequence)を `cmp` で比較する。一致すれば `WARN:` + `READY:` で exit 0、不一致なら `path#symbol` を名指しした hard stale `ERROR:` で exit 1。**symbol の宣言行だけが一致し、引用していない関数本体側が変わった場合も warning に落ちる** — 検出力の意図的な低下であり、人間が warning を見て確認できる状態を残すことで、共有ファイルへの無関係な追加による反復的な再 ground を減らすためである。**distinct な内容を持つ matching line の並べ替えは sequence 差として hard stale になるが、byte-identical な matching line を持つ enclosing block だけの並べ替えは検出できない**(同じ行が複数回現れる場合、grep 出力は行の並び順だけを保持し、どの block に属していたかは失われるため)。
+
+symbol 粒度が有効なのは**その参照 path が clean である HEAD 同士の比較だけ**であり、dirty な作業ツリーの緩和ではない。**判定は参照 path ごとであり、作業ツリー全体の dirty 状態では判断しない**(無関係な dirty file が他 spec の symbol 粒度を消さない)。
+
+すべての committed comparison は `HEAD` ではなく、invocation 開始時に固定した `VALIDATION_HEAD` を使う(umbrella は親が固定した 1 つの値を全 child に渡す)。出力直前に、成功し得る全 non-generated reference path の clean status と現在の HEAD を再確認し、最後の recheck 以降の変更は検出しない — 「最後に成功した recheck 時点のスナップショット」を述べているだけであり、recheck 後から `gw start` までの変更を検出できるとは主張しない。
+
+leaf の `WARN:` は次の固定形式で stderr に出す: `WARN: referenced path changed but grounded symbol lines are identical: <path> (symbols: <comma-separated symbols>)`。この行に spec id・matching line 本文・ファイル内容は含めない。umbrella は成功した child の `WARN:` を `WARN: phase <child-id>: <child warning body>` として親自身の stderr へ伝播する。
+
+warning/error のメッセージには repo-relative path・symbol・phase/spec id を載せてよいが、matching line 本文・ファイル内容・設定値・認証情報は載せない。hard error が 1 件でもある invocation は `WARN:` も `READY:` も出さない。
+
 ## umbrella spec (`kind: umbrella`)
 
 複数フェーズを 1 worktree で順に実装し、main への統合を最後に 1 回だけ行う大型作業では、運用契約とフェーズ表だけを持つ **umbrella** を置き、実装の実体は各フェーズの sub-spec に持たせる。umbrella 自身は AC も実装マップも `grounded_at` も持たない — それらを sub-spec から複製すると、複製した側が独立に stale になるため。
@@ -158,4 +180,4 @@ repo root で実行する。
 bash ".claude/skills/_shared/validate-implementation-spec.sh" <spec-path>
 ```
 
-green でなければ `crowi-kickoff` へ渡さない。legacy spec は `crowi-feature` の planner fallback で実装できるが、`crowi-kickoff` の implementation-ready 経路には入れない。
+exit 0 が着手可の判定。stdout の `READY:` に加えて、stderr に `WARN:`(symbol 粒度で緩めた path/symbol の一覧、上記参照)が出ることがあるが、これも exit 0 であり着手を止めない。exit 1(stderr の `ERROR:`)だけが not ready。legacy spec は `crowi-feature` の planner fallback で実装できるが、`crowi-kickoff` の implementation-ready 経路には入れない。

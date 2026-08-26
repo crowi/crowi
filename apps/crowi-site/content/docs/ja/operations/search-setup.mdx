@@ -82,7 +82,7 @@ Elasticsearch に `analysis-kuromoji` プラグインをプリインストール
 
 | 設定キー | 説明 |
 | -------- | ---- |
-| `url` | Elasticsearch のエンドポイント。`https://[user:pass@]host[:port][/indexName]` 形式。URL にパスワードを含められるため、機密値として暗号化されます。空文字のときはドライバは登録されますが無効化されます。 |
+| `url` | Elasticsearch のエンドポイント。`https://[user:pass@]host[:port][/indexName]` 形式。URL にパスワードを含められるため、機密値として暗号化されます。空文字のまま起動するとドライバは**登録されません**。あとから url を設定しても、登録されていないドライバを設定し直すことはできないため、**有効にするには api の再起動が必要**です。 |
 | `indexName` | ベースとなるインデックス名 (デフォルト `crowi`)。URL のパスで指定しない場合に使われます。 |
 | `requestTimeout` | リクエストタイムアウト (ミリ秒、デフォルト `5000`)。 |
 | `analyzer` | マッピングの種類。`default` / `kuromoji` / `sudachi` から選択。 |

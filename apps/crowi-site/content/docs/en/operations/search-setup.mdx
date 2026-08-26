@@ -83,7 +83,7 @@ admin panel (`/admin/plugins/edit?name=@crowi/plugin-search-elasticsearch`).
 
 | Config key | Description |
 | ---------- | ----------- |
-| `url` | The Elasticsearch endpoint in `https://[user:pass@]host[:port][/indexName]` format. Because the URL can embed a password, the value is encrypted as sensitive. When empty, the driver is registered but disabled. |
+| `url` | The Elasticsearch endpoint in `https://[user:pass@]host[:port][/indexName]` format. Because the URL can embed a password, the value is encrypted as sensitive. Booting with this empty leaves the driver **unregistered**; setting a url afterwards cannot reconfigure a driver that was never registered, so **enabling it needs an api restart**. |
 | `indexName` | The base index name (default `crowi`). Used when not specified in the URL path. |
 | `requestTimeout` | Request timeout in milliseconds (default `5000`). |
 | `analyzer` | The mapping flavour. Choose from `default` / `kuromoji` / `sudachi`. |

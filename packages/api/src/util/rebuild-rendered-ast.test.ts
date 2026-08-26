@@ -2,8 +2,9 @@ import { Types } from 'mongoose';
 import { createRebuildCliApi } from 'src/migration/rebuild-api';
 import type { RevisionModel } from 'src/models/revision';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
-import { crowi } from 'src/test/setup';
-import { createPageViaApi, createTestUser } from 'src/test/test-helpers';
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createPageViaApi, createTestUser } from 'src/test/test-helpers';
+import request from 'supertest';
 
 /**
  * RFC-0023 §15 — `rebuild rendered-ast`: unified eligibility predicate,
@@ -122,5 +123,48 @@ describe('rebuild rendered-ast (RFC-0023 §15)', () => {
     expect(stats.eligible).toBe(0);
     expect(stats.written).toBe(0);
     expect(stats.remainingEligible).toBe(0);
+  });
+
+  // feature-renderer-break-normalization D-7 / AC-11 — `collectPrefilteredTargets`
+  // (module doc comment) only ever collects the revision id each `Page.revision`
+  // currently points at. A stale HISTORY revision — one a page once had current
+  // but has since moved past via a save — is never that page's `.revision`
+  // anymore, so it is neither eligible nor written, and stays stale forever
+  // (backfilled only by `GET /pages/revisions/:id` recomputing it per read,
+  // with no write-back — a cost, not a correctness gap).
+  it('a stale HISTORY revision (superseded by a later save, no longer any Page.revision) is never eligible/written and stays stale after a real run', async () => {
+    const created = await createPageViaApi(accessToken, '/backfill/history-superseded', BODY);
+    const Page = crowi.model('Page');
+    const pageBefore = await Page.findById(created._id).exec();
+    const historyRevisionId = String(pageBefore?.revision);
+
+    // A second save makes a NEW current revision; `historyRevisionId` is
+    // no longer `Page.revision` for anything.
+    const updateRes = await request(app)
+      .put('/api/pages')
+      .set(authHeaders(accessToken))
+      .send({ page_id: created._id, body: `${BODY}\n\nupdated`, revision_id: historyRevisionId });
+    expect(updateRes.status).toBe(200);
+    const pageAfter = await Page.findById(created._id).exec();
+    expect(String(pageAfter?.revision)).not.toBe(historyRevisionId);
+
+    // Force the now-history revision to look pre-RFC stale, exactly like
+    // the CURRENT-revision `stale` fixture in `beforeAll` above.
+    await Revision()
+      .updateOne({ _id: historyRevisionId }, { $unset: { rendererVersion: '' } })
+      .exec();
+
+    const api = createRebuildCliApi(crowi);
+    await api.rebuildRenderedAst({});
+
+    const untouched = await readRevision(historyRevisionId);
+    // Never collected: `collectPrefilteredTargets` only ever resolves each
+    // page's CURRENT `.revision`, and this id isn't one anymore. Had the
+    // stale history revision leaked into the scan it would have been
+    // rewritten and stamped, so this single assertion carries the claim —
+    // asserting the run-wide eligible/written counters instead would bind
+    // this test to how many targets the other tests in this file happen to
+    // leave behind.
+    expect(untouched.rendererVersion).toBeUndefined();
   });
 });

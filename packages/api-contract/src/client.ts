@@ -96,6 +96,7 @@ import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { accessTokenRoutes } from './contracts/access-token';
 import { oauthRoutes } from './contracts/oauth';
+import { oauthSessionRoutes } from './contracts/oauth-session';
 import { notificationRoutes } from './contracts/notification';
 import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
@@ -126,6 +127,7 @@ import type {
   UserProfileResponseSchema,
 } from './schemas/me';
 import type { AccessTokenSchema, CreateAccessTokenResponseSchema, ListAccessTokensResponseSchema } from './schemas/access-token';
+import type { ListOAuthSessionsResponseSchema, OAuthSessionSchema } from './schemas/oauth-session';
 import type {
   AuthorizeResponseSchema,
   ClientInfoResponseSchema,
@@ -210,6 +212,8 @@ type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
 type AccessToken = z.infer<typeof AccessTokenSchema>;
 type ListAccessTokensResponse = z.infer<typeof ListAccessTokensResponseSchema>;
 type CreateAccessTokenResponse = z.infer<typeof CreateAccessTokenResponseSchema>;
+type OAuthSession = z.infer<typeof OAuthSessionSchema>;
+type ListOAuthSessionsResponse = z.infer<typeof ListOAuthSessionsResponseSchema>;
 type AuthorizeResponse = z.infer<typeof AuthorizeResponseSchema>;
 type TokenResponse = z.infer<typeof TokenResponseSchema>;
 type RevokeResponse = z.infer<typeof RevokeResponseSchema>;
@@ -601,7 +605,7 @@ const stubDeleteAdminUser: DeleteAdminUserResponse = { deletedId: '' };
 const stubPendingUsersCount: PendingUsersCountResponse = { count: 0 };
 const stubListPlugins: ListPluginsResponse = { plugins: [] };
 const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {} };
-const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
+const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false, verificationResults: [] };
 const stubPluginReadiness: ConfigReadinessResponse = { issues: [] };
 const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: '', removedCount: 0 };
 
@@ -843,8 +847,9 @@ const adminPageDeletionContractApp = new OpenAPIHono()
   .openapi(adminPageDeletionRoutes.erasePageDeletionRoute, (c) => c.json({ deletedCount: 0 }, 200));
 
 /**
- * OAuth 2.0 authorization-server endpoints (RFC-0010 Phase 3) — 4 routes.
- * Kept on its own chain (rather than extended onto the near-full
+ * OAuth 2.0 authorization-server endpoints (RFC-0010 Phase 3) plus the
+ * self-service OAuth session list/revoke endpoints — 10 routes. Kept on
+ * its own chain (rather than extended onto the near-full
  * `appAuthMeUserChain`) to stay well under TS's instantiation-depth
  * ceiling, per the TS2589 mitigation documented in this file's header.
  */
@@ -856,7 +861,11 @@ const oauthContractApp = new OpenAPIHono()
   .openapi(oauthRoutes.deviceAuthorizeRoute, (c) => c.json(stubDeviceAuthorize, 200))
   .openapi(oauthRoutes.deviceInfoRoute, (c) => c.json(stubDeviceInfo, 200))
   .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200))
-  .openapi(oauthRoutes.clientInfoRoute, (c) => c.json(stubClientInfo, 200));
+  .openapi(oauthRoutes.clientInfoRoute, (c) => c.json(stubClientInfo, 200))
+  .openapi(oauthSessionRoutes.listOAuthSessionsRoute, (c) => c.json({ oauthSessions: [] } satisfies ListOAuthSessionsResponse, 200))
+  .openapi(oauthSessionRoutes.deleteOAuthSessionRoute, (c) =>
+    c.json({ id: '', clientId: '', clientName: '', scopes: [], authorizedAt: '', lastRefreshedAt: '', expiresAt: '' } satisfies OAuthSession, 200),
+  );
 
 /**
  * Federated (OAuth2/OIDC) sign-in flow skeleton (RFC-0014 phase 1) — 4

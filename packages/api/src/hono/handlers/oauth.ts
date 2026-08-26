@@ -329,8 +329,11 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
 
           // Rotate: issue the successor, then revoke the presented token and
           // link it to the successor (`rotatedTo`) so a later replay of the
-          // old token can revoke the whole chain.
-          const issued = await issueTokens(user, active.clientId, nextScopes);
+          // old token can revoke the whole chain. The successor inherits the
+          // chain's ORIGIN authorization time, not this rotation's time —
+          // `active.createdAt` is the fallback for a legacy row that
+          // predates `authorizedAt`.
+          const issued = await issueTokens(user, active.clientId, nextScopes, active.authorizedAt ?? active.createdAt);
           const successorHash = OAuthRefreshToken.hashToken(issued.refresh_token);
           active.revokedAt = new Date();
           active.rotatedTo = successorHash;
@@ -539,8 +542,16 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
       return c.json({ clientId: client.clientId, name: client.name, firstParty: client.firstParty, trusted: client.trusted }, 200);
     });
 
-  /** Mint a fresh access (JWT) + refresh (DB-backed) pair for a grant. */
-  async function issueTokens(user: { _id: Types.ObjectId; email: string }, clientId: string, scopes: string[]) {
+  /**
+   * Mint a fresh access (JWT) + refresh (DB-backed) pair for a grant.
+   *
+   * `authorizedAt` is the rotation chain's origin authorization time:
+   * authorization-code / device-code grants default to "now" (a fresh
+   * chain), while a refresh grant passes `active.authorizedAt ??
+   * active.createdAt` so every successor in a chain reports the SAME
+   * authorization time, not the time of its own rotation.
+   */
+  async function issueTokens(user: { _id: Types.ObjectId; email: string }, clientId: string, scopes: string[], authorizedAt: Date = new Date()) {
     const accessToken = jwtUtil.signOauthAccessToken({
       user,
       scopes,
@@ -554,6 +565,7 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
       userId: user._id,
       scopes,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      authorizedAt,
     });
     return {
       access_token: accessToken,

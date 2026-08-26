@@ -12,14 +12,15 @@
  *     `/admin/security/*` + the bare `/admin/security` path.
  *
  * feature-renderer-plugin-boundary Phase 3 adds `linkCardEnabled`
- * (`security:linkCardEnabled`). Its PUT write is deliberately routed
- * through a SEPARATE, fail-propagating persistence call
- * (`ConfigService.saveConfigValueDurable`) rather than the existing
- * best-effort batched `saveConfig('crowi', {...})` call that
- * `registrationMode` / `registrationWhiteList` still use — see spec
- * §6.2. The durable write runs FIRST: if it fails, the handler 500s
- * immediately and the registration-settings batch write never runs
- * either, so a single PUT never partially persists.
+ * (`security:linkCardEnabled`). Its PUT write runs as its own
+ * `saveConfigValue` call, deliberately BEFORE the batched
+ * `saveConfig('crowi', {...})` call that persists `registrationMode` /
+ * `registrationWhiteList`: if the `linkCardEnabled` write fails, the
+ * handler 500s immediately and the batch never runs, so neither
+ * `linkCardEnabled` nor the registration fields are persisted. If the
+ * batch fails, only the registration fields remain unpersisted (since
+ * `linkCardEnabled` succeeded). This ordering ensures failed
+ * `linkCardEnabled` prevents the registration batch from running.
  */
 import { type RegistrationMode, type SecuritySettings, adminSecurityRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -73,9 +74,9 @@ export const registerAdminSecurityRoutes = <E extends OpenAPIHono<CrowiHonoBindi
       const configService = crowi.getConfigService();
 
       try {
-        await configService.saveConfigValueDurable('crowi', 'security:linkCardEnabled', body.linkCardEnabled);
+        await configService.saveConfigValue('crowi', 'security:linkCardEnabled', body.linkCardEnabled);
       } catch (err) {
-        debug('Error durably saving security:linkCardEnabled:', (err as Error).message);
+        debug('Error saving security:linkCardEnabled:', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
 

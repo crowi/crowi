@@ -118,20 +118,17 @@ description: |
 bash .claude/skills/_shared/validate-implementation-spec.sh ".feature-state/specs/<id>.md"
 ```
 
-exit 0 のときだけ続行する。validator は次をまとめて検証する:
+exit 0 のときだけ続行する(`WARN:` が stderr に出ていても exit 0 なら着手を止めない — symbol 粒度の freshness 判定が「共有ファイルへの無関係な変更」を soft に落としたもので、hard stale ではない)。validator は次をまとめて検証する:
 
 - contract v2 marker(`spec_contract: 2` / `status: approved` / `implementation_ready: true`)
 - `scope` / AC / blocking open question 無し
 - path + symbol 単位の実装マップ、処理フロー、契約・不変条件、実装順序
 - stable AC ID と test file/case/level の対応
-- `grounded_at` が有効で、参照 path が以後の commit / working tree で変化していない
-  (生成物 — lockfile / OpenAPI / `**/generated/**` — は staleness 判定から除外される)
+- `grounded_at` が有効で、参照 path が以後の commit / working tree で変化していない(生成物 — lockfile / OpenAPI / `**/generated/**` — は staleness 判定から除外される。参照 path が symbol 単位で保守的な 5 条件を満たせば、シンボル行が変わっていない限り `WARN:` に落ちる — 詳細は `.claude/skills/_shared/spec-contract.md` の freshness の symbol 粒度節)
 
-**umbrella spec**(`kind: umbrella`)はこの経路に入らない。umbrella は運用契約とフェーズ表だけを持ち
-AC も実装マップも持たないのが正しい形なので、validator は代わりに **`phases:` の各 sub-spec が実在し
-それ自体が v2 を通ること**を検証する(厳しさは sub-spec へ委譲される)。kickoff 側の手順は変わらず、
-worktree 名も umbrella の id を使う — 単一 worktree で全フェーズを回す運用契約は umbrella が持っており、
-sub-spec を個別に kickoff するとその契約が失われるため。
+複数 spec を preflight する場合は、各 spec の validator 実行について **stdout・stderr・exit status を spec id と対応づけて**リクエスト内に保持する(spec をまたいで混ざらないようにするため)。exit 0 の全 spec について、保持した stderr に `WARN:` 行があれば **spec id ごとに原文のまま**保持しておく(Step 6 で報告するため)。
+
+**umbrella spec**(`kind: umbrella`)はこの経路に入らない。umbrella は運用契約とフェーズ表だけを持ち AC も実装マップも持たないのが正しい形なので、validator は代わりに **`phases:` の各 sub-spec が実在しそれ自体が v2 を通ること**を検証する(厳しさは sub-spec へ委譲される)。kickoff 側の手順は変わらず、worktree 名も umbrella の id を使う — 単一 worktree で全フェーズを回す運用契約は umbrella が持っており、sub-spec を個別に kickoff するとその契約が失われるため。
 
 失敗時は validator の `ERROR:` を欠落・stale 理由として列挙して中止する。
 **kickoff 側で spec を補完・書き換えない。** legacy spec は直接 `/crowi-feature` の
@@ -192,7 +189,25 @@ tmux send-keys -t "<claude の pane_id>" Enter
 sleep 2
 ```
 
-4. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
+4. **agmsg の受信を自分宛だけに絞る**。`watch.sh` は role 名を渡さないと
+   **そのプロジェクトに登録された全 (team, agent) ペア**を購読するので、既定のままだと
+   worktree セッションに manager⇄planner のやり取りまで流れ込む(実測。impl セッションが
+   自分宛でない版数の議論を読まされ、そのぶんのトークンと注意を払っていた)。role 名は
+   **spec id をそのまま使う**(worktree 名・task id と同じ値にして、どのセッションの
+   role かを一意にする)。`actas` は未登録なら join も行うので事前の join は要らない:
+
+```bash
+tmux send-keys -t "<claude の pane_id>" "/agmsg actas <id>"
+sleep 1
+tmux send-keys -t "<claude の pane_id>" Enter
+sleep 3
+```
+
+   投入した role は **worktree セッション自身が終端で drop する**
+   (`/crowi-complete-feature` か `/crowi-handoff`)。`actas` の排他ロックは
+   セッション ID に紐づくので、main 側から外して回ることはできない。
+
+5. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
    **平文で書き、行頭を `/` にしない**):
 
 ```bash
@@ -211,13 +226,14 @@ tmux send-keys -t "<claude の pane_id>" Enter
 として報告する(このリトライは初回指示の配送完了であり、鉄則の「指示は 1 通
 のみ」の例外ではない — 新しい内容は送らない)。
 
-4. **fallback**: tmux 環境でない / window が見つからない / 60 秒待っても claude が
+6. **fallback**: tmux 環境でない / window が見つからない / 60 秒待っても claude が
    起動しない → 投入せず、手動手順を表示して終わる(中止ではない — worktree は
    作成済みなので Step 6 の報告に含める):
 
 ```
 cd <worktree-abs-path> && claude
-→ 最初に: /crowi-feature <id>
+→ 最初に: /agmsg actas <id>        (受信を自分宛に絞る。省くと他 role 宛まで流れ込む)
+→ 次に:   /crowi-feature <id>
 → 完了時: /crowi-complete-feature / 中断時: /crowi-handoff
 ```
 
@@ -245,6 +261,14 @@ signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 /
 - worktree path / branch / window(投入済み or 手動手順)
 - signal watcher を張った(or 既存)ことを 1 行
 - 次に人間がやること(通常なし。spec が multi-phase で gated phase を含むならその旨)
+- **staleness warnings**: Step 2 で保持した `WARN:` がある spec id ごとに見出しを立て、配下に validator の raw `WARN:` 行を原文のまま転記する(要約・書き換えしない)。`WARN:` が無かった spec には見出しを出さない。
+
+```
+staleness warnings:
+
+## feature-<id>
+WARN: referenced path changed but grounded symbol lines are identical: <path> (symbols: <...>)
+```
 
 ## 鉄則
 
@@ -259,7 +283,9 @@ signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 /
 |---|---|
 | spec が specs/ に無い | wiki `/crowi/spec/<id>` から pull を試みる(Step 1)。wiki にも無ければ中止 |
 | legacy / incomplete spec | validator の欠落を列挙して中止。`/crowi-design spec` で v2 化するか、直接 `/crowi-feature` の planner fallback を明示的に使う |
-| 参照コードが `grounded_at` 後に変化 | stale として中止。安価な planner で黙って再設計せず、spec を再 ground / review する |
+| 引用 symbol の行が `grounded_at` 後に変わった(symbol line hard stale) | `ERROR:` で中止(exit 1)。安価な planner で黙って再設計せず、spec を再 ground / review する |
+| path-only 参照、または symbol 粒度の 5 条件を満たさない変化(mode 不一致・binary・dirty 等、file-level hard stale) | `ERROR:` で中止(exit 1)。symbol hard stale と同様に再 ground / review する |
+| symbol 外の変更だけが起きた(共有ファイルへの無関係な追加など) | `WARN:` は出るが exit 0。着手は止めない。Step 6 の staleness warnings に転記する |
 | gw start 失敗(同名 branch 残骸等) | gw のエラーを提示して中止。`-f` 系は使わずユーザーに委ねる |
 | claude 起動待ち timeout | 手動手順を表示(worktree は残す) |
 | send-keys 後に反応が無い | 追いパンチしない。報告に「投入したが未確認」と書き、ユーザーに window 確認を促す |

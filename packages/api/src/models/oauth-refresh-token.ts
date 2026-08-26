@@ -38,6 +38,13 @@ export interface OAuthRefreshTokenDocument extends Document {
   revokedAt: Date | null;
   /** Successor token's hash once this one is rotated; null while active. */
   rotatedTo: string | null;
+  /**
+   * When the chain this token belongs to was first authorized (chain-origin
+   * `authorizedAt`, carried forward on every rotation). Optional: rows
+   * created before this field existed have no value, and readers fall back
+   * to `createdAt` rather than backfilling.
+   */
+  authorizedAt?: Date;
 }
 
 export interface OAuthRefreshTokenModel extends Model<OAuthRefreshTokenDocument> {
@@ -50,6 +57,13 @@ export interface OAuthRefreshTokenModel extends Model<OAuthRefreshTokenDocument>
    * Walks descendants via `rotatedTo` and ancestors via the reverse link.
    */
   revokeChain(tokenHash: string): Promise<void>;
+  /**
+   * A user's active tip documents (`revokedAt: null`, `rotatedTo: null`,
+   * `expiresAt > now`), newest first. `now` is supplied by the caller (not
+   * generated here) so a single request-local instant governs both the
+   * expiry filter and the response serialization built from the result.
+   */
+  listActiveByUser(userId: Types.ObjectId, now: Date): Promise<OAuthRefreshTokenDocument[]>;
 
   TOKEN_PREFIX: string;
 }
@@ -93,6 +107,10 @@ export default (_crowi: Crowi) => {
     rotatedTo: {
       type: String,
       default: null,
+    },
+    authorizedAt: {
+      type: Date,
+      required: false,
     },
   });
 
@@ -143,6 +161,12 @@ export default (_crowi: Crowi) => {
     }
 
     await OAuthRefreshToken.updateMany({ tokenHash: { $in: [...seen] }, revokedAt: null }, { revokedAt: now });
+  };
+
+  schema.statics.listActiveByUser = function (userId: Types.ObjectId, now: Date): Promise<OAuthRefreshTokenDocument[]> {
+    return OAuthRefreshToken.find({ userId, revokedAt: null, rotatedTo: null, expiresAt: { $gt: now } })
+      .sort({ createdAt: -1 })
+      .exec();
   };
 
   const OAuthRefreshToken = model<OAuthRefreshTokenDocument, OAuthRefreshTokenModel>('OAuthRefreshToken', schema);

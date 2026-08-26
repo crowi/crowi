@@ -33,6 +33,7 @@ export * from './schemas/me';
 export * from './schemas/notification';
 export * from './schemas/oauth';
 export * from './schemas/oauth-endpoints';
+export * from './schemas/oauth-session';
 export * from './schemas/page';
 export * from './schemas/page-history';
 export * from './schemas/page-preview';

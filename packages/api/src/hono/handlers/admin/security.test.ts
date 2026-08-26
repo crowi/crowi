@@ -2,7 +2,6 @@ import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
-import ConfigService from 'src/service/config';
 
 /**
  * Reset the registration-related security:* keys back to defaults between
@@ -16,7 +15,7 @@ const resetSecurityConfig = async () => {
     'security:registrationMode': 'Open',
     'security:registrationWhiteList': [],
   });
-  await configService.saveConfigValueDurable('crowi', 'security:linkCardEnabled', true);
+  await configService.saveConfigValue('crowi', 'security:linkCardEnabled', true);
 };
 
 describe('Routes /api/admin/security (Hono)', () => {
@@ -120,7 +119,7 @@ describe('Routes /api/admin/security (Hono)', () => {
       });
 
       it('reflects an explicit false written via configService', async () => {
-        await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+        await crowi.getConfigService().saveConfigValue('crowi', 'security:linkCardEnabled', false);
 
         const res = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
         expect(res.status).toBe(200);
@@ -239,19 +238,32 @@ describe('Routes /api/admin/security (Hono)', () => {
     });
 
     /**
-     * feature-renderer-plugin-boundary Phase 3 spec §6.2/AC5 — the
-     * `linkCardEnabled` write is fail-propagating and runs BEFORE the
-     * best-effort registration-settings batch write, so a durable-write
-     * failure 500s the whole PUT and leaves EVERY field (not just
-     * linkCardEnabled) unpersisted.
+     * feature-config-write-durability AC-4/AC-6 — `linkCardEnabled`
+     * writes via its own `saveConfigValue` call BEFORE the
+     * registration-settings batch write, so a Mongo failure on
+     * linkCardEnabled 500s the whole PUT and leaves both linkCardEnabled
+     * and registration fields unpersisted (batch never runs). This order
+     * ensures failed linkCardEnabled prevents the batch from running (AC-6
+     * regression). Injected at the model layer (`Config.updateByParams`),
+     * not by mocking `ConfigService` itself — a `ConfigService.prototype`
+     * mock would pass even without this feature's `models/config.ts` fix,
+     * since the handler's own try/catch alone already turns any rejection
+     * into a 500.
      */
-    describe('linkCardEnabled durable write failure propagation', () => {
+    describe('linkCardEnabled write failure propagation', () => {
       afterEach(() => {
         jest.restoreAllMocks();
       });
 
-      it('a rejected durable write 500s the response and persists NEITHER linkCardEnabled NOR the registration fields', async () => {
-        const durableSpy = jest.spyOn(ConfigService.prototype, 'saveConfigValueDurable').mockRejectedValueOnce(new Error('mongo write failed'));
+      it('a rejected Mongo write for linkCardEnabled 500s the response and persists NEITHER linkCardEnabled NOR the registration fields', async () => {
+        const Config = crowi.model('Config');
+        const originalUpdateByParams = Config.updateByParams.bind(Config);
+        const updateByParamsSpy = jest.spyOn(Config, 'updateByParams').mockImplementation(async (ns: string, key: string, value: string) => {
+          if (key === 'security:linkCardEnabled') {
+            throw new Error('mongo write failed');
+          }
+          return originalUpdateByParams(ns, key, value);
+        });
 
         const res = await request(app)
           .put('/api/admin/security')
@@ -263,7 +275,10 @@ describe('Routes /api/admin/security (Hono)', () => {
           });
 
         expect(res.status).toBe(500);
-        expect(durableSpy).toHaveBeenCalledTimes(1);
+        // Only the linkCardEnabled write was even attempted — the
+        // registration-settings batch write never started.
+        expect(updateByParamsSpy).toHaveBeenCalledTimes(1);
+        expect(updateByParamsSpy).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
 
         // Nothing from this failed PUT was persisted — GET still shows
         // the pre-PUT (reset) defaults.

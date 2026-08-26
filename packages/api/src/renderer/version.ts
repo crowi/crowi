@@ -71,5 +71,23 @@
  *     difference (the stored bytes are never contested, both sides only
  *     ever recompute for their own response), NOT something a dedicated
  *     drain / traffic-isolation gate exists for.
+ *   - 1.3.0  feature-renderer-break-normalization — an attribute-less
+ *     `<br>` in any spelling CommonMark accepts (`<br>` / `<br >` /
+ *     `<br/>` / `<br />` / `<br\t/>` — the whitespace run before the
+ *     optional slash is unbounded) as an `html` node inside an uncontaminated
+ *     `paragraph` / `heading` / `tableCell` phrasing subtree is
+ *     normalized to a canonical mdast `break` by a new bundled
+ *     transform (`core/break-normalization.ts`'s
+ *     `remarkNormalizeHtmlBreaks`); new-bundled-transform minor bump
+ *     per this constant's own policy above. Rollout is the ordinary
+ *     one: a stored 1.2.0 AST recomputes per read (`util/page-
+ *     response.ts`, no write-back) so non-web clients stop showing a
+ *     placeholder for the normalized line break on next view, and
+ *     `rebuild rendered-ast` backfills the DB copy in bulk whenever an
+ *     operator chooses to — but that command only ever collects each
+ *     page's CURRENT revision (`util/rebuild-rendered-ast.ts`'s
+ *     `collectPrefilteredTargets`), so a stale HISTORY revision keeps
+ *     recomputing on every read of `GET /pages/revisions/:id`
+ *     indefinitely; that is a per-read cost, not a correctness gap.
  */
-export const RENDERER_PIPELINE_VERSION = '1.2.0';
+export const RENDERER_PIPELINE_VERSION = '1.3.0';

@@ -9,10 +9,12 @@
  */
 
 import { z } from 'zod/v3';
-import type { CrowiPlugin, PluginContext, StateCell } from '@crowi/plugin-api';
+import { Client } from '@elastic/elasticsearch';
+import type { CrowiPlugin, PluginConfigVerificationResult, PluginContext, StateCell, VerificationFailureReason } from '@crowi/plugin-api';
 import {
   applyConfig,
   createElasticsearchDriver,
+  parseUri,
   type Analyzer,
   type ElasticsearchDriver,
   type ElasticsearchDriverConfig,
@@ -166,9 +168,88 @@ const plugin: CrowiPlugin = {
     });
     ctx.log.debug('reconfigured elasticsearch search driver (node=%s, index=%s, analyzer=%s)', next.node || '<unset>', next.baseIndexName, config.analyzer);
   },
+
+  // feature-plugin-config-live-verification — snapshot-only, non-blocking,
+  // info-only (no index/document read-write, no round-trip object): a
+  // single `client.info()` call against a throwaway client built from the
+  // snapshot's own config, closed when done. Index/alias/analyzer/rebuild
+  // correctness stays entirely out of scope — this only confirms the
+  // cluster is reachable and the credentials in `url` are accepted.
+  verifyConfig: async (snapshot) => {
+    const config = snapshot.config<ElasticsearchConfig>();
+    return probeElasticsearchCluster(config);
+  },
 };
 
 export default plugin;
+
+// ---------------------------------------------------------------------------
+// feature-plugin-config-live-verification — verification probe
+// ---------------------------------------------------------------------------
+
+/**
+ * A single `client.info()` call against a one-shot client built directly
+ * from `config` — never `applyConfig`/the driver's hot-reload `StateCell`.
+ * `maxRetries: 0` (a verification probe must not silently retry into the
+ * caller's timeout budget) and `requestTimeout` capped at 10s regardless
+ * of what the operator configured, so an operator-set multi-minute
+ * `requestTimeout` can't stall this probe past the manager's own 10s race
+ * (feature-plugin-config-live-verification §3/§4). Always closes the
+ * client before returning — no persistent connection left behind.
+ */
+export async function probeElasticsearchCluster(config: ElasticsearchConfig): Promise<PluginConfigVerificationResult> {
+  let client: Client;
+  try {
+    const { node } = parseUri(config.url);
+    client = new Client({ node, requestTimeout: resolveVerificationRequestTimeout(config.requestTimeout), maxRetries: 0 });
+  } catch (err) {
+    // Most likely an empty/malformed `url` — not one of the classified
+    // driver exceptions in §3's table, so 'unknown' is the honest reason.
+    return { status: 'failed', reason: classifyElasticsearchError(err) };
+  }
+
+  try {
+    await client.info();
+    return { status: 'ok' };
+  } catch (err) {
+    return { status: 'failed', reason: classifyElasticsearchError(err) };
+  } finally {
+    await client.close().catch(() => {
+      // Best-effort close — never lets a teardown failure surface as (or
+      // override) the probe's own result.
+    });
+  }
+}
+
+/** Caps an operator-configured `requestTimeout` at 10s for a verification probe — a multi-minute configured timeout must never stall this probe past the caller's own 10s hook-level race (feature-plugin-config-live-verification §3/§4). */
+export function resolveVerificationRequestTimeout(configuredRequestTimeoutMs: number): number {
+  return Math.min(configuredRequestTimeoutMs, 10_000);
+}
+
+const ES_CONNECTION_ERROR_NAMES = new Set(['ConnectionError', 'TimeoutError', 'NoLivingConnectionsError']);
+
+/**
+ * Classify an Elasticsearch client failure into the fixed reason set
+ * (feature-plugin-config-live-verification §3's table). Anything not
+ * explicitly listed there falls into `'unknown'`.
+ */
+export function classifyElasticsearchError(err: unknown): VerificationFailureReason {
+  const statusCode = extractStatusCode(err);
+  if (statusCode === 401 || statusCode === 403) return 'auth-failed';
+  if (statusCode === 404) return 'resource-missing';
+  const name = (err as { name?: unknown } | undefined)?.name;
+  if (typeof name === 'string' && ES_CONNECTION_ERROR_NAMES.has(name)) return 'unreachable';
+  return 'unknown';
+}
+
+/** Same shape `driver.ts`'s `isNotFoundError` reads: the ES client puts the HTTP status either directly on the error or under `.meta.statusCode`. */
+function extractStatusCode(err: unknown): number | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const e = err as { statusCode?: unknown; meta?: { statusCode?: unknown } };
+  if (typeof e.statusCode === 'number') return e.statusCode;
+  if (typeof e.meta?.statusCode === 'number') return e.meta.statusCode;
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Wiring helpers — visible for tests.
