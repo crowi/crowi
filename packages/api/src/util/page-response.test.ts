@@ -323,10 +323,16 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // `core/github-alerts.ts`'s `makeGithubAlertsPlugin` is another new
   // bundled transform, and its rendering likewise arrives on next read
   // rather than next save.
+  // feature-renderer-break-normalization bumps it again (1.2.0 -> 1.3.0):
+  // `core/break-normalization.ts`'s `remarkNormalizeHtmlBreaks` is another
+  // new bundled transform (a bare `<br>` `html` node in an uncontaminated
+  // paragraph/heading/tableCell phrasing subtree becomes a canonical
+  // `break`), and its rendering likewise arrives on next read rather than
+  // next save.
   // Pinned here so an accidental future bump/no-bump alongside an
   // unrelated change is caught immediately.
-  it('RENDERER_PIPELINE_VERSION is 1.2.0 (new bundled transform, minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('1.2.0');
+  it('RENDERER_PIPELINE_VERSION is 1.3.0 (new bundled transform, minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.3.0');
   });
 
   // The concrete read-path half of that bump: a revision saved by a
@@ -348,6 +354,51 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
     expect(recomputed).not.toBe(storedAst);
     expect(recomputed.children[0].type).toBe('crowiAlert');
     expect(recomputed.children[0].variant).toBe('note');
+    // The read path is a pure projection: no in-place upgrade of the
+    // caller's stored blob (and, one level up, no DB write-back).
+    expect(storedAst).toEqual(before);
+  });
+
+  // The concrete read-path half of the 1.2.0 -> 1.3.0 bump: a revision
+  // saved by a 1.2.0 process holds a bare `html("<br>")` node, and the
+  // first read served by a 1.3.0 process must hand back the recomputed
+  // `break` without touching either the stored AST object or the
+  // document behind it.
+  it('recomputes a 1.2.0-stored bare `html("<br>")` table cell into `break` on read, leaving the stored AST object untouched', async () => {
+    const tableBody = '| h |\n| --- |\n| a<br>b |\n';
+    const storedAst = {
+      type: 'root',
+      children: [
+        {
+          type: 'table',
+          align: [null],
+          children: [
+            { type: 'tableRow', children: [{ type: 'tableCell', children: [{ type: 'text', value: 'h' }] }] },
+            {
+              type: 'tableRow',
+              children: [
+                {
+                  type: 'tableCell',
+                  children: [
+                    { type: 'text', value: 'a' },
+                    { type: 'html', value: '<br>' },
+                    { type: 'text', value: 'b' },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const before = structuredClone(storedAst);
+
+    const result = await computeRevisionRenderArtifactsAsync(crowi, undefined, storedAst, tableBody, TEST_ACTOR, '1.2.0');
+
+    const recomputed = result.renderedAst as { children: Array<{ children: Array<{ children: Array<{ type: string }> }> }> };
+    expect(recomputed).not.toBe(storedAst);
+    const cell = recomputed.children[0].children[1].children[0] as unknown as { children: Array<{ type: string }> };
+    expect(cell.children.map((c) => c.type)).toEqual(['text', 'break', 'text']);
     // The read path is a pure projection: no in-place upgrade of the
     // caller's stored blob (and, one level up, no DB write-back).
     expect(storedAst).toEqual(before);

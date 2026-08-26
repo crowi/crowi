@@ -35,6 +35,14 @@ to Node.js 24 before working.
 > the host directly. The `docker compose up -d` step below brings up all
 > of the development infrastructure at once.
 
+## Recovering from a failed setup
+
+If a write to MongoDB fails partway through initial setup (a dropped connection, a timeout, and so on), the installer's admin-creation step can stop without completing. Here's what state you're left in and how to recover.
+
+- **The installer reopens.** The state of the failed setup attempt is cleaned up automatically, so opening the installer URL again shows the admin-creation screen once more. It never gets stuck showing "already installed" with no way forward.
+- **The admin user already exists.** Only part of the database write failed — the admin user itself was already created earlier in the same request. Running setup again with the same username / email produces a duplicate error. Nothing rolls that user back, so retrying with the same input won't get you further.
+- **The reliable recovery is to recreate the database and rerun setup.** At the point of initial setup there is no wiki data yet, so emptying the MongoDB database carries no risk of data loss. Recreate the database, then run the installer again from the start.
+
 ## Quick start (Docker infrastructure + dev servers on the host)
 
 The simplest setup is to **run the middleware in Docker and run the API
@@ -49,7 +57,7 @@ cd crowi
 # 2. Install dependencies
 pnpm install
 
-# 3. Start the development infrastructure (MongoDB / Redis / Elasticsearch / PlantUML)
+# 3. Start the development infrastructure (MongoDB / Redis / Elasticsearch / Mailpit)
 docker compose up -d
 
 # 4. Prepare the environment file
@@ -92,7 +100,7 @@ middleware**, not the application itself.
 | `mongodb` | `mongo:8` | `27017` |
 | `redis` | `redis:8.8.0` | `6379` |
 | `elasticsearch` | Custom image (9.4.0 + `analysis-kuromoji`) | `9200` |
-| `plantuml` | `plantuml/plantuml-server` | `8080` |
+| `mailpit` | `axllent/mailpit:latest` | `1025` (SMTP) / `8025` (web UI) |
 
 The Elasticsearch image is a custom build that bundles the Japanese
 morphological analysis plugin `analysis-kuromoji`. See

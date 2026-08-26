@@ -155,6 +155,17 @@ Crowi API from outside.
 > **Changing your password does not revoke your PATs** (and, conversely,
 > revoking a PAT does not affect your login sessions).
 
+### Authorized apps (OAuth sessions)
+
+You can list and revoke sessions for external apps you've authorized via OAuth — a CLI tool, a mobile app, and so on. Each row here represents one active refresh token. **Your web login session is never shown in this list** — it is a separate credential and cannot be reviewed or revoked from here.
+
+Each row shows the client name, scopes, when it was authorized, when it was last refreshed, and when it expires. **"Last refreshed" is when that refresh token was last rotated, not the last time the API was used** — Crowi does not track a per-call access timestamp, so the list can only report token issuance/rotation, not API activity.
+
+Revoking a row stops only **future refreshes reachable from that row**. **An already-issued access token stays usable until it expires (up to 1 hour by default)** — access tokens are stateless signed tokens with no storage that a revoke operation could act on.
+
+- Right after an ordinary token refresh, the same app may briefly show as two rows. This is a transient in-progress state that converges back to one row the next time you reload the page.
+- If the same refresh token was refreshed from two places at nearly the same time, though, two rows can persist. Revoking one does not affect the other in that case — **revoke both rows once you notice them**.
+
 ## Related pages
 
 - [Working with pages](./pages) — a user page is also just a page

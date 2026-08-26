@@ -229,6 +229,56 @@ describe('renderMdastToReactNode', () => {
 });
 
 /**
+ * feature-renderer-break-normalization AC-8 — renderer parity between an
+ * mdast `html("<br>")` node (what a bare `<br>` used to stay as) and the
+ * `break` node `core/break-normalization.ts` now normalizes it to.
+ * `mdast-util-to-hast`'s `html` handler emits one `raw` node containing
+ * the literal string, which `hast-util-raw` then parses into a single
+ * `<br>` element; its `break` handler instead directly emits a `<br>`
+ * element PLUS a sibling `{ type: 'text', value: '\n' }` (`break.js`'s
+ * `hardBreak`). Both inputs therefore produce the SAME single `<br>`
+ * element in the SAME position with the SAME surrounding visible text —
+ * this is what makes the two byte-different trees render identically
+ * (D-3) — but they are not byte-identical: only the `break` side carries
+ * the extra (CSS-collapsed, invisible in prose) newline text node. Each
+ * input gets its OWN expectation rather than one shared assertion.
+ */
+describe('html("<br>") vs break render parity (feature-renderer-break-normalization AC-8)', () => {
+  const paragraphWith = (breakNode: unknown) => [{ type: 'paragraph', children: [{ type: 'text', value: 'a' }, breakNode, { type: 'text', value: 'b' }] }];
+
+  const tableWith = (breakNode: unknown) => [
+    {
+      type: 'table',
+      align: [null],
+      children: [
+        { type: 'tableRow', children: [{ type: 'tableCell', children: [{ type: 'text', value: 'h' }] }] },
+        { type: 'tableRow', children: [{ type: 'tableCell', children: [{ type: 'text', value: 'a' }, breakNode, { type: 'text', value: 'b' }] }] },
+      ],
+    },
+  ];
+
+  it('paragraph: `html("<br>")` renders one `<br>` element between "a" and "b", with no injected text node', () => {
+    const html = render(paragraphWith({ type: 'html', value: '<br>' }));
+    expect(html).toBe('<p>a<br/>b</p>');
+  });
+
+  it('paragraph: `break` renders the same single `<br>` element between "a" and "b", plus its own newline text node', () => {
+    const html = render(paragraphWith({ type: 'break' }));
+    expect(html).toBe('<p>a<br/>\nb</p>');
+  });
+
+  it('tableCell: `html("<br>")` renders one `<br>` element between "a" and "b", with no injected text node', () => {
+    const html = render(tableWith({ type: 'html', value: '<br>' }));
+    expect(html).toContain('<td>a<br/>b</td>');
+  });
+
+  it('tableCell: `break` renders the same single `<br>` element between "a" and "b", plus its own newline text node', () => {
+    const html = render(tableWith({ type: 'break' }));
+    expect(html).toContain('<td>a<br/>\nb</td>');
+  });
+});
+
+/**
  * Link-card embed HTML integration fixture (reviewer finding: the
  * renderer's own `render-card.test.ts` only verified the emitted
  * string's tag names via a regex scan — it never exercised the ACTUAL

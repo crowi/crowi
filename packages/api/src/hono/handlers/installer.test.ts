@@ -129,6 +129,46 @@ describe('GET /api/installer (Hono)', () => {
       await User.deleteMany({ email: 'installer-happy@example.com' });
     });
 
+    // The admin user this request created is real (createAdmin doesn't
+    // roll it back), but a seeding write failure means install itself
+    // never completed, so the installer must still be reachable rather
+    // than reporting `already_installed` forever.
+    it('AC-8: installer stays reopenable after a seeding write failure during createAdmin', async () => {
+      await Config.deleteMany({ ns: 'crowi' });
+      await User.deleteMany({ email: 'installer-seed-fail@example.com' });
+
+      jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during install'));
+
+      try {
+        const res = await request(app)
+          .post('/api/installer/createAdmin')
+          .send({
+            registerForm: {
+              name: 'Seed Fail',
+              username: 'installer-seed-fail',
+              email: 'installer-seed-fail@example.com',
+              password: 'Password!1',
+            },
+          });
+
+        // Legacy parity: a failure inside the try/catch still comes back
+        // as HTTP 200 + `status: 'error'`, not a 500 — the admin-creation
+        // step itself did succeed, only seeding failed afterward.
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('error');
+        expect(res.body.errors?.[0]).toMatch(/mongo write failed during install/);
+
+        // The seeded `{ ns: 'crowi' }` rows are gone, so the count-based
+        // guard reports uninstalled again instead of stuck-forever
+        // `already_installed`.
+        const status = await request(app).get('/api/installer');
+        expect(status.body).toEqual({ status: 'installer_required' });
+      } finally {
+        jest.restoreAllMocks();
+        await User.deleteMany({ email: 'installer-seed-fail@example.com' });
+      }
+    });
+
     it('returns 400 (zod validation) when registerForm is missing required fields', async () => {
       await Config.deleteMany({ ns: 'crowi' });
 

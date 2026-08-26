@@ -20,8 +20,8 @@ import { sanitizeSvg } from './sanitize';
  * placeholder is rendered through `crowi-embed-placeholder-error-*`.
  *
  * Operator install:
- *   1. Run the official PlantUML server (e.g. `docker compose` from
- *      Crowi's compose file ships one at `http://plantuml:8080`).
+ *   1. Run the official PlantUML server yourself — Crowi's compose file
+ *      does not ship one.
  *   2. List this plugin in `crowi.config.json:plugins`.
  *   3. In the admin UI, fill in `serverUrl` if your server isn't at
  *      the default hostname.
@@ -29,8 +29,9 @@ import { sanitizeSvg } from './sanitize';
 
 /**
  * Schema-driven config. The admin UI in `/admin/plugins` builds the
- * form by walking this object. Defaults match the docker-compose
- * service hostname that ships with the Crowi 2.x dev runner.
+ * form by walking this object. The `serverUrl` default is a
+ * compose-internal hostname, which only resolves for an operator who
+ * runs their own PlantUML service on the same compose network.
  */
 export const plantumlConfigSchema = z.object({
   serverUrl: z.string().url().default('http://plantuml:8080').describe('Base URL of the PlantUML server.'),

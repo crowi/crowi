@@ -722,6 +722,53 @@ describe('sanitizeAst — real-parser round-trip fixture (§3 field preservation
     expect(JSON.stringify(projected)).toContain('[!WARNING]');
     expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
   });
+
+  // feature-renderer-break-normalization AC-7 — the markdown → producer
+  // (core/break-normalization.ts) → projection (sanitizeAst) composite
+  // path. `sanitize-ast.test.ts`'s own hand-built fixtures below only
+  // prove the PROJECTION half in isolation; the golden corpus
+  // (`break-normalization.json`, AC-14) is the other consumer of this
+  // same composite path, pinned against the wire contract instead of
+  // against this file's ad hoc envelope shape.
+  it('a GFM table cell bare `<br>` is stored as `break` and served to a declared v1 client as the same `break`', async () => {
+    const { tree } = await runCore('| h |\n| --- |\n| a<br>b |\n');
+    const stored = serializeMdast(tree) as { children: AnyNode[] };
+    const storedCell = ((stored.children[0].children as AnyNode[])[1].children as AnyNode[])[0];
+    expect((storedCell.children as AnyNode[]).map((c) => c.type)).toEqual(['text', 'break', 'text']);
+
+    const envelope = sanitizeAst(stored);
+    const projectedTable = rootChildren(envelope)[0];
+    const projectedCell = ((projectedTable.children as AnyNode[])[1].children as AnyNode[])[0];
+    expect((projectedCell.children as AnyNode[]).map((c) => c.type)).toEqual(['text', 'break', 'text']);
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
+  });
+
+  it('real-parser flow-position bare `<br>` (root / blockquote / listItem direct child) stays `html` and never becomes crowiOpaque', async () => {
+    const { tree } = await runCore('<br>\n');
+    const stored = serializeMdast(tree) as { children: AnyNode[] };
+    expect(stored.children.map((c) => c.type)).toEqual(['html']);
+    const envelope = sanitizeAst(stored);
+    expect(rootChildren(envelope).map((c) => c.type)).toEqual(['html']);
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
+
+    const { tree: quoteTree } = await runCore('> <br>\n');
+    const quoteStored = serializeMdast(quoteTree) as { children: AnyNode[] };
+    const quoteChildren = quoteStored.children[0].children as AnyNode[];
+    expect(quoteChildren.map((c) => c.type)).toEqual(['html']);
+    const quoteEnvelope = sanitizeAst(quoteStored);
+    const projectedQuote = (rootChildren(quoteEnvelope)[0].children as AnyNode[]).map((c) => c.type);
+    expect(projectedQuote).toEqual(['html']);
+    expect(() => RenderedAstEnvelopeSchema.parse(quoteEnvelope)).not.toThrow();
+
+    const { tree: listTree } = await runCore('- foo\n\n  <br>\n');
+    const listStored = serializeMdast(listTree) as { children: AnyNode[] };
+    const listItemChildren = ((listStored.children[0].children as AnyNode[])[0].children as AnyNode[]).map((c) => c.type);
+    expect(listItemChildren).toEqual(['paragraph', 'html']);
+    const listEnvelope = sanitizeAst(listStored);
+    const projectedList = rootChildren(listEnvelope)[0];
+    expect(((projectedList.children as AnyNode[])[0].children as AnyNode[]).map((c) => c.type)).toEqual(['paragraph', 'html']);
+    expect(() => RenderedAstEnvelopeSchema.parse(listEnvelope)).not.toThrow();
+  });
 });
 
 describe('serializeMdast call sites stay untouched (design doc §2 — walker is response-time only)', () => {

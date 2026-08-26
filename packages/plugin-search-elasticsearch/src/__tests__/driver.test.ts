@@ -1,6 +1,8 @@
+import { Client } from '@elastic/elasticsearch';
 import { applyConfig, createElasticsearchDriver, docToEsSource, parseUri, shouldIndex } from '../driver';
 import type { ElasticsearchDriverConfig, ESDriverState, PageStreamDoc } from '../driver';
 import type { SearchableDoc, StateCell } from '@crowi/plugin-api';
+import { classifyElasticsearchError, type ElasticsearchConfig, probeElasticsearchCluster, resolveVerificationRequestTimeout } from '../index';
 
 const CONFIG: ElasticsearchDriverConfig = { url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' };
 
@@ -488,5 +490,196 @@ describe('plugin reconfigure() hook', () => {
     await reconfigure(reCtx as any);
 
     expect(reCtx.log.warn).toHaveBeenCalledWith(expect.stringContaining('restart is required'));
+  });
+});
+
+describe('probeElasticsearchCluster / verifyConfig (feature-plugin-config-live-verification, AC-5)', () => {
+  const CONFIG: ElasticsearchConfig = { url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' };
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pluginModule = require('../index') as typeof import('../index');
+  const plugin = pluginModule.default;
+
+  it('AC-5: plugin.verifyConfig builds its client from the snapshot config with maxRetries 0 and requestTimeout capped at 10s, is info-only, and always closes', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const esModule = require('@elastic/elasticsearch') as typeof import('@elastic/elasticsearch');
+    const OriginalClient = esModule.Client;
+    const info = jest.fn().mockResolvedValue({ cluster_name: 'test' });
+    const close = jest.fn().mockResolvedValue(undefined);
+    const search = jest.fn();
+    const index = jest.fn();
+    const capturedOptions: Array<{ node?: string; maxRetries?: number; requestTimeout?: number }> = [];
+
+    // Spies on the constructor itself (not just prototype methods, as the
+    // rest of this describe block does) — the options object handed to
+    // `new Client(...)` is otherwise unobservable, and that's exactly what
+    // this test needs to prove: a snapshot-derived node, a hardcoded
+    // maxRetries: 0, and the requestTimeout cap.
+    const clientSpy = jest.spyOn(esModule, 'Client').mockImplementation(function (
+      this: unknown,
+      opts: { node?: string; maxRetries?: number; requestTimeout?: number },
+    ) {
+      capturedOptions.push(opts);
+      return Object.assign(Object.create(OriginalClient.prototype), { info, close, search, index });
+      // biome-ignore lint/suspicious/noExplicitAny: mockImplementation's constructor signature is looser than the real overload set
+    } as any);
+
+    const snapshotConfig: ElasticsearchConfig = {
+      url: 'https://es-user:es-pass@es.example.com:9243/snapshot-index',
+      indexName: 'snapshot-index',
+      requestTimeout: 120_000, // above the 10s cap — must be clamped, not passed through
+      analyzer: 'default',
+    };
+    const snapshot = {
+      config: <T>() => snapshotConfig as unknown as T,
+      dependencyConfig: (): never => {
+        throw new Error('elasticsearch has no dependencies');
+      },
+    };
+
+    const result = await plugin.verifyConfig!(snapshot, { timeoutMs: 10_000 });
+
+    expect(result).toEqual({ status: 'ok' });
+    expect(capturedOptions).toHaveLength(1);
+    expect(capturedOptions[0].node).toContain('es.example.com');
+    expect(capturedOptions[0].maxRetries).toBe(0);
+    expect(capturedOptions[0].requestTimeout).toBe(10_000);
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    // info-only: no index/search call is ever made by verification.
+    expect(search).not.toHaveBeenCalled();
+    expect(index).not.toHaveBeenCalled();
+
+    clientSpy.mockRestore();
+  });
+
+  // `probeElasticsearchCluster` builds its own one-shot client internally
+  // (never the driver's hot-reload `StateCell` client), so there is no
+  // instance to monkey-patch externally — override the prototype for the
+  // duration of each test instead (same "don't mock the whole SDK module,
+  // patch the specific method" spirit as `driver.client.search = ...`
+  // elsewhere in this file, just at the prototype level since no instance
+  // is reachable ahead of time).
+  const originalInfo = Client.prototype.info;
+  const originalClose = Client.prototype.close;
+
+  afterEach(() => {
+    Client.prototype.info = originalInfo;
+    Client.prototype.close = originalClose;
+  });
+
+  it('AC-5: a successful info() call reports ok and always closes the one-shot client', async () => {
+    const info = jest.fn().mockResolvedValue({ cluster_name: 'test' });
+    const close = jest.fn().mockResolvedValue(undefined);
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.info = info as any;
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.close = close as any;
+
+    const result = await probeElasticsearchCluster(CONFIG);
+
+    expect(result).toEqual({ status: 'ok' });
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('never retries on failure (maxRetries: 0) — info() is attempted exactly once even when it keeps failing', async () => {
+    const info = jest.fn().mockRejectedValue(Object.assign(new Error('down'), { name: 'ConnectionError' }));
+    const close = jest.fn().mockResolvedValue(undefined);
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.info = info as any;
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.close = close as any;
+
+    const result = await probeElasticsearchCluster(CONFIG);
+
+    expect(result).toEqual({ status: 'failed', reason: 'unreachable' });
+    // The real client's own retry policy is what `maxRetries: 0` disables;
+    // this mock always fails regardless of retries, so a single call here
+    // is exactly what we'd see with retries turned off. Not a proof the
+    // SDK's internal retry logic is wired correctly (that's the SDK's own
+    // test suite's job) — see `resolveVerificationRequestTimeout` below
+    // for the same "assert the input we hand the SDK" pattern applied to
+    // `requestTimeout`, which — unlike `maxRetries` — has no visible
+    // proxy at all through a mocked client method.
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('a malformed url (parseUri throws) never constructs/closes a client and reports unknown', async () => {
+    const close = jest.fn();
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.close = close as any;
+
+    const result = await probeElasticsearchCluster({ ...CONFIG, url: 'not-a-url' });
+
+    expect(result).toEqual({ status: 'failed', reason: 'unknown' });
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('closes the client even when info() rejects', async () => {
+    const info = jest.fn().mockRejectedValue(new Error('boom'));
+    const close = jest.fn().mockResolvedValue(undefined);
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.info = info as any;
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.close = close as any;
+
+    await probeElasticsearchCluster(CONFIG);
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('a close() failure is swallowed and never overrides a successful verdict', async () => {
+    const info = jest.fn().mockResolvedValue({});
+    const close = jest.fn().mockRejectedValue(new Error('close failed'));
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.info = info as any;
+    // biome-ignore lint/suspicious/noExplicitAny: prototype override needs a loose signature to match the real client's overloads
+    Client.prototype.close = close as any;
+
+    const result = await probeElasticsearchCluster(CONFIG);
+
+    expect(result).toEqual({ status: 'ok' });
+  });
+});
+
+describe('resolveVerificationRequestTimeout (feature-plugin-config-live-verification §3/§4)', () => {
+  it('passes an already-small requestTimeout through unchanged', () => {
+    expect(resolveVerificationRequestTimeout(5000)).toBe(5000);
+  });
+
+  it('caps a large operator-configured requestTimeout at 10s', () => {
+    expect(resolveVerificationRequestTimeout(120_000)).toBe(10_000);
+  });
+
+  it('caps exactly at the 10s boundary', () => {
+    expect(resolveVerificationRequestTimeout(10_000)).toBe(10_000);
+    expect(resolveVerificationRequestTimeout(10_001)).toBe(10_000);
+  });
+});
+
+describe('classifyElasticsearchError (feature-plugin-config-live-verification AC-12-adjacent table)', () => {
+  it.each([401, 403])('a direct .statusCode of %d -> auth-failed', (statusCode) => {
+    expect(classifyElasticsearchError(Object.assign(new Error('x'), { statusCode }))).toBe('auth-failed');
+  });
+
+  it('a .meta.statusCode of 401/403 -> auth-failed', () => {
+    expect(classifyElasticsearchError({ meta: { statusCode: 401 } })).toBe('auth-failed');
+    expect(classifyElasticsearchError({ meta: { statusCode: 403 } })).toBe('auth-failed');
+  });
+
+  it('statusCode 404 -> resource-missing', () => {
+    expect(classifyElasticsearchError(Object.assign(new Error('x'), { statusCode: 404 }))).toBe('resource-missing');
+  });
+
+  it.each(['ConnectionError', 'TimeoutError', 'NoLivingConnectionsError'])('a %s -> unreachable', (name) => {
+    expect(classifyElasticsearchError({ name })).toBe('unreachable');
+  });
+
+  it('anything not in the table -> unknown', () => {
+    expect(classifyElasticsearchError(new Error('mystery'))).toBe('unknown');
+    expect(classifyElasticsearchError(Object.assign(new Error('x'), { statusCode: 500 }))).toBe('unknown');
+    expect(classifyElasticsearchError({ name: 'SomeOtherError' })).toBe('unknown');
   });
 });

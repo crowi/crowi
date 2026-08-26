@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
+import { z } from 'zod/v3';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import s3Plugin from '@crowi/plugin-storage-aws-s3';
 import gcsPlugin from '@crowi/plugin-storage-gcs';
@@ -826,5 +827,645 @@ describe('PUT/GET /api/admin/plugins/config — GCS service-account key validati
     await crowi.getConfigService().load();
     const flatBucketKey = formatPluginConfigKey(gcsPlugin.name, 'bucket');
     expect(crowi.getConfig().crowi[flatBucketKey]).toBe('old-bucket');
+  });
+});
+
+/**
+ * `googlePlugin`'s driver is never actually registered here (`registerAuth`
+ * only runs during real plugin bootstrap, and `@crowi/plugin-google` isn't
+ * in this harness's implicit-default set) — `crowi.getPlugins().auth.list()`
+ * is stubbed directly instead, the same private-surface pattern the
+ * readiness suite above uses for `getLoadedPlugins()`/`selectedDrivers`.
+ *
+ * Every real auth/storage plugin in this file (`googlePlugin`, `gcsPlugin`)
+ * has ALL its config fields inside a single atomic group, so testing that a
+ * non-group field change never gates needs a synthetic plugin with one
+ * group plus one ungrouped field.
+ */
+describe('PUT /api/admin/plugins/config — linked-identities confirmation gate (feature-auth-plugin-credential-change-guard AC-1/AC-2/AC-3/AC-4/AC-5/AC-6/AC-7b)', () => {
+  const SYNTH_DRIVER_NAME = 'synth-auth';
+  const syntheticAuthPlugin: CrowiPlugin = {
+    name: '@crowi/plugin-synth-auth-test',
+    version: '0.0.0',
+    configSchema: z
+      .object({
+        clientId: z.string().trim().default(''),
+        clientSecret: z.string().trim().describe('@sensitive synthetic test secret').default(''),
+        timeout: z.number().default(30),
+      })
+      .strict(),
+    configAtomicGroups: [{ name: 'credentials', keys: ['clientId', 'clientSecret'], sensitive: true }],
+  };
+  const syntheticNonAuthPlugin: CrowiPlugin = {
+    name: '@crowi/plugin-synth-non-auth-test',
+    version: '0.0.0',
+    configSchema: z
+      .object({
+        apiKey: z.string().trim().default(''),
+      })
+      .strict(),
+    configAtomicGroups: [{ name: 'credentials', keys: ['apiKey'], sensitive: false }],
+  };
+
+  type PluginManagerLoadedPluginsAccess = {
+    loadedPlugins: readonly CrowiPlugin[];
+  };
+
+  let adminToken: string;
+  let originalLoadedPlugins: readonly CrowiPlugin[];
+  let authListSpy: ReturnType<typeof jest.spyOn>;
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'Linked Identities Admin',
+      username: 'linkedIdentitiesAdmin',
+      email: 'linked-identities-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+  });
+
+  beforeEach(() => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    originalLoadedPlugins = manager.getLoadedPlugins();
+    (manager as unknown as PluginManagerLoadedPluginsAccess).loadedPlugins = [
+      ...originalLoadedPlugins,
+      googlePlugin,
+      syntheticAuthPlugin,
+      syntheticNonAuthPlugin,
+    ];
+    // `syntheticNonAuthPlugin` deliberately never appears here: no
+    // registered driver means it must never trigger the gate.
+    authListSpy = jest.spyOn(crowi.getPlugins().auth, 'list').mockReturnValue([
+      { driverName: 'google', plugin: googlePlugin.name },
+      { driverName: SYNTH_DRIVER_NAME, plugin: syntheticAuthPlugin.name },
+    ]);
+  });
+
+  afterEach(async () => {
+    const manager = crowi.pluginManager;
+    if (manager) (manager as unknown as PluginManagerLoadedPluginsAccess).loadedPlugins = originalLoadedPlugins;
+    jest.restoreAllMocks();
+    const Config = crowi.model('Config');
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-google:__atomic:clientCredentials').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-auth-test:__atomic:credentials').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-auth-test:timeout').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-non-auth-test:__atomic:credentials').catch(() => undefined);
+    await crowi.getConfigService().load();
+    await crowi.model('UserIdentity').deleteMany({ provider: { $in: ['google', SYNTH_DRIVER_NAME] } });
+  });
+
+  const putGoogleConfig = (values: Record<string, unknown>, confirmLinkedIdentities?: boolean) =>
+    request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: googlePlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values, ...(confirmLinkedIdentities !== undefined ? { confirmLinkedIdentities } : {}) });
+
+  const putSynthConfig = (values: Record<string, unknown>, confirmLinkedIdentities?: boolean) =>
+    request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: syntheticAuthPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values, ...(confirmLinkedIdentities !== undefined ? { confirmLinkedIdentities } : {}) });
+
+  const linkIdentity = (provider: string, providerUserId: string) =>
+    crowi.model('UserIdentity').create({ userId: new Types.ObjectId(), provider, providerUserId });
+
+  it('AC-1: a credential group change with linked identities and no confirmation returns 409 with the count, and writes nothing', async () => {
+    await linkIdentity('google', 'sub-1');
+    await linkIdentity('google', 'sub-2');
+
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('LINKED_IDENTITIES_EXIST');
+    expect(res.body.error.count).toBe(2);
+
+    const Config = crowi.model('Config');
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-google:/ }).exec();
+    expect(rows).toHaveLength(0);
+  });
+
+  it('AC-2: resubmitting the same request with confirmLinkedIdentities: true saves it', async () => {
+    await linkIdentity('google', 'sub-1');
+
+    const blocked = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(blocked.status).toBe(409);
+
+    const confirmed = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' }, true);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientId']).toBe('id-1');
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientSecret']).toBe('secret-1');
+  });
+
+  it('AC-3: a credential group change with zero linked identities saves without confirmation', async () => {
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('AC-4: changing only a field outside every atomic group saves without confirmation, even with identities linked', async () => {
+    await linkIdentity(SYNTH_DRIVER_NAME, 'sub-1');
+
+    const res = await putSynthConfig({ timeout: 60 });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-synth-auth-test:timeout']).toBe(60);
+  });
+
+  // The admin form's `buildRequest` sends every non-secret field's current
+  // value on every save, not only the ones the operator edited — so a real
+  // save touching only `timeout` still carries `clientId` in the body. The
+  // gate must judge "changed" against the stored value, not against
+  // presence in the request, or this would 409 even though the atomic
+  // group's identity never moved.
+  it('AC-4: a full-form save (unchanged clientId resent alongside a changed timeout) does not trigger the gate', async () => {
+    await putSynthConfig({ clientId: 'client-1', timeout: 45 });
+    await linkIdentity(SYNTH_DRIVER_NAME, 'sub-1');
+
+    const res = await putSynthConfig({ clientId: 'client-1', timeout: 60 });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-synth-auth-test:timeout']).toBe(60);
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-synth-auth-test:clientId']).toBe('client-1');
+  });
+
+  it('AC-7b: omitting clientSecret and changing only clientId still 409s when identities are linked (group-membership gate, not secret presence)', async () => {
+    const seeded = await putGoogleConfig({ clientId: 'old-id', clientSecret: 'old-secret' });
+    expect(seeded.status).toBe(200);
+
+    await linkIdentity('google', 'sub-1');
+
+    const res = await putGoogleConfig({ clientId: 'new-id' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('LINKED_IDENTITIES_EXIST');
+    expect(res.body.error.count).toBe(1);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientId']).toBe('old-id');
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:clientSecret']).toBe('old-secret');
+  });
+
+  it('AC-5: a plugin that registers no auth driver saves an atomic-group change without confirmation, even with unrelated identities linked', async () => {
+    await linkIdentity('google', 'sub-1');
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: syntheticNonAuthPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { apiKey: 'new-key' } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi[formatPluginConfigKey(syntheticNonAuthPlugin.name, 'apiKey')]).toBe('new-key');
+  });
+
+  it('AC-6: a save that touches no atomic-group field (unsent secret) never requires confirmation, even with identities linked', async () => {
+    await linkIdentity('google', 'sub-1');
+
+    const res = await putGoogleConfig({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const Config = crowi.model('Config');
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-google:/ }).exec();
+    expect(rows).toHaveLength(0);
+  });
+
+  it('does not treat confirmLinkedIdentities as a config value', async () => {
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' }, true);
+    expect(res.status).toBe(200);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi['plugin:@crowi/plugin-google:confirmLinkedIdentities']).toBeUndefined();
+  });
+
+  it('AC-1 (auth.list filter): does not count identities for a different driver the same registry lists', async () => {
+    await linkIdentity(SYNTH_DRIVER_NAME, 'sub-1');
+
+    const res = await putGoogleConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(res.status).toBe(200);
+    expect(authListSpy).toHaveBeenCalled();
+  });
+});
+
+/**
+ * feature-plugin-config-live-verification — end-to-end wiring of the
+ * post-save verification plan through the real Hono app + real
+ * PluginManager, including a regression check that the pre-existing
+ * atomic-first/ordinary-second call order and ordinary write-error swallow
+ * behaviour are still exercised together (the atomic-group describe block
+ * above never combines the two in one request — its plugin fixture has no
+ * ordinary field), plus the NEW behaviour this feature adds — plan
+ * creation before saves, execution after reconfigure, the no-op/409/422/
+ * atomic-500 skip paths, dependent fan-out, and the confirmed-resend AC-13
+ * parity.
+ */
+describe('PUT /api/admin/plugins/config — live verification (feature-plugin-config-live-verification)', () => {
+  type PluginManagerLoadedPluginsAccess = { loadedPlugins: readonly CrowiPlugin[]; buildDependentsMap: () => void };
+
+  const VerifiedConfigSchema = z.object({ value: z.string().default('') }).strict();
+  const AuthListSpyTargetConfigSchema = z.object({ clientId: z.string().trim().default('') }).strict();
+
+  let adminToken: string;
+  let originalLoadedPlugins: readonly CrowiPlugin[];
+  let verifyConfig: jest.Mock;
+  let reconfigureOrder: string[];
+  let persistedBeforeVerify: boolean | null;
+
+  const loadedPluginsOf = (manager: NonNullable<typeof crowi.pluginManager>) => manager as unknown as PluginManagerLoadedPluginsAccess;
+
+  const setLoadedPlugins = (extra: CrowiPlugin[]) => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    const access = loadedPluginsOf(manager);
+    access.loadedPlugins = [...originalLoadedPlugins, ...extra];
+    // `affectedPluginsFromNamespaces` (which `createVerificationPlan` fans
+    // out through) reads the private `dependents` map, built from
+    // `requires` — it is only rebuilt by `bootstrap()`, so a direct
+    // `loadedPlugins` mutation (same pattern the atomic-group/linked-
+    // identities describe blocks above use) must explicitly rebuild it too
+    // whenever a synthetic plugin declares `requires`.
+    access.buildDependentsMap();
+  };
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'Live Verification Admin',
+      username: 'liveVerificationAdmin',
+      email: 'live-verification-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    originalLoadedPlugins = manager.getLoadedPlugins();
+  });
+
+  beforeEach(() => {
+    reconfigureOrder = [];
+    persistedBeforeVerify = null;
+    verifyConfig = jest.fn(async (snapshot) => {
+      persistedBeforeVerify = reconfigureOrder.includes('reconfigure');
+      reconfigureOrder.push('verifyConfig');
+      const value = snapshot.config<{ value: string }>().value;
+      if (value === 'fail-auth') return { status: 'failed', reason: 'auth-failed' };
+      return { status: 'ok' };
+    });
+  });
+
+  afterEach(async () => {
+    const manager = crowi.pluginManager;
+    if (manager) {
+      const access = loadedPluginsOf(manager);
+      access.loadedPlugins = originalLoadedPlugins;
+      access.buildDependentsMap();
+    }
+    jest.restoreAllMocks();
+    const Config = crowi.model('Config');
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-verified-test:value').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-verified-dependent-test:clientId').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-verified-atomic-test:__atomic:credentials').catch(() => undefined);
+    await Config.deleteByParams('crowi', 'plugin:@crowi/plugin-synth-verified-atomic-test:label').catch(() => undefined);
+    await crowi.getConfigService().load();
+    await crowi.model('UserIdentity').deleteMany({ provider: 'synth-verified-auth' });
+  });
+
+  it('AC-3/AC-4: verification runs only AFTER the save has persisted and reconfigure has completed, and reports the outcome', async () => {
+    const verifiedPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-test',
+      version: '0.0.0',
+      configSchema: VerifiedConfigSchema,
+      reconfigure: async () => {
+        reconfigureOrder.push('reconfigure');
+      },
+      verifyConfig,
+    };
+    setLoadedPlugins([verifiedPlugin]);
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: verifiedPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { value: 'ok-value' } });
+
+    expect(res.status).toBe(200);
+    expect(verifyConfig).toHaveBeenCalledTimes(1);
+    expect(persistedBeforeVerify).toBe(true);
+    expect(reconfigureOrder).toEqual(['reconfigure', 'verifyConfig']);
+    expect(res.body.verificationResults).toEqual([{ plugin: verifiedPlugin.name, status: 'ok' }]);
+
+    // The value really was persisted before verifyConfig ran (not just
+    // reconfigure) — read straight from Mongo.
+    const Config = crowi.model('Config');
+    const row = await Config.findOne({ ns: 'crowi', key: 'plugin:@crowi/plugin-synth-verified-test:value' }).exec();
+    expect(row?.value).toBe(JSON.stringify('ok-value'));
+  });
+
+  it('reports a failed verification reason without failing the save (200, saved, notice-worthy failure)', async () => {
+    const verifiedPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-test',
+      version: '0.0.0',
+      configSchema: VerifiedConfigSchema,
+      verifyConfig,
+    };
+    setLoadedPlugins([verifiedPlugin]);
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: verifiedPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { value: 'fail-auth' } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.verificationResults).toEqual([{ plugin: verifiedPlugin.name, status: 'failed', reason: 'auth-failed' }]);
+  });
+
+  it('AC-3: a no-op save (unchanged value) never creates a plan, never invokes verifyConfig, and reports an empty verificationResults', async () => {
+    const verifiedPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-test',
+      version: '0.0.0',
+      configSchema: VerifiedConfigSchema,
+      verifyConfig,
+    };
+    setLoadedPlugins([verifiedPlugin]);
+    const manager = crowi.pluginManager!;
+    const configService = crowi.getConfigService();
+
+    const seeded = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: verifiedPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { value: 'same-value' } });
+    expect(seeded.status).toBe(200);
+    verifyConfig.mockClear();
+
+    // Spy AFTER seeding — the seed save above is a genuine (non-no-op)
+    // write and legitimately exercises all of these.
+    const planSpy = jest.spyOn(manager, 'createVerificationPlan');
+    const saveConfigSpy = jest.spyOn(configService, 'saveConfig');
+    const saveAtomicSpy = jest.spyOn(configService, 'saveConfigAtomicGroup');
+    const reconfigureSpy = jest.spyOn(manager, 'reconfigureAffected');
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: verifiedPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { value: 'same-value' } });
+
+    expect(res.status).toBe(200);
+    // AC-3: a no-op save skips the plan (not just the hook it would have
+    // triggered) and every persistence/reconfigure call — there is nothing
+    // for `verifyAffectedConfig` to even be given.
+    expect(planSpy).not.toHaveBeenCalled();
+    expect(saveConfigSpy).not.toHaveBeenCalled();
+    expect(saveAtomicSpy).not.toHaveBeenCalled();
+    expect(reconfigureSpy).not.toHaveBeenCalled();
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(res.body.verificationResults).toEqual([]);
+  });
+
+  it('AC-3: a 422 validation failure never invokes verifyConfig', async () => {
+    const verifiedPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-test',
+      version: '0.0.0',
+      // `value` must be a string; sending a number fails `safeParse`.
+      configSchema: VerifiedConfigSchema,
+      verifyConfig,
+    };
+    setLoadedPlugins([verifiedPlugin]);
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: verifiedPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { value: 12345 } });
+
+    expect(res.status).toBe(422);
+    expect(verifyConfig).not.toHaveBeenCalled();
+  });
+
+  it('AC-3: an atomic-group write rejection (500) never invokes verifyConfig, and never runs the ordinary save or reconfigure that would otherwise follow', async () => {
+    const atomicPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-atomic-test',
+      version: '0.0.0',
+      // `label` sits outside the atomic group — the same request also
+      // touches an ordinary field, so a passing test here can't be
+      // explained by "there was nothing ordinary to save anyway".
+      configSchema: z
+        .object({
+          clientId: z.string().trim().default(''),
+          clientSecret: z.string().trim().describe('@sensitive').default(''),
+          label: z.string().trim().default(''),
+        })
+        .strict(),
+      configAtomicGroups: [{ name: 'credentials', keys: ['clientId', 'clientSecret'], sensitive: true }],
+      reconfigure: async () => {
+        reconfigureOrder.push('reconfigure');
+      },
+      verifyConfig,
+    };
+    setLoadedPlugins([atomicPlugin]);
+
+    const Config = crowi.model('Config');
+    const manager = crowi.pluginManager!;
+    const configService = crowi.getConfigService();
+    jest.spyOn(Config, 'updateAtomicConfigGroup').mockRejectedValueOnce(new Error('injected mongo failure'));
+    const saveConfigSpy = jest.spyOn(configService, 'saveConfig');
+    const reconfigureSpy = jest.spyOn(manager, 'reconfigureAffected');
+    const verifySpy = jest.spyOn(manager, 'verifyAffectedConfig');
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: atomicPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { clientId: 'id-1', clientSecret: 'secret-1', label: 'ordinary-value' } });
+
+    expect(res.status).toBe(500);
+    // Rejecting the atomic write must short-circuit the whole rest of the
+    // pipeline — not just skip the hook, but never even attempt the
+    // ordinary-field save, reconfigure, or verification that a healthy
+    // atomic write would have unlocked.
+    expect(saveConfigSpy).not.toHaveBeenCalled();
+    expect(reconfigureSpy).not.toHaveBeenCalled();
+    expect(verifySpy).not.toHaveBeenCalled();
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(reconfigureOrder).toEqual([]);
+
+    // And the ordinary field was never persisted either — confirm from
+    // Mongo, not just from the spy not having been invoked.
+    const row = await Config.findOne({ ns: 'crowi', key: 'plugin:@crowi/plugin-synth-verified-atomic-test:label' }).exec();
+    expect(row).toBeNull();
+  });
+
+  it('AC-3/AC-7 (feature-config-write-durability): a single request touching both an atomic-group field and an ordinary field saves the atomic group first, but an ordinary write failure now 500s instead of being swallowed — the atomic pair stays persisted+cached, the ordinary field is neither', async () => {
+    const LABEL_KEY = 'plugin:@crowi/plugin-synth-verified-atomic-test:label';
+    const ATOMIC_KEY = 'plugin:@crowi/plugin-synth-verified-atomic-test:__atomic:credentials';
+    const CLIENT_ID_KEY = 'plugin:@crowi/plugin-synth-verified-atomic-test:clientId';
+    const atomicPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-atomic-test',
+      version: '0.0.0',
+      configSchema: z
+        .object({
+          clientId: z.string().trim().default(''),
+          clientSecret: z.string().trim().describe('@sensitive').default(''),
+          label: z.string().trim().default(''),
+        })
+        .strict(),
+      configAtomicGroups: [{ name: 'credentials', keys: ['clientId', 'clientSecret'], sensitive: true }],
+      reconfigure: async () => {
+        reconfigureOrder.push('reconfigure');
+      },
+      verifyConfig,
+    };
+    setLoadedPlugins([atomicPlugin]);
+
+    const Config = crowi.model('Config');
+    const manager = crowi.pluginManager!;
+    const configService = crowi.getConfigService();
+    const saveAtomicSpy = jest.spyOn(configService, 'saveConfigAtomicGroup');
+    const saveConfigSpy = jest.spyOn(configService, 'saveConfig');
+    const reconfigureSpy = jest.spyOn(manager, 'reconfigureAffected');
+    const verifySpy = jest.spyOn(manager, 'verifyAffectedConfig');
+    // Only the ordinary field's own Mongo write fails — the atomic group
+    // write (a separate `updateByParams` call, on its own `__atomic:` key)
+    // goes through untouched, so the two outcomes stay independently
+    // observable.
+    const originalUpdateByParams = Config.updateByParams.bind(Config);
+    jest.spyOn(Config, 'updateByParams').mockImplementation(async (ns: string, key: string, value: string) => {
+      if (key === LABEL_KEY) throw new Error('injected ordinary write failure');
+      return originalUpdateByParams(ns, key, value);
+    });
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: atomicPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { clientId: 'id-1', clientSecret: 'secret-1', label: 'ordinary-value' } });
+
+    // feature-config-write-durability: the ordinary write's Mongo failure
+    // now propagates instead of being swallowed — the whole PUT 500s, and
+    // nothing past the save (reconfigure, verification) ever runs.
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
+    expect(res.body.verificationResults).toBeUndefined();
+    expect(saveAtomicSpy).toHaveBeenCalledTimes(1);
+    expect(saveConfigSpy).toHaveBeenCalledTimes(1);
+    // Atomic-first, ordinary-second: the atomic call completes before the
+    // ordinary one even starts.
+    expect(saveAtomicSpy.mock.invocationCallOrder[0]).toBeLessThan(saveConfigSpy.mock.invocationCallOrder[0]);
+    expect(reconfigureSpy).not.toHaveBeenCalled();
+    expect(verifySpy).not.toHaveBeenCalled();
+    expect(verifyConfig).not.toHaveBeenCalled();
+    expect(reconfigureOrder).toEqual([]);
+
+    // The atomic group's own write succeeded before the ordinary write
+    // was even attempted, so it stays persisted...
+    const atomicRow = await Config.findOne({ ns: 'crowi', key: ATOMIC_KEY }).exec();
+    expect(atomicRow).not.toBeNull();
+    // ...and its fields DID reach the in-memory cache — saveConfigAtomicGroup
+    // already ran its own update()/notify before the ordinary save even
+    // started (partial acceptance is allowed across independent calls; see
+    // spec §2).
+    expect(crowi.getConfig().crowi[CLIENT_ID_KEY]).toBe('id-1');
+
+    // The ordinary field's Mongo write really did fail (nothing persisted)...
+    const labelRow = await Config.findOne({ ns: 'crowi', key: LABEL_KEY }).exec();
+    expect(labelRow).toBeNull();
+    // ...and — unlike before this feature — the in-memory cache does NOT
+    // reflect it either: `saveConfig` never reached `this.update(...)`.
+    expect(crowi.getConfig().crowi[LABEL_KEY]).toBeUndefined();
+  });
+
+  it('AC-3/AC-13: an unconfirmed 409 (linked identities) never invokes verifyConfig, and the confirmed resend runs it normally', async () => {
+    const authPlugin: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-atomic-test',
+      version: '0.0.0',
+      configSchema: AuthListSpyTargetConfigSchema,
+      configAtomicGroups: [{ name: 'credentials', keys: ['clientId'], sensitive: false }],
+      verifyConfig,
+    };
+    setLoadedPlugins([authPlugin]);
+    const authListSpy = jest.spyOn(crowi.getPlugins().auth, 'list').mockReturnValue([{ driverName: 'synth-verified-auth', plugin: authPlugin.name }]);
+    await crowi.model('UserIdentity').create({ userId: new Types.ObjectId(), provider: 'synth-verified-auth', providerUserId: 'sub-1' });
+
+    const manager = crowi.pluginManager!;
+    const configService = crowi.getConfigService();
+    const planSpy = jest.spyOn(manager, 'createVerificationPlan');
+    const saveConfigSpy = jest.spyOn(configService, 'saveConfig');
+    const saveAtomicSpy = jest.spyOn(configService, 'saveConfigAtomicGroup');
+    const reconfigureSpy = jest.spyOn(manager, 'reconfigureAffected');
+
+    const blocked = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: authPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { clientId: 'new-id' } });
+    expect(blocked.status).toBe(409);
+    // AC-3: an unconfirmed 409 never gets as far as building a plan,
+    // never persists (atomic or ordinary), and never reconfigures — not
+    // just "never calls the hook".
+    expect(planSpy).not.toHaveBeenCalled();
+    expect(saveConfigSpy).not.toHaveBeenCalled();
+    expect(saveAtomicSpy).not.toHaveBeenCalled();
+    expect(reconfigureSpy).not.toHaveBeenCalled();
+    expect(verifyConfig).not.toHaveBeenCalled();
+
+    const confirmed = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: authPlugin.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { clientId: 'new-id' }, confirmLinkedIdentities: true });
+
+    // AC-13: the confirmed resend behaves exactly like an ordinary save
+    // that was never gated — plan/save/reconfigure/verify all run normally.
+    expect(confirmed.status).toBe(200);
+    expect(planSpy).toHaveBeenCalledTimes(1);
+    expect(saveAtomicSpy).toHaveBeenCalledTimes(1);
+    expect(reconfigureSpy).toHaveBeenCalledTimes(1);
+    expect(verifyConfig).toHaveBeenCalledTimes(1);
+    expect(confirmed.body.verificationResults).toEqual([{ plugin: authPlugin.name, status: 'ok' }]);
+
+    authListSpy.mockRestore();
+  });
+
+  it('AC-2: saving a base plugin fans verification out to a dependent plugin that also declares verifyConfig', async () => {
+    const dependentVerify = jest.fn(async () => ({ status: 'ok' as const }));
+    const base: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-test',
+      version: '0.0.0',
+      configSchema: VerifiedConfigSchema,
+      exposesConfigToDependents: true,
+    };
+    const dependent: CrowiPlugin = {
+      name: '@crowi/plugin-synth-verified-dependent-test',
+      version: '0.0.0',
+      requires: [base.name],
+      configSchema: AuthListSpyTargetConfigSchema,
+      verifyConfig: dependentVerify,
+    };
+    setLoadedPlugins([base, dependent]);
+
+    const res = await request(app)
+      .put('/api/admin/plugins/config')
+      .query({ name: base.name })
+      .set(authHeaders(adminToken))
+      .send({ values: { value: 'triggers-dependent' } });
+
+    expect(res.status).toBe(200);
+    expect(dependentVerify).toHaveBeenCalledTimes(1);
+    expect(res.body.verificationResults).toEqual([{ plugin: dependent.name, status: 'ok' }]);
   });
 });

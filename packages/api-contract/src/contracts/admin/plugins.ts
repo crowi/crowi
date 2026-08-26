@@ -23,6 +23,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import {
   ClearRenderCacheResponseSchema,
   ConfigReadinessResponseSchema,
+  LinkedIdentitiesExistErrorSchema,
   ListPluginsResponseSchema,
   PluginConfigResponseSchema,
   PluginConfigValidationErrorSchema,
@@ -110,7 +111,8 @@ export const updatePluginConfigRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Save succeeded; hotReloaded flag indicates live apply',
+      description:
+        'Save succeeded; hotReloaded flag indicates live apply. verificationResults (feature-plugin-config-live-verification) carries non-blocking connectivity/permission probe results for the changed plugin and its dependents, run after this save already persisted and reconfigured — empty on a no-op save or when no affected plugin declares verifyConfig, optional on the wire for rolling-deploy compat with an older api replica, and reflects only the instance that answered this request (never a cluster-wide aggregate).',
       content: { 'application/json': { schema: UpdatePluginConfigResponseSchema } },
     },
     401: {
@@ -124,6 +126,11 @@ export const updatePluginConfigRoute = createRoute({
     404: {
       description: 'Plugin not loaded',
       content: { 'application/json': { schema: PluginNotFoundErrorSchema } },
+    },
+    409: {
+      description:
+        "The save rewrites a credential atomic group and users are linked through this plugin's auth driver(s); resubmit with confirmLinkedIdentities: true to proceed",
+      content: { 'application/json': { schema: LinkedIdentitiesExistErrorSchema } },
     },
     422: {
       description: 'Plugin config failed plugin-defined validation',
@@ -248,6 +255,7 @@ export type {
   ClearRenderCacheResponse,
   ConfigReadinessIssue,
   ConfigReadinessResponse,
+  LinkedIdentitiesExistError,
   ListPluginsResponse,
   PluginAdminPlacement,
   PluginConfigResponse,
@@ -256,6 +264,8 @@ export type {
   PluginInfo,
   PluginNotFoundError,
   PluginReadinessField,
+  PluginVerificationFailureReason,
+  PluginVerificationResult,
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '../../schemas/admin/plugins';

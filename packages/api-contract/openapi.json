@@ -98,7 +98,8 @@
           "MAIL_FROM_NOT_CONFIGURED",
           "MAIL_TEST_FAILED",
           "PLUGIN_NOT_FOUND",
-          "PLUGIN_CONFIG_VALIDATION_FAILED"
+          "PLUGIN_CONFIG_VALIDATION_FAILED",
+          "LINKED_IDENTITIES_EXIST"
         ]
       },
       "ApplicationNotInstalledError": {
@@ -821,6 +822,99 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "OAuthSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "authorizedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRefreshedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientName",
+          "scopes",
+          "authorizedAt",
+          "lastRefreshedAt",
+          "expiresAt"
+        ]
+      },
+      "ListOAuthSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "oauthSessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "clientId": {
+                  "type": "string"
+                },
+                "clientName": {
+                  "type": "string"
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "authorizedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "lastRefreshedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "clientId",
+                "clientName",
+                "scopes",
+                "authorizedAt",
+                "lastRefreshedAt",
+                "expiresAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "oauthSessions"
         ]
       },
       "ClientInfoResponse": {
@@ -7300,6 +7394,9 @@
           "values": {
             "type": "object",
             "additionalProperties": {}
+          },
+          "confirmLinkedIdentities": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -7320,6 +7417,60 @@
           },
           "reconfigureFailed": {
             "type": "boolean"
+          },
+          "verificationResults": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "plugin": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "plugin",
+                    "status"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "plugin": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "failed"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "unreachable",
+                        "auth-failed",
+                        "resource-missing",
+                        "write-denied",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "plugin",
+                    "status",
+                    "reason"
+                  ]
+                }
+              ]
+            }
           }
         },
         "required": [
@@ -13127,6 +13278,474 @@
           },
           "404": {
             "description": "No such token belonging to the current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/oauth-sessions": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List the current user's active OAuth sessions (refresh-token rotation-chain tips)",
+        "responses": {
+          "200": {
+            "description": "Active OAuth session list (no secrets)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "oauthSessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "clientId": {
+                            "type": "string"
+                          },
+                          "clientName": {
+                            "type": "string"
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "authorizedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "lastRefreshedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "clientId",
+                          "clientName",
+                          "scopes",
+                          "authorizedAt",
+                          "lastRefreshedAt",
+                          "expiresAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "oauthSessions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "OAuth sessions can only be managed from a web session, or the account is not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "FORBIDDEN"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "USER_REGISTERED",
+                                "USER_SUSPENDED",
+                                "USER_INVITED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "redirectTo": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "redirectTo"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/oauth-sessions/{id}": {
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke an OAuth session (the rotation-chain component reachable from this tip)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientName": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "authorizedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "lastRefreshedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientId",
+                    "clientName",
+                    "scopes",
+                    "authorizedAt",
+                    "lastRefreshedAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "OAuth sessions can only be managed from a web session, or the account is not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "FORBIDDEN"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "USER_REGISTERED",
+                                "USER_SUSPENDED",
+                                "USER_INVITED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "redirectTo": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "redirectTo"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session belonging to the current user",
             "content": {
               "application/json": {
                 "schema": {
@@ -37226,6 +37845,42 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -38223,6 +38878,42 @@
                         },
                         "redirectTo": {
                           "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
                         }
                       },
                       "required": [
@@ -43471,6 +44162,9 @@
                   "values": {
                     "type": "object",
                     "additionalProperties": {}
+                  },
+                  "confirmLinkedIdentities": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -43482,7 +44176,7 @@
         },
         "responses": {
           "200": {
-            "description": "Save succeeded; hotReloaded flag indicates live apply",
+            "description": "Save succeeded; hotReloaded flag indicates live apply. verificationResults (feature-plugin-config-live-verification) carries non-blocking connectivity/permission probe results for the changed plugin and its dependents, run after this save already persisted and reconfigured — empty on a no-op save or when no affected plugin declares verifyConfig, optional on the wire for rolling-deploy compat with an older api replica, and reflects only the instance that answered this request (never a cluster-wide aggregate).",
             "content": {
               "application/json": {
                 "schema": {
@@ -43499,6 +44193,60 @@
                     },
                     "reconfigureFailed": {
                       "type": "boolean"
+                    },
+                    "verificationResults": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "plugin": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ok"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "plugin",
+                              "status"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "plugin": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "failed"
+                                ]
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "unreachable",
+                                  "auth-failed",
+                                  "resource-missing",
+                                  "write-denied",
+                                  "unknown"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "plugin",
+                              "status",
+                              "reason"
+                            ]
+                          }
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -43611,6 +44359,44 @@
                       "required": [
                         "code",
                         "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The save rewrites a credential atomic group and users are linked through this plugin's auth driver(s); resubmit with confirmLinkedIdentities: true to proceed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "LINKED_IDENTITIES_EXIST"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "count"
                       ]
                     }
                   },

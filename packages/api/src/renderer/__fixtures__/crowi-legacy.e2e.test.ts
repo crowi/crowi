@@ -82,6 +82,65 @@ describe('e2e: @crowi/plugin-renderer-crowi-legacy (v1 quirks)', () => {
     expect(leftover.children[0]).toEqual({ type: 'text', value: 'bar' });
   });
 
+  // feature-renderer-break-normalization D-5 — `core/break-normalization.ts`
+  // now runs before the registry's external transforms too, so a bare
+  // `<br>` right after a v1 `##heading` is a canonical `break` node by the
+  // time this plugin's leading-break skip (`v1HeadingReplacement`'s
+  // `restChildren.length === 0 && child.type === 'break'` check) sees it —
+  // where it used to be `html` and survive as spurious leading content.
+  // These 3 shapes are only reachable through the REAL pipeline (the
+  // plugin's own hand-built unit test at `index.test.ts` passes the same
+  // `[text, break, text]` tree before AND after this feature, so it cannot
+  // observe the difference); pinning here is the only gate on this
+  // cross-feature interaction.
+  it('drops a leading `break` (from a normalized `<br>`) after `##hoge` — same result as `##hoge\\nbar`', async () => {
+    const reg = new RendererRegistryImpl();
+    enablePlugin(reg);
+
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
+    const { tree } = await runPipeline('##hoge<br>bar', reg, ctx, loadDeps);
+
+    expect(tree.children).toHaveLength(2);
+    expect((tree.children[0] as Heading).type).toBe('heading');
+    expect((tree.children[0] as Heading).depth).toBe(2);
+    const leftover = tree.children[1] as Paragraph;
+    expect(leftover.type).toBe('paragraph');
+    // `toMatchObject`, not `toEqual`: unlike the synthetic `text` node
+    // `remarkBreaks` builds for the `##hoge\nbar` case above, this "bar"
+    // is the ORIGINAL text node straight from `remark-parse`'s inline
+    // tokenizer (the split here comes from the `<br>` tag, not a
+    // newline), so it still carries a real `position`.
+    expect(leftover.children).toHaveLength(1);
+    expect(leftover.children[0]).toMatchObject({ type: 'text', value: 'bar' });
+  });
+
+  it('drops the entire trailing paragraph when `##hoge<br>` has nothing after the normalized break', async () => {
+    const reg = new RendererRegistryImpl();
+    enablePlugin(reg);
+
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
+    const { tree } = await runPipeline('##hoge<br>', reg, ctx, loadDeps);
+
+    expect(tree.children).toHaveLength(1);
+    expect((tree.children[0] as Heading).type).toBe('heading');
+    expect((tree.children[0] as Heading).depth).toBe(2);
+  });
+
+  it('drops BOTH leading breaks when `##hoge<br><br>text` normalizes to two consecutive `break` nodes', async () => {
+    const reg = new RendererRegistryImpl();
+    enablePlugin(reg);
+
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
+    const { tree } = await runPipeline('##hoge<br><br>text', reg, ctx, loadDeps);
+
+    expect(tree.children).toHaveLength(2);
+    expect((tree.children[0] as Heading).type).toBe('heading');
+    const leftover = tree.children[1] as Paragraph;
+    expect(leftover.type).toBe('paragraph');
+    expect(leftover.children).toHaveLength(1);
+    expect(leftover.children[0]).toMatchObject({ type: 'text', value: 'text' });
+  });
+
   it('coexists with bundled core transforms — proper `# Title` headings still get TOC entries', async () => {
     const reg = new RendererRegistryImpl();
     enablePlugin(reg);

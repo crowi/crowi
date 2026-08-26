@@ -3,6 +3,7 @@ import type { Root } from 'mdast';
 import type { MongoCacheStorage } from '../cache';
 import type { PipelineEsmDeps } from '../pipeline';
 import type { RendererRegistryImpl } from '../registry';
+import { remarkNormalizeHtmlBreaks } from './break-normalization';
 import { makeCodeBlockDispatch } from './code-block-dispatch';
 import { remarkCodeBlockLanguages } from './code-blocks';
 import { makeEmbedTagDispatch } from './embed-tags';
@@ -40,9 +41,9 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 /**
  * Build the bundled core renderer transform plugins, in their fixed
  * order (frontmatter → github-alerts → headings → raw-space-links →
- * image-attrs → wikilinks → mentions → code-blocks → syntax-highlight).
- * The pipeline prepends these to the registry's external plugins on
- * every run.
+ * image-attrs → wikilinks → mentions → code-blocks → syntax-highlight →
+ * break-normalization). The pipeline prepends these to the registry's
+ * external plugins on every run.
  *
  * Order rationale:
  *   - frontmatter (feature-renderer-frontmatter §D-3) runs FIRST,
@@ -89,9 +90,24 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
  *   - code-blocks (the lang aggregator) runs BEFORE syntax-highlight
  *     because the latter rewrites `code` nodes into `html`, after
  *     which the aggregator would no longer find them.
- *   - syntax-highlight runs last among core plugins so wikilinks /
- *     mentions / heading anchors are already stamped by the time the
- *     AST gets persisted.
+ *   - syntax-highlight runs before break-normalization: its output is
+ *     a large, attribute-bearing `html` node at flow position, well
+ *     outside break-normalization's phrasing-unit scope, so ordering
+ *     between the two never changes either one's result — but syntax-
+ *     highlight must still run before ANY transform that could see a
+ *     `code` node so wikilinks / mentions / heading anchors are
+ *     already stamped by the time the AST gets persisted.
+ *   - break-normalization (feature-renderer-break-normalization §D-5)
+ *     runs LAST among core plugins, right before `remarkBreaks`
+ *     (`pipeline.ts`): it turns a bare `<br>` `html` node into a
+ *     canonical `break` inside an uncontaminated `paragraph` /
+ *     `heading` / `tableCell` phrasing subtree. It must run AFTER
+ *     GitHub Alerts (which keys its marker-vs-body decision on the
+ *     child at index 1 still being `html`, not yet `break`) and after
+ *     headings / raw-space-links (both need pristine pre-rewrite
+ *     `position` / text), and it must run BEFORE `remarkBreaks` / emoji
+ *     / every external transform so those observe the canonical
+ *     `break` a bare `<br>` normalizes to instead of raw HTML.
  *
  * Bound to the loaded ESM deps because `headings` needs
  * `GithubSlugger` + `mdast-util-to-string`'s `toString` and
@@ -111,6 +127,7 @@ export function buildCorePlugins(deps: PipelineEsmDeps, body: string): UnifiedTr
     remarkMentions,
     remarkCodeBlockLanguages,
     makeRemarkSyntaxHighlight(deps),
+    remarkNormalizeHtmlBreaks,
   ];
 }
 
