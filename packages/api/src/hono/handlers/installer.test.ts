@@ -129,11 +129,12 @@ describe('GET /api/installer (Hono)', () => {
       await User.deleteMany({ email: 'installer-happy@example.com' });
     });
 
-    // The admin user this request created is real (createAdmin doesn't
-    // roll it back), but a seeding write failure means install itself
-    // never completed, so the installer must still be reachable rather
-    // than reporting `already_installed` forever.
-    it('AC-8: installer stays reopenable after a seeding write failure during createAdmin', async () => {
+    // feature-config-reconciliation-safety — the admin user this request
+    // created is real (createAdmin doesn't roll it back), and the
+    // partially-seeded config rows are no longer deleted either: the
+    // installer stays closed (reports `already_installed`) rather than
+    // reopening to a fresh install after a seeding failure.
+    it('AC-1/AC-4: installer does not reopen after a seeding write failure during createAdmin — partial config remains and the error names the recovery step', async () => {
       await Config.deleteMany({ ns: 'crowi' });
       await User.deleteMany({ email: 'installer-seed-fail@example.com' });
 
@@ -157,15 +158,89 @@ describe('GET /api/installer (Hono)', () => {
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('error');
         expect(res.body.errors?.[0]).toMatch(/mongo write failed during install/);
+        expect(res.body.errors?.[0]).toMatch(/will not reopen/i);
+        expect(res.body.errors?.[0]).toMatch(/recreate the database/i);
 
-        // The seeded `{ ns: 'crowi' }` rows are gone, so the count-based
-        // guard reports uninstalled again instead of stuck-forever
-        // `already_installed`.
+        // The partially-seeded rows remain — the installer stays closed
+        // instead of reporting `installer_required` again.
         const status = await request(app).get('/api/installer');
-        expect(status.body).toEqual({ status: 'installer_required' });
+        expect(status.body).toEqual({ status: 'already_installed' });
       } finally {
         jest.restoreAllMocks();
         await User.deleteMany({ email: 'installer-seed-fail@example.com' });
+      }
+    });
+
+    // The count-based install guard is intentionally left unlocked (spec
+    // §"やらないこと"). This test forces both concurrent requests past
+    // every count-based guard (the handler's own `isAppInstalled`
+    // pre-check AND `applicationInstall`'s internal one), regardless of
+    // real write timing, so it exercises exactly one race deterministically:
+    // one request's seeding WRITE fails while the other's genuinely
+    // concurrent write succeeds. Without forcing the guards open, the two
+    // requests' real Mongo timing can also make the second bounce off its
+    // OWN guard once the first's rows have already landed — a second,
+    // separate race (whether a concurrent installer even reaches the
+    // seeding write before the other completes) that `models/config.test.ts`
+    // (`AC-2`) already covers deterministically at the model level. Forcing
+    // the guards open here isolates this test to the one thing AC-2/AC-3
+    // actually assert: a completed install's configuration survives a
+    // concurrent, failed seeding write.
+    it("AC-2/AC-3: when two concurrent createAdmin requests race and one's seeding write fails, the other's completed configuration survives and already_installed persists", async () => {
+      await Config.deleteMany({ ns: 'crowi' });
+      await User.deleteMany({ email: { $in: ['installer-race-a@example.com', 'installer-race-b@example.com', 'installer-late@example.com'] } });
+
+      const originalUpdateByParams = Config.updateByParams.bind(Config);
+      let injected = false;
+      jest.spyOn(Config, 'updateByParams').mockImplementation(async (ns: string, key: string, value: string) => {
+        // Fails exactly one attempt's write of this key, whichever of the
+        // two concurrent installs reaches it first — the other's write of
+        // the same (identical) key still lands normally.
+        if (key === 'app:confidential' && !injected) {
+          injected = true;
+          throw new Error('mongo write failed during concurrent install');
+        }
+        return originalUpdateByParams(ns, key, value);
+      });
+      jest.spyOn(Config, 'countDocuments').mockReturnValue({ exec: async () => 0 } as unknown as ReturnType<typeof Config.countDocuments>);
+
+      try {
+        const [resA, resB] = await Promise.all([
+          request(app)
+            .post('/api/installer/createAdmin')
+            .send({ registerForm: { name: 'Race A', username: 'installer-race-a', email: 'installer-race-a@example.com', password: 'Password!1' } }),
+          request(app)
+            .post('/api/installer/createAdmin')
+            .send({ registerForm: { name: 'Race B', username: 'installer-race-b', email: 'installer-race-b@example.com', password: 'Password!1' } }),
+        ]);
+
+        // Every count-based guard was forced open, so both requests reach
+        // the seeding write and exactly one occurrence of it fails — the
+        // split is now deterministic: one response completed, the other
+        // carries the injected failure.
+        const bodies = [resA.body, resB.body];
+        expect(bodies.some((b) => b.status === 'ok')).toBe(true);
+        expect(bodies.some((b) => typeof b.errors?.[0] === 'string' && /mongo write failed during concurrent install/.test(b.errors[0]))).toBe(true);
+
+        // Restore real DB-backed guards before checking installed state —
+        // the assertions below must reflect what actually landed, not the
+        // forced-open guard.
+        jest.restoreAllMocks();
+
+        // The completed installer's configuration is not wiped by the
+        // other's failure.
+        const status = await request(app).get('/api/installer');
+        expect(status.body).toEqual({ status: 'already_installed' });
+
+        // And the public installer stays closed — it does not reopen.
+        const createAfter = await request(app)
+          .post('/api/installer/createAdmin')
+          .send({ registerForm: { name: 'Late', username: 'installer-late', email: 'installer-late@example.com', password: 'Password!1' } });
+        expect(createAfter.status).toBe(400);
+        expect(createAfter.body).toEqual({ status: 'error', message: 'Application is already installed' });
+      } finally {
+        jest.restoreAllMocks();
+        await User.deleteMany({ email: { $in: ['installer-race-a@example.com', 'installer-race-b@example.com', 'installer-late@example.com'] } });
       }
     });
 
