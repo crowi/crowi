@@ -223,6 +223,31 @@ integrate-worktree, orchestrate C, crowi-fix, future skills). `TODO.md` is for
 roadmap items and blocked dependency majors only — not a review-advisory
 graveyard.
 
+#### Severity calibration: crowi is a small-scale internal tool
+
+The deployment crowi is designed for is a few to at most a few hundred people
+inside one company or community — not a service taking many requests per
+second. Findings must be judged against that, and `drop` is the expected
+outcome for a whole class of them.
+
+**Drop a finding that meets ALL of these:**
+
+- it needs a rare race to trigger (a normal operation never hits it; it takes
+  a specific concurrent timing)
+- a maintenance window or an announcement to users would avoid it
+- someone who does hit it recovers by asking an admin, who can fix it
+
+**Do NOT drop these, regardless of scale:**
+
+- data loss or corruption
+- a defect reachable by an ordinary operation (no race required)
+- a wrong result returned to a user who cannot tell it is wrong
+- an authorization bypass or exposure of a secret
+
+When it is close, do not weigh how likely the finding is — ask **whether the
+person who hits it can get back to a good state, on their own or through an
+admin**. If they can, drop it.
+
 ### Flaky test / CI-infra root cause: delegate the investigation+design, don't reason it out inline
 When a CI failure turns out to be flaky/nondeterministic or CI-infra-shaped
 (turbo build/task-graph races, jest harness/worker behavior, GHA runner
