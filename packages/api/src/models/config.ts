@@ -151,19 +151,21 @@ export default (crowi: Crowi) => {
     try {
       await Config.updateConfigByNamespace('crowi', getArrayForInstalling());
     } catch (err) {
-      // The count check above guarantees `{ ns: 'crowi' }` was empty
-      // before this call, so every row now present under that namespace
-      // was written by this failed seeding attempt — deleting the whole
-      // namespace can't destroy pre-existing data. Without this, a
-      // partially-written seeding batch leaves rows behind that make
-      // `isAppInstalled` report `already_installed` forever, even though
-      // install never actually completed.
-      try {
-        await Config.deleteMany({ ns: 'crowi' }).exec();
-      } catch (deleteErr) {
-        debug('applicationInstall: failed to remove partially seeded crowi config:', (deleteErr as Error).message);
-      }
-      throw err;
+      // The count check above only proves the namespace was empty AT
+      // THE TIME OF THE CHECK, not at the time this write fails — an
+      // unlocked, unauthenticated route (`POST /installer/createAdmin`)
+      // lets a second concurrent install pass the same check and finish
+      // in between, so deleting `{ ns: 'crowi' }` here would destroy
+      // that other install's completed configuration, not just this
+      // attempt's own rows. There is also no way to delete only "this
+      // attempt's" rows: both attempts seed the identical, fixed key
+      // set, so the rows are indistinguishable by content. Leaving the
+      // partial rows in place means the installer stays closed after a
+      // failure; recreating the database is the supported recovery.
+      throw new Error(
+        `Failed to seed initial configuration while installing: ${(err as Error).message}. Configuration already written under { ns: 'crowi' } was left in place and the installer will not reopen. Recreate the database and re-run the installer to retry.`,
+        { cause: err },
+      );
     }
   };
 

@@ -265,6 +265,40 @@ describe('PluginManager.reconfigureAffected', () => {
   });
 });
 
+/**
+ * feature-config-reconciliation-safety §3 — `ConfigService.saveConfig`'s
+ * failure-path reconciliation now notifies local listeners tagged
+ * `'remote'`, not `'local'`, because nobody else is going to call
+ * `reconfigureAffected` for a write that never returned successfully.
+ * `handleConfigChange`'s own gate is unchanged; these pin the contract
+ * between the two rather than any new branching here.
+ */
+describe('PluginManager.handleConfigChange (feature-config-reconciliation-safety)', () => {
+  it("AC-8: reconfigures on a 'remote'-tagged notification — the shape ConfigService's failed-write recovery path now uses", async () => {
+    const reconfigure = jest.fn();
+    const plugin = stubPlugin({ name: 'a', reconfigure });
+    const manager = new PluginManager(makeFakeCrowi());
+    loadPluginsInto(manager, [plugin]);
+
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private method
+    await (manager as any).handleConfigChange(['plugin:a'], 'remote');
+
+    expect(reconfigure).toHaveBeenCalledTimes(1);
+  });
+
+  it("AC-10: does not reconfigure on a 'local'-tagged notification — the admin handler calls reconfigureAffected itself on that path, and firing here too would double-fire", async () => {
+    const reconfigure = jest.fn();
+    const plugin = stubPlugin({ name: 'a', reconfigure });
+    const manager = new PluginManager(makeFakeCrowi());
+    loadPluginsInto(manager, [plugin]);
+
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private method
+    await (manager as any).handleConfigChange(['plugin:a'], 'local');
+
+    expect(reconfigure).not.toHaveBeenCalled();
+  });
+});
+
 describe('PluginManager.createVerificationPlan / verifyAffectedConfig (feature-plugin-config-live-verification)', () => {
   const AwsConfigSchema = z.object({ region: z.string().default('') }).strict();
   const S3ConfigSchema = z.object({ bucket: z.string().default('') }).strict();
