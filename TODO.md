@@ -65,7 +65,10 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [ ] **monorepo restructure follow-ups**（catalog 化、compose healthcheck、dev/prod parity ほか）
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
 - [ ] **RFC-0008 follow-ups**（`rebuild renderer`/`backlink` 本実装、watcher backfill 統一、RFC 追従）
-- [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一が主目的 — GHSA `js-yaml` advisory は eslint version と無関係に root `pnpm.overrides` の `js-yaml@>=3.0.0 <3.15.0` / `js-yaml@>=4.0.0 <4.3.0` で解消済み）
+- [ ] **eslint 9 → 10 + @typescript-eslint 6 → 8 major up**（2 つは同伴。`@typescript-eslint` が 2 major 遅れているので、eslint 10 の flat config 変更と合わせて 1 回で通す。2026-08-27 の major 乖離棚卸しより）
+- [ ] **TypeScript 5.8 → 7 major up**（全 workspace。`@typescript-eslint` 8 と同伴させるか、先に単独で通すかの判断が要る。2026-08-27 の major 乖離棚卸しより）
+- [ ] **jest 29 → 30 major up**（`jest-environment-node` / `@types/jest` 30・`@testing-library/jest-dom` 6 → 7・`jsdom` 29 → 30 が同伴。api の suite 規模が大きいので、runner 挙動の変化を先に確認する。2026-08-27 の major 乖離棚卸しより）
+- [ ] **redis 4 → 6 / ioredis 5 → 6 major up**（`packages/api`。config pub/sub・presence・editor cap・rate limit・collab の Redis 拡張が乗っており、client API の変更点を面ごとに確認する必要がある。2026-08-27 の major 乖離棚卸しより）
 - [ ] **@google-cloud/storage 7 → 8 major up**（`packages/api` devDep / `packages/plugin-storage-gcs` dep。Dependabot #588 の `uuid@9.0.1` は `gaxios@6` 経由で入り、7.x は最新 7.22.0 でも `gaxios: ^6.0.2` のまま。uuid 依存が消えるのは `gaxios@8` = storage 8.x からで、patched 版へ到達するには major up が要る）
 - [x] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。mongodb 6→7・mms 10→11 同伴。GHSA `ip-address` chain は mongoose major とは直交し、root `pnpm.overrides` の `"socks": "^2.8.7"` で解消）
 
