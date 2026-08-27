@@ -1,6 +1,5 @@
 import { createAdaptorServer } from '@hono/node-server';
 import type { Http2Bindings, HttpBindings } from '@hono/node-server';
-import Tokens from 'csrf';
 import Debug from 'debug';
 import http from 'http';
 import mongoose from 'mongoose';
@@ -71,8 +70,6 @@ class Crowi {
   mailer: MailService | null = null;
 
   lru: any = {};
-
-  tokens: Tokens;
 
   // FIXME: {} をアサインしないで済む方法を捜す
   models: Models = {} as any as Models;
@@ -242,8 +239,6 @@ class Crowi {
     this.cacheDir = path.join(this.tmpDir, 'cache');
 
     this.setupEvents();
-
-    this.tokens = new Tokens();
   }
 
   async init() {
@@ -795,10 +790,6 @@ class Crowi {
 
   setupLRU() {
     this.lru = new LRU(this);
-  }
-
-  getTokens() {
-    return this.tokens;
   }
 
   start = async (): Promise<http.Server> => {
