@@ -472,36 +472,7 @@ describe('ConfigService write-queue serialization (feature-config-reconciliation
     expect(events).toEqual(['notify-start', 'notify-end', 'second-write-start']);
   });
 
-  it("AC-5/AC-10: a config-change listener that writes back from inside a SUCCESSFUL save's notification (e.g. a plugin's reconfigure(ctx) calling ctx.setConfig()) does not deadlock on the turn that is still notifying it", async () => {
-    const updateConfigByNamespace = jest.fn(async () => undefined);
-    const updateConfig = jest.fn(async () => undefined);
-    const svc = makeService({ updateConfigByNamespace, updateConfig });
-
-    let handled = false;
-    let nestedWriteRan = false;
-    svc.onConfigChange(async (_ns, source) => {
-      if (source !== 'local' || handled) return;
-      // Guard against the nested write's OWN success notify re-entering
-      // this same listener — it also fires with source 'local'.
-      handled = true;
-      // Mirrors PluginContext.setConfig(): a listener reacting to this
-      // successful save writing back through the same public entry
-      // points saveConfig serializes against.
-      await svc.saveConfigValue('crowi', 'app:title', 'reconfigured');
-      nestedWriteRan = true;
-    });
-
-    const result = await Promise.race([
-      svc.saveConfig('crowi', { 'app:confidential': 'secret' }),
-      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('deadlock: saveConfig never settled')), 1000)),
-    ]);
-
-    expect(result).toBeUndefined();
-    expect(nestedWriteRan).toBe(true);
-    expect(updateConfig).toHaveBeenCalledWith('crowi', 'app:title', 'reconfigured');
-  });
-
-  it("AC-5: does not let a later write start until a SUCCESSFUL save's notify — and whatever a listener does in response — has fully finished, not merely until the write+memory-update have", async () => {
+  it("AC-5/AC-10: a SUCCESSFUL save's local notify runs after the write queue already released — a later write is not blocked behind it", async () => {
     const updateConfigByNamespace = jest.fn(async () => undefined);
     const events: string[] = [];
     const updateConfig = jest.fn(async () => {
@@ -514,8 +485,9 @@ describe('ConfigService write-queue serialization (feature-config-reconciliation
       releaseNotify = resolve;
     });
     // Gate only the FIRST local notify (the one under test) — the second
-    // save below also notifies with source 'local' on its own success,
-    // and must not be mistaken for a second reaction to the first save.
+    // save below also notifies with source 'local' on its own success
+    // (that path is untouched, design decision 3), and must not be
+    // mistaken for a second reaction to the first save.
     let gatedOnce = false;
     svc.onConfigChange(async (_ns, source) => {
       if (source !== 'local' || gatedOnce) return;
@@ -527,7 +499,7 @@ describe('ConfigService write-queue serialization (feature-config-reconciliation
 
     const firstSave = svc.saveConfig('crowi', { 'app:title': 'New Title' });
 
-    // Let the first turn's write land, its memory update apply, and its
+    // Let the first turn's write land, the queue release, and its
     // (still-gated) local notify start.
     await tick();
     await tick();
@@ -536,19 +508,21 @@ describe('ConfigService write-queue serialization (feature-config-reconciliation
     const secondSave = svc.saveConfigValue('crowi', 'app:confidential', 'secret');
     await tick();
 
-    // Still queued behind the first save's still-open local notify — a
-    // turn that released the queue right after the write+memory-update
-    // (before notify) would let this start here already, and that gap is
-    // exactly what let two turns' reconfigure calls finish in either
-    // order regardless of which one actually holds the newer config.
-    expect(updateConfig).not.toHaveBeenCalled();
-    expect(events).toEqual(['notify-start']);
+    // Unlike the failure-path test above, a second write is NOT queued
+    // behind the first save's still-open local notify — the write queue
+    // already released once the first save's Mongo write + memory update
+    // finished, before its local notify (this listener) ever ran. A
+    // pre-fix implementation that kept the local notify inside the turn
+    // would leave `updateConfig` uncalled here, still queued behind the
+    // gate.
+    expect(updateConfig).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(['notify-start', 'second-write-start']);
 
     releaseNotify!();
     await firstSave;
     await secondSave;
 
-    expect(events).toEqual(['notify-start', 'notify-end', 'second-write-start']);
+    expect(events).toEqual(['notify-start', 'second-write-start', 'notify-end']);
   });
 });
 

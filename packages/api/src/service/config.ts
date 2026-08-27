@@ -46,15 +46,18 @@ export default class ConfigService {
    * Marks "the code currently running is part of an already-dequeued
    * write-queue turn" across the turn's whole async call chain — not just
    * `serializeWrite`'s own `task()` call, but anything that call in turn
-   * awaits. Every turn — success or failure — keeps notifying inside this
-   * window (memory update, publish, notify, and any reconfigure a
+   * awaits. Only a FAILURE-path turn keeps notifying inside this window
+   * (reload, publish, the `'remote'`-tagged notify, and any reconfigure a
    * listener triggers in response — see `serializeWrite`'s doc for why).
-   * `serializeWrite` reads it to tell a genuinely-concurrent caller (must
-   * wait its turn) apart from a reentrant call the still-in-flight turn's
-   * own notify makes into itself, e.g. a plugin's `reconfigure(ctx)`
-   * writing back via `ctx.setConfig()` while the notification that
-   * triggered it is still running — that call must run inline instead of
-   * enqueueing, or it would wait on the very turn that is calling it.
+   * A success-path turn's local notify runs after the queue has already
+   * released (see `saveConfig` et al.), so it is never covered by this
+   * marker. `serializeWrite` reads it to tell a genuinely-concurrent
+   * caller (must wait its turn) apart from a reentrant call the
+   * still-in-flight failure-path notify makes into itself, e.g. a
+   * plugin's `reconfigure(ctx)` writing back via `ctx.setConfig()` while
+   * the notification that triggered it is still running — that call must
+   * run inline instead of enqueueing, or it would wait on the very turn
+   * that is calling it.
    */
   private readonly writeContext = new AsyncLocalStorage<true>();
 
@@ -156,29 +159,35 @@ export default class ConfigService {
 
   /**
    * Runs `task` after every previously-queued write's turn has finished.
-   * `task` covers the write itself, the local memory update, and the
-   * whole post-write notification (publish, notify, and anything a
-   * listener does in response, e.g. a plugin's `reconfigure(ctx)`) —
-   * success or failure alike — so a slow notify/reconfigure genuinely
-   * blocks the next config write from starting. That closes the ordering
-   * gap a shorter "release the queue right after the Mongo write" turn
-   * would leave: two turns' notifications could otherwise finish in
-   * either order, and the later-finishing one's driver reconfiguration
-   * would win regardless of which one actually holds the newer config.
+   * `task` itself decides how much of the write is covered: a FAILURE
+   * path (see `saveConfig`) keeps its whole post-write notification
+   * (reload, publish, `postUpdate`, and anything a listener does in
+   * response, e.g. a plugin's `reconfigure(ctx)`) inside `task`, so a
+   * slow reconfigure genuinely blocks the next config write from
+   * starting — closing the ordering gap a shorter "release the queue
+   * right after the Mongo write" turn would leave (two turns'
+   * notifications could otherwise finish in either order, and the
+   * later-finishing one's driver reconfiguration would win regardless of
+   * which one actually holds the newer config). A SUCCESS path's `task`
+   * covers only the write and the local memory update — its local notify
+   * runs after this method already returned, deliberately outside the
+   * queue (see `saveConfig`'s doc).
    *
-   * Covering all of a turn inside `task` requires telling apart two
+   * Covering more of a turn inside `task` requires telling apart two
    * calls that can both arrive while that turn is in flight: a genuinely
    * concurrent OTHER caller (must queue and wait, same as ever) and a
    * REENTRANT call the in-flight turn makes into itself (e.g. a
-   * config-change listener notified from inside a turn calling
-   * `ctx.setConfig()` → `saveConfigValue`, which is a public entry point
-   * too). Queueing the reentrant case would make it wait on the very turn
-   * that is calling it — a guaranteed deadlock. The two are
+   * config-change listener notified from inside a failure-path turn
+   * calling `ctx.setConfig()` → `saveConfigValue`, which is a public
+   * entry point too). Queueing the reentrant case would make it wait on
+   * the very turn that is calling it — a guaranteed deadlock. The two are
    * indistinguishable by any state visible at the call site (both see "a
    * turn is currently running"); only the actual JS call stack tells them
    * apart, which is exactly what `writeContext` (`AsyncLocalStorage`)
    * captures: it stays set for every continuation of the turn's own async
-   * chain, and is absent for an unrelated caller.
+   * chain, and is absent for an unrelated caller — including a listener
+   * reacting to a SUCCESS path's local notify, since that notify runs
+   * after `writeContext.run()` has already returned.
    */
   private serializeWrite<T>(task: () => Promise<T>): Promise<T> {
     if (this.writeContext.getStore()) {
@@ -208,25 +217,32 @@ export default class ConfigService {
   /**
    * Persists every key of `config` to `ns`, then (and ONLY then) updates
    * local memory, notifies change listeners, and publishes to Redis. The
-   * write, the local memory update, and the whole post-write notification
-   * all run inside one `serializeWrite` turn — success or failure alike
-   * — so a later config write cannot start, and a later write's own
-   * reconfigure cannot race this one's, until this turn's notification
-   * has fully finished. See `serializeWrite`'s doc for why covering the
-   * notify (rather than releasing the queue right after the write)
-   * matters, and for how a reentrant call the notification triggers (a
-   * listener writing back via `ctx.setConfig()`) safely runs inline
-   * instead of queueing behind itself — which also means that reentrant
-   * write's OWN trailing notify still runs inside the outer turn (it has
-   * no queue release of its own to wait for); that's an accepted,
-   * unavoidable side effect of not deadlocking AC-7.
+   * write itself always runs inside one `serializeWrite` turn, but how
+   * much of the notification joins that turn depends on the outcome:
    *
-   * - On SUCCESS, notify is tagged `'local'`: the admin handler that
-   *   called this method is still the one responsible for explicitly
-   *   calling `reconfigureAffected` on its own response path (design
-   *   decision 3 — `PluginManager.handleConfigChange` ignores a `'local'`
-   *   source for exactly this reason, see AC-10).
-   * - On FAILURE, notify is tagged `'remote'` instead — see below.
+   * - On SUCCESS, the turn covers only the write and the local memory
+   *   update; it returns the changed namespaces and this method notifies
+   *   (`notifyUpdated(changed, 'local')`) AFTER the turn — and the write
+   *   queue — has already released. That keeps a plain successful save
+   *   exactly as unserialized as it was before this queue existed (design
+   *   decision 3: the success path is otherwise unchanged), so a listener
+   *   reacting to this notify and calling back into a public entry point
+   *   (`saveConfigValue` etc.) is an ordinary new queued call, never a
+   *   reentrant one — no `AsyncLocalStorage` marker is active by then.
+   * - On FAILURE, the turn covers the reload, the publish, and the
+   *   `'remote'`-tagged notify (and whatever a listener does in response,
+   *   e.g. a plugin's `reconfigure(ctx)`) too — see `serializeWrite`'s doc
+   *   for why keeping the notify inside the turn (rather than releasing
+   *   the queue early) matters here: a later config write cannot start,
+   *   and a later write's own reconfigure cannot race this one's, until
+   *   this turn's notification has fully finished. A reentrant call this
+   *   notification triggers (a listener writing back via
+   *   `ctx.setConfig()`) safely runs inline instead of queueing behind
+   *   itself — see `serializeWrite`'s doc — which also means that
+   *   reentrant write's OWN trailing local notify still runs inside the
+   *   outer failure turn (it has no queue release of its own to wait
+   *   for); that's an accepted, unavoidable side effect of not deadlocking
+   *   AC-7, not a missed case of the success/failure split above.
    *
    * `configModel.updateConfigByNamespace` writes each key independently
    * (`Promise.allSettled` — see its own doc), so a rejection here can
@@ -250,10 +266,11 @@ export default class ConfigService {
    * holds if publish/notify itself throws after a successful reload.
    */
   async saveConfig(ns: string, config: Record<string, any>): Promise<void> {
-    await this.serializeWrite(() => this.saveConfigTurn(ns, config));
+    const changed = await this.serializeWrite(() => this.saveConfigTurn(ns, config));
+    await this.notifyUpdated(changed, 'local');
   }
 
-  private async saveConfigTurn(ns: string, config: Record<string, unknown>): Promise<void> {
+  private async saveConfigTurn(ns: string, config: Record<string, unknown>): Promise<string[]> {
     debug('Save config', ns, config);
     const changed = deriveChangedNamespaces(ns, Object.keys(config));
 
@@ -275,26 +292,27 @@ export default class ConfigService {
     }
 
     this.set({ ...this.config, [ns]: { ...this.config[ns], ...config } });
-    await this.notifyUpdated(changed, 'local');
+    return changed;
   }
 
   /**
    * Single-key counterpart of `saveConfig` — same fail-propagating
-   * contract, and the same write-queue turn coverage (see `saveConfig`'s
-   * doc): `configModel.updateConfig` no longer swallows a Mongo failure,
-   * so a rejection reaches the caller before `applyLocalValueUpdate` (the
-   * in-memory mutation) ever runs, and on success the listener notify +
-   * Redis publish still run inside this turn before the queue releases.
+   * contract, and the same success/failure split of what runs inside the
+   * write-queue turn (see `saveConfig`'s doc): `configModel.updateConfig`
+   * no longer swallows a Mongo failure, so a rejection reaches the caller
+   * before `applyLocalValueUpdate` (the in-memory mutation) ever runs, and
+   * on success the listener notify + Redis publish happen after the queue
+   * has already released this turn.
    */
   async saveConfigValue(ns: string, key: string, value: any) {
-    await this.serializeWrite(() => this.saveConfigValueTurn(ns, key, value));
+    const changed = await this.serializeWrite(() => this.saveConfigValueTurn(ns, key, value));
+    await this.notifyUpdated(changed, 'local');
   }
 
-  private async saveConfigValueTurn(ns: string, key: string, value: unknown): Promise<void> {
+  private async saveConfigValueTurn(ns: string, key: string, value: unknown): Promise<string[]> {
     debug('Save config value', ns, key, value);
     await this.configModel.updateConfig(ns, key, value);
-    const changed = this.applyLocalValueUpdate(ns, key, value);
-    await this.notifyUpdated(changed, 'local');
+    return this.applyLocalValueUpdate(ns, key, value);
   }
 
   /**
@@ -311,14 +329,15 @@ export default class ConfigService {
    *
    * The flat fields are applied to local memory together, in one `set`,
    * so a listener never sees the group half-applied either. As with
-   * `saveConfig`, that notify runs inside the same write-queue turn as
-   * the write (see `saveConfig`'s doc).
+   * `saveConfig`, that notify runs after the queue has already released
+   * this turn (see `saveConfig`'s doc for the success/failure split).
    */
   async saveConfigAtomicGroup(ns: string, pluginName: string, groupName: string, values: Record<string, string>) {
-    await this.serializeWrite(() => this.saveConfigAtomicGroupTurn(ns, pluginName, groupName, values));
+    const changed = await this.serializeWrite(() => this.saveConfigAtomicGroupTurn(ns, pluginName, groupName, values));
+    await this.notifyUpdated(changed, 'local');
   }
 
-  private async saveConfigAtomicGroupTurn(ns: string, pluginName: string, groupName: string, values: Record<string, string>): Promise<void> {
+  private async saveConfigAtomicGroupTurn(ns: string, pluginName: string, groupName: string, values: Record<string, string>): Promise<string[]> {
     debug('Save atomic config group', ns, pluginName, groupName, Object.keys(values));
     await this.configModel.updateAtomicConfigGroup(ns, pluginName, groupName, values);
 
@@ -329,10 +348,10 @@ export default class ConfigService {
     // One namespace, notified once — the group is a single logical change
     // however many fields it happens to contain.
     this.set({ ...this.config, [ns]: { ...this.config[ns], ...flat } });
-    await this.notifyUpdated([`plugin:${pluginName}`], 'local');
+    return [`plugin:${pluginName}`];
   }
 
-  /** Shared local-memory mutation of `saveConfigValue`'s write queue turn — no notify here; the caller notifies within the same turn, right after (see `saveConfig`'s doc). */
+  /** Shared local-memory mutation of `saveConfigValue`'s write queue turn — no notify here; the caller notifies after the turn releases (see `saveConfig`'s doc). */
   private applyLocalValueUpdate(ns: string, key: string, value: any): string[] {
     const changed = deriveChangedNamespaces(ns, [key]);
     this.set({ ...this.config, [ns]: { ...this.config[ns], [key]: value } });
@@ -340,14 +359,14 @@ export default class ConfigService {
   }
 
   async deleteConfig(ns: string, key: string) {
-    await this.serializeWrite(() => this.deleteConfigTurn(ns, key));
+    const changed = await this.serializeWrite(() => this.deleteConfigTurn(ns, key));
+    await this.notifyUpdated(changed, 'local');
   }
 
-  private async deleteConfigTurn(ns: string, key: string): Promise<void> {
+  private async deleteConfigTurn(ns: string, key: string): Promise<string[]> {
     await this.configModel.deleteConfig(ns, key);
     delete this.config[ns][key];
-    const changed = deriveChangedNamespaces(ns, [key]);
-    await this.notifyUpdated(changed, 'local');
+    return deriveChangedNamespaces(ns, [key]);
   }
 
   /**
