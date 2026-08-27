@@ -38,7 +38,12 @@ export const registerPageHistoryRoutes = <E extends OpenAPIHono<CrowiHonoBinding
 
     let decoded: PageHistoryCursor | null;
     try {
-      decoded = cursor == null ? null : decodeCursor(cursor, pageId);
+      // Cursors are minted with the normalised (lowercase) ObjectId string
+      // (`encodeCursor`'s `pageId` comes off `objectId.toString()` elsewhere in
+      // this read path), so the match has to compare against that same
+      // normalised form — not the request's raw param, which the route
+      // accepts in either case.
+      decoded = cursor == null ? null : decodeCursor(cursor, objectId.toString());
     } catch (err) {
       if (err instanceof PageHistoryCursorError) {
         return c.json({ error: { code: 'INVALID_REQUEST', message: err.message } }, 400);

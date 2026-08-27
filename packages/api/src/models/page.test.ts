@@ -351,6 +351,64 @@ describe('Page', () => {
         await expect(Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)).rejects.toThrow('Page is not granted for the user');
       });
     });
+
+    describe('findPageByIdForReentry (RFC-0021 §16)', () => {
+      let creator;
+      let stranger;
+
+      beforeAll(async () => {
+        const users = await Fixture.generate('User', [
+          { name: 'Reentry Model Creator', username: 'reentryModelCreator', email: 'reentry-model-creator@example.com' },
+          { name: 'Reentry Model Stranger', username: 'reentryModelStranger', email: 'reentry-model-stranger@example.com' },
+        ]);
+        [creator, stranger] = users;
+      });
+
+      afterEach(async () => {
+        await Page.deleteMany({ path: { $regex: '^/reentry-model' } });
+      });
+
+      test('AC-1: a granted user reads the same page findPageByIdAndGrantedUser would return', async () => {
+        const [page] = await Fixture.generate('Page', [{ path: '/reentry-model/granted', grant: Page.GRANT_RESTRICTED, creator, grantedUsers: [creator] }]);
+
+        const viaReentry = await Page.findPageByIdForReentry(page._id, creator);
+        const viaGranted = await Page.findPageByIdAndGrantedUser(page._id, creator);
+        expect(viaReentry.path).toBe(page.path);
+        expect(viaReentry.path).toBe(viaGranted.path);
+      });
+
+      test('AC-1: rejects a non-granted user the same way as findPageByIdAndGrantedUser', async () => {
+        const [page] = await Fixture.generate('Page', [{ path: '/reentry-model/not-granted', grant: Page.GRANT_RESTRICTED, creator, grantedUsers: [creator] }]);
+
+        await expect(Page.findPageByIdForReentry(page._id, stranger)).rejects.toThrow('Page is not granted for the user');
+      });
+
+      test('AC-1: hides a draft from a non-creator the same way as findPageByIdAndGrantedUser', async () => {
+        const [page] = await Fixture.generate('Page', [{ path: '/reentry-model/draft', status: 'draft', grant: Page.GRANT_PUBLIC, creator }]);
+
+        await expect(Page.findPageByIdForReentry(page._id, stranger)).rejects.toThrow('Page not found');
+      });
+
+      test('AC-2: does not collapse a transitional page into not-found', async () => {
+        const [page] = await Fixture.generate('Page', [{ path: '/reentry-model/transitional', grant: Page.GRANT_PUBLIC, creator, status: STATUS_RENAMING }]);
+
+        const found = await Page.findPageByIdForReentry(page._id, creator);
+        expect(found).not.toBeNull();
+        expect(found.status).toBe(STATUS_RENAMING);
+      });
+
+      test('returns null — not an error — when no such page exists', async () => {
+        await expect(Page.findPageByIdForReentry(new Types.ObjectId(), creator)).resolves.toBeNull();
+      });
+
+      test('AC-3: findPageByIdAndGrantedUser is unchanged — it still collapses a transitional page into not-found', async () => {
+        const [page] = await Fixture.generate('Page', [
+          { path: '/reentry-model/transitional-granted', grant: Page.GRANT_PUBLIC, creator, status: STATUS_RENAMING },
+        ]);
+
+        await expect(Page.findPageByIdAndGrantedUser(page._id, creator)).rejects.toThrow('Page not found');
+      });
+    });
   });
 
   describe('Rename Tree', () => {

@@ -233,6 +233,19 @@ export async function updatePageViaApi(context: BrowserContext, input: { pageId:
 }
 
 /**
+ * A fresh key per call, matching what the built-in UI sends
+ * (`crypto.randomUUID().replaceAll('-', '')` in `rename-dialog.tsx` /
+ * `page-view.tsx`) and satisfying `IDEMPOTENCY_KEY_PATTERN`
+ * (`^[A-Za-z0-9_-]{16,128}$`). Never reuse one across calls: replaying a key
+ * with a different destination is refused with 409
+ * `IDEMPOTENCY_KEY_CONFLICT`, and these helpers are called repeatedly with
+ * different paths within a single spec.
+ */
+function freshIdempotencyKey(): string {
+  return crypto.randomUUID().replaceAll('-', '');
+}
+
+/**
  * Rename a page as the user backing `context` (`POST /api/pages/rename`).
  * RFC-0017 Phase 1 — used to exercise the collab lifecycle epoch: a rename
  * must invalidate any live collab editor open on `pageId`, even though the
@@ -250,6 +263,7 @@ export async function renamePageViaApi(context: BrowserContext, input: { pageId:
     headers: {
       authorization: `Bearer ${accessToken}`,
       'content-type': 'application/json',
+      'idempotency-key': freshIdempotencyKey(),
     },
     body: JSON.stringify({ page_id: input.pageId, new_path: input.newPath, include_descendants: input.includeDescendants }),
   });
@@ -270,6 +284,7 @@ export async function deletePageViaApi(context: BrowserContext, input: { pageId:
     headers: {
       authorization: `Bearer ${accessToken}`,
       'content-type': 'application/json',
+      'idempotency-key': freshIdempotencyKey(),
     },
     body: JSON.stringify({ page_id: input.pageId }),
   });
