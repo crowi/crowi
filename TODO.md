@@ -66,6 +66,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
 - [ ] **RFC-0008 follow-ups**（`rebuild renderer`/`backlink` 本実装、watcher backfill 統一、RFC 追従）
 - [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一が主目的 — GHSA `js-yaml` advisory は eslint version と無関係に root `pnpm.overrides` の `js-yaml@>=3.0.0 <3.15.0` / `js-yaml@>=4.0.0 <4.3.0` で解消済み）
+- [ ] **@google-cloud/storage 7 → 8 major up**（`packages/api` devDep / `packages/plugin-storage-gcs` dep。Dependabot #588 の `uuid@9.0.1` は `gaxios@6` 経由で入り、7.x は最新 7.22.0 でも `gaxios: ^6.0.2` のまま。uuid 依存が消えるのは `gaxios@8` = storage 8.x からで、patched 版へ到達するには major up が要る）
 - [x] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。mongodb 6→7・mms 10→11 同伴。GHSA `ip-address` chain は mongoose major とは直交し、root `pnpm.overrides` の `"socks": "^2.8.7"` で解消）
 
 ---
