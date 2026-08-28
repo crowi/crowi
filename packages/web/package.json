@@ -34,7 +34,7 @@
     "clsx": "^2.1.1",
     "hast-util-raw": "^9.1.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
-    "lucide-react": "^0.562.0",
+    "lucide-react": "catalog:",
     "mdast-util-to-hast": "^13.2.1",
     "next": "16.2.11",
     "next-themes": "^0.4.6",

@@ -2,10 +2,12 @@ packages:
   - "apps/*"
   - "packages/*"
 
-# Default catalog (pnpm 9+). Single source of truth for shared dev tools
-# and cross-cutting external peers. Per-package runtime deps (next / react /
-# mongoose / express / @aws-sdk/* etc.) stay out of the catalog — they are
-# intentionally allowed to drift per package.
+# Default catalog (pnpm 9+). Single source of truth for deps where drift
+# across packages would be a bug, not a choice — shared dev tools,
+# cross-cutting external peers, and deps whose version defines a shared
+# contract (e.g. lucide-react icon names). Per-package runtime deps (next /
+# react / mongoose / express / @aws-sdk/* etc.) stay out of the catalog —
+# for those, drift per package is intentional.
 catalog:
   typescript: ^5.8.3
   tsup: ^8.3.5
@@ -18,3 +20,4 @@ catalog:
   "@modelcontextprotocol/sdk": ^1.29.0
   "@hono/mcp": ^0.3.0
   hono-rate-limiter: ^0.5.3
+  lucide-react: ^1.35.0
