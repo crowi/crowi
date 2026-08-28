@@ -421,6 +421,161 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean()).result.status).toBe('succeeded');
   });
 
+  test('a losing exit-CAS delivery settles its member from the grouped event instead of reporting failure', async () => {
+    const root = await createReadyPage('/subtree/durable-authority');
+    const child = await createReadyPage('/subtree/durable-authority/child');
+    const destination = '/subtree/durable-authority-moved';
+    const key = nextKey();
+    const { childDestination, childMember } = await createSealedSubtreeState(root, child, destination, key);
+    const memberKey = deriveMemberKey(key, child._id);
+
+    // Both deliveries are held at the SAME afterEnter point (the sync every
+    // real "two deliveries entered, one is about to lose the exit CAS"
+    // interleaving needs) and released together.
+    const updateRevisionListByPath = Revision.updateRevisionListByPath.bind(Revision);
+    let afterEnterCalls = 0;
+    let releaseAfterEnter: (() => void) | undefined;
+    const afterEnterGate = new Promise<void>((resolve) => {
+      releaseAfterEnter = resolve;
+    });
+    let bothAtGate: (() => void) | undefined;
+    const bothAtGatePromise = new Promise<void>((resolve) => {
+      bothAtGate = resolve;
+    });
+    const revisionSpy = jest.spyOn(Revision, 'updateRevisionListByPath').mockImplementation(async (path, updateData) => {
+      afterEnterCalls += 1;
+      if (afterEnterCalls === 2) bothAtGate?.();
+      await afterEnterGate;
+      return updateRevisionListByPath(path, updateData);
+    });
+
+    // Only the FIRST terminal write for this member is held — that is
+    // whichever delivery reaches `completeOperation` first, normally the
+    // exit-CAS winner. Holding it keeps `result` durably `null` until the
+    // losing delivery has actually performed its decisive read.
+    let trackFinalRead = false;
+    let finalReadCalls = 0;
+    let releaseCompletion: (() => void) | undefined;
+    const completionGate = new Promise<void>((resolve) => {
+      releaseCompletion = resolve;
+    });
+    const findOne = PageHistoryOperation.findOne.bind(PageHistoryOperation);
+    const findOneSpy = jest.spyOn(PageHistoryOperation, 'findOne').mockImplementation((filter, projection, options) => {
+      const query = findOne(filter, projection, options);
+      const f = filter as { idempotencyKey?: string };
+      if (trackFinalRead && f?.idempotencyKey === memberKey) {
+        const exec = query.exec.bind(query);
+        query.exec = (async () => {
+          const value = await exec();
+          finalReadCalls += 1;
+          if (finalReadCalls === 1) releaseCompletion?.();
+          return value;
+        }) as typeof query.exec;
+      }
+      return query;
+    });
+    const findOneAndUpdate = PageHistoryOperation.findOneAndUpdate.bind(PageHistoryOperation);
+    let completionCalls = 0;
+    const completionSpy = jest.spyOn(PageHistoryOperation, 'findOneAndUpdate').mockImplementation((filter, update, options) => {
+      const query = findOneAndUpdate(filter, update, options);
+      const f = filter as { operationId?: string; result?: unknown };
+      if (f?.operationId === childMember.operationId && f?.result === null) {
+        completionCalls += 1;
+        if (completionCalls === 1) {
+          const exec = query.exec.bind(query);
+          query.exec = (async () => {
+            await completionGate;
+            return exec();
+          }) as typeof query.exec;
+        }
+      }
+      return query;
+    });
+
+    const firstDelivery = run(root, destination, key);
+    const secondDelivery = run(root, destination, key);
+    await bothAtGatePromise;
+    // Everything that reads this member's record before this point is one of
+    // the two deliveries' own preliminary lookups, not the decisive read the
+    // repro targets — only start counting once both are past afterEnter.
+    trackFinalRead = true;
+    releaseAfterEnter?.();
+
+    const outcomes = await Promise.all([firstDelivery, secondDelivery]);
+    revisionSpy.mockRestore();
+    findOneSpy.mockRestore();
+    completionSpy.mockRestore();
+
+    expect(outcomes.every((outcome) => outcome.status === 'completed')).toBe(true);
+    expect(outcomes.every((outcome) => outcome.status === 'completed' && outcome.failures.length === 0)).toBe(true);
+    expect(await Page.findById(child._id).lean()).toMatchObject({ path: childDestination });
+    expect(await PageHistoryEvent.countDocuments({ page: child._id, kind: 'page_renamed' })).toBe(1);
+    expect((await PageHistoryOperation.findById(childMember._id).lean()).result?.status).toBe('succeeded');
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean()).result?.status).toBe('succeeded');
+  });
+
+  test('an exception raised after the exit CAS commits still settles the member from durable evidence', async () => {
+    const root = await createReadyPage('/subtree/catch-durable-evidence');
+    const key = nextKey();
+    const pageEvent = crowi.event('Page');
+    const emitSpy = jest.spyOn(pageEvent, 'emit').mockImplementation(((name: string) => {
+      // The transition (Page CAS + grouped event materialize) already
+      // committed by the time this fires — throwing here reaches
+      // `outcomeFromCurrentMember` through the `catch` in `subtreeRenameCommand`
+      // with the durable evidence already in place, but `result` still null.
+      if (name === 'update') throw new Error('a post-commit listener failed');
+      return true;
+    }) as never);
+
+    let outcome: Awaited<ReturnType<typeof run>>;
+    try {
+      outcome = await run(root, '/subtree/catch-durable-evidence-moved', key);
+    } finally {
+      emitSpy.mockRestore();
+    }
+
+    expect(outcome.status).toBe('completed');
+    expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+    expect(await Page.findById(root._id).lean()).toMatchObject({ path: '/subtree/catch-durable-evidence-moved' });
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: root._id }).lean()).result?.status).toBe('succeeded');
+  });
+
+  test('a failed durable-evidence read still reports member failure instead of asserting success', async () => {
+    const root = await createReadyPage('/subtree/unreadable-evidence');
+    const child = await createReadyPage('/subtree/unreadable-evidence/child');
+    const destination = '/subtree/unreadable-evidence-moved';
+    const key = nextKey();
+    const { childDestination, childMember } = await createSealedSubtreeState(root, child, destination, key);
+    const memberKey = deriveMemberKey(key, child._id);
+
+    const revisionSpy = jest.spyOn(Revision, 'updateRevisionListByPath').mockRejectedValueOnce(new Error('transient revision write failure'));
+    const findOne = PageHistoryOperation.findOne.bind(PageHistoryOperation);
+    let matchingCalls = 0;
+    const findOneSpy = jest.spyOn(PageHistoryOperation, 'findOne').mockImplementation((filter, projection, options) => {
+      const f = filter as { idempotencyKey?: string };
+      if (f?.idempotencyKey === memberKey) {
+        matchingCalls += 1;
+        // The first two matching reads are the delivery's own preliminary
+        // lookups (unaffected by this repro); only the third — the decisive
+        // read inside `outcomeFromCurrentMember` — fails here.
+        if (matchingCalls > 2) throw new Error('durable evidence read failed');
+      }
+      return findOne(filter, projection, options);
+    });
+
+    let outcome: Awaited<ReturnType<typeof run>>;
+    try {
+      outcome = await run(root, destination, key);
+    } finally {
+      revisionSpy.mockRestore();
+      findOneSpy.mockRestore();
+    }
+
+    expect(outcome.status === 'completed' && outcome.failures).toEqual([{ oldPath: child.path, error: `Failed to update page (${child.path}).` }]);
+    expect((await PageHistoryOperation.findById(childMember._id).lean()).result).toBeNull();
+    expect(await Page.findById(child._id).lean()).toMatchObject({ path: childDestination, historyTransition: { operationId: childMember.operationId } });
+  });
+
   test('AC-30: destination state is not completion evidence, but the grouped event row is', async () => {
     const root = await createReadyPage('/subtree/stale-derivation');
     const child = await createReadyPage('/subtree/stale-derivation/child');
