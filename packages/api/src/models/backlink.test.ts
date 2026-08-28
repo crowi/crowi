@@ -1,4 +1,4 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 // pageEvent.on('create' | 'update') schedules Backlink.createBySavedPage
@@ -35,7 +35,7 @@ describe('Backlink', () => {
   });
 
   beforeAll(async () => {
-    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
+    const createdUsers = await Fixture.generate('User', [{ name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() }]);
     user = createdUsers[0];
   });
 

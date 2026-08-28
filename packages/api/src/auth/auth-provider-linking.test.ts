@@ -1,6 +1,6 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import { createAuthProviderLinkingTerminal, resolveAuthProviderLinkReplay, unlinkFederatedIdentity } from 'src/auth/auth-provider-linking';
 import type { UserDocument } from 'src/models/user';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
@@ -21,7 +21,7 @@ describe('auth provider linking (3-stage link flow)', () => {
 
   const seedUser = async (): Promise<UserDocument> => {
     const [user] = (await Fixture.generate('User', [
-      { name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() },
+      { name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() },
     ])) as UserDocument[];
     return user;
   };
