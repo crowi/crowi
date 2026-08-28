@@ -66,6 +66,81 @@ describe('Backlink', () => {
     });
   });
 
+  // Page.createPage persists the Page first and only then creates its Revision,
+  // with no compensating delete if the Revision step fails (models/page.ts) — so
+  // a Page with no `revision` survives indefinitely. createByAllPages scans
+  // `Page.find({})` unfiltered, so such a Page reaches the rebuild loop.
+  describe('.createByAllPages with a revision-less Page', () => {
+    beforeEach(async () => {
+      await Promise.all([Page.deleteMany({}), Revision.deleteMany({}), Backlink.deleteMany({})]);
+
+      // Inserted FIRST so it sits at index 0 of the unsorted `Page.find({})`
+      // result, i.e. the rebuild loop's page lookup always evaluates it.
+      await Page.create({
+        path: '/' + faker.lorem.slug() + '-orphan',
+        creator: user,
+        lastUpdateUser: user,
+        grant: 1,
+        status: 'published',
+      });
+
+      const targetPath = '/' + faker.lorem.slug() + '-target';
+      await Page.createPage(targetPath, '# target', user, {});
+      await Page.createPage('/' + faker.lorem.slug() + '-source', `link: <${targetPath}>`, user, {});
+      await Backlink.deleteMany({});
+    });
+
+    test('rebuilds instead of crashing on the revision-less Page', async () => {
+      await expect(Backlink.createByAllPages()).resolves.toBeDefined();
+      expect(await Backlink.countDocuments({})).toBe(1);
+    });
+
+    // The test above exercises the real rebuild, but `Page.find({})` is unsorted
+    // and MongoDB guarantees no natural order, so it cannot by itself prove the
+    // revision-less Page was reached. Pin the exclusion at the query instead:
+    // the scan must never hand a revision-less Page to the lookup.
+    test('excludes revision-less Pages from the scan rather than relying on scan order', async () => {
+      const findSpy = jest.spyOn(Page, 'find');
+      try {
+        await Backlink.createByAllPages();
+        expect(findSpy).toHaveBeenCalled();
+        expect(findSpy.mock.calls[0][0]).toEqual({ revision: { $exists: true, $ne: null } });
+      } finally {
+        findSpy.mockRestore();
+      }
+    });
+
+    test('does not delete existing backlinks when link resolution throws (resolve-before-delete ordering)', async () => {
+      // The property the ordering fix buys: a throw during resolution must
+      // leave the previous rows in place. Before the fix `deleteMany` ran
+      // first unconditionally, so this ended with zero backlinks and no way
+      // back — and this rebuild is itself the documented recovery path.
+      // Mirrors the `createBySavedPage` ordering test below.
+      await Backlink.createByAllPages();
+      expect(await Backlink.countDocuments({})).toBe(1);
+
+      const deleteSpy = jest.spyOn(Backlink, 'deleteMany');
+      const realFind = Page.find.bind(Page);
+      let findCalls = 0;
+      // Call 1 is the page scan; every later call comes from
+      // `convertLinksToPageIds`, i.e. the resolution phase.
+      const findSpy = jest.spyOn(Page, 'find').mockImplementation((...args) => {
+        findCalls += 1;
+        if (findCalls === 1) return realFind(...args);
+        throw new Error('simulated resolution failure');
+      });
+
+      try {
+        await expect(Backlink.createByAllPages()).rejects.toThrow('simulated resolution failure');
+        expect(deleteSpy).not.toHaveBeenCalled();
+        expect(await Backlink.countDocuments({})).toBe(1);
+      } finally {
+        findSpy.mockRestore();
+        deleteSpy.mockRestore();
+      }
+    });
+  });
+
   describe('via pageEvent hooks', () => {
     const PREFIX = '/backlink-event-test/';
 
