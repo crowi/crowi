@@ -64,6 +64,8 @@ const clearUsers = async () => {
   ownedUserIds.clear();
 };
 
+const resultsByEmail = <T extends { email: string }>(results: T[]): Map<string, T> => new Map(results.map((r) => [r.email, r]));
+
 describe('Routes /api/admin/users (Hono)', () => {
   describe('GET /api/admin/users', () => {
     let adminToken: string;
@@ -343,9 +345,7 @@ describe('Routes /api/admin/users (Hono)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.results).toHaveLength(2);
-      const byEmail = new Map<string, { status: string; userId?: string }>(
-        (res.body.results as Array<{ email: string; status: string; userId?: string }>).map((r) => [r.email, r]),
-      );
+      const byEmail = resultsByEmail(res.body.results as Array<{ email: string; status: string; userId?: string }>);
       expect(byEmail.get('newcomer1@example.com')?.status).toBe('created');
       expect(byEmail.get('newcomer2@example.com')?.status).toBe('created');
       expect(byEmail.get('newcomer1@example.com')?.userId).toMatch(/^[0-9a-f]{24}$/);
@@ -361,9 +361,37 @@ describe('Routes /api/admin/users (Hono)', () => {
         .send({ emailList: ['duplicate@example.com', 'fresh@example.com'] });
 
       expect(res.status).toBe(200);
-      const byEmail = new Map<string, { status: string }>((res.body.results as Array<{ email: string; status: string }>).map((r) => [r.email, r]));
+      const byEmail = resultsByEmail(res.body.results as Array<{ email: string; status: string }>);
       expect(byEmail.get('duplicate@example.com')?.status).toBe('exists');
       expect(byEmail.get('fresh@example.com')?.status).toBe('created');
+    });
+
+    it('AC-5: reports a save failure as status="failed" without aborting the batch', async () => {
+      const User = crowi.model('User');
+      // Both emails are processed concurrently, so the failure is keyed off
+      // `this.email` rather than call order (call order between the two
+      // concurrent saves is not guaranteed).
+      const originalSave = User.prototype.save;
+      const saveSpy = jest.spyOn(User.prototype, 'save').mockImplementation(function (this: UserDocument, ...args: unknown[]) {
+        if (this.email === 'failing@example.com') {
+          return Promise.reject(new Error('forced save failure'));
+        }
+        return originalSave.apply(this, args);
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/admin/users/invite')
+          .set(authHeaders(adminToken))
+          .send({ emailList: ['failing@example.com', 'succeeding@example.com'], sendEmail: false });
+
+        expect(res.status).toBe(200);
+        const byEmail = resultsByEmail(res.body.results as Array<{ email: string; status: string }>);
+        expect(byEmail.get('failing@example.com')?.status).toBe('failed');
+        expect(byEmail.get('succeeding@example.com')?.status).toBe('created');
+      } finally {
+        saveSpy.mockRestore();
+      }
     });
   });
 
