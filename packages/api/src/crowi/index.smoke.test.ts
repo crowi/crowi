@@ -8,7 +8,7 @@
  *   (b) TLS handshake (gated on the TLS fixture target, unconditional once
  *       reachable — the TLS shape bug is already fixed by `fee9c9a4`): a
  *       real `rediss://` connection succeeds for BOTH the shared node-redis
- *       v4 client (`setupRedisClient()`) and the collab-side ioredis client
+ *       client (`setupRedisClient()`) and the collab-side ioredis client
  *       — reached via `buildCollabRedisExtension()` itself (unmodified
  *       production code, same construction path `attachCollabServer` uses).
  *
@@ -97,7 +97,7 @@ describe('boot connection + TLS smoke (real Redis 8)', () => {
   });
 
   describeTlsMaybe('TLS handshake', () => {
-    it('setupRedisClient() completes a real TLS handshake against the rediss:// fixture (shared node-redis v4 client)', async () => {
+    it('setupRedisClient() completes a real TLS handshake against the rediss:// fixture (shared node-redis client)', async () => {
       // Self-signed test fixture — `rejectUnauthorized: false` matches
       // `redis-opts.test.ts`'s existing TLS repro (handshake succeeds; a
       // strict CA chain is explicitly out of this smoke's scope).

@@ -7,6 +7,20 @@ import type { AddressInfo } from 'node:net';
 
 import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 import { crowi } from 'src/test/setup';
+import { redisReconnectForever } from 'src/util/redis-opts';
+
+/**
+ * The v4-compatible pins `buildRedisOpts` adds to every result (see
+ * `util/redis-opts.ts`'s docstring) — factored out so the table below states
+ * only the URL-derived fields it's actually testing.
+ */
+const v4Pins = { RESP: 2, commandOptions: { timeout: undefined } };
+const v4Socket = (socket: Record<string, unknown>) => ({
+  keepAlive: true,
+  keepAliveInitialDelay: 5000,
+  reconnectStrategy: redisReconnectForever,
+  ...socket,
+});
 
 describe('Test for Crowi application context', () => {
   // test crowi object by environment
@@ -60,23 +74,39 @@ describe('Test for Crowi application context', () => {
 
   describe('buildRedisOpts', () => {
     const table: [string, boolean, object][] = [
-      ['redis://localhost:6379', true, { socket: { host: 'localhost', port: 6379 }, database: 0 }],
-      ['redis://localhost:6379', false, { socket: { host: 'localhost', port: 6379 }, database: 0 }],
+      ['redis://localhost:6379', true, { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379 }), database: 0 }],
+      ['redis://localhost:6379', false, { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379 }), database: 0 }],
 
       // ACL username is forwarded too (it used to be dropped, leaving the
       // api client AUTHing as `default` while collab used the URL's user).
-      ['redis://user:password@localhost:6379', true, { socket: { host: 'localhost', port: 6379 }, database: 0, username: 'user', password: 'password' }],
-      ['redis://user:password@localhost:6379', false, { socket: { host: 'localhost', port: 6379 }, database: 0, username: 'user', password: 'password' }],
+      [
+        'redis://user:password@localhost:6379',
+        true,
+        { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379 }), database: 0, username: 'user', password: 'password' },
+      ],
+      [
+        'redis://user:password@localhost:6379',
+        false,
+        { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379 }), database: 0, username: 'user', password: 'password' },
+      ],
 
       // node-redis v4 requires the LITERAL `tls: true` with the TLS options
       // flattened into the socket object (`RedisTlsSocketOptions`); a nested
       // object silently selects a plaintext transport. See
       // `util/redis-opts.test.ts` for the behavioral (handshake) repro.
-      ['rediss://localhost:6379', true, { socket: { host: 'localhost', port: 6379, tls: true, requestCert: true, rejectUnauthorized: true }, database: 0 }],
-      ['rediss://localhost:6379', false, { socket: { host: 'localhost', port: 6379, tls: true, requestCert: true, rejectUnauthorized: false }, database: 0 }],
+      [
+        'rediss://localhost:6379',
+        true,
+        { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379, tls: true, requestCert: true, rejectUnauthorized: true }), database: 0 },
+      ],
+      [
+        'rediss://localhost:6379',
+        false,
+        { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379, tls: true, requestCert: true, rejectUnauthorized: false }), database: 0 },
+      ],
 
       // feature-redis-key-prefix §3: the pathname selects a non-default DB.
-      ['redis://localhost:6379/1', true, { socket: { host: 'localhost', port: 6379 }, database: 1 }],
+      ['redis://localhost:6379/1', true, { ...v4Pins, socket: v4Socket({ host: 'localhost', port: 6379 }), database: 1 }],
     ];
 
     test.each(table)('parse %s', (url, redisRejectUnauthorized, expected) => {

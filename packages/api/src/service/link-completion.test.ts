@@ -8,7 +8,23 @@ import {
   type LinkCompletionIssue,
   type LinkCompletionStore,
   type MinimalLinkCompletionRedisClient,
+  msFromRedisTimeReply,
 } from './link-completion';
+
+describe('msFromRedisTimeReply', () => {
+  test('truncates sub-millisecond microseconds instead of carrying them as a decimal', () => {
+    // `microseconds` here is 999 short of the next whole millisecond —
+    // an unpatched `unixTimestamp * 1000 + microseconds / 1000` would
+    // return 1700000000123.999, silently disagreeing with the Lua
+    // scripts' own `math.floor(...)` derivation of `now` from the same
+    // reply shape.
+    expect(msFromRedisTimeReply(['1700000000', '123999'])).toBe(1700000000123);
+  });
+
+  test('is exact on a whole-millisecond boundary', () => {
+    expect(msFromRedisTimeReply(['1700000000', '500000'])).toBe(1700000000500);
+  });
+});
 
 const TEST_KEYSPACE = resolveRedisKeyspace({
   getBaseUrl: () => null,
@@ -88,7 +104,12 @@ function makeFakeRedis(initialClockMs = Date.now()): {
       return rawGet(key);
     },
     async time() {
-      return new Date(state.clockMs);
+      // Mirrors node-redis's real `TIME` reply shape (`[unixTimestamp,
+      // microseconds]`, decimal strings) — round-trips exactly through
+      // `msFromRedisTimeReply` back to `state.clockMs`.
+      const seconds = Math.floor(state.clockMs / 1000);
+      const micros = (state.clockMs % 1000) * 1000;
+      return [String(seconds), String(micros)] as const;
     },
     async eval(script, options) {
       if (script.includes('STATE_ALREADY_ISSUED')) {
