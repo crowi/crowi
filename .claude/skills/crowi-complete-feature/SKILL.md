@@ -70,11 +70,7 @@ watcher) が次の tick で拾い、裏取りした上で `integrate-worktree` �
 6. `pnpm --filter @crowi/api test`
 7. `pnpm lint` (errors=0 必須、warnings は許容)
 8. 契約を触っていれば `pnpm check:openapi` (drift なし)
-9. `git diff main..HEAD --name-only | grep '^packages/e2e/'` が非空なら e2e を選択実行して
-   green (`pnpm --filter @crowi/e2e e2e ...`。setup project は自動同伴)。選択ルール:
-   `tests/*.spec.ts` に変更があればその spec のみ、src/ 等の共有部のみの変更なら全 spec。
-   **infra (docker の mongo/redis) が落ちていて実行できない場合は fail 扱いではなく
-   「blocked: e2e infra down」として signal を立てず報告**(infra を上げて再実行を促す)
+9. `bash .claude/skills/_shared/e2e-gate.sh main..HEAD` を実行し、出力行 (`RUN: <理由>` / `SKIP: <理由>`) をそのまま読む。e2e を回すかどうかの判断はこのヘルパー 1 箇所にのみ存在する — ここで独自に diff を取って判定し直さない。**`SKIP:` で始まる行を得られたときだけ skip、それ以外 (`RUN:` はもちろん、ヘルパーが出力を返さなかった場合も含む) はすべて run** として扱う (ヘルパーの失敗が skip を意味してはならない)。run のときは e2e を選択実行して green (`pnpm --filter @crowi/e2e e2e ...`。setup project は自動同伴)。選択ルール: `tests/*.spec.ts` に変更があればその spec のみ、src/ 等の共有部のみの変更なら全 spec (この選択ルールと下記 blocked の扱いは変更しない — ヘルパーが決めるのは run/skip のみ)。**infra (docker の mongo/redis) が落ちていて実行できない場合は fail 扱いではなく「blocked: e2e infra down」として signal を立てず報告**(infra を上げて再実行を促す)
 10. task.json に `extraGates` (`[{ "name": "<表示名>", "cmd": "<シェルコマンド>", "cwd":
     "<worktree 相対パス。省略時は worktree root>" }]`) があれば、**各エントリを順に**
     `cwd` で `cmd` を bash 実行する。iOS 島の `xcodebuild` / `swift test` のような、標準
@@ -140,12 +136,16 @@ Write/Edit は PreToolUse hook が拒否するため、**`.claude/scripts/task-s
   "branch": "<git rev-parse --abbrev-ref HEAD>",
   "headSha": "<git rev-parse HEAD>",
   "checks": {
-    "typeCheck": true, "test": true, "lint": true, "openapi": true, "e2e": true,
+    "typeCheck": true, "test": true, "lint": true, "openapi": true,
+    "e2e": true,
     "extra": { "<name>": true }
   },
+  "e2eGate": "<ゲート9で得た e2e-gate.sh の出力行 (RUN:/SKIP: ...) を原文のまま。要約・書き換えをしない>",
   "notes": "<走らせたゲートの結果サマリ。N/A だったもの (例: 契約未変更で openapi N/A) も明記>"
 }
 ```
+
+`checks.e2e` はゲート9の判定で意味が変わる: `RUN:` を得て e2e が green だったなら `true`、`SKIP:` を得て e2e を回さなかったなら `"skip"` を入れる (false は使わない — e2e が実際に失敗していればゲート2の規則どおりそもそもここに来ない)。判定理由は `e2eGate` に**原文のまま**入れる — ここが「契約が変わったので e2e を回した」ことを後から人が読める場所になる。
 
 `checks.extra` は task.json に `extraGates` があるときだけ付ける(既存 checks フィールドの
 拡張。`extraGates` が無い task では従来どおり `extra` キー自体を書かない)。
