@@ -1,5 +1,35 @@
 # @crowi/web
 
+## 2.0.0-alpha.17
+
+### Minor Changes
+
+- 33cb08f: Add self-service OAuth session management under Settings > Security. Users can now see a list of the OAuth refresh-token rotation-chain tips issued to apps they've authorized (client name, granted scopes, when authorized, when last refreshed, and when it expires) and revoke any of them individually. Revoking stops future token refreshes reachable from that row, but an already-issued access token remains usable until it naturally expires (up to 1 hour by default) — there is no immediate-revocation mechanism for access tokens. The new `GET /me/oauth-sessions` and `DELETE /me/oauth-sessions/{id}` endpoints never expose the underlying token or its hash, and never include the browser's own web login session in the list.
+- A page's history now shows what happened to the page itself, not just its content. Renames, visibility changes, moves to the trash, restores and draft publishes appear as their own rows — who did it and when — interleaved with the content revisions in the order they happened, on one timeline (RFC-0021). Each row carries the concrete detail behind it: a rename names the old and new paths and whether a redirect was left behind, a visibility change names both sharing levels, and trash and restore rows name the path the page left or returned to. Comparing revisions works as before — only content rows are selectable, and the default comparison still opens on the most recent change. A new `GET /pages/{pageId}/history` endpoint backs the screen, paginated by an opaque cursor and readable by anyone who can read the page. Pages whose history predates this release keep showing their revisions, simply without a position in the metadata ordering, and users who have since been deleted or suspended appear as an unknown user rather than by name.
+
+  **Clients other than the built-in UI must be updated before upgrading.** `POST /pages/rename`, `POST /pages/rename-subtree`, the soft-delete branch of `DELETE /pages`, and `POST /pages/revert` now require an `Idempotency-Key` header. Each of those runs as a durable operation: a repeated delivery of the same request returns the current page with `Idempotency-Replayed: true` instead of moving anything twice, and the same key sent with a different destination is refused with 409 `IDEMPOTENCY_KEY_CONFLICT`. Hard delete and internal callers such as user-page activation are unchanged and record nothing.
+
+  **Replace every api replica at once when upgrading to this version rather than rolling them.** While a page is between the two writes of a move it is briefly excluded from reads, listings and search rather than being served under an ambiguous path, and a replica running an older version does not recognise that state — it can start a second move on top of one already underway, leaving both unfinished. A single-instance deployment satisfies this automatically. A move interrupted by a crash leaves the page in that recoverable state, and `crowi-admin page-history repair --transitions` settles it or reports it with the operation, page and path so an operator can act; it never rewrites a page whose state it cannot classify.
+
+  Hard-deleting a page or cancelling a draft purges that page's history events, so a deleted page's history never outlives it. Page creation and draft cancellation deliberately record nothing. Page content, search indexing, backlinks, notifications and live-collaboration updates are unaffected.
+
+- c810729: Saving local storage, AWS S3, or Elasticsearch configuration from `/admin/plugins` now runs a non-blocking connectivity/permission check right after the existing save and hot-reload finish. Local and S3 do a real `put` / `get` / `delete` round trip under a reserved key namespace, entirely separate from uploaded attachments; Elasticsearch calls the cluster's `info` API once. The admin UI shows the outcome next to the existing save toast — "saved, but verification failed" with one of a small set of fixed reasons (unreachable, authentication failed, not found, write denied, unknown) — without ever undoing the save; a failed check is informational only.
+
+  The check always reflects just the api instance that answered the save request, never a cluster-wide result, and every form control (including the linked-identities confirmation dialog) is disabled while a save is in flight so edits can't race the response.
+
+  Plugin authors can opt into the same mechanism via the new optional `CrowiPlugin.verifyConfig` hook in `@crowi/plugin-api`, documented in that package's README.
+
+### Patch Changes
+
+- 09e0294: The admin user list now marks a federated identity with the provider's own brand mark (the Google "G" for a Google identity) instead of a generic link icon, so an admin can see which service a user is connected to without opening the row menu. A user with several linked providers gets one mark each, and a provider Crowi ships no mark for keeps the link icon — the marks are the same inline SVGs the sign-in screen draws, so no third-party host is contacted to render the page.
+- 09e0294: Reading a page now offers a "Copy markdown" button pinned under the table of contents, so handing a whole page to an AI assistant no longer costs a trip through the page actions menu. The button copies the same markdown source as the existing menu item (which stays where it is) and confirms on itself rather than through a toast; it appears on portals too, and is absent for a page with an empty body. Viewports too narrow for the TOC rail keep reaching the action through the actions menu.
+- Updated dependencies [c3329f5]
+- Updated dependencies [5270087]
+- Updated dependencies [33cb08f]
+- Updated dependencies
+- Updated dependencies [c810729]
+  - @crowi/api-contract@2.0.0-alpha.17
+
 ## 2.0.0-alpha.16
 
 ### Major Changes
