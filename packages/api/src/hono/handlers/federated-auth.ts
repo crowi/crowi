@@ -49,7 +49,7 @@ import {
 import { createUnavailableFederatedProfileTerminal, type FederatedProfileTerminal } from 'src/auth/federated-profile-terminal';
 import type Crowi from 'src/crowi';
 import { createFederatedHandoffStore, type FederatedHandoffStore } from 'src/service/federated-handoff';
-import { createLinkCompletionStore, type LinkCompletionStore } from 'src/service/link-completion';
+import { createLinkCompletionStore, type LinkCompletionStore, msFromRedisTimeReply } from 'src/service/link-completion';
 import { isMultiInstanceDeclared } from 'src/util/env-schema';
 import {
   buildHandoffCanonicalMessage,
@@ -451,7 +451,7 @@ function createDefaultLinkCompletionRuntimeFactory(crowi: Crowi): LinkCompletion
     const usingRedis = keyspace !== undefined;
     return {
       store,
-      now: usingRedis ? async () => (await crowi.redis.time()).getTime() : async () => Date.now(),
+      now: usingRedis ? async () => msFromRedisTimeReply(await crowi.redis.time()) : async () => Date.now(),
     };
   };
 }

@@ -22,7 +22,7 @@ import { MailService } from 'src/service/mail';
 import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
 import { validateEnv } from 'src/util/env-schema';
-import { buildRedisOpts } from 'src/util/redis-opts';
+import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
 import LRU from '../service/lru';
 
@@ -669,7 +669,7 @@ class Crowi {
 
   async setupRedisClient() {
     if (this.redisOpts) {
-      // Bound ONLY the initial (boot) connection. node-redis's default
+      // Bound ONLY the initial (boot) connection. The client's default
       // reconnectStrategy always returns a retry delay, so `connect()`
       // never rejects — a configured-but-unreachable Redis retried forever
       // and the degrade catch below was unreachable (boot hung). Once the
@@ -689,7 +689,7 @@ class Crowi {
             if (!established && retries + 1 >= BOOT_CONNECT_MAX_RETRIES) {
               return new Error(`Redis unreachable after ${retries + 1} boot connection attempts`);
             }
-            return Math.min(retries * 50, 500); // node-redis's own default backoff
+            return redisReconnectForever(retries);
           },
         },
       });

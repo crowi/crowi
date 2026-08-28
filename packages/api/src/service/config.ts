@@ -399,6 +399,13 @@ export default class ConfigService {
       // "Redis enabled but no keyspace" case to degrade for here.
       this.pubSub.channel = resolveRedisKeyspace(this.crowi).key('config');
       try {
+        // `redisOpts` (`crowi/util/redis-opts.ts`'s `buildRedisOpts`) pins
+        // RESP version / command timeout / keepalive / reconnect curve to
+        // fixed, v4-compatible values, so these two clients get identical
+        // connection semantics to the boot client without repeating that
+        // configuration here — unlike the boot client, neither overrides
+        // `reconnectStrategy`, so both retry forever instead of ever
+        // aborting.
         this.pubSub.publisher = createClient(redisOpts);
         this.pubSub.subscriber = createClient(redisOpts);
         // Without an 'error' listener, a steady-state Redis outage after
@@ -416,11 +423,11 @@ export default class ConfigService {
         debug('PubSubId', pubSub.id);
 
         if (subscriber) {
-          // @redis/client v4 takes the message listener as the 2nd argument
-          // to `subscribe`. The v3 `.on('message', ...)` pattern leaves no
-          // listener registered, so when a message arrives the client tries
-          // to invoke `undefined` and crashes the process with
-          // "TypeError: listener is not a function".
+          // The message listener is the 2nd argument to `subscribe` itself
+          // — an `.on('message', ...)` pattern leaves no listener
+          // registered, so when a message arrives the client tries to
+          // invoke `undefined` and crashes the process with "TypeError:
+          // listener is not a function".
           await subscriber.subscribe(pubSub.channel, async (message: string, channel: string) => {
             if (channel !== pubSub.channel) return;
 
