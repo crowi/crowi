@@ -63,7 +63,6 @@ export async function preflightDockerServices(): Promise<void> {
   await assertTcpPort('Redis', 6379);
   await assertTcpPort('Mailpit SMTP', 1025);
   await assertTcpPort('Mailpit HTTP', 8025);
-  await assertTcpPort('PlantUML', 8080);
   await assertMongo();
   await assertMailpitHttp();
 }

@@ -330,22 +330,6 @@ jobs:
           --health-timeout 5s
           --health-retries 12
 
-      # PlantUML — renderer-plugins.spec.ts renders a real PlantUML diagram
-      # through this server and asserts the resulting fragment, so the suite
-      # does not pass without it. Mirrors docker-compose.yml's `plantuml`
-      # service on 8080.
-      #
-      # This was missing from the job's first version because the dependency
-      # list was taken from preflight.ts, which only asserts mongo/redis/
-      # mailpit — preflight is not a complete inventory of what the specs
-      # actually reach out to. preflight now asserts this port too, so the
-      # next such gap fails fast with a named dependency instead of an
-      # assertion two minutes into the run.
-      plantuml:
-        image: plantuml/plantuml-server:latest
-        ports:
-          - 8080:8080
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

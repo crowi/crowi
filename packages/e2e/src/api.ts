@@ -113,39 +113,6 @@ export async function listLoadedPluginNamesViaApi(context: BrowserContext): Prom
 }
 
 /**
- * Update a plugin's config via the admin API
- * (`PUT /api/admin/plugins/config?name=<name>`) — merges `values` into
- * the plugin's existing config and, for a plugin that declares a
- * `reconfigure` hook, live-applies it (no restart needed) before this
- * resolves. feature-renderer-plugin-boundary Phase 2 — `renderer-plugins.
- * spec.ts` uses this to point the PlantUML plugin's `serverUrl` at the
- * compose-published `http://localhost:8080` server (spec §9); the same
- * generic endpoint `admin-mail-page.ts`'s UI-driven SMTP config flow PUTs
- * to, called directly here since the config FORM itself isn't what this
- * spec tests.
- */
-export async function updatePluginConfigViaApi(context: BrowserContext, input: { pluginName: string; values: Record<string, unknown> }): Promise<void> {
-  const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/admin/plugins/config?name=${encodeURIComponent(input.pluginName)}`, {
-    method: 'PUT',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ values: input.values }),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to update E2E plugin config for ${input.pluginName}: HTTP ${response.status} ${await response.text()}`);
-  }
-  const body = (await response.json()) as { hotReloaded?: boolean; reconfigureFailed?: boolean };
-  if (!body.hotReloaded) {
-    throw new Error(
-      `Update E2E plugin config for ${input.pluginName} did not hot-reload (reconfigureFailed=${body.reconfigureFailed}) — the api process may need a restart to see the new value.`,
-    );
-  }
-}
-
-/**
  * Read a page's current (latest) revision's `renderedAst` (the transformed
  * mdast the web client renders without re-parsing, RFC-0002 Phase 3) via
  * the API. feature-renderer-plugin-boundary Phase 2 — used to assert the

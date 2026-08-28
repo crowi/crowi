@@ -35,7 +35,7 @@ export async function dropE2eDatabase(): Promise<void> {
  * Count `PluginRenderCache` rows (Mongoose collection name
  * `pluginrendercaches`) for a given `pageId` + `pluginName`.
  * feature-renderer-plugin-boundary Phase 2 — `renderer-plugins.spec.ts`
- * asserts a real PlantUML/Mermaid save actually writes a cache row (spec
+ * asserts a real Mermaid save actually writes a cache row (spec
  * §9), and that a subsequent forced-stale re-read (`forceStaleRendererVersion`
  * below) does not duplicate it. See `getPluginRenderCacheFetchedAt` for why
  * this alone cannot prove a cache HIT occurred.
