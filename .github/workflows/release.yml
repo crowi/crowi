@@ -76,9 +76,15 @@ jobs:
       # `0.1.0-dev` predates its alphas, so its releases go to `alpha` and its
       # `latest` has to be moved by hand after any release that publishes it
       # (see operations/release-runbook.mdx). Leaving pre mode resolves it.
+      # Pinned to v1: the action's v2 line requires Changesets CLI v3 and refuses
+      # to run against the CLI v2 this repo uses ("Changesets CLI v2 is not
+      # supported; use Changesets action v1 instead"). v2 also renames every
+      # input below (publish/version/commit/title -> publish-script/
+      # version-script/commit-message/pr-title), so moving up means migrating
+      # the CLI and the inputs in one change, not bumping this line.
       - name: Create Release PR or Publish
         id: changesets
-        uses: changesets/action@v2
+        uses: changesets/action@v1
         with:
           publish: pnpm changeset publish
           version: pnpm changeset version
