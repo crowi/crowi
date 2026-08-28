@@ -13,7 +13,8 @@ shared contract package. Most core wiki features (page CRUD / list / portal /
 revisions / bookmarks / likes / seen-by / comments / watch / trash / backlinks
 / notifications / user pages / page history) have been migrated to the new
 stack. Admin section is in progress (foundations + crypto migration UI +
-security settings landed). See `TODO.md` for the up-to-date phase status.
+security settings landed). In-flight work is whatever sits in
+`.feature-state/specs/`; what has landed is in the git history.
 
 ## Monorepo Structure
 
@@ -152,7 +153,7 @@ ts-rest layers have since been fully removed (RFC-0006).
 - New code goes under `hono/handlers/`, `(auth)/` / `(admin)/`, `lib/`,
   `components/`.
 
-Detailed phase status lives in `TODO.md`.
+In-flight work is whatever sits in `.feature-state/specs/`.
 
 ## Operational Conventions
 
@@ -216,12 +217,17 @@ the feature pipeline's review, but simplify fixes are written ad hoc by the
 integrating session and previously landed on main with no independent check.
 
 ### Review findings: fix or drop (applies everywhere)
-Review / simplify / QA findings are NEVER parked in `TODO.md` or any backlog.
-The only two outcomes are: fix it now, or drop it (report the drop in one
-line). This applies to every skill and agent (feature pipeline, crowi-review,
-integrate-worktree, orchestrate C, crowi-fix, future skills). `TODO.md` is for
-roadmap items and blocked dependency majors only — not a review-advisory
-graveyard.
+Review / simplify / QA findings are NEVER parked. The only two outcomes are:
+fix it now, or drop it (report the drop in one line). This applies to every
+skill and agent (feature pipeline, crowi-review, integrate-worktree,
+orchestrate C, crowi-fix, future skills).
+
+**There is nowhere to defer them to.** The repository deliberately keeps no
+backlog file, so "park it for later" is not an available answer — a finding
+either becomes work now or stops existing. Work someone has committed to
+starting becomes a spec in `.feature-state/specs/`; anything else is dropped.
+Facts that can be recomputed (dependency drift, worktree state) are read from
+the tool that computes them, not copied into a file that nothing re-checks.
 
 #### Severity calibration: crowi is a small-scale internal tool
 
@@ -287,7 +293,7 @@ exists to prevent.
   the working conversation is in Japanese.
 - Conventional Commits: `feat(api): ...`, `feat(web): ...`,
   `feat(api-contract): ...`, `fix(...)`, `refactor(...)`, `chore(...)`,
-  `docs(todo): ...`.
+  `docs(...)`.
 - Multi-paragraph body explaining WHY when the change isn't obvious.
 
 ### Changesets (release notes accumulation)

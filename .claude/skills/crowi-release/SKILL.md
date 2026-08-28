@@ -101,7 +101,7 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
 - **merge / tag / push / publish はすべてユーザーの明示承認後**(pre-flight は提示で止まる)
 - verify は read-only(docker pull/run はローカルのみ・`--rm` 付き)
 - 失敗成果物の修正・再 publish を自動でしない
-- レビュー的な指摘が出たら fix or drop(TODO へ退避しない — 全 skill 共通方針)
+- レビュー的な指摘が出たら fix or drop(退避先は存在しない — 全 skill 共通方針)
 - **prod build スモーク(`/crowi-qa main --prod-build`)は既定で実行**。省略するのは
   人間が明示的にスキップを指示した場合のみで、その旨を Go/No-Go 材料に記録する
   (黙って省略しない)

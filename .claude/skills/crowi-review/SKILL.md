@@ -148,7 +148,7 @@ crowi-orchestrate C と同じルール:
 - **main が dirty** (ユーザー作業中) → 勝手に commit しない。**報告に留め**、適用は
   main clean 時 or ユーザー承認後。
 - **大きい / 判断系** → 報告してユーザーの判断を仰ぐ(直す指示が出れば直す、出なければ**捨てる**)。
-  **TODO への退避はしない**(fix or drop — 全 skill 共通方針)。重要なら ping。
+  **退避はしない**(fix or drop — 退避先は存在しない)。重要なら ping。
 - **push / PR はしない**。commit までで止め、push はユーザー指示待ち。
 
 > API surface/behavior を変える修正は勝手に入れない (report に留めて確認を仰ぐ)。

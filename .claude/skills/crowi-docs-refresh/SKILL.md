@@ -146,7 +146,7 @@ printf '{ "lastDocsSyncSha": "%s", "at": "%s" }\n' "$(git rev-parse HEAD)" \
 - **実コードを読まずに docs を書かない**(commit message は意図、docs は挙動)。
 - **main に merge されていないものを書かない**(worktree 進行中の機能は次回)。
 - **ja / en の片翼更新をしない**。
-- 見つけた stale は **fix or drop** — TODO / backlog への退避禁止(全 skill 共通)。
+- 見つけた stale は **fix or drop** — 退避先は存在しない(全 skill 共通)。
 - **push しない**。site の deploy は push に紐づくので、公開タイミングはユーザーが握る。
 
 ## エッジケース

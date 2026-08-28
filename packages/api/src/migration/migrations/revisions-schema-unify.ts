@@ -25,8 +25,7 @@ import { defineMigration } from '../types';
  * `default: 'snapshot'` closes the write source, the transform reduces to a
  * single idempotent `updateMany({ type: null }, ...)` backfill — structurally
  * identical to `page-status-default` (also boot). It is cheap, index-backed,
- * and non-destructive, so boot-auto is the right fit. This deviation is noted
- * in TODO.md as well.
+ * and non-destructive, so boot-auto is the right fit.
  * ─────────────────────────────────────────────────────────────────────
  *
  * Scope: `type` ONLY. `contributors` is left untouched (v1.x has no `savedBy`

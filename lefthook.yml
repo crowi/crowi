@@ -21,11 +21,6 @@ pre-commit:
     - name: kebab-filenames
       glob: "**/*.{ts,tsx}"
       run: node scripts/check-kebab-filenames.mjs
-    # TODO.md is orientation-only (one line per item); the prose rule alone
-    # kept being violated, so enforce it mechanically — see the script header.
-    - name: todo-brevity
-      glob: "TODO.md"
-      run: node scripts/check-todo-brevity.mjs
 
 pre-push:
   jobs:

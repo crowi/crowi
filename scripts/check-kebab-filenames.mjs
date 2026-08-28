@@ -4,7 +4,7 @@
 // drifting into PascalCase / lowerCamelCase (`MarkdownEditor.tsx`,
 // `tokenAuth.ts`) even though Crowi 2.0 uses kebab-case; the prose rule
 // alone did not hold, so this makes it mechanical — the same approach as
-// check-todo-brevity / check-workspace-protocol.
+// check-workspace-protocol.
 //
 // The rule is deliberately simple:
 //   - Only the first dot-delimited segment is checked, so compound suffixes

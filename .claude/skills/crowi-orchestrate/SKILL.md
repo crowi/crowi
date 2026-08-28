@@ -134,7 +134,7 @@ git log --first-parent --no-merges <lastReviewedMainSha>..main
 ### 「意味のある塊」判定 (発火条件)
 
 上記のうち **housekeeping を除いた実装 commit が 2 つ以上**あるとき発火する。
-- housekeeping (除外): `docs(todo)` / `chore(.claude…)` / format-only / orchestrate の
+- housekeeping (除外): `chore(.claude…)` / format-only / orchestrate の
   状態ファイル更新など、`packages/**` の source を触らない commit。
 - 実装 commit: `packages/**` の source を触る `feat` / `fix` / `refactor` / `perf` /
   `test` 等。
@@ -150,7 +150,7 @@ reuse / simplify / efficiency)。手段は **`crowi-review` が既定** (その�
 - **main が dirty** (= user が作業中): 勝手に commit しない。指摘を**報告に留め**、適用は
   main clean 時 or user 承認後。
 - **大きい / 判断系**: 報告に留めユーザー判断を仰ぐ(直す指示が出れば直す、出なければ**捨てる**)。
-  **TODO へは書かない**(fix or drop — 全 skill 共通方針)。重要なら `PushNotification` で ping。
+  **どこにも書き残さない**(fix or drop — 全 skill 共通方針)。重要なら `PushNotification` で ping。
 
 ### 後始末
 
@@ -162,7 +162,7 @@ reuse / simplify / efficiency)。手段は **`crowi-review` が既定** (その�
 GitHub Dependabot の open security alerts を定期チェックし、**前回の tick 時点から
 新しく出てきた advisory のみ** を簡潔に報告する **watcher**。**自動 bump はしない**
 (deps 更新は影響範囲が広く、lint/test の検証と判断を伴う行動)。実際の fix
-(direct bump / parent bump / per-major override / major-upgrade 待ちは TODO 退避 +
+(direct bump / parent bump / per-major override / major-upgrade 待ちは報告のみ +
 検証 + commit)は **`/crowi-deps` skill に集約**してあるので、新規が出たら user が
 `/crowi-deps` を打つ(D は検知・報告に徹する)。
 
@@ -196,7 +196,7 @@ gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
   - **direct dep** か **transitive** かを `grep -E '"<pkg>"\s*:' packages/*/package.json
     apps/*/package.json package.json` で簡易判定 (見つかれば direct)。
   - **直し方は `/crowi-deps` に集約**(direct は version bump / transitive は親 bump →
-    不可なら per-major override / major upgrade 待ちは TODO 退避)。報告には
+    不可なら per-major override / major upgrade 待ちは報告のみ)。報告には
     「`/crowi-deps` で対応可」と一言添える。
   - **high / critical** が混じってる、または **prod scope** だけで 3件以上溜まったら
     `PushNotification` で ping。

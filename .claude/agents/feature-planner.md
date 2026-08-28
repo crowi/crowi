@@ -113,7 +113,7 @@ context 完備の task 定義を作成する。
 7. **commitPlan の概形**
    想定される commit を `feat` / `test` / `docs` (場合により `refactor`) に分けて配置。
    docsTargets が空でなければ `{"type":"docs","scope":"site"}` エントリ (crowi-site 更新) を
-   `docs(todo)` (TODO.md) とは **別に** 置く。e2eTargets の entries が空でなければ
+   置く。e2eTargets の entries が空でなければ
    `{"type":"test","scope":"e2e"}` エントリも置く。
    実装時に implementer が files リストを埋めるので、ここでは type / scope / title だけで OK。
 

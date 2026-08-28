@@ -44,7 +44,7 @@ globs:
                     ↑                                │
                     └────── NEEDS_WORK (最大 N 回) ──┘
      ※ reviewer の advisory は既定で修正: in-scope(autofix)は commit 前に polish pass で
-       直す。out-of-scope(defer)のみ人間に surface(TODO には書かない)。
+       直す。out-of-scope(defer)のみ人間に surface(どこにも書き残さない)。
    autoContinue=false の phase 手前で GATED 返却 → 人間に resume を促す
    ↓
 [skill] Workflow の status (DONE / GATED / ESCALATE / FAILED) で報告
@@ -275,12 +275,6 @@ legacy spec では planner が従来の拡張 context を作る:
         "apps/crowi-site/content/docs/en/guide/attachments.mdx"
       ]
     },
-    {
-      "type": "docs",
-      "scope": "todo",
-      "title": "mark attachment thumbnail done",
-      "files": ["TODO.md"]
-    }
   ],
   "history": [
     {"phase": "planner", "at": "ISO8601", "summary": "計画完了"}
@@ -563,20 +557,8 @@ legacy は `context.docsTargets.assessment` に判定を記録する:
 
 ### commit (committer)
 
-crowi-site の更新は **`docs(site)` scope の独立した commit** にする
-(`TODO.md` 更新の `docs(todo)` とは別)。順序は `feat → test → docs(site) → docs(todo)` が典型。
-
-## TODO.md は簡潔に保つ
-
-`TODO.md` は **spec ではなく全体感の把握用**。肥大化させない (過去に一度 slim 化済み)。
-`docs(todo)` で TODO を更新するときは:
-
-- 形式は固定: `- **<短い名前>** — <1 文>（spec: feature-xxx.md）`。**1 項目 = 300 字以内**
-  (「1 行」だと 1 物理行に長文を詰めて回避されるため、上限は文字数。
-  `scripts/check-todo-brevity.mjs` が pre-commit / 統合ゲートで機械強制する)。
-- 実装詳細・経緯・設計判断は書かない — git log / spec / changeset が持つ。
-- crowi-site ドキュメント (`apps/crowi-site/`) が利用者向けの詳細を持つので、TODO に運用詳細を
-  二重に書かない (`Operator runbooks` 節も 1 行ポインタに留める)。
+crowi-site の更新は **`docs(site)` scope の独立した commit** にする。
+順序は `feat → test → docs(site)` が典型。
 
 ## Crowi テーマ
 

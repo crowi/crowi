@@ -681,7 +681,7 @@ commit しない。
 disposition の実行 (直す/捨てる) は呼び出し文脈の責務:
 
 - **単体起動** (人間が直接 `/crowi-qa` を叩いた場合) — その場で直すか、
-  理由を添えて drop する。`TODO.md` への退避は禁止。
+  理由を添えて drop する。どこかへの退避は禁止 (退避先は存在しない)。
 - **`integrate-worktree` から呼ばれた場合** — Step 7 の simplify と同じ
   「その場で直すか、報告 1 行で捨てる」運用に findings を合流させる。
 - **`crowi-release` の pre-flight から呼ばれた場合** — pre-flight は
@@ -689,7 +689,7 @@ disposition の実行 (直す/捨てる) は呼び出し文脈の責務:
   findings は Go/No-Go 材料の「リスク / 未検証」欄にそのまま出す。
   pre-flight 自身が直すことはしない。
 
-**findings は fix-or-drop。TODO への退避は全ケースで禁止** (全 skill 共通
+**findings は fix-or-drop。退避は全ケースで禁止** (全 skill 共通
 方針)。
 
 ## §10. ブラウザドライバの優先順位と証跡取得
@@ -1085,7 +1085,7 @@ pre-flight はこの verdict をそのまま Go/No-Go 材料に転記する。
   worktree のアンカーを推測で採番しない。
 - **QA 用の認証情報は環境変数で受け取る**。未設定時は該当 charter だけ
   `blocked: no credentials`。自動でテストアカウントを登録しない。
-- **findings は fix-or-drop**。TODO への退避は禁止 (全 skill 共通方針)。
+- **findings は fix-or-drop**。退避先は存在しない (全 skill 共通方針)。
 - **共有 dev DB では破壊的操作を行わない**。mutation を伴う認証サブフロー・
   管理設定の実変更は isolated DB (または `--prod-build` の per-run DB)
   限定。

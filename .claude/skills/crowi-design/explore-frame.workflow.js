@@ -178,7 +178,7 @@ const codebaseTask =
   `encryption, the Mongo->Postgres portability preference). Read CLAUDE.md for conventions.`
 const priorTask =
   `2) prior — everything the design must honor or that overlaps with it: docs/rfcs/ (existing RFCs + ` +
-  `their decisions and house style), .feature-state/specs/ (in-flight specs), TODO.md, CLAUDE.md, ` +
+  `their decisions and house style), .feature-state/specs/ (in-flight specs), CLAUDE.md, ` +
   `apps/crowi-site/content/docs (user/operator docs). Report related prior decisions, conventions to ` +
   `follow (RFC structure, the crowi-feature spec schema), and any conflicts or overlap. Anchor with ` +
   `file:line / RFC number.`
@@ -218,7 +218,7 @@ const [research, art] = await parallel([
             agent(
               `crowi-design RESEARCH (prior decisions & docs) for the design topic: "${TOPIC}".\n` +
                 `Search for anything the design must honor or that overlaps with it: docs/rfcs/ (existing RFCs + ` +
-                `their decisions and house style), .feature-state/specs/ (in-flight specs), TODO.md, CLAUDE.md, ` +
+                `their decisions and house style), .feature-state/specs/ (in-flight specs), CLAUDE.md, ` +
                 `apps/crowi-site/content/docs (user/operator docs). Report related prior decisions, conventions ` +
                 `to follow (RFC structure, the crowi-feature spec schema), and any conflicts or overlap. Anchor ` +
                 `with file:line / RFC number. Return a concise markdown digest — do NOT propose a design.`,

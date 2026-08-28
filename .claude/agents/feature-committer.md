@@ -70,14 +70,14 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 ```json
 {
   "type": "feat",            // feat / fix / refactor / test / docs / chore
-  "scope": "api",            // api / web / api-contract / e2e / site / todo / *
+  "scope": "api",            // api / web / api-contract / e2e / site / *
   "title": "implement attachment thumbnail generation",
   "files": ["packages/api/src/util/thumbnail.ts", "..."]
 }
 ```
 
 crowi-site (`apps/crowi-site/`) のユーザー向けドキュメント更新は **`docs(site)`** scope の
-独立した commit にする (`TODO.md` 更新の `docs(todo)` とは別)。ja / en 両方のファイルを
+独立した commit にする。ja / en 両方のファイルを
 同じ `docs(site)` commit にまとめてよい。`packages/e2e/` の Playwright spec は
 **`test(e2e)`** scope の独立した commit にする。
 
@@ -94,20 +94,6 @@ trailer を足そうとしても付けない)。
 
 本文は spec.md の `## 背景 / why` と `## 設計の主な判断` から 3-6 行に要約。
 test / docs commit は本文 1-2 行で十分。
-
-## TODO.md の記載ルール (docs(todo) commit)
-
-`docs(todo)` エントリで `TODO.md` を更新するときは **簡潔に** 保つ。TODO.md は
-spec ではなく**全体感の把握用**で、肥大化させない (過去に一度 slim 化した経緯あり)。
-
-- **形式は固定**: `- **<短い名前>** — <何をしたかの 1 文>（spec: feature-xxx.md）`。
-  **1 項目 = 300 字以内**(「1 行」ではない — 過去に 1 物理行へ 1000 字超を詰めて
-  字義どおり回避された実例があるため、上限は文字数で切る)。実装詳細・経緯・
-  ファイル名・設計判断は書かない — それらは git log / spec / changeset が持つ。
-- 新規項目も同形式。spec/RFC があるなら要約せずポインタを書く。
-- 既存の冗長な行を見つけたら、その commit のついでに削る (TODO は育てない)。
-- この上限は **`scripts/check-todo-brevity.mjs` が機械的に強制する**
-  (lefthook pre-commit + integrate-worktree の統合ゲート)。超えた commit は落ちる。
 
 ## Pre-commit チェック (省略不可)
 
@@ -234,7 +220,6 @@ Commits:
 3. ghi9012 — feat(web): show thumbnails in attachment list
 4. jkl3456 — test(api): cover thumbnail edge cases
 5. mno7890 — docs(site): document attachment thumbnails (ja/en)
-6. pqr1234 — docs(todo): mark attachment thumbnail done
 
 Files (Σ): N 件
 Pre-commit checks: PASS
@@ -252,7 +237,7 @@ Push / PR: 未実施 (ユーザー指示待ち)
 
 ## 注意事項
 
-- commitPlan の順序を尊重する (api-contract → api → web → test → test(e2e) → docs(site) → docs(todo) が典型)
+- commitPlan の順序を尊重する (api-contract → api → web → test → test(e2e) → docs(site) が典型)
 - 1 commit が大きすぎる場合は reviewer に差し戻して分割提案を求める
 - spec.md は **編集しない** (ただし task 全体完了時の削除は「spec の後始末」に従う)
 - `.feature-state/` (root) を使うこと

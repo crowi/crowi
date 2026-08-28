@@ -59,7 +59,7 @@ bash .claude/scripts/codex-run.sh --sandbox read-only --tier terra \
 - 重い 3 lens は使わない(1 パスのみ)。
 - **findings は「直すか捨てる」の二択**: 自分でコードに当てて裏取りし、正しければ
   その場で直してゲート再走。誤り・過大なら捨てる(報告に 1 行)。
-  **TODO 等への退避は禁止**(fix or drop — 全 skill 共通方針)。
+  **どこかへの退避は禁止**(fix or drop — 退避先は存在しない)。
 - exit 2(codex 不可)/ exit 3(出力が不正 — codex が exit 0 で何も書かなかった場合もここに来る)
   なら skip して報告(レビュー無しで止めない)。どちらも fix の進行を止めない。
 
@@ -76,6 +76,6 @@ bash .claude/scripts/codex-run.sh --sandbox read-only --tier terra \
 ## 鉄則
 
 - 再現なしに直さない / 根本原因なしに直さない
-- レビュー指摘は **fix or drop**(TODO・backlog へ退避しない)
+- レビュー指摘は **fix or drop**(退避先は存在しない)
 - 設計判断が要ると気づいたら勝手に進めず crowi-design / ユーザーへ
 - push はユーザー指示待ち

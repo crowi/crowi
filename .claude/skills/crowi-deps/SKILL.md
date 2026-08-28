@@ -5,7 +5,7 @@ description: |
   「最近 dependency 見てないな」というとき単発 (`/crowi-deps`) で手起動する。
   alert 取得 → direct/transitive 分類 → 根本対応(direct は version bump、
   transitive は親 bump、親が上げられないときだけ per-major override、major upgrade
-  待ちは TODO へ退避)→ pnpm install + lint/type-check/test で検証 → commit
+  待ちは報告のみ)→ pnpm install + lint/type-check/test で検証 → commit
   (push しない)。crowi-orchestrate の D 系統(watcher)も fix の本体としてここを使う。
   キーワード: dependency, dependabot, security, vulnerability, CVE, GHSA, bump,
   override, undici, nodemailer, npm audit, 脆弱性, 依存更新, セキュリティ
@@ -15,7 +15,7 @@ description: |
 
 GitHub Dependabot の open security alert を **根本原因で潰す** skill。crowi-orchestrate
 の D 系統が「新規 advisory の検知 + 報告」だけを担うのに対し、この skill は **実際に
-直す**(version bump / parent bump / override / TODO 退避)+ **検証** + **commit** まで。
+直す**(version bump / parent bump / override / major 待ちの報告)+ **検証** + **commit** まで。
 
 単発起動の想定: 「最近 dependency 見てないな」というとき `/crowi-deps` を打つ。
 crowi-orchestrate の D 系統からも fix の本体としてこの skill を参照する。
@@ -28,8 +28,10 @@ crowi-orchestrate の D 系統からも fix の本体としてこの skill を�
   ad-hoc ではなく「直接 bump 経路が無い transitive」専用の正規手段。理由を残す)。
 - **場当たり的でなく本質的**に。advisory / changelog を読み、なぜその版で直るかを
   確認してから上げる。
-- **major upgrade を要するものは強行しない**。判断系なので TODO backlog に退避し、
-  別タスク(`/crowi-feature` 等)で扱う。high/critical が major 待ちで滞留するなら ping。
+- **major upgrade を要するものは強行しない**。判断系なので**報告に残すだけ**にして、
+  着手が決まったら `.feature-state/specs/` に spec を切る(退避先のファイルは無い —
+  残件は `pnpm outdated` と Dependabot がいつでも再導出する)。high/critical が
+  major 待ちで滞留するなら ping。
 - **push しない**(commit まで。push は user 指示待ち)。
 - **検証して通してから commit**(lint errors=0 / type-check / 影響パッケージの test)。
 
@@ -87,7 +89,7 @@ gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
 | **direct dep + patch あり** | 宣言している package.json の版を patched 以上へ bump |
 | **transitive・親を上げれば patched を引ける** | **親 dep を bump**(version up) |
 | **transitive・親が上げられない** | `pnpm.overrides` で **per-major** に patched 固定。理由を commit に残す |
-| **patched が major upgrade を要する**(例: eslint 8→9 chain の js-yaml、mongoose 8→9 chain の ip-address) | **TODO backlog へ退避**(強行しない)。既存項目があれば追記 |
+| **patched が major upgrade を要する**(例: eslint 8→9 chain の js-yaml、mongoose 8→9 chain の ip-address) | **報告に残すだけ**(強行しない)。着手するなら spec を切る |
 
 > **override の書き方**: root `package.json` の `pnpm.overrides`(または
 > `pnpm-workspace.yaml`)に、既存パターン(例 `"postcss@<8.5.13": "8.5.15"`)へ合わせ
@@ -107,12 +109,13 @@ gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
 
 - `fix(deps): bump <pkg> to <ver> (#<alert> / GHSA-xxxx)` など。本文に「なぜこの版で
   直るか」「override にした理由」を残す。
-- major upgrade 待ちの未対応分は `docs(todo)` で backlog に記録。
+- major upgrade 待ちの未対応分は報告に 1 行残すだけにする (退避先は無い —
+  `pnpm outdated` がいつでも再導出する)。
 - **push は user 指示待ち**(commit まで)。
 
 ## 出力
 
-直した alert(番号 + package + 版)/ override にしたもの(+理由)/ TODO 退避(+ブロッカー)
+直した alert(番号 + package + 版)/ override にしたもの(+理由)/ major 待ち(+ブロッカー)
 / 残件を、簡潔に表で。全件対応済み or 全件 major 待ちならその旨一言。
 
 ## crowi-orchestrate との関係

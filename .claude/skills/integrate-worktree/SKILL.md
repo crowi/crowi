@@ -153,7 +153,6 @@ pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check
 pnpm --filter @crowi/api test
 pnpm lint                                 # errors=0 必須
-node scripts/check-todo-brevity.mjs       # merge 差分に TODO.md を含む場合 (docs(todo) の肥大化を機械拒否)
 
 # merge 差分に packages/e2e/** が含まれる場合のみ (選択実行):
 # tests/*.spec.ts に変更があればその spec のみ、src/ 等の共有部のみなら全 spec
@@ -343,8 +342,8 @@ merge 直後は、両側の変更が混ざってコードに重複や非効率�
 simplify <description of merged work>
 ```
 
-simplify が見つけた issue は **fix or drop**(TODO.md 等への advisory 退避は禁止 —
-全 skill 共通方針。`docs(todo): record ... advisory` 型の commit を作らない)。
+simplify が見つけた issue は **fix or drop**(advisory の退避は禁止 — 全 skill 共通
+方針で、そもそも退避先が存在しない)。
 ただし「fix」側は指摘の種類で規律を分ける:
 
 - **mechanical な修正**(挙動不変が構造的に自明なもの: 死コード/未使用 CSS の削除、
