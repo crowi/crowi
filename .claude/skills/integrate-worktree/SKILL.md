@@ -154,10 +154,18 @@ pnpm --filter @crowi/web type-check
 pnpm --filter @crowi/api test
 pnpm lint                                 # errors=0 必須
 
-# merge 差分に packages/e2e/** が含まれる場合のみ (選択実行):
+bash .claude/skills/_shared/e2e-gate.sh --cached
+```
+
+e2e を回すかどうかの判断はこのヘルパー 1 箇所にのみ存在する — ここで `packages/e2e/**` の有無を独自に判定し直さない。`--cached` を渡すのは、この no-commit merge の最中は Step 3.3 の注記どおり `HEAD` がまだ main を指したままで `main..HEAD` が常に空になり使えないため — staged (= merge で取り込む) diff を見るには `--cached` が要る。出力行 (`RUN: <理由>` / `SKIP: <理由>`) をそのまま読み、**`SKIP:` で始まる行を得られたときだけ skip、それ以外 (`RUN:` はもちろん、出力を得られなかった場合も含む) はすべて run** として扱う(ヘルパーの失敗が skip を意味してはならない)。run のときだけ e2e を選択実行して green:
+
+```bash
 # tests/*.spec.ts に変更があればその spec のみ、src/ 等の共有部のみなら全 spec
+# (選択ルールは変更しない — ヘルパーが決めるのは run/skip のみ)
 pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts
 ```
+
+判定理由 (ヘルパーの出力行) は要約せず**原文のまま** Step 4 完了時の報告に含める (merge commit メッセージに書く場合は下記 lint warnings の "Note:" と同じ要領で 1 行足す)。
 
 1 つでも失敗したら中止。conflict 解消の判断ミスや、両側の変更の組み合わせで型が合わなく
 なっているケースが多い。
