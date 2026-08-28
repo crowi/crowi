@@ -349,6 +349,14 @@ describe('Routes /api/admin/users (Hono)', () => {
       expect(byEmail.get('newcomer1@example.com')?.status).toBe('created');
       expect(byEmail.get('newcomer2@example.com')?.status).toBe('created');
       expect(byEmail.get('newcomer1@example.com')?.userId).toMatch(/^[0-9a-f]{24}$/);
+
+      // `toEqual` on every key (not just a subset) catches a `password`
+      // field — or any other extra field — leaking into the wire response,
+      // which a looser subset assertion would miss.
+      for (const result of res.body.results as Array<Record<string, unknown>>) {
+        expect(Object.keys(result).sort()).toEqual(['email', 'status', 'userId']);
+        expect(result).not.toHaveProperty('password');
+      }
     });
 
     it('reports already-existing emails as status="exists"', async () => {
@@ -364,6 +372,10 @@ describe('Routes /api/admin/users (Hono)', () => {
       const byEmail = resultsByEmail(res.body.results as Array<{ email: string; status: string }>);
       expect(byEmail.get('duplicate@example.com')?.status).toBe('exists');
       expect(byEmail.get('fresh@example.com')?.status).toBe('created');
+
+      // 'exists' rows carry no userId/password — only { email, status }.
+      const existsResult = res.body.results.find((r: { email: string }) => r.email === 'duplicate@example.com');
+      expect(Object.keys(existsResult).sort()).toEqual(['email', 'status']);
     });
 
     it('AC-5: reports a save failure as status="failed" without aborting the batch', async () => {
