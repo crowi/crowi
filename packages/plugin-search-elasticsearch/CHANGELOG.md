@@ -80,7 +80,7 @@
 
   The remaining `js-yaml` (eslint 8 chain) and `ip-address` (mongoose 8 →
   mongodb → socks chain) advisories require eslint 8 → 9 and mongoose 8 → 9
-  major upgrades respectively; tracked in TODO.md.
+  major upgrades respectively.
 
 ## 0.1.0-alpha.0
 
