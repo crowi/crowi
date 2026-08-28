@@ -41,6 +41,8 @@ import {
   type LinkCompletionIssue,
   type LinkCompletionRecord,
   type MinimalLinkCompletionRedisClient,
+  msFromRedisTimeReply,
+  type RedisTimeReply,
 } from 'src/service/link-completion';
 import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId, withRedisClient } from 'src/test/redis-smoke';
 import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
@@ -82,7 +84,7 @@ function makeInput(overrides: Partial<LinkCompletionIssue> = {}): LinkCompletion
 }
 
 /** Adapts a real `withRedisClient` connection to `MinimalLinkCompletionRedisClient` — shared by every test below so the `get`/`eval` pass-through isn't repeated per call site. Seeding writes use the raw connection instead, since the store's own surface has no `set`. `timeOverride` replaces `time()` alone (used by the poisoned-clock test); every other test lets `time()` fall through to the real connection. */
-function makeClient(real: ReturnType<typeof createClient>, timeOverride?: () => Promise<Date>): MinimalLinkCompletionRedisClient {
+function makeClient(real: ReturnType<typeof createClient>, timeOverride?: () => Promise<RedisTimeReply>): MinimalLinkCompletionRedisClient {
   return {
     get: (key) => real.get(key),
     eval: (script, options) => real.eval(script, options) as Promise<unknown>,
@@ -171,8 +173,9 @@ describeMaybe('link-completion smoke (real Redis 8)', () => {
       // to consulting this method for `issue()`/`consumeVerified()`'s own
       // timestamps, the assertions below (which compare against the REAL
       // `Date.now()`) would fail loudly instead of silently passing.
-      const poisonedTime = new Date(0);
-      const client = makeClient(real, async () => poisonedTime);
+      const poisonedTimeReply = ['0', '0'] as const;
+      const poisonedTimeMs = msFromRedisTimeReply(poisonedTimeReply);
+      const client = makeClient(real, async () => poisonedTimeReply);
       const store = createLinkCompletionStore({ redisClient: client, keyspace: SMOKE_KEYSPACE });
       const input = makeInput();
 
@@ -181,14 +184,14 @@ describeMaybe('link-completion smoke (real Redis 8)', () => {
       expect(issued.ok).toBe(true);
       if (!issued.ok) throw new Error('unreachable');
       expect(Math.abs(issued.record.issuedAt - beforeIssue)).toBeLessThan(REAL_CLOCK_TOLERANCE_MS);
-      expect(issued.record.issuedAt).not.toBe(poisonedTime.getTime());
+      expect(issued.record.issuedAt).not.toBe(poisonedTimeMs);
 
       const beforeConsume = Date.now();
       const consumed = await store.consumeVerified(issued.code);
       expect(consumed.ok).toBe(true);
       if (!consumed.ok) throw new Error('unreachable');
       expect(Math.abs(consumed.record.consumedAt! - beforeConsume)).toBeLessThan(REAL_CLOCK_TOLERANCE_MS);
-      expect(consumed.record.consumedAt).not.toBe(poisonedTime.getTime());
+      expect(consumed.record.consumedAt).not.toBe(poisonedTimeMs);
 
       // NOT calling store.find() here on purpose — find()'s liveness check
       // legitimately consults client.time() by design (see link-completion.ts's
