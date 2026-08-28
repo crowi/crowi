@@ -61,7 +61,6 @@
     "@hono/zod-openapi": "^1.4.0",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "^0.10.16",
-    "async": "~1.5.0",
     "bcryptjs": "^3.0.3",
     "csrf": "~3.1.0",
     "date-fns": "^2.1.0",

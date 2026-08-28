@@ -4,7 +4,6 @@ import type { PaginateModel, PaginateOptions, PaginateResult } from 'mongoose';
 import Debug from 'debug';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import async from 'async';
 import { UsernameSchema } from '@crowi/api-contract';
 import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'src/models/config';
 import { createMailTokenUtil } from 'src/util/mail-token';
@@ -971,25 +970,25 @@ export default (crowi: Crowi) => {
       debug('emailList is not array');
     }
 
-    async.each(
-      emailList,
-      function (email, next) {
+    // Each email's lookup/save never rejects — a failure is recorded as a
+    // row, not thrown, so one bad email can't abort the whole batch. The
+    // outer function itself stays non-async and returns undefined
+    // synchronously (as `async.each` left it): `callback` fires later, from
+    // this `.then()`, once every row has settled.
+    Promise.all(
+      emailList.map((rawEmail) => {
         const newUser = new User();
         let password;
-
-        email = email.trim();
+        const email = rawEmail.trim();
 
         // email check
         // TODO: 削除済みはチェック対象から外そう〜
-        // mongoose 7 dropped the callback forms of findOne()/save(); use
-        // promises inside the async.each iteratee, still calling next().
-        User.findOne({ email })
+        return User.findOne({ email })
           .then((user) => {
             // The user is exists
             if (user) {
               createdUserList.push({ email, password: null, user: null });
-
-              return next();
+              return;
             }
 
             password = Math.random().toString(36).slice(-16);
@@ -1003,54 +1002,48 @@ export default (crowi: Crowi) => {
               (saved) => {
                 createdUserList.push({ email, password, user: saved });
                 debug('saved!', email);
-                next();
               },
               () => {
                 createdUserList.push({ email, password: null, user: null });
                 debug('save failed!! ', email);
-                next();
               },
             );
           })
           .catch(() => {
             createdUserList.push({ email, password: null, user: null });
             debug('save failed!! ', email);
-            next();
           });
-      },
-      function (err) {
-        if (err) {
-          debug('error occured while iterate email list');
-        }
-
-        if (toSendEmail) {
-          async.each(
-            createdUserList,
-            function (item, next) {
+      }),
+    ).then(() => {
+      if (toSendEmail) {
+        // Fire-and-forget: `callback` below fires right after the sends are
+        // started, not after they finish — the invite API has never waited
+        // on SMTP. `trackSideEffect` lets the test harness's
+        // `drainSideEffects()` still settle it before teardown instead of
+        // leaking into the next test.
+        crowi.trackSideEffect(
+          Promise.all(
+            createdUserList.map((item) => {
               // Skip rows that already existed or failed to save.
               if (!item.user) {
-                return next();
+                return undefined;
               }
 
               // Token issuance + invite-link assembly + send is shared with
               // the admin "resend invite" action via `sendInvitationMail`.
               // A send failure must not abort the batch — log and continue
               // so the remaining invitations still go out.
-              User.sendInvitationMail(item.user)
+              return User.sendInvitationMail(item.user)
                 .then(() => debug('completed to send invitation to', item.email))
-                .catch((err) => debug('failed to send invitation email: ', err))
-                .finally(() => next());
-            },
-            function (err) {
-              debug('Sending invitation email completed.', err);
-            },
-          );
-        }
+                .catch((err) => debug('failed to send invitation email: ', err));
+            }),
+          ).then(() => debug('Sending invitation email completed.')),
+        );
+      }
 
-        debug('createdUserList!!! ', createdUserList);
-        return callback(null, createdUserList);
-      },
-    );
+      debug('createdUserList!!! ', createdUserList);
+      callback(null, createdUserList);
+    });
   };
 
   userSchema.statics.createUserByEmailAndPassword = function (name, username, email, password, lang, callback) {
