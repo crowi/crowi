@@ -54,20 +54,33 @@ async function outcomeFromSettledMember(
   return page == null ? memberFailure(oldPath) : { ok: true, page };
 }
 
+/**
+ * The last thing either of `outcomeFromCurrentMember`'s two callers (the
+ * `incomplete` branch and the `catch` around a mid-flight exception) does
+ * before giving up on a member. It must not report failure on `result ==
+ * null` alone: the grouped `PageHistoryEvent` — not `PageHistoryOperation.result`
+ * — is the durable proof a move landed, and the two are separate writes with
+ * a window between them (RFC-0021 "Member result authority"). Delegating to
+ * `settleMemberFailureFromDurableState` (which checks that evidence first)
+ * makes this invariant hold regardless of how many call sites there are.
+ */
 async function outcomeFromCurrentMember(
   crowi: Crowi,
   pageId: Types.ObjectId,
   oldPath: string,
   key: { actor: Types.ObjectId | null; command: 'subtree_rename_member'; idempotencyKey: string },
 ): Promise<MemberOutcome> {
+  let operation: PageHistoryOperationDocument | null;
   try {
-    const operation = (await crowi.model('PageHistoryOperation').findOne(key).exec()) as PageHistoryOperationDocument | null;
-    if (operation?.result != null) return outcomeFromSettledMember(crowi, pageId, oldPath, operation);
+    operation = (await crowi.model('PageHistoryOperation').findOne(key).exec()) as PageHistoryOperationDocument | null;
   } catch {
     // A failed reconciliation read is still not evidence that the member can
     // be settled. The repair sweep will classify its durable state later.
+    return memberFailure(oldPath);
   }
-  return memberFailure(oldPath);
+  if (operation == null) return memberFailure(oldPath);
+  if (operation.result != null) return outcomeFromSettledMember(crowi, pageId, oldPath, operation);
+  return settleMemberFailureFromDurableState(crowi, pageId, oldPath, operation);
 }
 
 const expectationFromMember = (operation: PageHistoryOperationDocument): ResumeExpectation => ({
