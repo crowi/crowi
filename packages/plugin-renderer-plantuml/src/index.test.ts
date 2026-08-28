@@ -167,6 +167,17 @@ describe('encoder', () => {
     const b = encode('A -> B');
     expect(a).toBe(b);
   });
+
+  // This value is PlantUML's own published example encoding
+  // (https://plantuml.com/server: "For example, SyfFKj2rKt3CoKnELR1Io4ZDoSa70000
+  // is the encoded form of: Bob -> Alice : hello"), not a snapshot captured
+  // from this plugin's own output — the only test here asserting the
+  // encoder's output is CORRECT rather than merely well-formed. The four
+  // assertions above accept anything string-shaped and deterministic,
+  // including a completely wrong encoding.
+  it('matches the encoding PlantUML itself publishes for a known diagram', () => {
+    expect(encode('Bob -> Alice : hello')).toBe('SyfFKj2rKt3CoKnELR1Io4ZDoSa70000');
+  });
 });
 
 /**
