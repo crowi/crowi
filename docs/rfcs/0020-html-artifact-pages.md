@@ -15,7 +15,7 @@ The entire security posture rests on one idea: an artifact must never execute in
 ## Goals
 
 - Store and serve agent-authored HTML documents as first-class Crowi pages, sharing the existing path namespace, ACL, revision history, rename and delete semantics.
-- Execute artifact content in an isolated context that cannot read Crowi credentials, call Crowi APIs, or exfiltrate data.
+- Execute artifact content in an isolated context that cannot read Crowi credentials, call Crowi APIs, or otherwise reach the Crowi origin. See *Delivery: response headers* for what this does and does not cover.
 - Add no new collections and no new required schema fields, so that a future relational migration is not made harder by this feature.
 - Fail loudly when the deployment is not configured to host artifacts safely, rather than silently degrading to an unsafe configuration.
 - Remain deployable by a self-hosting operator who controls only a single domain.
@@ -151,11 +151,20 @@ Content-Security-Policy:
   form-action 'none';
   base-uri 'none';
   sandbox allow-scripts;          # Mode B only
+Referrer-Policy: no-referrer
 X-Content-Type-Options: nosniff
 Cache-Control: private, immutable
 ```
 
-`connect-src 'none'` is the directive that matters most. With it in place, an artifact cannot call the Crowi API, cannot reach a third-party endpoint, and cannot exfiltrate anything a user types into it — which in turn is what makes a permissive CDN allowlist tolerable rather than dangerous.
+`connect-src 'none'` is the directive that matters most. With it in place, an artifact cannot call the Crowi API and cannot open a scripted connection to a third-party endpoint.
+
+It does not, on its own, make an artifact incapable of exfiltration, and an earlier draft of this section overstated what it buys. Three channels survive it. A frame may navigate *itself* — `connect-src` does not govern navigation, `navigate-to` was dropped from CSP3 and never shipped, and no `sandbox` flag restricts a frame's navigation of its own browsing context; `allow-top-navigation` withholds only the *containing* tab. A subresource fetched from an allowlisted CDN carries whatever the artifact puts in its query string, so allowlisting an origin makes that origin's operator a recipient. And a request leaving the frame carries a `Referer` naming the artifact URL, which contains the signed token — a capability, not merely a location.
+
+The first and third are closed: the third by `Referrer-Policy: no-referrer` above, the first by the shell policy below. The second is inherent to allowlisting an origin at all, which is why the allowlist ships empty and is populated deliberately by an administrator rather than seeded with a speculative default.
+
+**The page shell restricts where its frame may go.** Sandboxing the artifact document does not constrain the artifact's own navigation, but the *embedding* document's `frame-src` does: a nested browsing context is checked against its parent's policy on every navigation, including ones the frame initiates for itself and any redirect that follows. The Crowi page shell therefore serves `Content-Security-Policy: frame-src {artifact-origin}`. A policy naming only `frame-src` enforces only `frame-src`, so this composes with the application's existing response headers without disturbing script or style handling. Without it, an artifact closes the loop with a single assignment to `location.href`.
+
+That defence has one boundary worth stating rather than discovering. It exists only where there is a parent: a browser tab pointed directly at an artifact URL has no embedding document and therefore no `frame-src`. Mode A and Mode B already ensure such a tab holds no Crowi authority, so what remains at risk there is what the user types into that tab. **The guarantee this design makes is that an artifact cannot reach Crowi — its origin, its credentials, or its API. It is not a guarantee that an artifact cannot transmit what a user types into it, and the sandboxed-content indicator should not be read as promising one.**
 
 `frame-ancestors` restricted to the Crowi origin prevents third-party sites from embedding artifacts and presenting them as their own.
 
@@ -200,7 +209,9 @@ The practical cost is that `localStorage` and `sessionStorage` are unavailable i
 
 ### CDN allowlist
 
-Artifacts may load scripts, styles and fonts from a small curated allowlist, overridable by an administrator. Without it, charting and visualisation libraries are unreachable and the feature loses most of its value; with `connect-src 'none'` holding, the marginal risk of an additional CDN origin is limited to what that origin's own code can do inside an isolated, network-silent document.
+Artifacts may load scripts, styles and fonts from an allowlist of origins maintained by an administrator. **It ships empty.** Nothing is allowlisted until someone decides to allowlist it, because an allowlisted origin is a party that receives whatever an artifact puts in a request to it, and that is a decision an operator should make rather than inherit. `esm.sh` and `cdn.jsdelivr.net` are offered in the admin UI as one-click entries — a suggestion an operator accepts, not a default they must discover and remove.
+
+The cost of the empty default is real but bounded: a self-contained artifact — inline markup, styles and scripts, which is what agents emit by default — needs no allowlist at all. What an empty allowlist withholds is the large charting and visualisation libraries that are impractical to inline.
 
 Allowlist entries are matched by origin. Ingest validation and the delivery CSP are generated from the same configuration value, so a payload that passes validation cannot be blocked at runtime by a policy mismatch.
 
@@ -230,23 +241,25 @@ The shell displays a persistent indicator that the frame contains sandboxed, age
 
 **No React or JSX.** See Non-goals.
 
+**The CDN allowlist ships empty.** Populating it speculatively would allowlist recipients no operator chose. Suggested entries are offered in the admin UI instead.
+
+**Fully-qualified CDN URLs only.** Import maps and bare specifiers are rejected at ingest. Validation stays exact, and the requirement is stated in the MCP tool description and the CLI's help text.
+
+**Artifacts are indexed by path and title only.** Indexing raw markup would pollute results with tag noise, and extracting text implies parsing and therefore derived data. Restricting indexing to fields every search driver already handles keeps Mongo and external backends behaviourally identical.
+
+**No in-place conversion between Markdown and artifact.** Create selects the kind; update preserves it. The revision model handles conversion correctly, but the operation has no demonstrated use, and permitting it would put mixed-kind history in front of every reader of a page's timeline.
+
+**A distinct size limit, not the Markdown one.** The two bodies have unrelated size distributions. The starting values are a 2 MiB default with a 10 MiB configurable maximum, measured over the normalised UTF-8 bytes.
+
+**A disabled deployment shows a notice and an attachment-only download.** Not a raw source view: rendering stored HTML as text in the page is a rendering decision that invites the same mistakes the delivery design exists to prevent, and the download route already has to exist for the page menu.
+
 ## Reversibility
 
 The React exclusion is deliberately structured to be reversible without touching the delivery, storage or CSP design. Should a case for it emerge, the sound path is to transpile and bundle at ingest, on the server, and store the resulting single HTML document. The stored artifact would then be indistinguishable from a hand-emitted one; delivery, CSP, sandboxing and RFC-0009 integration would all be unaffected. Build cost is incurred once per write rather than once per view, and build failure surfaces as a fail-fast ingest rejection with a diagnostic the authoring agent can act on. Nothing in this RFC should be designed in a way that forecloses that option, and equally nothing should be built in anticipation of it.
 
 ## Open questions
 
-**Initial allowlist contents.** The set should be small and justified by observed agent output rather than assembled speculatively. Populating it likely wants a short period of real MCP usage first.
-
-**Import map support.** Whether to inject an import map so that agents may write bare specifiers for allowlisted libraries, or to require fully-qualified CDN URLs. The latter is simpler and keeps validation exact; the former is closer to how agents write by default. Leaning toward requiring full URLs in v1 and stating the requirement wherever a write client is documented — the MCP tool description and the CLI's help text.
-
-**Size limit.** A concrete cap on artifact body size, and whether it is shared with or distinct from the Markdown body limit.
-
-**Search indexing.** Whether artifact bodies are indexed, and if so whether raw HTML is indexed or only extracted text content. Indexing raw markup would pollute results with tag and attribute noise; extracting text implies parsing, which reintroduces a small amount of derived data.
-
-**Type conversion semantics.** Whether converting an existing Markdown page to an artifact in place is permitted at all, or whether artifacts must be created at fresh paths. The revision model handles conversion correctly, but it is not clear the operation is desirable.
-
-**Presentation of a disabled feature.** What an artifact page shows when no delivery mode is configured — a raw source view, a plain notice, or a download link.
+None outstanding. The six questions this RFC carried in draft — allowlist contents, import maps, size limit, search indexing, type conversion, and the disabled-deployment surface — are recorded under *Resolved decisions*.
 
 ## Implementation plan
 
@@ -259,3 +272,5 @@ The React exclusion is deliberately structured to be reversible without touching
 **Phase 4 — Shell.** The page-level rendering surface: placeholder, explicit execution control, sandboxed indicator, revision navigation. Also the surrounding chrome — the widened layout that drops the table-of-contents rail and the body width cap together, the menu with format-specific and undefined actions hidden, the HTML download served as an attachment, and the artifact icon in page lists.
 
 **Phase 5 — RFC-0009 amendment.** Generalise the snapshot safety valve from a paste-size heuristic to a diff-to-body ratio test. Separable from the phases above and beneficial to Markdown independently.
+
+Phase 5 is sequenced after the others rather than alongside them, because the compaction behaviour it amends is not yet implemented; a specification written against absent code would describe a baseline that does not exist.
