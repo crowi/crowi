@@ -1,8 +1,8 @@
+import crypto from 'node:crypto';
 import Crowi from 'src/crowi';
 import { Types, Document, Schema, model } from 'mongoose';
 import type { PaginateModel } from 'mongoose';
 // import Debug from 'debug'
-import { v4 as uuidv4 } from 'uuid';
 import { applyPaginatePlugin } from 'src/util/mongoose-paginate';
 import { UserDocument } from './user';
 
@@ -162,7 +162,7 @@ export default (crowi: Crowi) => {
     }
 
     return Share.create({
-      uuid: uuidv4(),
+      uuid: crypto.randomUUID(),
       page: pageId,
       creator: user,
       createdAt: Date.now(),

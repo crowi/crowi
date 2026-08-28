@@ -361,9 +361,6 @@ importers:
       unified:
         specifier: ^11.0.5
         version: 11.0.5
-      uuid:
-        specifier: ^11.1.1
-        version: 11.1.1
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -568,9 +565,6 @@ importers:
       mongoose:
         specifier: ^9.7.3
         version: 9.7.3(@aws-sdk/credential-providers@3.826.0)
-      uuid:
-        specifier: ^11.1.1
-        version: 11.1.1
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.7(yjs@13.6.30)
