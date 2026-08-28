@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import type { NotifierDriver, NotificationPayload } from '@crowi/plugin-api';
 import { crowi, Fixture } from 'src/test/setup';
 import { dispatchMentions } from './mention-dispatch';

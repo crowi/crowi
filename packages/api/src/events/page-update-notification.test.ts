@@ -1,4 +1,4 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import mongoose from 'mongoose';
 import { crowi, Fixture } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
