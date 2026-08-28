@@ -316,6 +316,58 @@ describe('User', () => {
     });
   });
 
+  describe('createUsersByInvitation', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('AC-4: processes multiple emails concurrently rather than one at a time', async () => {
+      const emails = ['par1@example.com', 'par2@example.com', 'par3@example.com'];
+      const pendingResolvers: (() => void)[] = [];
+      let inFlight = 0;
+      let maxInFlight = 0;
+
+      // Each findOne() call parks on its own deferred promise instead of
+      // resolving immediately, so a sequential (one-at-a-time) implementation
+      // would only ever have 1 call in flight while a concurrent one issues
+      // all of them before any resolves.
+      const findOneSpy = jest.spyOn(User, 'findOne').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            inFlight += 1;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            pendingResolvers.push(() => {
+              inFlight -= 1;
+              // Truthy resolution takes the "user already exists" branch,
+              // which needs no further DB interaction (no save()).
+              resolve({ _id: 'existing' });
+            });
+          }) as unknown as ReturnType<typeof User.findOne>,
+      );
+
+      const resultPromise = new Promise<{ email: string; password: string | null; user: unknown }[]>((resolve, reject) => {
+        User.createUsersByInvitation(emails, false, (err: Error | null, list: { email: string; password: string | null; user: unknown }[]) => {
+          if (err) return reject(err);
+          resolve(list);
+        });
+      });
+
+      // Let the microtask queue advance so every findOne() call in the
+      // Promise.all(...map...) has been issued before any of them resolves.
+      await new Promise((r) => setImmediate(r));
+
+      expect(findOneSpy).toHaveBeenCalledTimes(emails.length);
+      expect(maxInFlight).toBe(emails.length);
+
+      while (pendingResolvers.length > 0) {
+        pendingResolvers.pop()?.();
+      }
+
+      const list = await resultPromise;
+      expect(list).toHaveLength(emails.length);
+    });
+  });
+
   describe('User Utilities', () => {
     describe('Get username from path', () => {
       test('found', () => {
