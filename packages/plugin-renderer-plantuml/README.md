@@ -123,6 +123,10 @@ either way.
 - Per-server-host trust list / CORS / proxying — operator's network
   responsibility.
 
+## Testing
+
+This package's own unit tests (`src/index.test.ts`) cover the render pipeline (fetch, sanitize, cache metadata, error mapping) with a mocked `fetch`. The encoder is verified against a value PlantUML itself publishes as a text-encoding example, so a broken encoder is caught without needing a live server. This package has no integration test against a real PlantUML server — `packages/e2e` does not run one. The remaining unverified surface is PlantUML's own response format changing upstream; that is not a regression in this plugin's code and would surface in any operator's environment regardless of how this package is tested.
+
 ## See also
 
 - RFC-0002 §"Phase 6 — bundled renderer plugins" for the design
