@@ -78,7 +78,7 @@ jobs:
       # (see operations/release-runbook.mdx). Leaving pre mode resolves it.
       - name: Create Release PR or Publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           publish: pnpm changeset publish
           version: pnpm changeset version
