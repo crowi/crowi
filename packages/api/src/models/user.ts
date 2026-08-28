@@ -333,14 +333,20 @@ export default (crowi: Crowi) => {
     }
   }
 
+  /**
+   * `Math.random` is unusable here because V8's xorshift128+ state can be
+   * recovered from a handful of observed outputs, making later outputs
+   * predictable. `crypto.randomInt` draws from the platform CSPRNG and
+   * rejection-samples internally, so picking an index this way carries no
+   * modulo bias.
+   */
   function generateRandomTempPassword() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!=-_';
-    let password = '';
     const len = 12;
 
+    let password = '';
     for (let i = 0; i < len; i++) {
-      const randomPoz = Math.floor(Math.random() * chars.length);
-      password += chars.substring(randomPoz, randomPoz + 1);
+      password += chars[crypto.randomInt(chars.length)];
     }
 
     return password;
@@ -991,7 +997,7 @@ export default (crowi: Crowi) => {
               return;
             }
 
-            password = Math.random().toString(36).slice(-16);
+            password = generateRandomTempPassword();
 
             newUser.email = email;
             newUser.setPassword(password);
@@ -1041,7 +1047,12 @@ export default (crowi: Crowi) => {
         );
       }
 
-      debug('createdUserList!!! ', createdUserList);
+      // Log only email/outcome, never the plaintext `password` field the
+      // caller (admin invite UI) still gets back in `createdUserList` itself.
+      debug(
+        'createdUserList!!! ',
+        createdUserList.map(({ email, user }) => ({ email, created: user != null })),
+      );
       callback(null, createdUserList);
     });
   };
