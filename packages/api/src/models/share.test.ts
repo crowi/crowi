@@ -45,6 +45,19 @@ describe('Share', () => {
         await expect(Share.createShare(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share);
         await expect(Share.createShare(createdPages[0]._id, user)).rejects.toThrow('Cannot create new share.');
       });
+
+      test('should generate a v4 UUID for the uuid field', async () => {
+        const share = await Share.createShare(createdPages[0]._id, user);
+        expect(share.uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      });
+    });
+  });
+
+  describe('.findShareByUuid', () => {
+    test('should find a share by its uuid', async () => {
+      const created = await Share.createShare(createdPages[0]._id, user);
+      const found = await Share.findShareByUuid(created.uuid);
+      expect(found._id.toString()).toBe(created._id.toString());
     });
   });
 

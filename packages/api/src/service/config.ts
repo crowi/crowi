@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import crypto from 'node:crypto';
 import Debug from 'debug';
 import { createClient } from 'redis';
 import Crowi from 'src/crowi';
 import { formatPluginNamespace, parsePluginConfigKey } from 'src/plugin/plugin-namespace';
 import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
-import { v4 } from 'uuid';
 
 const debug = Debug('crowi:service:config');
 
@@ -68,7 +68,7 @@ export default class ConfigService {
     this.configModel = this.crowi.model('Config');
 
     this.pubSub = {
-      id: v4(),
+      id: crypto.randomUUID(),
       publisher: null,
       subscriber: null,
       // Placeholder — never actually published/subscribed on before
