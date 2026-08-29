@@ -87,6 +87,17 @@ describe('Backlink', () => {
       const targetPath = '/' + faker.lorem.slug() + '-target';
       await Page.createPage(targetPath, '# target', user, {});
       await Page.createPage('/' + faker.lorem.slug() + '-source', `link: <${targetPath}>`, user, {});
+
+      // `Page.createPage` only emits the create event; the backlink write it
+      // schedules is fire-and-forget (events/page.ts registerBacklinks). Without
+      // this barrier the delete below can overtake that pending write, leaving a
+      // second writer live while a test runs the rebuild — both then delete, and
+      // both insert the same source->target row (there is no compound unique
+      // index), so the rebuild's count comes out at 2. Draining is exact rather
+      // than a tick budget: registerBacklinks puts the deferred promise into the
+      // tracked set synchronously, so once these creates return the set already
+      // holds them, and drainSideEffects loops until it is empty.
+      await crowi.drainSideEffects();
       await Backlink.deleteMany({});
     });
 
