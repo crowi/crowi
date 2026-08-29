@@ -103,7 +103,7 @@ One adjustment is required. RFC-0009's safety valve triggers on large pastes, wh
 
 ### Normalisation happens at ingest
 
-Validation and normalisation run once, on write, and the result is what gets stored. Read is a byte-for-byte serve. This keeps artifacts free of derived data, makes the served bytes auditable, and ensures a policy change cannot retroactively alter what an existing artifact does — a policy change affects future writes only.
+Validation and normalisation run once, on write, and the result is what gets stored. Read is a byte-for-byte serve. This keeps artifacts free of derived data and makes the served bytes auditable. It does not make an artifact immune to a later policy change: the bytes never change, but what the browser is permitted to do with them is decided by the policy in force when the page is served. See *CDN allowlist* for where that boundary sits.
 
 Ingest rejects, rather than sanitising:
 
@@ -164,7 +164,7 @@ The first and third are closed: the third by `Referrer-Policy: no-referrer` abov
 
 **The page shell restricts where its frame may go.** Sandboxing the artifact document does not constrain the artifact's own navigation, but the *embedding* document's `frame-src` does: a nested browsing context is checked against its parent's policy on every navigation, including ones the frame initiates for itself and any redirect that follows. The Crowi page shell therefore serves `Content-Security-Policy: frame-src {artifact-origin}`. A policy naming only `frame-src` enforces only `frame-src`, so this composes with the application's existing response headers without disturbing script or style handling. Without it, an artifact closes the loop with a single assignment to `location.href`.
 
-That defence has one boundary worth stating rather than discovering. It exists only where there is a parent: a browser tab pointed directly at an artifact URL has no embedding document and therefore no `frame-src`. Mode A and Mode B already ensure such a tab holds no Crowi authority, so what remains at risk there is what the user types into that tab. **The guarantee this design makes is that an artifact cannot reach Crowi — its origin, its credentials, or its API. It is not a guarantee that an artifact cannot transmit what a user types into it, and the sandboxed-content indicator should not be read as promising one.**
+That defence has one boundary worth stating rather than discovering. It exists only where there is a parent: a browser tab pointed directly at an artifact URL has no embedding document and therefore no `frame-src`. Mode A and Mode B already ensure such a tab holds no Crowi authority, so what remains at risk there is what the user types into that tab. The same boundary governs ordinary links: an `<a href>` to a third-party site is inert in the embedded case, where `frame-src` applies, and is an ordinary working link in a directly-opened tab, where nothing constrains it. Author-facing documentation should describe link behaviour as a property of the embedded case rather than of artifacts as such. **The guarantee this design makes is that an artifact cannot reach Crowi — its origin, its credentials, or its API. It is not a guarantee that an artifact cannot transmit what a user types into it, and the sandboxed-content indicator should not be read as promising one.**
 
 `frame-ancestors` restricted to the Crowi origin prevents third-party sites from embedding artifacts and presenting them as their own.
 
@@ -213,7 +213,13 @@ Artifacts may load scripts, styles and fonts from an allowlist of origins mainta
 
 The cost of the empty default is real but bounded: a self-contained artifact — inline markup, styles and scripts, which is what agents emit by default — needs no allowlist at all. What an empty allowlist withholds is the large charting and visualisation libraries that are impractical to inline.
 
-Allowlist entries are matched by origin. Ingest validation and the delivery CSP are generated from the same configuration value, so a payload that passes validation cannot be blocked at runtime by a policy mismatch.
+Allowlist entries are matched by origin. Ingest validation and the delivery CSP read the same configuration value, so the two agree at any single moment. That agreement is a property of one instant, not a guarantee that holds over time, and an earlier draft of this section overstated it into one.
+
+Two things break the stronger reading. An allowlist is mutable while stored bytes are not, so removing an origin blocks subresources in artifacts that were accepted while it was allowed. And ingest can only enumerate what is statically visible in the document — a URL assembled at runtime, a stylesheet's own `url()` references, or a module a permitted module imports in turn are all beyond it.
+
+**The CSP is the enforcement boundary. Ingest is a fast-fail diagnostic for the authoring agent** — it catches, at write time and with a message the agent can act on, the mistakes that are cheap to catch, so that the common case fails in the place where it can be fixed rather than silently in a viewer's browser. Its enumeration is best-effort by design, and calling it anything stronger would misplace where the security actually lives.
+
+One operational consequence follows. Narrowing the allowlist can break artifacts that already exist, so the admin UI must say so at the point of removal rather than leaving an operator to discover it from a blank frame.
 
 ### Execution is user-initiated
 
