@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import type { Command } from 'commander';
 
+import { version as pkgVersion } from '../package.json';
 import { createProgram, getGlobalOptions } from './cli';
 import * as capabilityModule from './lib/capability';
 
@@ -185,8 +186,7 @@ describe('createProgram — --version reports the published package version', ()
   // so this keeps passing across releases and only fails if the wiring is
   // broken again.
   it('matches the version in package.json', () => {
-    const { version } = require('../package.json') as { version: string };
-    expect(createProgram().version()).toBe(version);
+    expect(createProgram().version()).toBe(pkgVersion);
   });
 
   it('does not report a hardcoded development placeholder', () => {
