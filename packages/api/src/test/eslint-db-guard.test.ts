@@ -1,30 +1,38 @@
 /**
  * Deterministic coverage for the B1 lint guard
  * (feature-test-parallel-db-flake-hardening, Phase 3):
- * `packages/api/.eslintrc.js`'s `no-restricted-imports` / `no-restricted-syntax`
- * override that blocks a test file from opening its own ad hoc DB connection
+ * `packages/api/eslint.config.mjs`'s `no-restricted-imports` / `no-restricted-syntax`
+ * config that blocks a test file from opening its own ad hoc DB connection
  * instead of going through the harness (`test/setup.ts` / `crowi-environment.js`).
  *
- * Drives the REAL `.eslintrc.js` via the ESLint Node API (`eslint` is already
- * a devDependency of this package — `packages/api/package.json`) rather than
- * re-implementing the rule config here, so a future edit to the override that
- * accidentally narrows or widens it shows up as a test failure. Every fixture
- * is linted with a virtual `filePath` under `src/hono/handlers/` (a real,
- * non-`src/test/**` directory) so ESLint's cascading config lookup resolves
- * the SAME `packages/api/.eslintrc.js` a real test file would use, and so the
- * `excludedFiles: ['src/test/**\/*']` carve-out for the harness's own
+ * Drives the REAL `eslint.config.mjs` via the ESLint Node API rather than
+ * re-implementing the rule config here, so a future edit that accidentally
+ * narrows or widens it shows up as a test failure. Every fixture is linted
+ * with a virtual `filePath` under `src/hono/handlers/` (a real, non-
+ * `src/test/**` directory) so ESLint's flat-config file-matching resolves
+ * the SAME `packages/api/eslint.config.mjs` a real test file would use, and
+ * so the `ignores: ['src/test/**\/*']` carve-out for the harness's own
  * implementation files does not accidentally exempt these fixtures too.
  *
- * `eslint@8.57.1` ships no bundled type declarations and this repo has no
- * `@types/eslint` (see `packages/api/.eslintrc.js`'s own `no-var-requires`
- * precedent) — `require()`'d and hand-typed with the minimal surface used
- * here, same pattern as `global-setup.test.ts` / `crowi-environment.test.ts`
- * requiring their plain-CJS harness modules directly.
+ * ESLint v9's flat config is discovered from `cwd` alone (`findUp` walks up
+ * looking for `eslint.config.mjs`) — no `useEslintrc`-style legacy option
+ * needed, same pattern as `packages/web/src/eslint-radix-import-guard.test.ts`.
+ * Unlike that vitest-based sibling, though, this suite runs under Jest, and
+ * ESLint's config loader always dynamically `import()`s the config file —
+ * which Jest's default sandbox rejects for code it doesn't itself transform
+ * ("A dynamic import callback was invoked without --experimental-vm-modules").
+ * That flag fixes it, but only by changing Jest's dynamic-import handling
+ * for the WHOLE process, which broke an unrelated `await import(...)`
+ * elsewhere in this package (`src/hono/index.ts`'s Scalar docs middleware —
+ * `docs.test.ts` started 500ing). So `ESLint` itself never runs inside this
+ * jest process: `eslint-flat-config-runner.js` (a plain Node child process,
+ * no Jest, no `--experimental-vm-modules` needed) does the real linting, and
+ * `ForkedESLint` below proxies to it over IPC. Every fixture, assertion, and
+ * message filter is unchanged from before this fork — only how `eslint` is
+ * driven changed.
  */
+import { type ChildProcess, fork } from 'node:child_process';
 import path from 'node:path';
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-const { ESLint } = require('eslint') as { ESLint: ESLintCtor };
 
 interface LintMessage {
   ruleId: string | null;
@@ -37,22 +45,74 @@ interface LintResult {
 interface ESLintInstance {
   lintText(code: string, options?: { filePath?: string }): Promise<LintResult[]>;
 }
-interface ESLintCtor {
-  new (options?: { cwd?: string; useEslintrc?: boolean }): ESLintInstance;
+
+type RunnerMessage = { type: 'ready' | 'result' | 'error'; id: number; messages?: LintMessage[]; message?: string };
+
+class ForkedESLint implements ESLintInstance {
+  private readonly child: ChildProcess;
+  private readonly ready: Promise<void>;
+  private nextId = 0;
+  private readonly pending = new Map<number, { resolve: (messages: LintMessage[]) => void; reject: (err: Error) => void }>();
+
+  constructor(cwd: string) {
+    // Inherit stderr so a runner boot failure (bad require, config syntax
+    // error) surfaces in test output instead of failing silently.
+    this.child = fork(path.join(__dirname, 'eslint-flat-config-runner.js'), [], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+    this.child.on('message', (msg: RunnerMessage) => this.handleMessage(msg));
+    this.child.on('exit', (code, signal) =>
+      this.rejectAllPending(new Error(`eslint-flat-config-runner exited (code=${code}, signal=${signal}) before responding`)),
+    );
+    const initId = this.nextId++;
+    this.ready = new Promise((resolve, reject) => {
+      this.pending.set(initId, { resolve: () => resolve(), reject });
+    });
+    this.child.send({ type: 'init', id: initId, cwd });
+  }
+
+  private handleMessage(msg: RunnerMessage): void {
+    const entry = this.pending.get(msg.id);
+    if (!entry) return;
+    this.pending.delete(msg.id);
+    if (msg.type === 'error') {
+      entry.reject(new Error(msg.message));
+    } else {
+      entry.resolve(msg.messages ?? []);
+    }
+  }
+
+  private rejectAllPending(err: Error): void {
+    for (const entry of this.pending.values()) {
+      entry.reject(err);
+    }
+    this.pending.clear();
+  }
+
+  async lintText(code: string, options?: { filePath?: string }): Promise<LintResult[]> {
+    await this.ready;
+    const id = this.nextId++;
+    const messages = await new Promise<LintMessage[]>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.child.send({ type: 'lint', id, code, filePath: options?.filePath });
+    });
+    return [{ messages }];
+  }
+
+  kill(): void {
+    this.child.kill();
+  }
 }
 
 const API_ROOT = path.join(__dirname, '..', '..');
 // Any real, non-`src/test/**` directory works — this one is arbitrary.
 // The file itself is never read from disk; `lintText`'s `filePath` only
-// drives ESLint's cascading `.eslintrc.js` lookup + `overrides` glob
-// matching.
+// drives ESLint's flat-config `files`/`ignores` glob matching.
 const FIXTURE_PATH = path.join(API_ROOT, 'src', 'hono', 'handlers', '__eslint-db-guard-fixture__.test.ts');
 
 /**
  * Warmed in `beforeAll` rather than built at module scope. The constructor is
- * nearly free; the cost is in `lintText`, which resolves the cascading
- * `.eslintrc.js` for the given `filePath`, loads its plugins, and cold-starts
- * the TypeScript parser. Because the cascade resolves per path, EVERY new
+ * nearly free; the cost is in `lintText`, which resolves the flat config for
+ * the given `filePath`, loads its plugins, and cold-starts the TypeScript
+ * parser. Because resolution is per path, EVERY new
  * directory context this suite lints under pays its own cold start — measured
  * at 444ms for the first `src/hono/handlers/` lint and a further 1127ms for
  * the first `src/util/` one, against 1-2ms once warm. At module scope those
@@ -65,7 +125,7 @@ const FIXTURE_PATH = path.join(API_ROOT, 'src', 'hono', 'handlers', '__eslint-db
  * is what leaves the 1127ms on an assertion. Any new `filePath` this suite
  * starts linting under belongs in {@link WARMUP_PATHS} too.
  */
-let eslint: ESLintInstance;
+let eslint: ForkedESLint;
 
 async function lintAt(code: string, filePath: string): Promise<LintMessage[]> {
   const [result] = await eslint.lintText(code, { filePath });
@@ -82,7 +142,7 @@ function dbGuardMessages(messages: LintMessage[]): LintMessage[] {
 
 /**
  * feature-redis-subscriber-crash-fix — the sibling `no-restricted-syntax`
- * override that blocks a direct `.duplicate()` call on a Redis client
+ * config that blocks a direct `.duplicate()` call on a Redis client
  * anywhere outside `src/util/redis-opts.ts` (see that file's
  * `duplicateWithErrorHandler`) — production AND test files alike; AC-3
  * draws no test-file exception ("a direct .duplicate() call outside
@@ -91,7 +151,7 @@ function dbGuardMessages(messages: LintMessage[]): LintMessage[] {
  * CALLS `.duplicate()` on something else). Unlike the DB guard above
  * (scoped to `**\/*.test.ts` / `src/test/**`, which never sets
  * `parserOptions.project`), this guard's `files: ['src/**\/*.ts']` glob
- * OVERLAPS the override that DOES set `parserOptions.project` for
+ * OVERLAPS the config object that DOES set `parserOptions.project` for
  * non-`.test.ts` source outside `src/test/**` — a virtual, on-disk-
  * nonexistent fixture path there throws a parser error ("TSConfig does not
  * include this file") instead of running the rule. So the non-test fixture
@@ -101,7 +161,7 @@ function dbGuardMessages(messages: LintMessage[]): LintMessage[] {
  * disk at `filePath`) — a virtual `.test.ts` / `src/test/**` path is fine
  * to keep using as a fixture for the test-file cases below, same as the DB
  * guard above, since both are exempt from the `parserOptions.project`
- * override regardless of this guard.
+ * config regardless of this guard.
  */
 const DUPLICATE_GUARD_FIXTURE_PATH = path.join(API_ROOT, 'src', 'util', 'redis-database.ts');
 const REDIS_OPTS_PATH = path.join(API_ROOT, 'src', 'util', 'redis-opts.ts');
@@ -119,13 +179,17 @@ function duplicateGuardMessages(messages: LintMessage[]): LintMessage[] {
 const WARMUP_PATHS = [FIXTURE_PATH, DUPLICATE_GUARD_FIXTURE_PATH, REDIS_OPTS_PATH, path.join(API_ROOT, 'src', 'test', '__eslint-warmup-fixture__.ts')];
 
 beforeAll(async () => {
-  eslint = new ESLint({ cwd: API_ROOT, useEslintrc: true });
+  eslint = new ForkedESLint(API_ROOT);
   for (const warmupPath of WARMUP_PATHS) {
     await lintAt('export const warm = 1;\n', warmupPath);
   }
 }, 30_000);
 
-describe('B1 DB-bypass lint guard (packages/api/.eslintrc.js)', () => {
+afterAll(() => {
+  eslint.kill();
+});
+
+describe('B1 DB-bypass lint guard (packages/api/eslint.config.mjs)', () => {
   it('flags a MemberExpression call — mongoose.connect(...)', async () => {
     const messages = dbGuardMessages(await lint(`import mongoose from 'mongoose';\nmongoose.connect('mongodb://localhost:27017');\n`));
     expect(messages).toHaveLength(1);
@@ -194,9 +258,9 @@ describe('B1 DB-bypass lint guard (packages/api/.eslintrc.js)', () => {
 
   it(
     'does NOT flag the same violating code when the virtual filePath is inside src/test/** — the ' +
-      'harness-implementation carve-out `.eslintrc.js` requires (AC2), not a coverage gap: every file ' +
+      'harness-implementation carve-out `eslint.config.mjs` requires (AC2), not a coverage gap: every file ' +
       'in this directory today is either harness implementation or a harness-only unit test that ' +
-      "legitimately opens a real connection (see this rule's own doc comment in `.eslintrc.js`)",
+      "legitimately opens a real connection (see this rule's own doc comment in `eslint.config.mjs`)",
     async () => {
       const [result] = await eslint.lintText(`import mongoose from 'mongoose';\nmongoose.connect('mongodb://localhost:27017');\n`, {
         filePath: path.join(API_ROOT, 'src', 'test', '__eslint-db-guard-fixture__.test.ts'),
@@ -206,7 +270,7 @@ describe('B1 DB-bypass lint guard (packages/api/.eslintrc.js)', () => {
   );
 });
 
-describe('feature-redis-subscriber-crash-fix duplicate() guard (packages/api/.eslintrc.js)', () => {
+describe('feature-redis-subscriber-crash-fix duplicate() guard (packages/api/eslint.config.mjs)', () => {
   it('flags a direct .duplicate() call on a production Redis client', async () => {
     const messages = duplicateGuardMessages(await lintAt(`const dup = client.duplicate();\nvoid dup;\n`, DUPLICATE_GUARD_FIXTURE_PATH));
     expect(messages).toHaveLength(1);
