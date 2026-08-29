@@ -48,7 +48,7 @@
     "@types/node": "catalog:",
     "@typescript-eslint/eslint-plugin": "catalog:",
     "@typescript-eslint/parser": "catalog:",
-    "eslint": "^8.57.1",
+    "eslint": "catalog:",
     "jest": "catalog:",
     "ts-jest": "catalog:",
     "tsup": "catalog:",
