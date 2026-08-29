@@ -438,6 +438,16 @@ const writerBody =
   `non-empty at ${BRIEF}; if it is missing or empty, do NOT write anything and return wrote=false with a ` +
   `blockedReason. If a file already exists at the target and it describes an UNRELATED feature (not this ` +
   `design), STOP and return wrote=false (conflict) instead of overwriting it.\n` +
+  `Those two are the ONLY cases in which you may return wrote=false, and each requires a blockedReason. ` +
+  `Writing is otherwise mandatory: an under-specified corner, a decision you cannot settle, or a ` +
+  `contradiction you cannot resolve is recorded in residualOpenQuestions — it is never a reason to ` +
+  `return without a document. Returning an investigation summary in place of the document is a failure.\n` +
+  `The brief is authoritative for MECHANISM (how a thing works, which existing component already does it). ` +
+  `The locked decisions are authoritative for JUDGEMENT (which option was chosen, what is out of scope). ` +
+  `When the decisions constrain what may not be done, they narrow the brief's mechanism — they do not ` +
+  `replace it, and they never license removing something the design is made of. If a decision seems to ` +
+  `forbid the feature's own substance, you have misread it: re-read the brief and record the tension in ` +
+  `residualOpenQuestions rather than designing the substance away.\n` +
   `Read the approved design brief at ${BRIEF}. Apply the locked human decisions:\n${DECISIONS}\n\n` +
   `${writeInstructions}\n` +
   `AUDIENCE — write the document to stand on its own when read cold from the repo by ` +
