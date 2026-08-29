@@ -14,6 +14,7 @@ export interface PageDeletionRecordDocument extends Document {
 }
 
 // biome-ignore lint/suspicious/noEmptyInterface: deletion-record queries use the base Mongoose Model API.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PageDeletionRecordModel extends Model<PageDeletionRecordDocument> {}
 
 const pageDeletionRecordSchema = new Schema<PageDeletionRecordDocument, PageDeletionRecordModel>(

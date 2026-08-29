@@ -36,11 +36,11 @@ import { readFileSync, rmSync } from 'node:fs';
 // `global-setup.js` / `test-mongo-sentinel.js` / `redis-smoke-sentinel.js`
 // are plain CJS with no type declarations — required directly rather than
 // imported (same pattern as `crowi-environment.test.ts`).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const globalSetup = require('./global-setup');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { getSentinelPath } = require('./test-mongo-sentinel');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { REDIS_SMOKE_TARGETS, getConnectivitySentinelPath, readConnectivitySentinel } = require('./redis-smoke-sentinel');
 
 /**

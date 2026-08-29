@@ -23,7 +23,7 @@
  */
 import path from 'node:path';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { ESLint } = require('eslint') as { ESLint: ESLintCtor };
 
 interface LintMessage {

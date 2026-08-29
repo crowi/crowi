@@ -17,9 +17,9 @@ import { randomUUID } from 'node:crypto';
 
 // Plain CJS, no type declarations — required directly (same pattern as
 // `global-setup.test.ts`).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const globalTeardown = require('./global-teardown');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { REDIS_SMOKE_CATEGORIES, writeMarker, listMarkedCategories } = require('./redis-smoke-sentinel');
 
 describe('globalTeardown — Redis smoke category coverage gate', () => {

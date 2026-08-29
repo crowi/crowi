@@ -166,6 +166,7 @@ describe('remark-emoji resolution is per-Renderer-instance (feature-renderer-cor
     // `import`), specifically to get the exact module object every
     // other `require('jiti')` call (including `pipeline.ts`'s) already
     // shares.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const jitiModule = require('jiti') as typeof import('jiti');
     const createJitiSpy = jest.spyOn(jitiModule, 'createJiti');
 

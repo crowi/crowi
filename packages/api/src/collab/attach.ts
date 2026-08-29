@@ -250,7 +250,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   // call `start()`). The collab dist is plain CJS so the require
   // resolves cleanly under both jest and the dev runner.
   //
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   const collab = require('@crowi/collab') as typeof import('@crowi/collab');
   // RFC-0005 — the api-side presence adapter so a collab connect /
   // disconnect records a short-lived editing signal (the `✏️` badge).

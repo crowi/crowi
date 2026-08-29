@@ -13,7 +13,7 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const channel = require('./failure-taxonomy-channel') as {
   RUN_ID_ENV_VAR: string;
   SCHEMA_VERSION: number;

@@ -41,9 +41,9 @@ import { MONGO_URI } from './setup';
 
 // `crowi-environment.js` / `test-mongo-sentinel.js` are plain CJS with no
 // type declarations — required directly rather than imported.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const CrowiEnvironment = require('./crowi-environment');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { getSentinelPath } = require('./test-mongo-sentinel');
 
 const {
@@ -517,7 +517,7 @@ describe('buildWorkerEnrichmentRecord', () => {
 });
 
 describe('handleTestEvent (real CrowiEnvironment method, isolated instance)', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   const failureTaxonomyChannel = require('./failure-taxonomy-channel') as {
     RUN_ID_ENV_VAR: string;
     readChannel: (runId: string) => { records: Array<Record<string, unknown>> };

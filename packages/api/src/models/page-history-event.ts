@@ -109,6 +109,7 @@ export interface PageHistoryEventDocument extends Document {
 }
 
 // biome-ignore lint/suspicious/noEmptyInterface: Phase 1 adds no statics — materialize.ts talks to the base Model directly.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PageHistoryEventModel extends Model<PageHistoryEventDocument> {}
 
 /**
