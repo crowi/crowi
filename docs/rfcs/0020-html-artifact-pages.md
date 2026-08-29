@@ -103,13 +103,13 @@ One adjustment is required. RFC-0009's safety valve triggers on large pastes, wh
 
 ### Normalisation happens at ingest
 
-Validation and normalisation run once, on write, and the result is what gets stored. Read is a byte-for-byte serve. This keeps artifacts free of derived data and makes the served bytes auditable. It does not make an artifact immune to a later policy change: the bytes never change, but what the browser is permitted to do with them is decided by the policy in force when the page is served. See *CDN allowlist* for where that boundary sits.
+Validation and normalisation run once, on write, and the result is what gets stored. Read is a byte-for-byte serve. This keeps artifacts free of derived data and makes the served bytes auditable. The single configurable input to delivery is the web-font setting, and turning it off degrades a stored artifact's typography rather than breaking it, so a policy change cannot leave an existing artifact inoperable. See *No external references*.
 
 Ingest rejects, rather than sanitising:
 
-- external script or stylesheet references whose origin is outside the CDN allowlist
+- any reference to another origin, with the single exception of the web-font origins when that setting is enabled
 - `<script type="text/babel">`, `type="text/jsx"`, or other transpiler-dependent script types
-- bare module specifiers in `import` statements that no import map resolves
+- module specifiers of every form — bare, relative, and absolute — since no module may be loaded from outside the document
 - references to relative paths, which cannot resolve since artifacts are single documents
 - payloads exceeding the configured size limit
 
@@ -142,10 +142,10 @@ Artifact responses carry:
 ```
 Content-Security-Policy:
   default-src 'none';
-  script-src 'nonce-{n}' {cdn-allowlist};
-  style-src  'nonce-{n}' {cdn-allowlist};
+  script-src 'nonce-{n}';
+  style-src  'nonce-{n}' [https://fonts.googleapis.com];
   img-src    data: blob:;
-  font-src   {cdn-allowlist};
+  font-src   [https://fonts.gstatic.com];
   connect-src 'none';
   frame-ancestors {crowi-origin};
   form-action 'none';
@@ -156,11 +156,15 @@ X-Content-Type-Options: nosniff
 Cache-Control: private, immutable
 ```
 
+The two font origins in brackets are present only when the web-font setting is enabled; with it off, `style-src` carries the nonce alone and `font-src` is absent, leaving `default-src 'none'` to cover it. They are the only values in this policy an operator can influence.
+
 `connect-src 'none'` is the directive that matters most. With it in place, an artifact cannot call the Crowi API and cannot open a scripted connection to a third-party endpoint.
 
-It does not, on its own, make an artifact incapable of exfiltration, and an earlier draft of this section overstated what it buys. Three channels survive it. A frame may navigate *itself* — `connect-src` does not govern navigation, `navigate-to` was dropped from CSP3 and never shipped, and no `sandbox` flag restricts a frame's navigation of its own browsing context; `allow-top-navigation` withholds only the *containing* tab. A subresource fetched from an allowlisted CDN carries whatever the artifact puts in its query string, so allowlisting an origin makes that origin's operator a recipient. And a request leaving the frame carries a `Referer` naming the artifact URL, which contains the signed token — a capability, not merely a location.
+It does not, on its own, make an artifact incapable of exfiltration, and an earlier draft of this section overstated what it buys. Two channels survive it. A frame may navigate *itself* — `connect-src` does not govern navigation, `navigate-to` was dropped from CSP3 and never shipped, and no `sandbox` flag restricts a frame's navigation of its own browsing context; `allow-top-navigation` withholds only the *containing* tab. And a request leaving the frame carries a `Referer` naming the artifact URL, which contains the signed token — a capability, not merely a location.
 
-The first and third are closed: the third by `Referrer-Policy: no-referrer` above, the first by the shell policy below. The second is inherent to allowlisting an origin at all, which is why the allowlist ships empty and is populated deliberately by an administrator rather than seeded with a speculative default.
+A third channel existed while this design carried a CDN allowlist: a subresource fetched from an allowlisted origin carries whatever the artifact puts in its query string, making that origin's operator a recipient. *No external references* removes it by removing the allowlist.
+
+Both are closed: the second by `Referrer-Policy: no-referrer` above, the first by the shell policy below.
 
 **The page shell restricts where its frame may go.** Sandboxing the artifact document does not constrain the artifact's own navigation, but the *embedding* document's `frame-src` does: a nested browsing context is checked against its parent's policy on every navigation, including ones the frame initiates for itself and any redirect that follows. The Crowi page shell therefore serves `Content-Security-Policy: frame-src {artifact-origin}`. A policy naming only `frame-src` enforces only `frame-src`, so this composes with the application's existing response headers without disturbing script or style handling. Without it, an artifact closes the loop with a single assignment to `location.href`.
 
@@ -207,19 +211,19 @@ The page shell embeds the artifact with `sandbox="allow-scripts"` and nothing el
 
 The practical cost is that `localStorage` and `sessionStorage` are unavailable inside artifacts. This is not a meaningful loss for the target use case, and agent-authored artifacts are already conventionally written without browser storage.
 
-### CDN allowlist
+### No external references
 
-Artifacts may load scripts, styles and fonts from an allowlist of origins maintained by an administrator. **It ships empty.** Nothing is allowlisted until someone decides to allowlist it, because an allowlisted origin is a party that receives whatever an artifact puts in a request to it, and that is a decision an operator should make rather than inherit. `esm.sh` and `cdn.jsdelivr.net` are offered in the admin UI as one-click entries — a suggestion an operator accepts, not a default they must discover and remove.
+**An artifact may not reference anything outside itself.** No scripts, stylesheets, images or modules from another origin; no relative paths, which cannot resolve for a single document anyway. Markup, styles and behaviour are inline, and binary assets are embedded as `data:` URIs.
 
-The cost of the empty default is real but bounded: a self-contained artifact — inline markup, styles and scripts, which is what agents emit by default — needs no allowlist at all. What an empty allowlist withholds is the large charting and visualisation libraries that are impractical to inline.
+An earlier draft carried a curated CDN allowlist, on the reasoning that charting and visualisation libraries would otherwise be unreachable and the feature would lose most of its value. That reasoning does not survive contact with how these documents are actually authored. An agent cannot inline a library it does not possess, and it has no fetch step at authoring time, so "load d3 from a CDN" and "inline d3" were never two available options — the realistic authoring mode is hand-written markup, CSS, SVG and vanilla JavaScript, with or without an allowlist. The allowlist bought little and cost a great deal: a mutable policy whose narrowing breaks stored artifacts, an admin surface to maintain it, a static-analysis obligation that cannot be discharged completely (a stylesheet's own `url()` references, a URL assembled at runtime, and the transitive imports of a permitted module are all beyond what ingest can enumerate), and — most importantly — a third party receiving whatever an artifact chooses to put in a request to it.
 
-Allowlist entries are matched by origin. Ingest validation and the delivery CSP read the same configuration value, so the two agree at any single moment. That agreement is a property of one instant, not a guarantee that holds over time, and an earlier draft of this section overstated it into one.
+Removing it collapses all four. `default-src 'none'` with no exceptions means no request leaves the frame, which closes the CDN-operator exfiltration channel described above outright rather than bounding it.
 
-Two things break the stronger reading. An allowlist is mutable while stored bytes are not, so removing an origin blocks subresources in artifacts that were accepted while it was allowed. And ingest can only enumerate what is statically visible in the document — a URL assembled at runtime, a stylesheet's own `url()` references, or a module a permitted module imports in turn are all beyond it.
+**One exception: web fonts, off by default.** Typography is the one part of a document's appearance an agent cannot produce for itself — layout, colour and diagrams it can draw, but a typeface has to come from somewhere. A single boolean setting permits `fonts.googleapis.com` and `fonts.gstatic.com`, whose origins are fixed in code rather than configured; there is no list to edit, only a checkbox.
 
-**The CSP is the enforcement boundary. Ingest is a fast-fail diagnostic for the authoring agent** — it catches, at write time and with a message the agent can act on, the mistakes that are cheap to catch, so that the common case fails in the place where it can be fixed rather than silently in a viewer's browser. Its enumeration is best-effort by design, and calling it anything stronger would misplace where the security actually lives.
+Two properties make this exception safe where a general allowlist was not. **A blocked font degrades a document; a blocked script breaks it.** Turning the setting off therefore does not break stored artifacts — they fall back to a system font stack — so the mutable-policy problem that condemned the allowlist does not arise here. And a font is a passive asset: it is rendered, not executed.
 
-One operational consequence follows. Narrowing the allowlist can break artifacts that already exist, so the admin UI must say so at the point of removal rather than leaving an operator to discover it from a blank frame.
+What remains is a disclosure rather than a vulnerability: Google observes the viewer's IP address and whatever the request carries. An artifact's author chooses the requested family name, so a low-bandwidth channel exists in principle, but its recipient is Google rather than the artifact's author. **The setting defaults to off** because Crowi is deployed inside organisations that deliberately close their network, and an artifact view silently reaching a third party is not a decision to make on an operator's behalf. When it is off, ingest rejects a font reference rather than letting it fail quietly at view time.
 
 ### Execution is user-initiated
 
@@ -239,7 +243,7 @@ The shell displays a persistent indicator that the frame contains sandboxed, age
 
 **Reject rather than sanitise.** Silent stripping produces silent breakage that the authoring agent cannot diagnose.
 
-**`connect-src 'none'` is non-negotiable.** It is the directive that makes the CDN allowlist safe, and no artifact-side feature justifying its relaxation has been identified.
+**`connect-src 'none'` is non-negotiable.** No artifact-side feature justifying its relaxation has been identified.
 
 **Mode A recommended, Mode B permitted, neither default.** Absent explicit configuration, artifacts do not render. Unsandboxed same-origin delivery is never reachable by configuration.
 
@@ -247,9 +251,7 @@ The shell displays a persistent indicator that the frame contains sandboxed, age
 
 **No React or JSX.** See Non-goals.
 
-**The CDN allowlist ships empty.** Populating it speculatively would allowlist recipients no operator chose. Suggested entries are offered in the admin UI instead.
-
-**Fully-qualified CDN URLs only.** Import maps and bare specifiers are rejected at ingest. Validation stays exact, and the requirement is stated in the MCP tool description and the CLI's help text.
+**No external references, and therefore no CDN allowlist.** An agent cannot inline a library it does not have, so an allowlist never made large libraries reachable in practice; what it did add was a mutable policy, an admin surface, an undischargeable static-analysis obligation, and a third-party recipient. Web fonts are the one exception, behind a boolean that defaults to off. The requirement is stated in the MCP tool description and the CLI's help text.
 
 **Artifacts are indexed by path and title only.** Indexing raw markup would pollute results with tag noise, and extracting text implies parsing and therefore derived data. Restricting indexing to fields every search driver already handles keeps Mongo and external backends behaviourally identical.
 
@@ -265,13 +267,13 @@ The React exclusion is deliberately structured to be reversible without touching
 
 ## Open questions
 
-None outstanding. The six questions this RFC carried in draft — allowlist contents, import maps, size limit, search indexing, type conversion, and the disabled-deployment surface — are recorded under *Resolved decisions*.
+None outstanding. The six questions this RFC carried in draft — allowlist contents, import maps, size limit, search indexing, type conversion, and the disabled-deployment surface — are recorded under *Resolved decisions*. The first two were dissolved rather than answered: with no external references there is no allowlist to populate and no specifier to resolve.
 
 ## Implementation plan
 
 **Phase 1 — Storage.** Add the type discriminator to `Revision` and `Page`, maintain the denormalised copy on write, and route rendering by revision type so that historical revisions display correctly. No delivery path yet.
 
-**Phase 2 — Ingest.** Validation and normalisation, the allowlist configuration value, structured rejection errors, and the MCP tool with a description that specifies the expected output shape, with that same shape documented on the CLI's write path. At the end of this phase artifacts can be stored and their source inspected, but not executed.
+**Phase 2 — Ingest.** Validation and normalisation, the web-font setting, structured rejection errors, and the MCP tool with a description that specifies the expected output shape, with that same shape documented on the CLI's write path. At the end of this phase artifacts can be stored and their source inspected, but not executed.
 
 **Phase 3 — Delivery.** The artifact serving route, signed-URL minting and verification, response headers, and Mode A / Mode B configuration with the startup check that disables the feature when neither is configured.
 
