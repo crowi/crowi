@@ -33,7 +33,7 @@ import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup
  *     generic way as a missing/invalid one.
  */
 const apiPkgPath = require.resolve('@crowi/api/package.json', { paths: [process.cwd(), __dirname] });
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const apiWsToken = require(path.join(path.dirname(apiPkgPath), 'dist', 'util', 'ws-token.js')) as {
   createWsTokenUtil(): {
     signWsToken(claims: { userId: string; pageId: string; readonly: boolean; epoch: number }): { token: string; expiresAt: Date };

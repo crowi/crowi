@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { getSentinelPath } = require('./mongo-sentinel') as { getSentinelPath: () => string };
 
 /**

@@ -34,6 +34,7 @@ export interface UserIdentityDocument extends Document {
 }
 
 // biome-ignore lint/suspicious/noEmptyInterface: Phase 0 adds no statics/instance methods yet (see doc comment above) — the type alias exists so later phases have a stable place to add them.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface UserIdentityModel extends Model<UserIdentityDocument> {}
 
 export default (_crowi: Crowi) => {

@@ -26,6 +26,9 @@ import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
 import LRU from '../service/lru';
 
+// `package.json` sits outside `rootDir` (tsconfig scopes emit to `./src`),
+// so a static `import` would trip tsc's rootDir check under `tsc && tsc-alias`.
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const pkg = require('../../package.json');
 
 type Models = { [K in keyof typeof models]: ReturnType<(typeof models)[K]> };

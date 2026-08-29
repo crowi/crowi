@@ -103,6 +103,7 @@ export interface PageHistoryOperationDocument extends Document {
 }
 
 // biome-ignore lint/suspicious/noEmptyInterface: Phase 1 adds no statics — Phase 2's command services own the create/lease/resolve helpers.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PageHistoryOperationModel extends Model<PageHistoryOperationDocument> {}
 
 /**

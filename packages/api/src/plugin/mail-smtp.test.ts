@@ -47,6 +47,9 @@ describe('@crowi/plugin-mail-smtp', () => {
     sendMailSpy.mockClear();
     createdTransports = [];
     sharedPluginState.reset();
+    // `jest.resetModules()` above means a static import would keep
+    // pointing at a stale pre-reset module — re-require for a fresh one.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     plugin = require('@crowi/plugin-mail-smtp').default;
     registered = null;
   });

@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { createServer as httpCreateServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { version as pkgVersion } from '../../package.json';
 import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 import { crowi } from 'src/test/setup';
 import { redisReconnectForever } from 'src/util/redis-opts';
@@ -46,7 +47,7 @@ describe('Test for Crowi application context', () => {
     });
 
     test('initialize crowi context', () => {
-      expect(crowi.version).toBe(require('../../package.json').version);
+      expect(crowi.version).toBe(pkgVersion);
       expect(crowi.isInitialized()).toBe(true);
       expect(typeof crowi.env).toBe('object');
     });

@@ -12,9 +12,9 @@
  */
 import { randomUUID } from 'node:crypto';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const FailureTaxonomyReporter = require('./failure-taxonomy-reporter');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const channel = require('./failure-taxonomy-channel') as {
   RUN_ID_ENV_VAR: string;
   readChannel: (runId: string) => { records: Array<Record<string, unknown>> };

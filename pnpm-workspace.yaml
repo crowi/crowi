@@ -9,14 +9,16 @@ packages:
 # react / mongoose / express / @aws-sdk/* etc.) stay out of the catalog —
 # for those, drift per package is intentional.
 catalog:
-  typescript: ^5.8.3
+  typescript: ^6.0.3
   tsup: ^8.3.5
   "@types/node": ^24
   jest: ^29.7.0
   "@types/jest": ^29.5.14
   jest-environment-node: ^29.7.0
-  ts-jest: ^29.3.4
+  ts-jest: ^29.4.12
   zod: ^4.4.3
+  "@typescript-eslint/eslint-plugin": ^8.68.0
+  "@typescript-eslint/parser": ^8.68.0
   "@modelcontextprotocol/sdk": ^1.29.0
   "@hono/mcp": ^0.3.0
   hono-rate-limiter: ^0.5.3

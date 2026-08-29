@@ -28,9 +28,9 @@ function freshConfigModule(): { FreshConfigService: typeof ConfigService; create
   let FreshConfigService!: typeof ConfigService;
   let createClientMock!: jest.Mock;
   jest.isolateModules(() => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     FreshConfigService = require('./config').default;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     createClientMock = require('redis').createClient;
   });
   return { FreshConfigService, createClientMock };

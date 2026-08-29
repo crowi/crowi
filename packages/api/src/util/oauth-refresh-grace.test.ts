@@ -20,6 +20,7 @@ function loadWithEnv(value: string | undefined): Module {
   } else {
     process.env[ENV_VAR] = value;
   }
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   return require('./oauth-refresh-grace') as Module;
 }
 
