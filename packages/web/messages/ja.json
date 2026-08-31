@@ -454,6 +454,8 @@
   "common.access_denied_description": "このページを表示する権限がありません。",
   "common.access_denied_title": "アクセスが拒否されました",
   "common.cancel": "キャンセル",
+  "common.copy_failed": "コピーできませんでした",
+  "common.copy_unavailable": "安全な接続 (HTTPS) が必要です",
   "common.delete": "削除",
   "common.edit": "編集",
   "common.error": "エラー",

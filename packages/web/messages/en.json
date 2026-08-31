@@ -454,6 +454,8 @@
   "common.access_denied_description": "You do not have permission to view this page.",
   "common.access_denied_title": "Access Denied",
   "common.cancel": "Cancel",
+  "common.copy_failed": "Couldn't copy",
+  "common.copy_unavailable": "A secure connection (HTTPS) is required",
   "common.delete": "Delete",
   "common.edit": "Edit",
   "common.error": "Error",

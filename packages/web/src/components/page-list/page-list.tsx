@@ -275,7 +275,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   // the centered column.
   if (portalPage) {
     return (
-      <PageTocColumns toc={portalToc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton page={portalPage} />}>
+      <PageTocColumns toc={portalToc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton key={portalPage._id} page={portalPage} />}>
         {body}
       </PageTocColumns>
     );

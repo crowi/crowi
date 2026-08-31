@@ -4,9 +4,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CopyPageMarkdownButton } from './copy-page-markdown-button';
 
-function makePage(body: string | undefined): PageWithRevision {
+function makePage(body: string | undefined, id = 'page-1'): PageWithRevision {
   return {
-    _id: 'page-1',
+    _id: id,
     path: '/docs/guide',
     revision: body === undefined ? undefined : { _id: 'rev-1', path: '/docs/guide', body, format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
     creator: null,
@@ -22,6 +22,9 @@ function makePage(body: string | undefined): PageWithRevision {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // jsdom has no Clipboard API by default — undo whatever a test stubbed in
+  // so "no clipboard" (the insecure-origin case) doesn't leak between tests.
+  Object.assign(navigator, { clipboard: undefined });
 });
 
 describe('CopyPageMarkdownButton', () => {
@@ -46,5 +49,45 @@ describe('CopyPageMarkdownButton', () => {
   it('renders nothing when the page has no revision at all', () => {
     const { container } = render(<CopyPageMarkdownButton page={makePage(undefined)} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders normally on a non-secure origin (no navigator.clipboard) instead of hiding', () => {
+    render(<CopyPageMarkdownButton page={makePage('# Title\n\nbody text')} />);
+    expect(screen.getByRole('button', { name: m['page.action_copy_markdown']() })).toBeInTheDocument();
+  });
+
+  it('shows an HTTPS-required message on the button when navigator.clipboard is missing', async () => {
+    render(<CopyPageMarkdownButton page={makePage('# Title\n\nbody text')} />);
+    fireEvent.click(screen.getByRole('button', { name: m['page.action_copy_markdown']() }));
+
+    expect(await screen.findByRole('button', { name: m['common.copy_unavailable']() })).toBeInTheDocument();
+  });
+
+  it('shows a generic failure message on the button when writeText rejects', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyPageMarkdownButton page={makePage('# Title\n\nbody text')} />);
+    fireEvent.click(screen.getByRole('button', { name: m['page.action_copy_markdown']() }));
+
+    expect(await screen.findByRole('button', { name: m['common.copy_failed']() })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: m['page.markdown_copied']() })).not.toBeInTheDocument();
+  });
+
+  // A page-identity `key` change (as `page-view.tsx` / `page-list.tsx` pass)
+  // remounts the button, so a "Copied" state from the previous page never
+  // survives onto a different one.
+  it('resets the copied state when the page identifier (key) changes', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const { rerender } = render(<CopyPageMarkdownButton key="page-1" page={makePage('body one', 'page-1')} />);
+    fireEvent.click(screen.getByRole('button', { name: m['page.action_copy_markdown']() }));
+    expect(await screen.findByRole('button', { name: m['page.markdown_copied']() })).toBeInTheDocument();
+
+    rerender(<CopyPageMarkdownButton key="page-2" page={makePage('body two', 'page-2')} />);
+
+    expect(screen.getByRole('button', { name: m['page.action_copy_markdown']() })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: m['page.markdown_copied']() })).not.toBeInTheDocument();
   });
 });
