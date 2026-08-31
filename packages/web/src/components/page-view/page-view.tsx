@@ -733,7 +733,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // this `if (page)` block — it can never actually fall back here.
     const renderedPage = displayedPage ?? page;
     return (
-      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton page={renderedPage} />}>
+      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton key={renderedPage._id} page={renderedPage} />}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
         <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}

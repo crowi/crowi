@@ -3,13 +3,13 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Check, Copy, Link2 } from 'lucide-react';
+import { AlertCircle, Check, Copy, Link2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { buildPageShareUrl } from '@/lib/build-page-share-url';
 import { isLinkOnlyGrant } from '@/lib/page-grant';
-import { useCopyFeedback } from '@/lib/use-copy-feedback';
+import { copyFailureMessage, useCopyFeedback } from '@/lib/use-copy-feedback';
 
 interface ShowRestrictedShareBannerOptions {
   isStaleRevision: boolean;
@@ -47,7 +47,9 @@ interface RestrictedShareBannerProps {
  */
 export function RestrictedShareBanner({ pageId }: RestrictedShareBannerProps) {
   const shareUrl = buildPageShareUrl(pageId);
-  const { copied, copy } = useCopyFeedback();
+  const { copied, failed, copy } = useCopyFeedback();
+
+  const label = copied ? m['page.share.copied']() : (copyFailureMessage(failed) ?? m['page.share.copy']());
 
   return (
     <Alert>
@@ -57,15 +59,14 @@ export function RestrictedShareBanner({ pageId }: RestrictedShareBannerProps) {
         <p>{m['page.share.restricted_banner_body']()}</p>
         <div className="flex w-full items-center gap-2">
           <Input value={shareUrl} readOnly className="font-mono text-xs h-8 bg-muted/40" onFocus={(e) => e.currentTarget.select()} />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            onClick={() => copy(shareUrl)}
-            aria-label={copied ? m['page.share.copied']() : m['page.share.copy']()}
-            title={copied ? m['page.share.copied']() : m['page.share.copy']()}
-          >
-            {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+          <Button type="button" variant="outline" size="icon-sm" onClick={() => copy(shareUrl)} aria-label={label} title={label}>
+            {copied ? (
+              <Check className="h-4 w-4 text-emerald-600" />
+            ) : failed ? (
+              <AlertCircle className="h-4 w-4 text-destructive" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </AlertDescription>
