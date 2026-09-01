@@ -290,6 +290,25 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
     });
   });
 
+  describe('AC-3: the fingerprint comparison is unaffected by the primary-read fix', () => {
+    test('resolvePageHistoryOperation keeps returning fingerprint-mismatch for a different request under the same key', async () => {
+      const page = await createReadyPage('/operation/ac3-fingerprint');
+      const input = createInput(page._id, '/operation/ac3-fingerprint', '/operation/ac3-fingerprint-moved');
+      await createPageHistoryOperation(crowi, input);
+
+      const resolution = await resolvePageHistoryOperation(crowi, input, 'a-completely-different-fingerprint');
+
+      expect(resolution.kind).toBe('fingerprint-mismatch');
+      expect(resolution.kind === 'fingerprint-mismatch' && resolution.operation.operationId).toBe(input.operationId);
+
+      // A repeated call (simulating a retry) must not eventually see a
+      // stale/miss result and let a different request slip through under
+      // the same key — the comparison is stateless, not a one-shot gate.
+      const again = await resolvePageHistoryOperation(crowi, input, 'a-completely-different-fingerprint');
+      expect(again.kind).toBe('fingerprint-mismatch');
+    });
+  });
+
   describe('AC-25/AC-34: what the sweep refuses to touch', () => {
     test('a page-less operation is reported and left unsettled when no inspector claims it', async () => {
       const input: CreateOperationInput = {

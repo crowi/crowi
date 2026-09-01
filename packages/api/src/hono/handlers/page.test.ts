@@ -924,23 +924,37 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
     it('rejects a reused subtree key when the request fingerprint changes', async () => {
       const headers = authHeaders(accessToken);
       const rootPath = `${PATH_PREFIX}tree-idem-conflict`;
+      const pathA = `${PATH_PREFIX}tree-idem-conflict-a`;
+      const pathB = `${PATH_PREFIX}tree-idem-conflict-b`;
       const rootId = await createPage(headers, rootPath);
       const key = idempotencyKey();
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
 
       const first = await request(app)
         .post('/api/pages/rename')
         .set(headers)
         .set('Idempotency-Key', key)
-        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-conflict-a`, include_descendants: true });
+        .send({ page_id: rootId, new_path: pathA, include_descendants: true });
+      const operationsAfterFirst = await PageHistoryOperation.countDocuments({ command: 'subtree_rename', idempotencyKey: key });
+      const eventsAfterFirst = await PageHistoryEvent.countDocuments({ page: rootId, kind: 'page_renamed' });
+
       const second = await request(app)
         .post('/api/pages/rename')
         .set(headers)
         .set('Idempotency-Key', key)
-        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-conflict-b`, include_descendants: true });
+        .send({ page_id: rootId, new_path: pathB, include_descendants: true });
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(409);
       expect(second.body.error.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+      // The rejection happens before fan-out: nothing about the root's
+      // already-accepted first request — Page, operation row, or grouped
+      // event — is touched by the conflicting second request.
+      expect(await Page.findOne({ path: pathA, redirectTo: null })).not.toBeNull();
+      expect(await Page.findOne({ path: pathB })).toBeNull();
+      expect(await PageHistoryOperation.countDocuments({ command: 'subtree_rename', idempotencyKey: key })).toBe(operationsAfterFirst);
+      expect(await PageHistoryEvent.countDocuments({ page: rootId, kind: 'page_renamed' })).toBe(eventsAfterFirst);
     });
 
     it('AC-8: returns partial subtree failures as 400 PAGE_RENAME_TREE_FAILED', async () => {

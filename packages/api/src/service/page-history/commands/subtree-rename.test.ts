@@ -421,6 +421,212 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean()).result.status).toBe('succeeded');
   });
 
+  test('AC-1: a stale member-operation miss for the root member does not derive a moved-to-moved path pair', async () => {
+    const root = await createReadyPage('/subtree/root-race');
+    const destination = '/subtree/root-race-moved';
+    const key = nextKey();
+    await PageHistoryOperation.create({
+      actor: user._id,
+      command: 'subtree_rename',
+      idempotencyKey: key,
+      operationId: `root-${key}`,
+      requestFingerprint: `fingerprint-${String(root._id)}-${destination}`,
+      memberPageIds: [root._id],
+      groupOperationId: `group-${key}`,
+    });
+    const memberKey = deriveMemberKey(key, root._id);
+
+    let matchingCalls = 0;
+    let bPaused: (() => void) | undefined;
+    const bPausedPromise = new Promise<void>((resolve) => {
+      bPaused = resolve;
+    });
+    let releaseB: (() => void) | undefined;
+    const bGate = new Promise<void>((resolve) => {
+      releaseB = resolve;
+    });
+    const findOne = PageHistoryOperation.findOne.bind(PageHistoryOperation);
+    const findOneSpy = jest.spyOn(PageHistoryOperation, 'findOne').mockImplementation((filter, projection, options) => {
+      const query = findOne(filter, projection, options);
+      const f = filter as { idempotencyKey?: string };
+      if (f?.idempotencyKey === memberKey) {
+        matchingCalls += 1;
+        // Call #1 is `existingRootMember`'s own pre-read (it shares this
+        // filter because the root is itself a member); call #2 is the
+        // fan-out loop's member-operation read — the exact site under test.
+        // Pausing right after it resolves null reproduces "delivery B saw a
+        // miss just before delivery A created the row" deterministically.
+        if (matchingCalls === 2) {
+          const exec = query.exec.bind(query);
+          query.exec = (async () => {
+            const value = await exec();
+            bPaused?.();
+            await bGate;
+            return value;
+          }) as typeof query.exec;
+        }
+      }
+      return query;
+    });
+
+    let deliveryBOutcome: Awaited<ReturnType<typeof run>>;
+    try {
+      const deliveryBPromise = run(root, destination, key);
+      await bPausedPromise;
+      const deliveryAOutcome = await run(root, destination, key);
+      releaseB?.();
+      deliveryBOutcome = await deliveryBPromise;
+      expect(deliveryAOutcome.status === 'completed' && deliveryAOutcome.failures).toEqual([]);
+    } finally {
+      findOneSpy.mockRestore();
+    }
+
+    expect(deliveryBOutcome.status === 'completed' && deliveryBOutcome.failures).toEqual([]);
+    expect(await Page.findById(root._id).lean()).toMatchObject({ path: destination });
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: root._id }).lean()).result?.status).toBe('succeeded');
+  });
+
+  test('AC-2: a stale member-operation miss for a child member does not derive a moved-to-moved path pair', async () => {
+    const root = await createReadyPage('/subtree/child-race');
+    const child = await createReadyPage('/subtree/child-race/child');
+    const destination = '/subtree/child-race-moved';
+    const key = nextKey();
+    await PageHistoryOperation.create({
+      actor: user._id,
+      command: 'subtree_rename',
+      idempotencyKey: key,
+      operationId: `root-${key}`,
+      requestFingerprint: `fingerprint-${String(root._id)}-${destination}`,
+      memberPageIds: [root._id, child._id],
+      groupOperationId: `group-${key}`,
+    });
+    // Seal the root member up front so its own (unrelated) fan-out race
+    // cannot add noise — this test isolates the child member's race only.
+    await PageHistoryOperation.create({
+      actor: user._id,
+      command: 'subtree_rename_member',
+      idempotencyKey: deriveMemberKey(key, root._id),
+      operationId: `root-member-${key}`,
+      requestFingerprint: createMemberFingerprint(root._id, root.path, destination),
+      page: root._id,
+      fromPath: root.path,
+      toPath: destination,
+      fromStatus: root.status,
+      fromStatusPresent: true,
+      toStatus: root.status,
+      createRedirect: false,
+      source: 'web',
+      result: { status: 'succeeded', completedAt: new Date() },
+    });
+    await Page.updateOne({ _id: root._id }, { $set: { path: destination } });
+    const childKey = deriveMemberKey(key, child._id);
+
+    let matchingCalls = 0;
+    let bPaused: (() => void) | undefined;
+    const bPausedPromise = new Promise<void>((resolve) => {
+      bPaused = resolve;
+    });
+    let releaseB: (() => void) | undefined;
+    const bGate = new Promise<void>((resolve) => {
+      releaseB = resolve;
+    });
+    const findOne = PageHistoryOperation.findOne.bind(PageHistoryOperation);
+    const findOneSpy = jest.spyOn(PageHistoryOperation, 'findOne').mockImplementation((filter, projection, options) => {
+      const query = findOne(filter, projection, options);
+      const f = filter as { idempotencyKey?: string };
+      if (f?.idempotencyKey === childKey) {
+        matchingCalls += 1;
+        // No `existingRootMember` collision for a non-root member, so the
+        // fan-out loop's own read is call #1 here.
+        if (matchingCalls === 1) {
+          const exec = query.exec.bind(query);
+          query.exec = (async () => {
+            const value = await exec();
+            bPaused?.();
+            await bGate;
+            return value;
+          }) as typeof query.exec;
+        }
+      }
+      return query;
+    });
+
+    let deliveryBOutcome: Awaited<ReturnType<typeof run>>;
+    try {
+      const deliveryBPromise = run(root, destination, key);
+      await bPausedPromise;
+      const deliveryAOutcome = await run(root, destination, key);
+      releaseB?.();
+      deliveryBOutcome = await deliveryBPromise;
+      expect(deliveryAOutcome.status === 'completed' && deliveryAOutcome.failures).toEqual([]);
+    } finally {
+      findOneSpy.mockRestore();
+    }
+
+    expect(deliveryBOutcome.status === 'completed' && deliveryBOutcome.failures).toEqual([]);
+    expect(await Page.findById(child._id).lean()).toMatchObject({ path: `${destination}/child` });
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: child._id }).lean()).result?.status).toBe('succeeded');
+  });
+
+  test('AC-4: the member fan-out, root-member, and resolver lookups all read from primary', async () => {
+    const root = await createReadyPage('/subtree/primary-read');
+    await createReadyPage('/subtree/primary-read/child');
+    const key = nextKey();
+
+    let matchingFindOneCalls = 0;
+    const readModes: unknown[] = [];
+    const findOne = PageHistoryOperation.findOne.bind(PageHistoryOperation);
+    const findOneSpy = jest.spyOn(PageHistoryOperation, 'findOne').mockImplementation((filter, projection, options) => {
+      const query = findOne(filter, projection, options);
+      const f = filter as { command?: string };
+      if (f?.command === 'subtree_rename_member') {
+        matchingFindOneCalls += 1;
+        const originalRead = query.read.bind(query);
+        query.read = ((mode: string, tags?: unknown[]) => {
+          readModes.push(mode);
+          return originalRead(mode, tags);
+        }) as typeof query.read;
+      }
+      return query;
+    });
+
+    let outcome: Awaited<ReturnType<typeof run>>;
+    try {
+      outcome = await run(root, '/subtree/primary-read-moved', key);
+    } finally {
+      findOneSpy.mockRestore();
+    }
+
+    expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+    // 1 `existingRootMember` pre-read + (fan-out peek + resolver read) per
+    // member (root, child) = 1 + 2*2.
+    expect(matchingFindOneCalls).toBe(5);
+    expect(readModes).toEqual(new Array(5).fill('primary'));
+  });
+
+  test('AC-5: a resend after the child page already sits at its destination resumes from the durable member row', async () => {
+    const root = await createReadyPage('/subtree/durable-resume');
+    const child = await createReadyPage('/subtree/durable-resume/child');
+    const destination = '/subtree/durable-resume-moved';
+    const key = nextKey();
+    const { childDestination, childMember } = await createSealedSubtreeState(root, child, destination, key);
+
+    // The child's transition was entered (Page moved, transition held) but
+    // never finished — a resend with the same key must resume from the
+    // durable row's fromPath/toPath rather than re-deriving them from the
+    // already-moved Page.
+    await Page.updateOne(
+      { _id: child._id },
+      { $set: { path: childDestination, status: STATUS_RENAMING, historyTransition: { operationId: childMember.operationId, kind: 'rename' } } },
+    );
+
+    const outcome = await run(root, destination, key);
+
+    expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+    expect(await Page.findById(child._id).lean()).toMatchObject({ path: childDestination, status: STATUS_PUBLISHED, historyTransition: null });
+    expect((await PageHistoryOperation.findById(childMember._id).lean()).result?.status).toBe('succeeded');
+  });
+
   test('a losing exit-CAS delivery settles its member from the grouped event instead of reporting failure', async () => {
     const root = await createReadyPage('/subtree/durable-authority');
     const child = await createReadyPage('/subtree/durable-authority/child');

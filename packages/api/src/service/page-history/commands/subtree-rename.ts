@@ -272,6 +272,10 @@ export async function subtreeRenameCommand(crowi: Crowi, input: SubtreeRenameInp
       : ((await crowi
           .model('PageHistoryOperation')
           .findOne({ actor: input.actor, command: 'subtree_rename_member', idempotencyKey: deriveMemberKey(input.idempotencyKey, input.pageId) })
+          // Primary: this feeds the same from/to fallback chain as the member
+          // fan-out's own lookup below, so a lagging secondary read here would
+          // be just as wrong.
+          .read('primary')
           .exec()) as PageHistoryOperationDocument | null);
   const oldRoot = existingRootMember?.fromPath ?? input.fromPath ?? input.page?.path;
   if (oldRoot == null) throw new Error('The subtree root path is unavailable before its first member record was created.');
@@ -283,8 +287,14 @@ export async function subtreeRenameCommand(crowi: Crowi, input: SubtreeRenameInp
     const key = { actor: input.actor, command: 'subtree_rename_member' as const, idempotencyKey: deriveMemberKey(input.idempotencyKey, pageId) };
     let fromPath = oldRoot;
     try {
-      const existing = (await crowi.model('PageHistoryOperation').findOne(key).exec()) as PageHistoryOperationDocument | null;
+      // Page before operation: whichever side of a concurrent enter CAS this
+      // read lands on, it is either still pre-move (used as-is below) or the
+      // operation the CAS's own creator already wrote wins instead — either
+      // way this never derives a moved-to-moved path pair from a stale peek.
       const page = (await Page.findById(pageId).exec()) as PageDocument | null;
+      // Primary: this row feeds the fingerprint computed below, so a lagging
+      // secondary read could still hand back a miss for a row just written.
+      const existing = (await crowi.model('PageHistoryOperation').findOne(key).read('primary').exec()) as PageHistoryOperationDocument | null;
       fromPath = existing?.fromPath ?? page?.path ?? oldRoot;
       const isRoot = input.pageId != null && String(pageId) === String(input.pageId);
       const derivedToPath = isRoot ? newRoot : deriveDestinationPath(fromPath, oldBase, newBase);
