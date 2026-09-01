@@ -218,12 +218,14 @@ module.exports = {
   // instrument the `server` project's tests (feature-flake-failure-taxonomy
   // AC-1) — see `failure-taxonomy-reporter.js`'s doc comment for why it must
   // be the parent-process reporter, not a worker-side hook, to reliably
-  // catch a worker crash (e.g. SIGSEGV). `'default'` keeps the normal
-  // on-screen jest output; this is purely additive. `onTestResult` also
+  // catch a worker crash (e.g. SIGSEGV). `failures-only-reporter.js` owns
+  // the per-file output and `'summary'` the run totals — `'default'` is
+  // deliberately absent, since it prints a line per PASSING file too.
+  // `onTestResult` also
   // sees `common` project results (harmless — a non-pass `common` file just
   // gets recorded into the same taxonomy channel too, which AC-1's "api
   // jest の非 pass file" wording does not exclude).
-  reporters: ['default', './src/test/failure-taxonomy-reporter.js'],
+  reporters: ['./src/test/failures-only-reporter.js', 'summary', './src/test/failure-taxonomy-reporter.js'],
 
   // Automatically reset mock state between every test
   // resetMocks: false,

@@ -44,7 +44,7 @@
     "migrate": "node scripts/migrate.mjs",
     "build": "turbo run build",
     "build:images": "node scripts/build-images.mjs",
-    "test": "turbo run test --concurrency=3 --filter=!@crowi/plugin-renderer-mermaid; s1=$?; turbo run test --concurrency=1 --filter=@crowi/plugin-renderer-mermaid; s2=$?; exit $(( s1 || s2 ))",
+    "test": "turbo run test --output-logs=errors-only --concurrency=3 --filter=!@crowi/plugin-renderer-mermaid; s1=$?; turbo run test --output-logs=errors-only --concurrency=1 --filter=@crowi/plugin-renderer-mermaid; s2=$?; exit $(( s1 || s2 ))",
     "test:scripts": "node --test scripts/*.test.mjs packages/*/scripts/*.test.mjs .claude/scripts/*.test.mjs .claude/skills/*/tests/*.test.mjs",
     "test:scripts:sh": "for f in .claude/scripts/orchestrate-watch.test.sh .claude/scripts/task-state.test.sh .claude/skills/crowi-feature/tests/pipeline-contract-v2-review.test.sh .claude/skills/_shared/tests/validate-implementation-spec.test.sh .claude/skills/_shared/tests/e2e-gate.test.sh; do echo \"--- $f ---\"; bash \"$f\" || exit 1; done",
     "test:flake": "node scripts/test-flake-report.mjs",
