@@ -87,7 +87,10 @@ export async function resolvePageHistoryOperation(crowi: Crowi, key: OperationKe
     actor: key.actor,
     command: key.command,
     idempotencyKey: key.idempotencyKey,
-  }).exec()) as PageHistoryOperationDocument | null;
+  })
+    // Primary: a lagging secondary read of a just-written row would surface as a false miss/mismatch instead of the in-flight record it is.
+    .read('primary')
+    .exec()) as PageHistoryOperationDocument | null;
 
   return existing == null ? { kind: 'miss' } : resolveExisting(existing, requestFingerprint);
 }
