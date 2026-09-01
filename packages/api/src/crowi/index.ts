@@ -1,6 +1,5 @@
 import { createAdaptorServer } from '@hono/node-server';
 import type { Http2Bindings, HttpBindings } from '@hono/node-server';
-import Tokens from 'csrf';
 import Debug from 'debug';
 import http from 'http';
 import mongoose from 'mongoose';
@@ -23,10 +22,13 @@ import { MailService } from 'src/service/mail';
 import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
 import { validateEnv } from 'src/util/env-schema';
-import { buildRedisOpts } from 'src/util/redis-opts';
+import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
 import LRU from '../service/lru';
 
+// `package.json` sits outside `rootDir` (tsconfig scopes emit to `./src`),
+// so a static `import` would trip tsc's rootDir check under `tsc && tsc-alias`.
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const pkg = require('../../package.json');
 
 type Models = { [K in keyof typeof models]: ReturnType<(typeof models)[K]> };
@@ -71,8 +73,6 @@ class Crowi {
   mailer: MailService | null = null;
 
   lru: any = {};
-
-  tokens: Tokens;
 
   // FIXME: {} をアサインしないで済む方法を捜す
   models: Models = {} as any as Models;
@@ -242,8 +242,6 @@ class Crowi {
     this.cacheDir = path.join(this.tmpDir, 'cache');
 
     this.setupEvents();
-
-    this.tokens = new Tokens();
   }
 
   async init() {
@@ -674,7 +672,7 @@ class Crowi {
 
   async setupRedisClient() {
     if (this.redisOpts) {
-      // Bound ONLY the initial (boot) connection. node-redis's default
+      // Bound ONLY the initial (boot) connection. The client's default
       // reconnectStrategy always returns a retry delay, so `connect()`
       // never rejects — a configured-but-unreachable Redis retried forever
       // and the degrade catch below was unreachable (boot hung). Once the
@@ -694,7 +692,7 @@ class Crowi {
             if (!established && retries + 1 >= BOOT_CONNECT_MAX_RETRIES) {
               return new Error(`Redis unreachable after ${retries + 1} boot connection attempts`);
             }
-            return Math.min(retries * 50, 500); // node-redis's own default backoff
+            return redisReconnectForever(retries);
           },
         },
       });
@@ -795,10 +793,6 @@ class Crowi {
 
   setupLRU() {
     this.lru = new LRU(this);
-  }
-
-  getTokens() {
-    return this.tokens;
   }
 
   start = async (): Promise<http.Server> => {

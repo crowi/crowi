@@ -40,7 +40,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 
 import { __test__ } from './setup';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { getSentinelPath } = require('./mongo-sentinel') as { getSentinelPath: () => string };
 
 const { buildPerFileUri, resolvedExternalMongoUri, dropPerFileDatabase, seedRawDocument, listDatabaseNames } = __test__;

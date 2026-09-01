@@ -88,6 +88,9 @@ let constructedBuckets: FakeBucketHandle[] = [];
 // from the factory's own top-level body hits the TDZ; referencing plain
 // `let` arrays from inside a lazily-invoked constructor does not.
 jest.mock('@google-cloud/storage', () => {
+  // A `jest.mock()` factory body cannot reference an outer-scope `import`
+  // binding (Jest's out-of-scope check), so this stays a require().
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Readable, Writable } = require('node:stream');
 
   // Drives the same event sequence SDK 7.21.0's `File#createReadStream()`

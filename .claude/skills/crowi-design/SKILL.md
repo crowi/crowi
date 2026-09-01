@@ -111,6 +111,19 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
                       decisions: { approach, answers }, maxReviewAttempts: 2,
                       critical: <bool> } })   // critical フラグの基準は上記
    ```
+   **`decisions` の組み立て方** — ここの作り方が、Workflow B が何ラウンドかかるかをほぼ決める:
+   - **先頭は「これは何であるか」**。作るものの positive な形を 1 項目目に置く。禁止から始めない。
+   - **禁止事項を単調に増やさない。** 差し戻しのたびに禁止を足していくと、writer の失敗は「勝手に作る」から
+     「作らない・許さない」へ反転する (実例: 禁止 19 項目・positive 記述ゼロの指示で、writer が対象機能の
+     本体そのものを拒否する spec を書いた)。**同じ禁止を 2 回書きたくなったら、それが含意する positive な
+     1 文に置き換える。**
+   - **brief を節番号で名指しする。** 機構は brief に既に書かれていることが多い。再導出させず
+     「brief §53 のとおり実装せよ」と書く。指示は writer にとって brief より上位の権威なので、
+     長い禁止リストは brief を実質的に押し流す。
+   - **実コードで裏を取った事実は「確認済み・再調査不要」と明示して渡す。** 前ラウンドの調査成果 (行番号つき)
+     を捨てさせない。
+   - 項目数が 15 を超えたら、それ自体が「leaf が大きすぎる」か「禁止で positive を代用している」のサイン。
+
    spec の writer は、ゲートで選ばれた案だけを対象にコードを再度ピンポイントで読み、
    `.claude/skills/_shared/spec-contract.md` の path/symbol 単位の実装マップ、処理フロー、
    契約・不変条件、AC→test 対応、実装順序まで確定する。production code 全文は書かない。

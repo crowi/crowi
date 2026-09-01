@@ -4,7 +4,7 @@
   "private": true,
   "description": "Playwright end-to-end tests for Crowi",
   "scripts": {
-    "build:runtime": "pnpm --workspace-root turbo run build --filter=@crowi/api --filter=@crowi/api-contract --filter=@crowi/collab --filter=@crowi/runner --filter=@crowi/plugin-storage-local --filter=@crowi/plugin-search-mongo --filter=@crowi/plugin-mail-smtp --filter=@crowi/plugin-renderer-katex --filter=@crowi/plugin-renderer-plantuml --filter=@crowi/plugin-renderer-mermaid",
+    "build:runtime": "pnpm --workspace-root turbo run build --filter=@crowi/api --filter=@crowi/api-contract --filter=@crowi/collab --filter=@crowi/runner --filter=@crowi/plugin-storage-local --filter=@crowi/plugin-search-mongo --filter=@crowi/plugin-mail-smtp --filter=@crowi/plugin-renderer-katex --filter=@crowi/plugin-renderer-mermaid",
     "e2e": "pnpm build:runtime && tsx src/global-setup.ts && playwright test",
     "e2e:headed": "pnpm build:runtime && tsx src/global-setup.ts && playwright test --headed",
     "e2e:debug": "pnpm build:runtime && tsx src/global-setup.ts && playwright test --debug",
@@ -17,9 +17,9 @@
     "@crowi/tsconfig": "workspace:*",
     "@playwright/test": "^1.57.0",
     "@types/node": "catalog:",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
+    "eslint": "catalog:",
     "mongodb": "^6.20.0",
     "tsx": "^4.19.2",
     "typescript": "catalog:"

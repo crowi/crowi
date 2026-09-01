@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { crowi } from 'src/test/setup';
 
 describe('User', () => {
@@ -205,6 +208,103 @@ describe('User', () => {
     });
   });
 
+  describe('Secure temp password generation (feature-secure-temp-password)', () => {
+    const TEMP_PASSWORD_CHARSET = /^[A-Za-z0-9!=_-]+$/;
+
+    async function createActiveUserWithoutPassword(prefix: string) {
+      const user = new User();
+      user.email = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+      user.status = User.STATUS_ACTIVE;
+      await user.save();
+      return user;
+    }
+
+    type InvitationResult = { email: string; password: string | null; user: unknown };
+
+    async function inviteOne(email: string): Promise<string | null> {
+      const list = await new Promise<InvitationResult[]>((resolve, reject) => {
+        User.createUsersByInvitation([email], false, (err: Error | null, result: InvitationResult[]) => {
+          if (err) return reject(err);
+          resolve(result);
+        });
+      });
+      return list.find((item) => item.email === email)?.password ?? null;
+    }
+
+    test('resetPasswordByRandomString: password is >= 12 chars, within the character set, and verifies', async () => {
+      const user = await createActiveUserWithoutPassword('temp-pw-reset');
+
+      const { newPassword } = await User.resetPasswordByRandomString(user._id);
+      expect(newPassword.length).toBeGreaterThanOrEqual(12);
+      expect(TEMP_PASSWORD_CHARSET.test(newPassword)).toBe(true);
+
+      const reloaded = await User.findById(user._id).select('+password');
+      expect(reloaded.isPasswordValid(newPassword)).toBe(true);
+    });
+
+    test('issuePasswordIfUnset: password is >= 12 chars and within the character set', async () => {
+      const user = await createActiveUserWithoutPassword('temp-pw-issue');
+
+      const { newPassword } = await User.issuePasswordIfUnset(user._id);
+      expect(newPassword.length).toBeGreaterThanOrEqual(12);
+      expect(TEMP_PASSWORD_CHARSET.test(newPassword)).toBe(true);
+    });
+
+    test('createUsersByInvitation: invited password is >= 12 chars and within the character set', async () => {
+      const email = `temp-pw-invite-${Date.now().toString(36)}@example.com`;
+
+      const password = await inviteOne(email);
+      expect(password).toBeTruthy();
+      expect((password as string).length).toBeGreaterThanOrEqual(12);
+      expect(TEMP_PASSWORD_CHARSET.test(password as string)).toBe(true);
+
+      await User.deleteOne({ email });
+    });
+
+    test('consecutive generations do not repeat', async () => {
+      const user = await createActiveUserWithoutPassword('temp-pw-uniq');
+
+      const first = await User.resetPasswordByRandomString(user._id);
+      const second = await User.resetPasswordByRandomString(user._id);
+      expect(first.newPassword).not.toBe(second.newPassword);
+    });
+
+    test('generation never calls Math.random, across all 3 credential-issuing paths', async () => {
+      const resetUser = await createActiveUserWithoutPassword('temp-pw-mathrandom-reset');
+      const issueUser = await createActiveUserWithoutPassword('temp-pw-mathrandom-issue');
+      const inviteEmail = `temp-pw-mathrandom-invite-${Date.now().toString(36)}@example.com`;
+
+      const randomSpy = jest.spyOn(Math, 'random');
+      randomSpy.mockClear();
+      try {
+        const { newPassword: resetPassword } = await User.resetPasswordByRandomString(resetUser._id);
+        const { newPassword: issuePassword } = await User.issuePasswordIfUnset(issueUser._id);
+        const invitePassword = await inviteOne(inviteEmail);
+
+        expect(randomSpy).not.toHaveBeenCalled();
+        for (const password of [resetPassword, issuePassword, invitePassword]) {
+          expect(TEMP_PASSWORD_CHARSET.test(password as string)).toBe(true);
+        }
+      } finally {
+        randomSpy.mockRestore();
+        await User.deleteOne({ email: inviteEmail });
+      }
+    });
+
+    test('all 3 credential-issuing paths call the same generator function, and no path draws from Math.random', () => {
+      const source = fs.readFileSync(path.resolve(__dirname, 'user.ts'), 'utf8');
+
+      // A count other than 4 means a credential-issuing path stopped sharing
+      // the generator, or a new one was added without wiring it through the
+      // same function.
+      const callSiteCount = (source.match(/generateRandomTempPassword\(/g) ?? []).length;
+      expect(callSiteCount).toBe(4);
+
+      expect(source).not.toMatch(/Math\.random\(/);
+      expect(source).toMatch(/crypto\.randomInt\(/);
+    });
+  });
+
   describe('Username validation (feature-username-validation-contract)', () => {
     test('rejects a document save when username is set to a non-conforming value', async () => {
       const user = new User();
@@ -313,6 +413,58 @@ describe('User', () => {
       expect(afterSave?.name).toBe('Renamed Legacy User');
 
       await User.deleteOne({ _id: user._id });
+    });
+  });
+
+  describe('createUsersByInvitation', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('AC-4: processes multiple emails concurrently rather than one at a time', async () => {
+      const emails = ['par1@example.com', 'par2@example.com', 'par3@example.com'];
+      const pendingResolvers: (() => void)[] = [];
+      let inFlight = 0;
+      let maxInFlight = 0;
+
+      // Each findOne() call parks on its own deferred promise instead of
+      // resolving immediately, so a sequential (one-at-a-time) implementation
+      // would only ever have 1 call in flight while a concurrent one issues
+      // all of them before any resolves.
+      const findOneSpy = jest.spyOn(User, 'findOne').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            inFlight += 1;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            pendingResolvers.push(() => {
+              inFlight -= 1;
+              // Truthy resolution takes the "user already exists" branch,
+              // which needs no further DB interaction (no save()).
+              resolve({ _id: 'existing' });
+            });
+          }) as unknown as ReturnType<typeof User.findOne>,
+      );
+
+      const resultPromise = new Promise<{ email: string; password: string | null; user: unknown }[]>((resolve, reject) => {
+        User.createUsersByInvitation(emails, false, (err: Error | null, list: { email: string; password: string | null; user: unknown }[]) => {
+          if (err) return reject(err);
+          resolve(list);
+        });
+      });
+
+      // Let the microtask queue advance so every findOne() call in the
+      // Promise.all(...map...) has been issued before any of them resolves.
+      await new Promise((r) => setImmediate(r));
+
+      expect(findOneSpy).toHaveBeenCalledTimes(emails.length);
+      expect(maxInFlight).toBe(emails.length);
+
+      while (pendingResolvers.length > 0) {
+        pendingResolvers.pop()?.();
+      }
+
+      const list = await resultPromise;
+      expect(list).toHaveLength(emails.length);
     });
   });
 

@@ -45,6 +45,7 @@ export interface PageYjsUpdateDocument extends Document {
 }
 
 // biome-ignore lint/suspicious/noEmptyInterface: placeholder for future statics that Phase 4 will introduce
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PageYjsUpdateModel extends Model<PageYjsUpdateDocument> {}
 
 export default (_crowi: Crowi) => {

@@ -5,7 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose, { type Model } from 'mongoose';
 import type { CollabModels, CollabRenderer } from '../models';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { getSentinelPath } = require('./mongo-sentinel') as { getSentinelPath: () => string };
 
 // Silence the ~20 `[crowi:collab]` / `[crowi:collab:presence]` console.warn
@@ -235,14 +235,14 @@ export interface RegisterTestModelsResult {
  * factories bind their schemas to the active Mongoose connection.
  */
 export function registerTestModels(): RegisterTestModelsResult {
-  /* eslint-disable @typescript-eslint/no-var-requires */
+  /* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
   const pageMod = require(resolveApiDistFile('models/page.js')) as ModelFactoryModule;
   const revisionMod = require(resolveApiDistFile('models/revision.js')) as ModelFactoryModule;
   const pageYjsUpdateMod = require(resolveApiDistFile('models/page-yjs-update.js')) as ModelFactoryModule;
   const userMod = require(resolveApiDistFile('models/user.js')) as ModelFactoryModule;
   const pluginRenderCacheMod = require(resolveApiDistFile('models/plugin-render-cache.js')) as ModelFactoryModule;
   const rendererMod = require(resolveApiDistFile('renderer/index.js')) as ApiRendererModule;
-  /* eslint-enable @typescript-eslint/no-var-requires */
+  /* eslint-enable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
 
   const stub = makeCrowiStub();
   const Revision = revisionMod.default(stub);

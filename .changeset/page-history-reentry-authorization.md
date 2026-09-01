@@ -1,0 +1,5 @@
+---
+"@crowi/api": patch
+---
+
+Fix authorization and recovery gaps in the path-moving commands' re-entry handling (RFC-0021). Replaying a subtree rename after losing access to the page no longer returns its current content — the retry now re-checks the caller's grant at the time of the replay instead of trusting that the original request was authorized. Retrying a rename, trash, or restore that was interrupted mid-move (crashed between entering and leaving its transition) now resumes and completes instead of dead-ending in a 404 that only an administrator's repair tool could clear; a normal (non-retry) request against a page that is genuinely mid-move by another operation now correctly reports 409 "in progress" rather than 404 "not found". Completed path-moving operation records are now removed automatically once their retention period elapses, via a TTL index that was missing from the collection; records still in flight are left untouched. Finally, opening a page's history with an uppercase-hex page id now works past the first page — pagination cursors are compared against the normalized id instead of the raw request parameter.

@@ -1,4 +1,4 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import mongoose from 'mongoose';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
@@ -12,7 +12,7 @@ describe('PageYjsUpdate', () => {
     PageYjsUpdate = crowi.model('PageYjsUpdate');
     Page = crowi.model('Page');
 
-    const users = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
+    const users = await Fixture.generate('User', [{ name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() }]);
     user = users[0];
 
     page = await Page.createPage(`/yjs-update-${faker.lorem.slug()}`, '# yjs', user, {});

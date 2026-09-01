@@ -40,7 +40,7 @@ import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup
  */
 
 const apiPkgPath = require.resolve('@crowi/api/package.json', { paths: [process.cwd(), __dirname] });
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const apiWsToken = require(path.join(path.dirname(apiPkgPath), 'dist', 'util', 'ws-token.js')) as {
   createWsTokenUtil(): {
     // RFC-0017 Phase 1 — `epoch` is a required wsToken claim.

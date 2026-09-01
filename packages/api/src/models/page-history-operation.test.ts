@@ -1,3 +1,4 @@
+import { completeOperation } from 'src/service/page-history/operation';
 import { crowi } from 'src/test/setup';
 
 /**
@@ -160,6 +161,50 @@ describe('PageHistoryOperation (RFC-0021 §5.3/§5.5a, feature-page-history-phas
       } catch (err) {
         expect(isE11000(err)).toBe(true);
       }
+    });
+  });
+
+  // This collection shipped with `expiresAt` but no TTL index behind it.
+  // Wall-clock expiry itself is deliberately not asserted here (Mongo's TTL
+  // monitor sweeps on its own ~60s cadence, unreliable to await under a test
+  // harness); what's pinned is the declaration and the null-vs-set
+  // distinction the index depends on.
+  describe('TTL (AC-9, AC-10)', () => {
+    test('AC-9: declares a TTL index on expiresAt with expireAfterSeconds: 0', () => {
+      const indexes = PageHistoryOperation.schema.indexes();
+      const ttlIndex = indexes.find(([fields]) => Object.keys(fields).length === 1 && fields.expiresAt === 1);
+
+      expect(ttlIndex).toBeDefined();
+      const [, options] = ttlIndex;
+      expect(options.expireAfterSeconds).toBe(0);
+    });
+
+    test('AC-10: a freshly-created (in-flight) operation has expiresAt: null — not a TTL match', async () => {
+      const doc = await PageHistoryOperation.create({
+        actor: null,
+        command: 'trash',
+        idempotencyKey: validKey(),
+        operationId: 'op-ttl-in-flight',
+        requestFingerprint: 'fp',
+      });
+
+      expect(doc.expiresAt).toBeNull();
+    });
+
+    test('AC-9: completeOperation sets expiresAt to a future retention deadline once the operation settles', async () => {
+      const before = await PageHistoryOperation.create({
+        actor: null,
+        command: 'trash',
+        idempotencyKey: validKey(),
+        operationId: 'op-ttl-settled',
+        requestFingerprint: 'fp',
+      });
+      expect(before.expiresAt).toBeNull();
+
+      const settled = await completeOperation(crowi, 'op-ttl-settled', { status: 'succeeded' });
+
+      expect(settled.expiresAt).not.toBeNull();
+      expect(settled.expiresAt.getTime()).toBeGreaterThan(Date.now());
     });
   });
 });

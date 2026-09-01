@@ -62,6 +62,7 @@ import {
   visiblePageGrantOr,
   visiblePageStatusOr,
 } from 'src/models/page';
+import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 import type { UserDocument } from 'src/models/user';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
 import { restorePageCommand } from 'src/service/page-history/commands/restore';
@@ -939,7 +940,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         debug('deletePage called with:', { page_id, revision_id, completely, userId: user._id });
 
         try {
-          const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+          // Hard delete has no Idempotency-Key / operation record of its own
+          // to resume through, so it stays behind the granted-user read: a
+          // page mid rename/trash/restore must stay hidden here rather than
+          // be destroyed out from under that other operation. Only the
+          // (idempotent, resumable) soft-delete path below needs the re-entry
+          // read.
+          const pageData = (
+            completely === true ? await Page.findPageByIdAndGrantedUser(page_id, user) : await Page.findPageByIdForReentry(page_id, user)
+          ) as PageDocument | null;
           if (!pageData) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
@@ -977,6 +986,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const keyConflictBody = {
             error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' },
           };
+          const trashIncompleteBody = {
+            error: {
+              code: 'PAGE_TRANSITION_INCOMPLETE' as const,
+              message: 'The page was moved but the delete did not finish. Ask an administrator to run the page-history repair.',
+            },
+          };
 
           const replayTrash = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
             if (operation.result?.status === 'failed') {
@@ -991,10 +1006,56 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json({ page: pageToResponse(populatedReplay) }, 200);
           };
 
+          // A record with no result yet: this delivery's own earlier attempt
+          // may still be running, or it crashed between `enterTransition` and
+          // `exitTransition`. Re-running the command is safe — same input,
+          // same operationId, so `runPageTransition` resumes rather than
+          // re-entering. Rebuilt from the RECORD, not `pageData`: by now the
+          // page may already be sitting at `toPath`.
+          const resumeTrash = async (operation: PageHistoryOperationDocument) => {
+            if (operation.page == null || operation.fromPath == null || operation.toPath == null) {
+              return c.json(inProgressBody, 409);
+            }
+            const resumedPage = (await Page.findById(operation.page)) as PageDocument | null;
+            if (!resumedPage) {
+              await completeOperation(crowi, operation.operationId, { status: 'moot' });
+              return c.json(PAGE_NOT_FOUND_BODY, 404);
+            }
+            const resumedOutcome = await trashPageCommand(crowi, {
+              page: resumedPage,
+              fromPath: operation.fromPath,
+              toPath: operation.toPath,
+              fromStatus: operation.fromStatus ?? null,
+              fromStatusPresent: operation.fromStatusPresent === true,
+              operationId: operation.operationId,
+              actor: user._id,
+              user,
+              source: operation.source ?? trashSource,
+            });
+            if (resumedOutcome.status === 'owned-elsewhere' || resumedOutcome.status === 'contended') return c.json(inProgressBody, 409);
+            if (resumedOutcome.status === 'page-missing') {
+              await completeOperation(crowi, operation.operationId, { status: 'moot' });
+              return c.json(PAGE_NOT_FOUND_BODY, 404);
+            }
+            if (resumedOutcome.status === 'incomplete') return c.json(trashIncompleteBody, 400);
+            if (await hasOperationCompletionEvidence(crowi, operation)) {
+              await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
+            }
+            crowi.trackSideEffect(indexPageInSearchById(crowi, String(operation.page)));
+            const populatedResumed = await Page.populatePageData(resumedOutcome.page, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedResumed) }, 200);
+          };
+
           const trashResolution = await resolvePageHistoryOperation(crowi, trashKeyTuple, trashFingerprint);
           if (trashResolution.kind === 'fingerprint-mismatch') return c.json(keyConflictBody, 409);
           if (trashResolution.kind === 'settled') return replayTrash(trashResolution.operation);
-          if (trashResolution.kind === 'in-flight') return c.json(inProgressBody, 409);
+          if (trashResolution.kind === 'in-flight') return resumeTrash(trashResolution.operation);
+
+          // No record for THIS key exists (`miss`), yet the page is already
+          // transitional — that is genuinely someone else's move in progress,
+          // not this caller's to resume.
+          if (isTransitionalPageStatus(pageData.status)) return c.json(inProgressBody, 409);
 
           // Only a first delivery validates deletability, for the same reason
           // rename resolves first: a replay runs against a page already sitting
@@ -1041,10 +1102,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             await completeOperation(crowi, trashOperationId, { status: 'moot' });
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
-          if (trashOutcome.status === 'incomplete') {
-            const message = 'The page was moved but the delete did not finish. Ask an administrator to run the page-history repair.';
-            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
-          }
+          if (trashOutcome.status === 'incomplete') return c.json(trashIncompleteBody, 400);
 
           if (await hasOperationCompletionEvidence(crowi, trashCreated.operation)) {
             await completeOperation(crowi, trashOperationId, { status: 'succeeded' });
@@ -1078,7 +1136,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         debug('revertDeletedPage called with:', { page_id, userId: user._id });
 
         try {
-          const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+          const pageData = (await Page.findPageByIdForReentry(page_id, user)) as PageDocument | null;
           if (!pageData) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
@@ -1101,6 +1159,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const restoreKeyConflict = {
             error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' },
           };
+          const restoreIncompleteBody = {
+            error: {
+              code: 'PAGE_TRANSITION_INCOMPLETE' as const,
+              message: 'The page was moved but the restore did not finish. Ask an administrator to run the page-history repair.',
+            },
+          };
 
           const replayRestore = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
             if (operation.result?.status === 'failed') {
@@ -1115,10 +1179,55 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json({ page: pageToResponse(populatedReplay) }, 200);
           };
 
+          // A record with no result yet: this delivery's own earlier attempt
+          // may still be running, or it crashed between `enterTransition` and
+          // `exitTransition`. Re-running the command is safe — same input,
+          // same operationId, so `runPageTransition` resumes rather than
+          // re-entering. Rebuilt from the RECORD, not `pageData`: by now the
+          // page may already be sitting at `toPath`.
+          const resumeRestore = async (operation: PageHistoryOperationDocument) => {
+            if (operation.page == null || operation.fromPath == null || operation.toPath == null) {
+              return c.json(restoreInProgress, 409);
+            }
+            const resumedPage = (await Page.findById(operation.page)) as PageDocument | null;
+            if (!resumedPage) {
+              await completeOperation(crowi, operation.operationId, { status: 'moot' });
+              return c.json(PAGE_NOT_FOUND_BODY, 404);
+            }
+            const resumedOutcome = await restorePageCommand(crowi, {
+              page: resumedPage,
+              fromPath: operation.fromPath,
+              toPath: operation.toPath,
+              fromStatus: operation.fromStatus ?? null,
+              fromStatusPresent: operation.fromStatusPresent === true,
+              operationId: operation.operationId,
+              actor: user._id,
+              source: operation.source ?? restoreSource,
+            });
+            if (resumedOutcome.status === 'owned-elsewhere' || resumedOutcome.status === 'contended') return c.json(restoreInProgress, 409);
+            if (resumedOutcome.status === 'page-missing') {
+              await completeOperation(crowi, operation.operationId, { status: 'moot' });
+              return c.json(PAGE_NOT_FOUND_BODY, 404);
+            }
+            if (resumedOutcome.status === 'incomplete') return c.json(restoreIncompleteBody, 400);
+            if (await hasOperationCompletionEvidence(crowi, operation)) {
+              await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
+            }
+            const populatedResumed = await Page.populatePageData(resumedOutcome.page, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedResumed) }, 200);
+          };
+
           const restoreResolution = await resolvePageHistoryOperation(crowi, restoreKeyTuple, restoreFingerprint);
           if (restoreResolution.kind === 'fingerprint-mismatch') return c.json(restoreKeyConflict, 409);
           if (restoreResolution.kind === 'settled') return replayRestore(restoreResolution.operation);
-          if (restoreResolution.kind === 'in-flight') return c.json(restoreInProgress, 409);
+          if (restoreResolution.kind === 'in-flight') return resumeRestore(restoreResolution.operation);
+
+          // No record for THIS key exists (`miss`), yet the page is already
+          // transitional — that is genuinely someone else's move in progress.
+          // Checked BEFORE the destructive destination cleanup below so a
+          // normal request never touches it while the page is mid-move.
+          if (isTransitionalPageStatus(pageData.status)) return c.json(restoreInProgress, 409);
 
           // First delivery only: clear the destination. This is destructive and
           // deliberately sits BEFORE the operation record exists — if it fails
@@ -1184,10 +1293,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             await completeOperation(crowi, restoreOperationId, { status: 'moot' });
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
-          if (restoreOutcome.status === 'incomplete') {
-            const message = 'The page was moved but the restore did not finish. Ask an administrator to run the page-history repair.';
-            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
-          }
+          if (restoreOutcome.status === 'incomplete') return c.json(restoreIncompleteBody, 400);
 
           if (await hasOperationCompletionEvidence(crowi, restoreCreated.operation)) {
             await completeOperation(crowi, restoreOperationId, { status: 'succeeded' });
@@ -1316,52 +1422,71 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             );
           }
           if (rootResolution.kind !== 'miss') {
-            // Re-entry must bypass the granted-page helper because that helper
-            // intentionally hides transitional pages. A root-only crash still
-            // needs this raw document to create its first member; once the root
-            // member exists, the command can resume even if the page vanished.
-            const replayRootPage = (await Page.findById(page_id)) as PageDocument | null;
-            const result = await executeSubtreeRename(crowi, Page, null, user, {
-              page: replayRootPage,
-              pageId: new Types.ObjectId(page_id),
-              toPath: newPagePath,
-              actor: user._id,
-              user,
-              source: toPageHistoryEventSource(c.get('authContext')?.kind),
-              idempotencyKey: subtreeIdempotencyKey!,
-              requestFingerprint: subtreeFingerprint!,
-              createRedirectPage: Boolean(create_redirect),
-            });
-            if (!result.ok) {
-              if (result.kind === 'fingerprint-mismatch') {
+            // Re-entry must bypass the granted-page helper's transitional-
+            // hiding — a root-only crash still needs the raw document to
+            // create its first member, and the command can resume even if
+            // the page vanished (findPageByIdForReentry returns null rather
+            // than throwing for that case). What it must NOT bypass is grant
+            // / draft: a caller who lost access since the first delivery
+            // gets 404, not this page's body. Both re-loads below (the root
+            // going in, and the one after execution finds no page in
+            // `successes`) go through the same read for that reason.
+            try {
+              const replayRootPage = (await Page.findPageByIdForReentry(page_id, user)) as PageDocument | null;
+              const result = await executeSubtreeRename(crowi, Page, null, user, {
+                page: replayRootPage,
+                pageId: new Types.ObjectId(page_id),
+                toPath: newPagePath,
+                actor: user._id,
+                user,
+                source: toPageHistoryEventSource(c.get('authContext')?.kind),
+                idempotencyKey: subtreeIdempotencyKey!,
+                requestFingerprint: subtreeFingerprint!,
+                createRedirectPage: Boolean(create_redirect),
+              });
+              if (!result.ok) {
+                if (result.kind === 'fingerprint-mismatch') {
+                  return c.json(
+                    { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                    409,
+                  );
+                }
+                if (result.kind === 'validation') {
+                  return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
+                }
+                debug('Error renaming subtree:', result.message);
                 return c.json(
-                  { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
-                  409,
+                  renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${result.message})`, [], true),
+                  400,
                 );
               }
-              if (result.kind === 'validation') {
-                return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
+              const { outcome } = result;
+              const movedRoot =
+                outcome.successes.find((page) => page._id.equals(page_id)) ?? ((await Page.findPageByIdForReentry(page_id, user)) as PageDocument | null);
+              if (!movedRoot) return c.json(PAGE_NOT_FOUND_BODY, 404);
+              const populated = await Page.populatePageData(movedRoot, null);
+              c.header('Idempotency-Replayed', 'true');
+              return c.json({ page: pageToResponse(populated), renamed_count: outcome.successes.length }, 200);
+            } catch (err) {
+              const error = err as Error;
+              if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+                return c.json(PAGE_NOT_FOUND_BODY, 404);
               }
-              debug('Error renaming subtree:', result.message);
-              return c.json(
-                renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${result.message})`, [], true),
-                400,
-              );
+              throw err;
             }
-            const { outcome } = result;
-            const movedRoot = outcome.successes.find((page) => page._id.equals(page_id)) ?? ((await Page.findById(page_id)) as PageDocument | null);
-            if (!movedRoot) return c.json(PAGE_NOT_FOUND_BODY, 404);
-            const populated = await Page.populatePageData(movedRoot, null);
-            c.header('Idempotency-Replayed', 'true');
-            return c.json({ page: pageToResponse(populated), renamed_count: outcome.successes.length }, 200);
           }
         }
 
         try {
-          const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+          const pageData = (await Page.findPageByIdForReentry(page_id, user)) as PageDocument | null;
           if (!pageData) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
+          // Shared by both the subtree and single-page branches below — the
+          // subtree branch's own "someone else is mid-move" check needs it
+          // before the single-page section (where the trash/restore handlers'
+          // equivalent constant is declared) even exists.
+          const renameInProgressBody = { error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } };
 
           // The user home page (`/user/<username>`) is bound to the username
           // and must not be renamed (mirrors `isDeletableName`). Checked on
@@ -1382,6 +1507,13 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // Subtree move — root + grant-visible descendants.
           // ------------------------------------------------------------
           if (include_descendants) {
+            // `rootResolution.kind === 'miss'` was already established above
+            // (the `!== 'miss'` branch returns before reaching here), so this
+            // is a normal, non-re-entry request — a transitional root means
+            // some OTHER operation is mid-move on it.
+            if (isTransitionalPageStatus(pageData.status)) {
+              return c.json(renameInProgressBody, 409);
+            }
             const oldStripped = pageData.path.replace(/\/+$/, '');
             const descendantRoot = pageData.path.endsWith('/') ? pageData.path : `${pageData.path}/`;
             const selfPaths = new Set([pageData.path, oldStripped]);
@@ -1458,6 +1590,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             .update(JSON.stringify({ page_id: String(pageData._id), new_path: newPagePath, create_redirect: Boolean(create_redirect) }))
             .digest('hex');
           const operationKey = { actor: user._id, command: 'rename' as const, idempotencyKey };
+          const renameIncompleteBody = {
+            error: {
+              code: 'PAGE_TRANSITION_INCOMPLETE' as const,
+              message: 'The page was moved but the rename did not finish. Ask an administrator to run the page-history repair.',
+            },
+          };
 
           const replay = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
             // A settled operation answers from the page as it is now — the
@@ -1477,6 +1615,52 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json({ page: pageToResponse(populatedReplay), renamed_count: 1 }, 200);
           };
 
+          // A record with no result yet: this delivery's own earlier attempt
+          // may simply still be running, or it may have crashed between
+          // `enterTransition` and `exitTransition`. Either way, re-running the
+          // command is safe — it is the same idempotent input the record
+          // stored, keyed on the SAME operationId, so `runPageTransition`
+          // resumes rather than re-entering. Rebuilt from the RECORD, not
+          // `pageData`: by now the page may already be sitting at `toPath`,
+          // so re-deriving `fromPath`/`toPath` off it would describe a second
+          // move out of the destination it is already at.
+          const resumeRename = async (operation: PageHistoryOperationDocument) => {
+            if (operation.page == null || operation.fromPath == null || operation.toPath == null) {
+              return c.json(renameInProgressBody, 409);
+            }
+            const resumedPage = (await Page.findById(operation.page)) as PageDocument | null;
+            if (!resumedPage) {
+              await completeOperation(crowi, operation.operationId, { status: 'moot' });
+              return c.json(PAGE_NOT_FOUND_BODY, 404);
+            }
+            const resumedOutcome = await renamePageCommand(crowi, {
+              page: resumedPage,
+              fromPath: operation.fromPath,
+              toPath: operation.toPath,
+              fromStatus: operation.fromStatus ?? null,
+              fromStatusPresent: operation.fromStatusPresent === true,
+              operationId: operation.operationId,
+              actor: user._id,
+              user,
+              source: operation.source ?? source,
+              createRedirectPage: operation.createRedirect === true,
+            });
+            if (resumedOutcome.status === 'owned-elsewhere' || resumedOutcome.status === 'contended') {
+              return c.json(renameInProgressBody, 409);
+            }
+            if (resumedOutcome.status === 'page-missing') {
+              await completeOperation(crowi, operation.operationId, { status: 'moot' });
+              return c.json(PAGE_NOT_FOUND_BODY, 404);
+            }
+            if (resumedOutcome.status === 'incomplete') return c.json(renameIncompleteBody, 400);
+            if (await hasOperationCompletionEvidence(crowi, operation)) {
+              await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
+            }
+            const populatedResumed = await Page.populatePageData(resumedOutcome.page, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedResumed), renamed_count: 1 }, 200);
+          };
+
           const resolution = await resolvePageHistoryOperation(crowi, operationKey, fingerprint);
           if (resolution.kind === 'fingerprint-mismatch') {
             return c.json(
@@ -1485,8 +1669,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             );
           }
           if (resolution.kind === 'settled') return replay(resolution.operation);
-          if (resolution.kind === 'in-flight') {
-            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          if (resolution.kind === 'in-flight') return resumeRename(resolution.operation);
+
+          // The re-entry / re-check above only ran for a MATCHING key. A
+          // `miss` here can still find the page transitional under a
+          // DIFFERENT operation (no record for THIS key exists yet, so it is
+          // not a re-entry) — that is genuinely someone else's move in
+          // progress, not this caller's to resume.
+          if (isTransitionalPageStatus(pageData.status)) {
+            return c.json(renameInProgressBody, 409);
           }
 
           // Only a first delivery validates the destination. A replay must not:
@@ -1567,10 +1758,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             await completeOperation(crowi, operationId, { status: 'moot' });
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
-          if (outcome.status === 'incomplete') {
-            const message = 'The page was moved but the rename did not finish. Ask an administrator to run the page-history repair.';
-            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
-          }
+          if (outcome.status === 'incomplete') return c.json(renameIncompleteBody, 400);
 
           if (await hasOperationCompletionEvidence(crowi, created.operation)) {
             await completeOperation(crowi, operationId, { status: 'succeeded' });

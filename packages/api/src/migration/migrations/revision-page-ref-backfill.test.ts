@@ -1,4 +1,4 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
@@ -30,7 +30,7 @@ describe('migration/revision-page-ref-backfill', () => {
     Page = crowi.model('Page');
     Revision = crowi.model('Revision');
 
-    const users = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
+    const users = await Fixture.generate('User', [{ name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() }]);
     user = users[0];
   });
 

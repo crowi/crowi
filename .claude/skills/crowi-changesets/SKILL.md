@@ -18,7 +18,7 @@ When to add — one changeset per "unit of user value":
 - ✅ Feature / bug fix / breaking change → one changeset.
 - ✅ One feature split across several commits is still one changeset if it's a single thing from the user's point of view (do not add a changeset per small in-progress commit).
 - ❌ Internal refactor / cleanup / lint fix / format / build infra / tests only → no changeset (no user-visible change).
-- ❌ docs(todo) / CLAUDE.md / `.claude/` updates → no changeset.
+- ❌ CLAUDE.md / `.claude/` updates → no changeset.
 - ❌ Per-phase commits of `feature-monorepo-packages-restructure` → covered as a whole by one changeset (`.changeset/initial-release.md`).
 
 Rule of thumb: "is it worth writing in the next changelog?" Add when `feat:` / `fix:` changes user behavior; skip when it is only `refactor:` / `chore:` / `test:` / `docs:`.

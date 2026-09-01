@@ -39,9 +39,9 @@ to Node.js 24 before working.
 
 If a write to MongoDB fails partway through initial setup (a dropped connection, a timeout, and so on), the installer's admin-creation step can stop without completing. Here's what state you're left in and how to recover.
 
-- **The installer reopens.** The state of the failed setup attempt is cleaned up automatically, so opening the installer URL again shows the admin-creation screen once more. It never gets stuck showing "already installed" with no way forward.
-- **The admin user already exists.** Only part of the database write failed — the admin user itself was already created earlier in the same request. Running setup again with the same username / email produces a duplicate error. Nothing rolls that user back, so retrying with the same input won't get you further.
-- **The reliable recovery is to recreate the database and rerun setup.** At the point of initial setup there is no wiki data yet, so emptying the MongoDB database carries no risk of data loss. Recreate the database, then run the installer again from the start.
+- **The installer does not reopen.** Initial setup writes several configuration entries, and whichever ones landed before the failure stay in the database. As long as that partial configuration remains, the installer keeps reporting "already installed" instead of going back to the admin-creation screen.
+- **The admin user already exists.** The failure happened in a later configuration save — the admin user itself was already created earlier in the same request. Trying setup again with the same username / email can't reach that step, since the installer no longer opens.
+- **The only supported recovery is to recreate the database and rerun setup from the start.** There is no way to selectively delete the partially-written configuration or to reopen the installer instead. At the point of initial setup there is no wiki data yet, so emptying the MongoDB database carries no risk of data loss. Recreate the database, then run the installer again from the start.
 
 ## Quick start (Docker infrastructure + dev servers on the host)
 

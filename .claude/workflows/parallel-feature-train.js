@@ -169,7 +169,7 @@ const simplifyReport = landed.length
   ? await agent(
       `On ${repoRoot} branch ${mergeTarget}, review git diff main...${mergeTarget} for reuse / simplification / efficiency / ` +
         `altitude cleanups only (NOT correctness bugs). Apply low-risk fixes in a refactor(merge) commit on ${mergeTarget}; ` +
-        `record larger ones as advisories in TODO.md. Return a short summary.`,
+        `report larger ones in the summary and drop them — there is no backlog to park them in. Return a short summary.`,
       { label: 'simplify:merged', phase: 'Simplify' },
     )
   : 'skipped (nothing landed)'

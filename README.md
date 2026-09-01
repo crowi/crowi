@@ -20,7 +20,8 @@
 >   [releases](https://github.com/crowi/crowi/releases) and read the notes. For
 >   a real deployment use a published release, not this branch's HEAD.
 > - Crowi v1.x is deprecated and unmaintained.
-> - Track progress in [`TODO.md`](./TODO.md), the [docs](https://crowi.wiki), and the
+> - Track progress in the [releases](https://github.com/crowi/crowi/releases),
+>   the [docs](https://crowi.wiki), and the
 >   [v2 announcement on Zenn](https://zenn.dev/sotarok/articles/34795a35a4ef74).
 
 ## What is Crowi

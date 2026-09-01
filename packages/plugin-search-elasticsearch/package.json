@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-search-elasticsearch",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "Elasticsearch 9 search driver for Crowi 2.0.",
   "repository": {
     "type": "git",

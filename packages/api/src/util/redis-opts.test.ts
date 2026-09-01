@@ -4,7 +4,20 @@ import path from 'node:path';
 import tls from 'node:tls';
 import Debug from 'debug';
 import { createClient } from 'redis';
-import { buildRedisOpts, duplicateWithErrorHandler } from './redis-opts';
+import { buildRedisOpts, duplicateWithErrorHandler, redisReconnectForever } from './redis-opts';
+
+/**
+ * The v4-compatible pins `buildRedisOpts` adds to every result (see its
+ * docstring), factored out so each shape assertion below states only the
+ * URL-derived fields it's actually testing.
+ */
+const v4Pins = { RESP: 2, commandOptions: { timeout: undefined } };
+const v4Socket = (socket: Record<string, unknown>) => ({
+  keepAlive: true,
+  keepAliveInitialDelay: 5000,
+  reconnectStrategy: redisReconnectForever,
+  ...socket,
+});
 
 describe('buildRedisOpts', () => {
   it('returns null when no REDIS_URL is configured', () => {
@@ -20,11 +33,13 @@ describe('buildRedisOpts', () => {
     // downgrades a rediss:// URL to a PLAINTEXT net socket — the bug this
     // pins against.
     expect(buildRedisOpts('rediss://localhost:6380', true)).toStrictEqual({
-      socket: { host: 'localhost', port: 6380, tls: true, requestCert: true, rejectUnauthorized: true },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6380, tls: true, requestCert: true, rejectUnauthorized: true }),
       database: 0,
     });
     expect(buildRedisOpts('rediss://localhost:6380', false)).toStrictEqual({
-      socket: { host: 'localhost', port: 6380, tls: true, requestCert: true, rejectUnauthorized: false },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6380, tls: true, requestCert: true, rejectUnauthorized: false }),
       database: 0,
     });
   });
@@ -35,7 +50,8 @@ describe('buildRedisOpts', () => {
     // client authenticating as the `default` user while collab's ioredis
     // parser (extension-redis.ts) passed both — same URL, divergent auth.
     expect(buildRedisOpts('redis://app%40svc:p%40ss@localhost:6379', false)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
       username: 'app@svc',
       password: 'p@ss',
@@ -44,12 +60,14 @@ describe('buildRedisOpts', () => {
 
   it('redis://:pass@host (empty username) stays password-only; redis://user@host (no colon) is username-only', () => {
     expect(buildRedisOpts('redis://:secret@localhost:6379', false)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
       password: 'secret',
     });
     expect(buildRedisOpts('redis://onlyuser@localhost:6379', false)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
       username: 'onlyuser',
     });
@@ -59,13 +77,15 @@ describe('buildRedisOpts', () => {
     // %2540 must decode to the literal '%40' (NOT '@' — that would be a
     // double decode), and an encoded ':' must stay inside the password.
     expect(buildRedisOpts('redis://acl:p%2540ss@localhost:6379', false)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
       username: 'acl',
       password: 'p%40ss',
     });
     expect(buildRedisOpts('redis://acl:pa%3Ass@localhost:6379', false)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
       username: 'acl',
       password: 'pa:ss',
@@ -74,33 +94,55 @@ describe('buildRedisOpts', () => {
 
   it('IPv6 literal hosts lose the WHATWG brackets (net/tls connect want the bare address)', () => {
     expect(buildRedisOpts('redis://[::1]:6379', false)).toStrictEqual({
-      socket: { host: '::1', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: '::1', port: 6379 }),
       database: 0,
     });
   });
 
   it('redis:// carries no tls key at all', () => {
     expect(buildRedisOpts('redis://localhost:6379', true)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
     });
   });
 
   it('a REDIS_URL database pathname (feature-redis-key-prefix §3) is parsed into the top-level `database` field', () => {
     expect(buildRedisOpts('redis://localhost:6379/0', true)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 0,
     });
     expect(buildRedisOpts('redis://localhost:6379/1', true)).toStrictEqual({
-      socket: { host: 'localhost', port: 6379 },
+      ...v4Pins,
+      socket: v4Socket({ host: 'localhost', port: 6379 }),
       database: 1,
     });
     expect(buildRedisOpts('rediss://ACL-user:password@host/1', true)).toStrictEqual({
-      socket: { host: 'host', port: 6379, tls: true, requestCert: true, rejectUnauthorized: true },
+      ...v4Pins,
+      socket: v4Socket({ host: 'host', port: 6379, tls: true, requestCert: true, rejectUnauthorized: true }),
       database: 1,
       username: 'ACL-user',
       password: 'password',
     });
+  });
+
+  it('pins v4-compatible defaults so the installed node-redis major cannot silently change connection behavior (AC-8/AC-9)', () => {
+    const opts = buildRedisOpts('redis://localhost:6379', true) as {
+      RESP: number;
+      commandOptions: { timeout: unknown };
+      socket: { keepAlive: boolean; keepAliveInitialDelay: number; reconnectStrategy: (retries: number) => number | Error };
+    };
+    expect(opts.RESP).toBe(2);
+    expect(opts.commandOptions).toStrictEqual({ timeout: undefined });
+    expect(opts.socket.keepAlive).toBe(true);
+    expect(opts.socket.keepAliveInitialDelay).toBe(5000);
+    // v4's actual default curve: linear, capped at 500ms, never an Error —
+    // NOT v6's exponential+jittered (and abortable) default.
+    expect(opts.socket.reconnectStrategy(0)).toBe(0);
+    expect(opts.socket.reconnectStrategy(10)).toBe(500);
+    expect(opts.socket.reconnectStrategy(1000)).toBe(500);
   });
 
   it('an invalid REDIS_URL database pathname throws instead of silently connecting to DB 0 (mirrors collab parseRedisUrlForIoredis)', () => {

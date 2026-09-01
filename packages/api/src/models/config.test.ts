@@ -137,12 +137,17 @@ describe('Config model test', () => {
   });
 
   /**
-   * The seeding write is not atomic across keys, so a rejection can
-   * leave some rows behind under `{ ns: 'crowi' }`. Left in place, those
-   * rows would make count-based install checks report the app as
-   * installed forever even though install never completed.
+   * The seeding write is not atomic across keys, so a rejection can leave
+   * some rows behind under `{ ns: 'crowi' }`. Deleting the whole
+   * namespace on that rejection would be unsafe: the count guard above
+   * only proves the namespace was empty at the moment of the check, not
+   * at the moment a delete would run. A concurrent installer attempt can
+   * pass the same guard and complete in between, and deleting the
+   * namespace here would destroy that completed configuration instead of
+   * just the failed attempt's own rows. Nothing under `{ ns: 'crowi' }`
+   * is deleted.
    */
-  describe('write reconciliation (feature-config-write-reconciliation)', () => {
+  describe('reconciliation safety (feature-config-reconciliation-safety)', () => {
     afterEach(() => {
       jest.restoreAllMocks();
     });
@@ -161,28 +166,55 @@ describe('Config model test', () => {
       }
     }
 
-    test('AC-7: applicationInstall removes the crowi namespace after a partial seeding failure, so the count guard reports uninstalled again', async () => {
+    test('AC-1: a seeding write failure leaves the rows it already wrote under { ns: "crowi" } in place instead of deleting the namespace', async () => {
       await withEmptyCrowiNamespace(async () => {
         jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during install'));
 
-        await expect(Config.applicationInstall()).rejects.toThrow('mongo write failed during install');
+        await expect(Config.applicationInstall()).rejects.toThrow();
 
         const count = await Config.countDocuments({ ns: 'crowi' }).exec();
-        expect(count).toBe(0);
+        expect(count).toBeGreaterThan(0);
       });
     });
 
-    test('AC-9: applicationInstall still propagates the original seeding error when the cleanup deletion itself fails', async () => {
+    test('AC-4: the error names the recovery steps — partial configuration remains, the installer will not reopen, recreate the database', async () => {
       await withEmptyCrowiNamespace(async () => {
         jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during install'));
-        jest.spyOn(Config, 'deleteMany').mockImplementationOnce(() => {
-          throw new Error('mongo delete failed');
-        });
 
-        // The delete failure must never surface in place of the seeding
-        // failure — the caller still needs to see why install didn't
-        // complete.
-        await expect(Config.applicationInstall()).rejects.toThrow('mongo write failed during install');
+        let caught: Error | undefined;
+        try {
+          await Config.applicationInstall();
+        } catch (err) {
+          caught = err as Error;
+        }
+
+        expect(caught).toBeDefined();
+        // The original error is still identifiable...
+        expect(caught?.message).toMatch(/mongo write failed during install/);
+        // ...alongside the recovery guidance this spec adds.
+        expect(caught?.message).toMatch(/will not reopen/i);
+        expect(caught?.message).toMatch(/recreate the database/i);
+      });
+    });
+
+    test("AC-2: a concurrent installer's already-completed configuration is not deleted when a second attempt's seeding write fails", async () => {
+      await withEmptyCrowiNamespace(async () => {
+        // Installer A wins the (still-unlocked — see spec §"やらないこと")
+        // count-based guard race and finishes.
+        await Config.applicationInstall();
+        const completedRows = await Config.find({ ns: 'crowi' }).sort({ key: 1 }).lean().exec();
+        expect(completedRows.length).toBeGreaterThan(0);
+
+        // Installer B read `count === 0` before A's write landed — the
+        // same race — and only now reaches its own write, where one key
+        // fails.
+        jest.spyOn(Config, 'countDocuments').mockReturnValueOnce({ exec: async () => 0 } as unknown as ReturnType<typeof Config.countDocuments>);
+        jest.spyOn(Config, 'updateByParams').mockRejectedValueOnce(new Error('mongo write failed during concurrent install'));
+
+        await expect(Config.applicationInstall()).rejects.toThrow('mongo write failed during concurrent install');
+
+        const rowsAfter = await Config.find({ ns: 'crowi' }).sort({ key: 1 }).lean().exec();
+        expect(rowsAfter.map((r) => ({ key: r.key, value: r.value }))).toEqual(completedRows.map((r) => ({ key: r.key, value: r.value })));
       });
     });
   });

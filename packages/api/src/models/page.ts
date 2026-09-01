@@ -362,6 +362,13 @@ export interface PageModel extends Model<PageDocument> {
   findPageById(id): Promise<PageDocument>;
   findPageByIdAndGrantedUser(id, userData): Promise<PageDocument>;
   /**
+   * RFC-0021 §16 — the read a re-entering path-moving command uses instead
+   * of `findPageByIdAndGrantedUser`. See the implementation below (right
+   * after `findPageByIdAndGrantedUser`) for why it exists and exactly which
+   * check it drops.
+   */
+  findPageByIdForReentry(id, userData): Promise<PageDocument | null>;
+  /**
    * feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
    * (invite-link) resolution for the `IdRedirector`-only share URL. See
    * the implementation below (right after `findPageByIdAndGrantedUser`)
@@ -886,25 +893,6 @@ export default (crowi: Crowi) => {
   // index then sorts in memory.
   pageSchema.index({ creator: 1, status: 1, createdAt: -1 });
 
-  // RFC-0021 §5.5a says new Pages are created `ready`. That belongs to the
-  // phase where creation goes through a command service that allocates the
-  // page-local sequence — Phase 2. Phase 1 allocates nothing: `createPage`
-  // saves the Page and then `Revision.prepareRevision` writes the first
-  // Revision with no `historySequence` at all.
-  //
-  // Marking such a Page `ready` would assert something untrue. `ready` means
-  // the page-local timeline is authoritative, and a page whose very first
-  // Revision carries no sequence has no timeline yet. It also creates a
-  // cohort that the Phase 2 backfill cannot see: the migration selects Pages
-  // that are NOT ready, and `requireHistoryReady` lets `ready` through, so a
-  // Phase 2 writer would hand sequence 1 to a NEW Revision while the initial
-  // one stays unsequenced — the ordering §5.4 exists to guarantee.
-  //
-  // So Phase 1 leaves every Page at the schema default (`untracked`), which
-  // is exactly what it is: a Page whose history is not yet tracked. Phase 2's
-  // create command sets `ready` in the same write that allocates the initial
-  // sequence, and the backfill promotes existing Pages the same way.
-
   pageEvent.on('create', pageEvent.onCreate);
   pageEvent.on('update', pageEvent.onUpdate);
   pageEvent.on('delete', pageEvent.onDelete);
@@ -1352,6 +1340,44 @@ export default (crowi: Crowi) => {
     }
 
     return pageData;
+  };
+
+  /**
+   * RFC-0021 §16 — the by-id read a re-entering path-moving command
+   * (rename / trash / restore / subtree rename) uses in place of
+   * `findPageByIdAndGrantedUser` above.
+   *
+   * It applies the same draft-hiding and grant enforcement as the granted
+   * read — a caller who has lost access must not get this page's content back
+   * just because they are replaying a request they made while they still had
+   * it. The one check it drops is the transitional-status collapse: a page
+   * between `enterTransition` and `exitTransition` is exactly the page a
+   * re-entry needs to see, so `findPageByIdAndGrantedUser`'s existence-hiding
+   * of it would 404 the retry before the caller's own operation ever gets a
+   * chance to resolve.
+   *
+   * Returns `null` — rather than throwing, as `findPageById` does — when no
+   * such Page exists at all, so a caller can tell "gone" from "hidden" and
+   * decide for itself whether a re-entry may still proceed against a member
+   * record with no root left.
+   */
+  pageSchema.statics.findPageByIdForReentry = async function (id, userData) {
+    const pageData = await Page.findOne({ _id: id });
+    if (pageData === null) {
+      return null;
+    }
+    const populated = await Page.populatePageData(pageData, null);
+
+    // RFC-0004: same draft existence-hiding rule as `findPageByIdAndGrantedUser`.
+    if (populated.isDraft() && (!userData || !populated.isCreator(userData))) {
+      throw pageNotFoundError();
+    }
+
+    if (userData && !populated.isGrantedFor(userData)) {
+      throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
+    }
+
+    return populated;
   };
 
   /**

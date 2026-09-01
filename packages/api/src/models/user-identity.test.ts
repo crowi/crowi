@@ -1,4 +1,4 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 import type { UserIdentityModel } from 'src/models/user-identity';
 
@@ -26,8 +26,8 @@ describe('UserIdentity', () => {
     await UserIdentity.syncIndexes();
 
     const users = await Fixture.generate('User', [
-      { name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() },
-      { name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() },
+      { name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() },
+      { name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() },
     ]);
     userAId = users[0]._id.toString();
     userBId = users[1]._id.toString();

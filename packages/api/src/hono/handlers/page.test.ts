@@ -965,6 +965,232 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(await Page.findOne({ path: `${movedPath}/sibling`, redirectTo: null })).not.toBeNull();
       expect(await Page.findOne({ path: `${rootPath}/blocked`, redirectTo: null })).not.toBeNull();
     });
+
+    describe('re-entry authorization (RFC-0021 §16)', () => {
+      it('AC-7: resumes a single-page rename crashed between entering and leaving its transition, retried with the same Idempotency-Key', async () => {
+        const headers = authHeaders(accessToken);
+        const fromPath = `${PATH_PREFIX}rename-resume`;
+        const toPath = `${PATH_PREFIX}rename-resume-moved`;
+        const rootId = await createPage(headers, fromPath);
+        const before = await Page.findById(rootId);
+        const key = idempotencyKey();
+        const fingerprint = createHash('sha256')
+          .update(JSON.stringify({ page_id: String(rootId), new_path: toPath, create_redirect: false }))
+          .digest('hex');
+        const operationId = `rename-resume-${key}`;
+        const PageHistoryOperation = crowi.model('PageHistoryOperation');
+        await PageHistoryOperation.create({
+          actor: before.creator,
+          command: 'rename',
+          idempotencyKey: key,
+          operationId,
+          requestFingerprint: fingerprint,
+          page: rootId,
+          fromPath,
+          toPath,
+          fromStatus: before.status ?? null,
+          fromStatusPresent: before.status != null,
+          toStatus: before.status ?? null,
+          createRedirect: false,
+          source: 'web',
+        });
+        // Simulate a crash right after `enterTransition` landed.
+        await Page.updateOne({ _id: rootId }, { $set: { path: toPath, status: 'renaming', historyTransition: { operationId, kind: 'rename' } } });
+
+        const res = await request(app).post('/api/pages/rename').set(headers).set('Idempotency-Key', key).send({ page_id: rootId, new_path: toPath });
+
+        expect(res.status).toBe(200);
+        expect(res.headers['idempotency-replayed']).toBe('true');
+        expect(res.body.page.path).toBe(toPath);
+        const after = await Page.findById(rootId);
+        expect(after.historyTransition).toBeNull();
+        const settledOperation = await PageHistoryOperation.findOne({ operationId });
+        expect(settledOperation.result?.status).toBe('succeeded');
+      });
+
+      it('AC-8: returns 409 PAGE_TRANSITION_IN_PROGRESS for a normal (non-re-entry) single-page rename against an already-transitional page', async () => {
+        const headers = authHeaders(accessToken);
+        const path = `${PATH_PREFIX}rename-transitional-miss`;
+        const pageId = await createPage(headers, path);
+        await Page.updateOne({ _id: pageId }, { $set: { status: 'renaming', historyTransition: { operationId: 'another-operation', kind: 'trash' } } });
+
+        const res = await request(app)
+          .post('/api/pages/rename')
+          .set(headers)
+          .set('Idempotency-Key', idempotencyKey())
+          .send({ page_id: pageId, new_path: `${PATH_PREFIX}rename-transitional-miss-moved` });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('PAGE_TRANSITION_IN_PROGRESS');
+      });
+
+      it('AC-4/AC-5: replaying a subtree rename after losing access returns 404 without the page body', async () => {
+        const guest = await createTestUser({
+          name: 'Subtree Reentry Guest',
+          username: 'subtreeReentryGuest',
+          email: 'subtree-reentry-guest@example.com',
+        });
+        const guestHeaders = authHeaders(guest.accessToken);
+        const rootPath = `${PATH_PREFIX}tree-access-lost`;
+        const movedPath = `${PATH_PREFIX}tree-access-lost-moved`;
+
+        const createRes = await request(app)
+          .post('/api/pages')
+          .set(guestHeaders)
+          .send({ path: rootPath, body: '# secret subtree body', grant: Page.GRANT_RESTRICTED });
+        expect(createRes.status).toBe(200);
+        const rootId = createRes.body.page._id;
+
+        const key = idempotencyKey();
+        const first = await request(app)
+          .post('/api/pages/rename')
+          .set(guestHeaders)
+          .set('Idempotency-Key', key)
+          .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
+        expect(first.status).toBe(200);
+
+        // The guest loses access: someone else takes ownership and the grant
+        // no longer lists them.
+        const otherOwner = await createTestUser({
+          name: 'Subtree Reentry Owner',
+          username: 'subtreeReentryOwner',
+          email: 'subtree-reentry-owner@example.com',
+        });
+        await Page.updateOne({ _id: rootId }, { $set: { creator: otherOwner.user._id, grantedUsers: [otherOwner.user._id] } });
+
+        // Replaying the SAME request (same key, same body) must not hand
+        // this page's body back just because the guest once had access.
+        const second = await request(app)
+          .post('/api/pages/rename')
+          .set(guestHeaders)
+          .set('Idempotency-Key', key)
+          .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
+
+        expect(second.status).toBe(404);
+        expect(second.body.error.code).toBe('PAGE_NOT_FOUND');
+        expect(JSON.stringify(second.body)).not.toContain('secret subtree body');
+      });
+
+      it('AC-6: a subtree re-entry whose root page is gone behaves as it did before the grant re-check (400, not 404)', async () => {
+        const headers = authHeaders(accessToken);
+        const rootPath = `${PATH_PREFIX}tree-root-gone`;
+        const movedPath = `${PATH_PREFIX}tree-root-gone-moved`;
+        const rootId = await createPage(headers, rootPath);
+        const root = await Page.findById(rootId);
+        const key = idempotencyKey();
+        const memberOperationId = `member-${key}`;
+        const groupOperationId = `group-${key}`;
+        const requestFingerprint = createHash('sha256')
+          .update(JSON.stringify({ page_id: String(rootId), new_path: movedPath, create_redirect: false }))
+          .digest('hex');
+        const memberFingerprint = createHash('sha256')
+          .update(JSON.stringify({ pageId: String(rootId), fromPath: rootPath, toPath: movedPath }))
+          .digest('hex');
+        const PageHistoryOperation = crowi.model('PageHistoryOperation');
+        await PageHistoryOperation.create({
+          actor: root.creator,
+          command: 'subtree_rename',
+          idempotencyKey: key,
+          operationId: `root-${key}`,
+          requestFingerprint,
+          memberPageIds: [root._id],
+          groupOperationId,
+        });
+        await PageHistoryOperation.create({
+          actor: root.creator,
+          command: 'subtree_rename_member',
+          idempotencyKey: createHash('sha256')
+            .update(`${key}\0${String(rootId)}`)
+            .digest('base64url'),
+          operationId: memberOperationId,
+          requestFingerprint: memberFingerprint,
+          page: root._id,
+          fromPath: rootPath,
+          toPath: movedPath,
+          fromStatus: root.status,
+          fromStatusPresent: true,
+          toStatus: root.status,
+          createRedirect: false,
+          source: 'web',
+        });
+        // The root vanished entirely (hard-deleted) before the retry. This
+        // is unchanged from before `findPageByIdForReentry` existed: a raw
+        // `Page.findById` also returned null here, without throwing, and the
+        // subtree command's own missing-page handling — not a grant denial —
+        // decides the outcome.
+        await Page.deleteOne({ _id: rootId });
+
+        const res = await request(app)
+          .post('/api/pages/rename')
+          .set(headers)
+          .set('Idempotency-Key', key)
+          .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
+        const settledMember = await PageHistoryOperation.findOne({ operationId: memberOperationId });
+        expect(settledMember.result?.status).toBe('moot');
+      });
+
+      it('AC-5: the second (post-execution) root re-load also denies access, independently of the first', async () => {
+        const headers = authHeaders(accessToken);
+        const rootPath = `${PATH_PREFIX}tree-second-load-denied`;
+        const movedPath = `${PATH_PREFIX}tree-second-load-denied-moved`;
+        const rootId = await createPage(headers, rootPath);
+        const root = await Page.findById(rootId);
+        const key = idempotencyKey();
+        const groupOperationId = `group-${key}`;
+        const requestFingerprint = createHash('sha256')
+          .update(JSON.stringify({ page_id: String(rootId), new_path: movedPath, create_redirect: false }))
+          .digest('hex');
+        const PageHistoryOperation = crowi.model('PageHistoryOperation');
+        // No members recorded at all: `subtreeRenameCommand` then has nothing
+        // to process, so it completes with `successes: []` — the ONLY way to
+        // reach the `outcome.successes.find(...) ?? findPageByIdForReentry(...)`
+        // fallback without a real member move (which `result.ok` would also
+        // gate on). This is a synthetic record, not a realistic operator
+        // state; it exists purely to force execution past the first read.
+        await PageHistoryOperation.create({
+          actor: root.creator,
+          command: 'subtree_rename',
+          idempotencyKey: key,
+          operationId: `root-${key}`,
+          requestFingerprint,
+          memberPageIds: [],
+          groupOperationId,
+        });
+
+        // The two reads are the SAME call with the SAME (page_id, user)
+        // input and no grant-mutating step runs between them in this
+        // synthetic case, so they are deterministically identical — a real
+        // request can't make the first permit and the second deny. The spy
+        // stands in for the only thing that could: a grant change racing the
+        // command's own execution window. It proves the second site does its
+        // own authorization check rather than trusting the first.
+        const original = Page.findPageByIdForReentry.bind(Page);
+        let calls = 0;
+        const spy = jest.spyOn(Page, 'findPageByIdForReentry').mockImplementation(async (...args) => {
+          calls += 1;
+          if (calls === 1) return original(...args);
+          throw new Error('Page is not granted for the user');
+        });
+
+        try {
+          const res = await request(app)
+            .post('/api/pages/rename')
+            .set(headers)
+            .set('Idempotency-Key', key)
+            .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
+
+          expect(calls).toBe(2);
+          expect(res.status).toBe(404);
+          expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+          expect(JSON.stringify(res.body)).not.toContain(rootPath);
+        } finally {
+          spy.mockRestore();
+        }
+      });
+    });
   });
 
   describe('POST /api/pages/rename (include_descendants — renameTree)', () => {
@@ -1681,6 +1907,90 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_DELETE_FAILED');
     });
+
+    describe('re-entry authorization (RFC-0021 §16)', () => {
+      it('AC-7: resumes a trash crashed between entering and leaving its transition, retried with the same Idempotency-Key', async () => {
+        const headers = authHeaders(accessToken);
+        const path = `${PATH_PREFIX}trash-resume`;
+        const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# resume me' });
+        const pageId = createRes.body.page._id;
+        const before = await Page.findById(pageId);
+        const toPath = Page.getDeletedPageName(path);
+        const key = idempotencyKey();
+        const fingerprint = createHash('sha256')
+          .update(JSON.stringify({ page_id: String(pageId), completely: false }))
+          .digest('hex');
+        const operationId = `trash-resume-${key}`;
+        const PageHistoryOperation = crowi.model('PageHistoryOperation');
+        await PageHistoryOperation.create({
+          actor: before.creator,
+          command: 'trash',
+          idempotencyKey: key,
+          operationId,
+          requestFingerprint: fingerprint,
+          page: pageId,
+          fromPath: path,
+          toPath,
+          fromStatus: before.status ?? null,
+          fromStatusPresent: before.status != null,
+          toStatus: 'deleted',
+          createRedirect: true,
+          source: 'web',
+        });
+        // Simulate a crash right after `enterTransition` landed: the page is
+        // already at `toPath` and mid-move, but `exitTransition` never ran.
+        await Page.updateOne({ _id: pageId }, { $set: { path: toPath, status: 'renaming', historyTransition: { operationId, kind: 'trash' } } });
+
+        const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', key).send({ page_id: pageId });
+
+        expect(res.status).toBe(200);
+        expect(res.headers['idempotency-replayed']).toBe('true');
+        expect(res.body.page.path).toBe(toPath);
+        expect(res.body.page.status).toBe('deleted');
+        const after = await Page.findById(pageId);
+        expect(after.historyTransition).toBeNull();
+        expect(after.status).toBe('deleted');
+        const settledOperation = await PageHistoryOperation.findOne({ operationId });
+        expect(settledOperation.result?.status).toBe('succeeded');
+      });
+
+      it('AC-8: returns 409 PAGE_TRANSITION_IN_PROGRESS for a normal (non-re-entry) delete against an already-transitional page', async () => {
+        const headers = authHeaders(accessToken);
+        const path = `${PATH_PREFIX}trash-transitional-miss`;
+        const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# mid move' });
+        const pageId = createRes.body.page._id;
+        // Owned by a DIFFERENT (unrelated) operation — no record exists for
+        // the fresh key this request is about to use.
+        await Page.updateOne({ _id: pageId }, { $set: { status: 'renaming', historyTransition: { operationId: 'another-operation', kind: 'rename' } } });
+
+        const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('PAGE_TRANSITION_IN_PROGRESS');
+      });
+
+      // Hard delete has no Idempotency-Key / operation record to resume
+      // through, so it must NOT go through the re-entry read: a page mid
+      // rename/trash/restore has to stay hidden here, or a hard delete could
+      // destroy it out from under that other in-flight operation.
+      it('returns 404 PAGE_NOT_FOUND for a hard delete (completely=true) against a transitional page, and leaves it untouched', async () => {
+        const headers = authHeaders(accessToken);
+        const path = `${PATH_PREFIX}trash-transitional-hard-delete`;
+        const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# mid move' });
+        const pageId = createRes.body.page._id;
+        await Page.updateOne({ _id: pageId }, { $set: { status: 'renaming', historyTransition: { operationId: 'another-operation', kind: 'rename' } } });
+
+        const res = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId, completely: true });
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+
+        const after = await Page.findById(pageId);
+        expect(after).not.toBeNull();
+        expect(after.status).toBe('renaming');
+        expect(after.historyTransition?.operationId).toBe('another-operation');
+      });
+    });
   });
 });
 
@@ -1772,6 +2082,74 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    describe('re-entry authorization (RFC-0021 §16)', () => {
+      it('AC-7: resumes a restore crashed between entering and leaving its transition, retried with the same Idempotency-Key', async () => {
+        const headers = authHeaders(accessToken);
+        const path = `${PATH_PREFIX}restore-resume`;
+        const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# restore me' });
+        const pageId = createRes.body.page._id;
+        const deleteRes = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
+        expect(deleteRes.status).toBe(200);
+        const trashedPath = deleteRes.body.page.path;
+        const before = await Page.findById(pageId);
+
+        // A genuine restore first clears the destination's redirect stub
+        // before entering the transition — mirror that so the crash we
+        // simulate below lands where the real command would have left it.
+        const redirectStub = await Page.findOne({ path });
+        expect(redirectStub).not.toBeNull();
+        await Page.deleteOne({ _id: redirectStub._id });
+
+        const key = idempotencyKey();
+        const fingerprint = createHash('sha256')
+          .update(JSON.stringify({ page_id: String(pageId) }))
+          .digest('hex');
+        const operationId = `restore-resume-${key}`;
+        const PageHistoryOperation = crowi.model('PageHistoryOperation');
+        await PageHistoryOperation.create({
+          actor: before.creator,
+          command: 'restore',
+          idempotencyKey: key,
+          operationId,
+          requestFingerprint: fingerprint,
+          page: pageId,
+          fromPath: trashedPath,
+          toPath: path,
+          fromStatus: before.status ?? null,
+          fromStatusPresent: before.status != null,
+          toStatus: 'published',
+          createRedirect: false,
+          source: 'web',
+        });
+        // Simulate a crash right after `enterTransition` landed.
+        await Page.updateOne({ _id: pageId }, { $set: { path, status: 'renaming', historyTransition: { operationId, kind: 'restore' } } });
+
+        const res = await request(app).post('/api/pages/revert').set(headers).set('Idempotency-Key', key).send({ page_id: pageId });
+
+        expect(res.status).toBe(200);
+        expect(res.headers['idempotency-replayed']).toBe('true');
+        expect(res.body.page.path).toBe(path);
+        expect(res.body.page.status).toBe('published');
+        const after = await Page.findById(pageId);
+        expect(after.historyTransition).toBeNull();
+        const settledOperation = await PageHistoryOperation.findOne({ operationId });
+        expect(settledOperation.result?.status).toBe('succeeded');
+      });
+
+      it('AC-8: returns 409 PAGE_TRANSITION_IN_PROGRESS for a normal (non-re-entry) restore against an already-transitional page', async () => {
+        const headers = authHeaders(accessToken);
+        const path = `${PATH_PREFIX}restore-transitional-miss`;
+        const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# mid move' });
+        const pageId = createRes.body.page._id;
+        await Page.updateOne({ _id: pageId }, { $set: { status: 'renaming', historyTransition: { operationId: 'another-operation', kind: 'trash' } } });
+
+        const res = await request(app).post('/api/pages/revert').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('PAGE_TRANSITION_IN_PROGRESS');
+      });
     });
   });
 });

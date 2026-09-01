@@ -1387,7 +1387,14 @@ describe('rebuild attachment-display-derivatives — SIGINT via a genuine OS sig
       // so this generous item count trades a little wall-clock time for a
       // non-flaky margin instead of a razor-thin one.
       const ITEM_COUNT = 20;
-      const seeded = await Promise.all(Array.from({ length: ITEM_COUNT }, () => seedAttachment(driver, {})));
+      // All 20 items want byte-identical input, so raster once and share
+      // the buffer: 20 separate sharp encodes of the same 2000x1000 JPEG
+      // compete for CPU with the other image suites under parallel jest
+      // workers and alone exhaust the 30s timeout. The child's own
+      // decode/resize/re-encode per item is untouched, so the margin this
+      // test needs between "first item started" and SIGINT landing holds.
+      const originalBytes = await rasterJpeg(LARGE_JPEG_WIDTH, LARGE_JPEG_HEIGHT);
+      const seeded = await Promise.all(Array.from({ length: ITEM_COUNT }, () => seedAttachment(driver, { originalBytes })));
 
       const result = await runSigintHarnessKillingOnFirstItem({
         CROWI_REBUILD_SIGINT_HARNESS_ROOT_DIR: harnessRootDir,

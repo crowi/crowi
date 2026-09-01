@@ -1,13 +1,20 @@
+import type { RedisClientType } from 'redis';
 import Crowi from 'src/crowi';
-import { RedisClientType } from 'redis';
-import { resolveRedisKeyspace, type RedisKeyspace } from 'src/util/redis-keyspace';
+import { type RedisKeyspace, resolveRedisKeyspace } from 'src/util/redis-keyspace';
 
 export default class LRU {
   crowi: Crowi;
 
   max: number;
 
-  client: any;
+  /**
+   * `crowi.redis` is typed `any` on `Crowi` itself (untyped boot field), so
+   * this annotation exists to pin `RedisClientType` against the commands
+   * actually called below (`ZREMRANGEBYRANK` / `ZADD` / `ZRANGE` /
+   * `multi()`) — a type-check failure here is the signal that the installed
+   * client's types no longer match one of them.
+   */
+  client: RedisClientType | null;
 
   /**
    * Resolved instance keyspace (feature-redis-key-prefix §1/§2), non-null
@@ -48,7 +55,12 @@ export default class LRU {
     }
   }
 
-  async add(namespace, key) {
+  // Explicit return type: `multi().exec()`'s inferred result type is built
+  // from internal @redis/client generics that TS can't name in a
+  // `declaration: true` build (TS2742) — the caller only ever `.catch()`s
+  // this promise (see `hono/handlers/page.ts`), so the exact tuple shape
+  // carries no information anyone reads.
+  async add(namespace: string, key: string): Promise<unknown> {
     const { client } = this;
 
     if (client) {

@@ -61,7 +61,7 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
       `operator-visible` なのに crowi-site の更新が diff に無い場合を advisory として指摘する
     - 更新がある場合: **ja / en 両方** が揃っているか、新規ページなら frontmatter
       (title/description) と `meta.json` の `pages` 追記があるか
-    - CLAUDE.md / TODO.md / RFC 更新の有無
+    - CLAUDE.md / RFC 更新の有無
 13. E2E 反映の有無:
     - v2 test plan が明記した e2e の欠落は必須観点 8 で NEEDS_WORK。ここでは spec が
       要求していない追加候補、または legacy `context.e2eTargets.assessment` が
@@ -78,8 +78,8 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
   重複除去、deprecation 置換、lockfile 剪定 等)。→ APPROVED 後に implementer の
   **polish pass が commit 前に修正する**。「後で advisory 専用タスクで一括対応」はしない。
 - **defer**: 本当に別作業なもの (大きめのリファクタ / 別機能 / 「X を上げたら Y」等の将来
-  条件付き)。→ **人間に surface するだけ**。TODO.md に受動的な「後続タスク」として書き残さ
-  ない (放置される advisory 台帳を作らない)。人間が fix / TODO / drop を判断する。
+  条件付き)。→ **人間に surface するだけ**。受動的な「後続タスク」としてどこかに書き残さ
+  ない (放置される advisory 台帳を作らない)。人間が fix / spec 化 / drop を判断する。
 
 迷ったら **autofix 側に倒す** (「記録するくらいなら直す」)。out-of-scope が明確なものだけ
 defer。autofix が 1 件も無ければ `advisories` は空でよい。
@@ -201,7 +201,7 @@ bash .claude/scripts/task-state.sh task append-history {id} '{"phase":"reviewer"
 
 ### Advisories
 - autofix: <commit 前に polish pass で直すもの>
-- defer: <人間に surface するもの (別作業/将来条件付き)。TODO には書かない>
+- defer: <人間に surface するもの (別作業/将来条件付き)。どこにも書き残さない>
 
 ### Next Action
 APPROVED → autofix advisory があれば polish pass で修正 → feature-committer
@@ -212,7 +212,7 @@ NEEDS_WORK → feature-implementer に差し戻し (具体的な修正項目を�
 
 - コードの修正は行わない (Read + Bash for checks のみ)
 - 改善余地は既定で修正する (autofix)。溜め込んで「将来一括」にしない。out-of-scope のみ
-  defer=人間に surface (受動 TODO 化しない)
+  defer=人間に surface (受動的な台帳化はしない)
 - 判断に迷う場合は厳格側 (NEEDS_WORK) に倒す
 - spec.md は **編集しない** (正本)
 - `.feature-state/` (root) を使うこと

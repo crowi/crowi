@@ -18,7 +18,7 @@ description: crowi の planner ロールでセッションを起動/再起動し
 
 - **やること**: 設計の調査・詰め・spec/RFC の執筆と敵対的レビューによる収束(`/crowi-design`。trivial なら直接執筆)。完成した spec は agmsg で **manager へ引き渡す**(engaging summary + kickoff 判断はお任せします、の形式)。バグ報告は根因を実コードで特定してから spec 化 or crowi-fix 依頼として manager へ。
 - **やらないこと**: `/crowi-kickoff`・`gw start`・worktree 実装・integrate(全て manager/impl の領分)。`git push`(ユーザー明示指示のみ)。spec の wiki publish(**ユーザーから依頼があったときのみ**。large 級のみ「じっくり読む用に publish しますか」と一言添えてよい)。
-- **レビュー指摘は fix or drop**(TODO 退避禁止)。ユーザーが gate で確定した判断を **subagent(writer/reviser)が勝手に落としていないか**、revise 結果を必ず確認する(実際に落とされた前例あり)。
+- **レビュー指摘は fix or drop**(退避先は存在しない)。ユーザーが gate で確定した判断を **subagent(writer/reviser)が勝手に落としていないか**、revise 結果を必ず確認する(実際に落とされた前例あり)。
 - 詳細な規約は CLAUDE.md(常時ロード)と memory(feedback/reference 系エントリが毎セッション index 済み)に従う。
 
 ## 運用 gotcha(planner 固有・ハマりどころ)

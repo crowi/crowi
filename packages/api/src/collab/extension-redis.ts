@@ -80,9 +80,9 @@ export function buildCollabRedisExtension(crowi: Crowi): Extension | null {
   // `@crowi/collab` in `attach.ts`). `ioredis` is loaded the same way
   // — we don't import it statically because it's a transitive dep of
   // the extension (no @types/ioredis needed in api's package.json).
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   const { Redis: RedisExtension } = require('@hocuspocus/extension-redis') as typeof import('@hocuspocus/extension-redis');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
   const IORedisModule = require('ioredis') as any;
   // ioredis exports both CJS (default) and ESM (named) shapes; pick
   // whichever the loader handed us.

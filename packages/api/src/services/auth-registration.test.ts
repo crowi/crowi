@@ -1,6 +1,6 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import { Types } from 'mongoose';
 import request from 'supertest';
 import type { UserDocument } from 'src/models/user';
@@ -470,7 +470,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
   describe('durable activation marker + idempotent page side effect (AC-6)', () => {
     it('drains a pending marker exactly once — a second drain on a done marker is a no-op', async () => {
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
       user.status = User().STATUS_ACTIVE;
       await user.save();
       await UserActivation().ensurePendingMarker(user._id);
@@ -490,7 +490,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
 
     it('never renames a pre-existing manually-created user page', async () => {
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
       user.status = User().STATUS_ACTIVE;
       await user.save();
 
@@ -510,7 +510,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
 
     it('an expired lease is reclaimed; a live lease is not', async () => {
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
 
       await UserActivation().ensurePendingMarker(user._id);
       const firstClaim = await UserActivation().claimActivationLease(user._id);
@@ -529,7 +529,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
 
     it('an ACTUAL fault injected exactly at the page side effect leaves a claimed-but-not-done marker; the lease-expiry retry then completes it exactly once', async () => {
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
       user.status = User().STATUS_ACTIVE;
       await user.save();
       await UserActivation().ensurePendingMarker(user._id);
@@ -616,7 +616,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
       const provider = 'fedreg-svc-reauth-drain';
       const providerUserId = 'sub-reauth-drain';
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
       user.status = User().STATUS_ACTIVE;
       await user.save();
       await UserIdentity().create({ userId: user._id, provider, providerUserId });
@@ -642,7 +642,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
       const provider = 'fedreg-svc-reauth-drain-holding';
       const providerUserId = 'sub-reauth-drain-holding';
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
       user.status = User().STATUS_ACTIVE;
       await user.save();
       await UserIdentity().create({ userId: user._id, provider, providerUserId });
@@ -762,7 +762,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
       const provider = 'fedreg-svc-reauth-done';
       const providerUserId = 'sub-reauth-done';
       const username = randomUsername();
-      const [user] = (await Fixture.generate('User', [{ name: faker.name.findName(), username, email: faker.internet.email() }])) as UserDocument[];
+      const [user] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username, email: faker.internet.email() }])) as UserDocument[];
       user.status = User().STATUS_ACTIVE;
       await user.save();
       await UserIdentity().create({ userId: user._id, provider, providerUserId });
@@ -1598,7 +1598,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
       const provider = 'fedreg-svc-6';
       const providerUserId = 'sub-6';
       const [userA] = (await Fixture.generate('User', [
-        { name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() },
+        { name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() },
       ])) as UserDocument[];
       await UserIdentity().create({ userId: userA._id, provider, providerUserId });
 
@@ -1689,7 +1689,7 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
       const providerUserId = 'sub-case-email-terminal';
       const localEmail = 'svc-case-terminal@example.com';
       const idpEmail = 'SVC-Case-Terminal@Example.com';
-      const [existing] = (await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: localEmail }])) as UserDocument[];
+      const [existing] = (await Fixture.generate('User', [{ name: faker.person.fullName(), username: randomUsername(), email: localEmail }])) as UserDocument[];
 
       const result = await resolveProfile(provider, providerUserId, idpEmail);
       expect(result.kind).toBe('redirect_error');

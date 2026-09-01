@@ -234,21 +234,23 @@ describe('@crowi/collab Phase 4 compaction', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
-    // The compactPage call is fire-and-forget inside onChange — we
-    // need to let the microtask queue drain so the spy assertion can
-    // see the call.
-    await new Promise((resolve) => setImmediate(resolve));
+    // `onChange` invokes `compactPage` synchronously and discards the
+    // promise on purpose, so edits are not serialized behind compaction
+    // (hooks/on-change.ts). The spy still captured that promise, so the
+    // test can await the very thing production drops — no drain needed
+    // for the call assertion, and no deadline for the effect.
     expect(compactSpy).toHaveBeenCalledWith(pageId);
 
-    // And we wait for the actual compaction to flush before asserting
-    // pending count, since compactPage runs async. Poll instead of a
-    // fixed wait — under heavy parallel jest load the 50ms-fixed wait
-    // sometimes raced the in-memory mongodb DELETE; up to ~500ms is
-    // still well below any reasonable per-test budget.
-    for (let i = 0; i < 25; i += 1) {
-      if ((await countPending(pageId)) === 0) break;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
+    // Awaiting the captured promise is what makes this deterministic:
+    // it cannot resolve until `runCompaction`'s terminal `deleteMany`
+    // has been acknowledged, so the count below runs after the delete by
+    // causal order rather than by elapsed time. Two earlier versions of
+    // this test waited on a clock instead — a fixed 50ms, then a ~500ms
+    // poll — and both raced Mongo under CI's concurrent turbo tasks.
+    // Awaiting it also surfaces a compaction rejection as itself, rather
+    // than as a later count mismatch that cannot say why.
+    await expect(compactSpy.mock.results[0].value).resolves.toEqual(expect.objectContaining({ compactedCount: 100 }));
+
     expect(await countPending(pageId)).toBe(0);
   });
 

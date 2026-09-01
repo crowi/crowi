@@ -820,6 +820,8 @@ Best-effort rewriting of historical `Revision.path` remains display
 denormalization and is not part of event commit correctness. History joins
 remain id-based.
 
+**Member result authority.** The grouped `PageHistoryEvent` is the durable proof that a member's move landed; `PageHistoryOperation.result` is a derived record written after it, in a separate write. A command that fans a request out across per-member records — today, subtree rename is the only one — must treat the two accordingly and never the reverse: the event is the fact, `result` is a cache of it. The two writes are not atomic with each other, so there is a window where the event already exists but `result` has not caught up yet. Reading `result` as absent inside that window and reporting the member failed mistakes the cache's lag for the fact's absence. Before any such command reports a member as failed, it checks for existing event evidence for that member and settles it `succeeded` from that evidence if found; only when the evidence check itself cannot be performed (the operation record could not be read) does it fall back to reporting failure, because asserting success without evidence is worse than a failure a later repair sweep can still correct. A command with a single operation per Page — every non-subtree command in this RFC — has no member results to build this window around and is unaffected; its resume logic already checks event evidence directly.
+
 ## §7 Hard delete state machine (Phase 4)
 
 Hard-delete history is not enabled before Phase 4. Phase 4 cannot use the
@@ -1320,6 +1322,9 @@ Two cases are called out because they are the ones a predicate cannot cover:
   new boundary. No Revision below the boundary is modified by promotion.
 - Cursor pagination remains complete under injected duplicate-sequence
   corruption and queues repair rather than dropping a co-sequenced entry.
+- A subtree rename member that loses the exit CAS never reports failure when
+  the grouped event already proves its move landed, on both the paths that
+  can observe this (a bounded-retry exhaustion and a mid-flight exception).
 
 ## §15 Alternatives considered
 

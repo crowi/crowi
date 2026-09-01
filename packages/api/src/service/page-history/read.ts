@@ -138,11 +138,10 @@ interface PageLean {
   pendingHistoryEntry?: unknown;
 }
 
-interface EventLean
-  extends Pick<PageHistoryEventDocument, '_id' | 'page' | 'sequence' | 'kind' | 'actor' | 'occurredAt' | 'operationId' | 'source' | 'payload'> {}
+type EventLean = Pick<PageHistoryEventDocument, '_id' | 'page' | 'sequence' | 'kind' | 'actor' | 'occurredAt' | 'operationId' | 'source' | 'payload'>;
 
-interface RevisionLean extends Pick<RevisionDocument, '_id' | 'createdAt' | 'author' | 'historySequence' | 'savedBy' | 'contributors' | 'editVia'> {}
-interface UserLean extends Pick<UserDocument, '_id' | 'username' | 'name' | 'email' | 'image' | 'createdAt' | 'status'> {}
+type RevisionLean = Pick<RevisionDocument, '_id' | 'createdAt' | 'author' | 'historySequence' | 'savedBy' | 'contributors' | 'editVia'>;
+type UserLean = Pick<UserDocument, '_id' | 'username' | 'name' | 'email' | 'image' | 'createdAt' | 'status'>;
 
 const isEventKind = (value: unknown): value is PageHistoryEventKind =>
   typeof value === 'string' && (PAGE_HISTORY_EVENT_KINDS as readonly string[]).includes(value);

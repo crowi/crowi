@@ -1,12 +1,10 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
-import { Check, Copy, Link2, X } from 'lucide-react';
 import { type PageWithRevision, unwrapRenderedAst } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { AlertCircle, Check, Copy, Link2, X } from 'lucide-react';
 import Link from 'next/link';
-import { useCopyFeedback } from '@/lib/use-copy-feedback';
-import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   getFigureLayoutClassName,
   getImageDisplayStyle,
@@ -17,10 +15,12 @@ import {
 } from '@/components/editor/image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
-import { MentionLink } from '@/components/page-view/mention-link';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
 import { MarkdownTableFullscreen } from '@/components/page-view/markdown-table-fullscreen';
-import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
+import { MentionLink } from '@/components/page-view/mention-link';
+import { isDiagramPresentationReady, pickRendererPresentationAttrs, RendererPresentation } from '@/components/page-view/renderer-presentation';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
+import { copyFailureMessage, useCopyFeedback } from '@/lib/use-copy-feedback';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -78,7 +78,7 @@ function TargetedSection({ children, ...rest }: TargetedSectionProps) {
 }
 
 function HeadingAnchor({ id }: { id?: string }) {
-  const { copied, copy } = useCopyFeedback();
+  const { copied, failed, copy } = useCopyFeedback();
 
   if (!id) return null;
 
@@ -88,14 +88,23 @@ function HeadingAnchor({ id }: { id?: string }) {
     copy(`${window.location.origin}${window.location.pathname}#${id}`);
   };
 
+  const label = copied ? 'Link copied' : (copyFailureMessage(failed) ?? 'Copy link to this section');
+
   return (
     <button
       type="button"
       onClick={handleClick}
-      aria-label={copied ? 'Link copied' : 'Copy link to this section'}
+      aria-label={label}
+      title={label}
       className="absolute -left-7 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground opacity-0 group-hover/heading:opacity-100 hover:text-foreground hover:bg-muted transition-opacity"
     >
-      {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Link2 className="h-4 w-4" aria-hidden="true" />}
+      {copied ? (
+        <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+      ) : failed ? (
+        <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />
+      ) : (
+        <Link2 className="h-4 w-4" aria-hidden="true" />
+      )}
     </button>
   );
 }
@@ -110,9 +119,11 @@ function HeadingAnchor({ id }: { id?: string }) {
  */
 function CodeBlock({ children, ...props }: ChildrenProps) {
   const preRef = useRef<HTMLPreElement>(null);
-  const { copied, copy } = useCopyFeedback();
+  const { copied, failed, copy } = useCopyFeedback();
 
   const handleCopy = () => copy(preRef.current?.textContent ?? '');
+
+  const label = copied ? m['page.code_copied']() : (copyFailureMessage(failed) ?? m['page.code_copy']());
 
   return (
     <InsidePreContext.Provider value={true}>
@@ -120,11 +131,17 @@ function CodeBlock({ children, ...props }: ChildrenProps) {
         <button
           type="button"
           onClick={handleCopy}
-          aria-label={copied ? m['page.code_copied']() : m['page.code_copy']()}
-          title={copied ? m['page.code_copied']() : m['page.code_copy']()}
+          aria-label={label}
+          title={label}
           className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/code:opacity-100"
         >
-          {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+          {copied ? (
+            <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          ) : failed ? (
+            <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />
+          ) : (
+            <Copy className="h-4 w-4" aria-hidden="true" />
+          )}
         </button>
         {/* `min-w-0` lets the parent flex/grid track shrink below the
             <pre>'s natural width, otherwise long lines push the column

@@ -226,31 +226,44 @@ export default (crowi: Crowi) => {
     const Page = crowi.model('Page');
     const Revision = crowi.model('Revision');
 
-    const pages = await Page.find({}).select('_id revision');
+    // `Page.createPage` persists the Page before creating its Revision and has
+    // no compensating delete, so a Page whose `revision` was never set survives
+    // indefinitely. Excluding those here keeps them out of the lookup below —
+    // they carry no body, so they can contribute no links either way.
+    const pages = await Page.find({ revision: { $exists: true, $ne: null } }).select('_id revision');
     const latestRevisionIds = pages.map(({ revision }) => revision);
 
     const revisions = await Revision.find({ _id: { $in: latestRevisionIds } }).and({
       $or: [{ body: linkDetector.getLinkRegexp() }, { body: linkDetector.getPathRegexps()[0] }, { body: linkDetector.getPathRegexps()[1] }],
     } as any);
 
-    await Backlink.deleteMany({});
-
-    return Promise.all(
+    // Resolve every link BEFORE discarding the existing rows. This is a full
+    // drop-and-rebuild, so anything that throws between the delete and the
+    // inserts leaves the instance with no backlinks at all and no way back —
+    // this command IS the documented recovery path, so a failed run must not
+    // end worse than it started.
+    const prepared = await Promise.all(
       revisions.map(async ({ _id: revisionId, body }) => {
-        const page = pages.find(({ revision }) => revision.toString() === revisionId.toString()) as PageDocument;
-        const pageId = page._id;
+        const page = pages.find(({ revision }) => revision?.toString() === revisionId.toString()) as PageDocument | undefined;
+        if (!page) return null;
 
         const links = linkDetector.search(body);
-        const ids = await convertLinksToPageIds(page, links);
+        return { pageId: page._id, revisionId, ids: await convertLinksToPageIds(page, links) };
+      }),
+    );
 
-        if (ids.length === 0) return [];
+    await Backlink.deleteMany({});
 
-        const now = new Date();
+    const now = new Date();
+    return Promise.all(
+      prepared.map(async (entry) => {
+        if (entry === null || entry.ids.length === 0) return [];
+
         const backlinks = await Backlink.insertMany(
-          ids.map((id) => ({
+          entry.ids.map((id) => ({
             page: id,
-            fromPage: pageId,
-            fromRevision: revisionId,
+            fromPage: entry.pageId,
+            fromRevision: entry.revisionId,
             updatedAt: now,
           })),
         );

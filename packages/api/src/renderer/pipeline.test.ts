@@ -621,7 +621,6 @@ describe('RendererRegistryImpl registrations (Phase 6: addCodeBlockRenderer is l
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
-    const { makeRendererScope } = require('./registry');
     const scope = makeRendererScope(reg, '@crowi/plugin-test', log);
     const renderer = { cacheVersion: 1, render: () => ({ html: '<x/>' }) };
     scope.addCodeBlockRenderer('mermaid', renderer);
@@ -635,7 +634,6 @@ describe('RendererRegistryImpl registrations (Phase 6: addCodeBlockRenderer is l
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
-    const { makeRendererScope } = require('./registry');
     const scopeA = makeRendererScope(reg, '@crowi/plugin-a', log);
     const scopeB = makeRendererScope(reg, '@crowi/plugin-b', log);
     const rendererA = { cacheVersion: 1, render: () => ({ html: 'A' }) };
@@ -652,7 +650,6 @@ describe('RendererRegistryImpl registrations (Phase 6: addCodeBlockRenderer is l
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
-    const { makeRendererScope } = require('./registry');
     const scope = makeRendererScope(reg, '@crowi/plugin-test', log);
 
     const embedRenderer = { cacheVersion: 1, render: () => ({ html: '<x/>' }) };
@@ -673,7 +670,6 @@ describe('RendererRegistryImpl registrations (Phase 6: addCodeBlockRenderer is l
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
-    const { makeRendererScope } = require('./registry');
     const scopeA = makeRendererScope(reg, '@crowi/plugin-a', log);
     const scopeB = makeRendererScope(reg, '@crowi/plugin-b', log);
     const rendererA = { cacheVersion: 1, render: () => ({ html: 'A' }) };
@@ -690,7 +686,6 @@ describe('RendererRegistryImpl registrations (Phase 6: addCodeBlockRenderer is l
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
-    const { makeRendererScope } = require('./registry');
     const scope = makeRendererScope(reg, '@crowi/plugin-test', log);
     scope.addUnifiedPlugin(() => () => undefined, { phase: 'pre' });
     scope.addUnifiedPlugin(() => () => undefined, { phase: 'post' });

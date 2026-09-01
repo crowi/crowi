@@ -7,6 +7,14 @@
  * S3 SDK calls are mocked at the module boundary so we can observe
  * which client + bucket each driver method actually used, without
  * touching AWS.
+ *
+ * `beforeEach` calls `jest.resetModules()` so each test gets a fresh
+ * module registry (hot-reload isolation); the SUT, the S3 SDK mock, and
+ * `node:stream` are all re-`require()`'d inline per test/factory instead
+ * of statically imported, since a static import is resolved once and
+ * would keep pointing at a stale, pre-reset module instance. Each site
+ * below carries an `eslint-disable-next-line` for
+ * `@typescript-eslint/no-require-imports` for this reason.
  */
 import type { PluginConfigVerificationSnapshot, PluginContext, StorageDriver } from '@crowi/plugin-api';
 import { makeSharedPluginState } from './state-cell-test-support';
@@ -36,6 +44,7 @@ jest.mock('@aws-sdk/client-s3', () => {
       }
       if (kind === 'get') {
         sentSpies.get({ ...command.input, clientTag: this.tag });
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { Readable } = require('node:stream');
         return { Body: Readable.from([Buffer.from('payload')]) };
       }
@@ -98,6 +107,7 @@ describe('@crowi/plugin-storage-aws-s3 hot-reload', () => {
     constructedClients = [];
     constructedInstances = [];
     sharedPluginState.reset();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     plugin = require('@crowi/plugin-storage-aws-s3').default;
     registeredDriver = null;
   });
@@ -148,6 +158,7 @@ describe('@crowi/plugin-storage-aws-s3 hot-reload', () => {
     // reconfigure. The snapshot semantics of the driver method mean
     // it must use bucket='old' for this command even though the state
     // is mutated to 'new' before the send resolves.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     let releaseSend: ((v: unknown) => void) | undefined;
     const releasePromise = new Promise<unknown>((r) => {
@@ -179,6 +190,7 @@ describe('@crowi/plugin-storage-aws-s3 hot-reload', () => {
     const oldClient = constructedInstances.at(-1);
     if (!oldClient) throw new Error('expected registerStorage to have constructed an S3Client');
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     let releaseSend: ((v: unknown) => void) | undefined;
     const releasePromise = new Promise<unknown>((r) => {
@@ -219,6 +231,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
     constructedClients = [];
     constructedInstances = [];
     sharedPluginState.reset();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     plugin = require('@crowi/plugin-storage-aws-s3').default;
   });
 
@@ -238,6 +251,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
    */
   function installRoundTripSend(): void {
     const store = new Map<string, Buffer>();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     sdk.S3Client.prototype.send = jest.fn(async function (this: any, command: any) {
       const kind = command.__kind;
@@ -249,6 +263,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
       }
       if (kind === 'get') {
         sentSpies.get({ ...command.input, clientTag: this.tag });
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { Readable } = require('node:stream');
         return { Body: Readable.from([store.get(command.input.Key) ?? Buffer.alloc(0)]) };
       }
@@ -290,6 +305,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
   });
 
   it('destroys its one-shot client even when the round trip fails', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     sdk.S3Client.prototype.send = jest.fn(async () => {
       throw Object.assign(new Error('nope'), { name: 'AccessDenied' });
@@ -304,6 +320,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
   });
 
   it('a put success followed by a get AccessDenied is reported as write-denied, not auth-failed (the put-succeeded-but-cannot-read row)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     sdk.S3Client.prototype.send = jest.fn(async function (this: any, command: any) {
       if (command.__kind === 'put') return {};
@@ -318,7 +335,9 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
   });
 
   it('a put() that reports storing under a different key than requested is reported as unknown, even though the payload round-trips correctly', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { probeS3RoundTrip } = require('@crowi/plugin-storage-aws-s3') as typeof import('@crowi/plugin-storage-aws-s3');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Readable } = require('node:stream');
     let written: Buffer | undefined;
     const putSpy = jest.fn(async (_key: string, body: unknown) => {
@@ -327,6 +346,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
     });
     const getSpy = jest.fn(async () => Readable.from([written as Buffer]));
     const deleteSpy = jest.fn(async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const state = { client: new (require('@aws-sdk/client-s3').S3Client)({ region: 'us-west-2' }), bucket: 'verify-bucket' };
 
     const { verdict, cleanupSettled } = await probeS3RoundTrip(state, 5_000, { put: putSpy, get: getSpy, delete: deleteSpy });
@@ -337,6 +357,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
   });
 
   it('the independent cleanup delete is still attempted after a successful put, even when the following get() rejects', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     sdk.S3Client.prototype.send = jest.fn(async (command: any) => {
       if (command.__kind === 'put') return {};
@@ -356,6 +377,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
 
   it('AC-11: a rejecting cleanup delete does not alter a successful verdict, and destroy() still proceeds once cleanup settles', async () => {
     installRoundTripSend();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const realSend = sdk.S3Client.prototype.send;
@@ -382,6 +404,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
   });
 
   it('AC-11: a rejecting cleanup delete does not alter an already-failed verdict', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     sdk.S3Client.prototype.send = jest.fn(async (command: any) => {
@@ -412,6 +435,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
   });
 
   it('AC-11: cleanup delete fires within its own budget even when get() is still gated well past it — destroy() is not blocked on get() settling either', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sdk = require('@aws-sdk/client-s3');
     let releaseGet: (() => void) | undefined;
     const getGate = new Promise<void>((resolve) => {
@@ -424,6 +448,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
         // 10s hook race) would ever wait for — but not aborted (§3): the
         // underlying probe keeps running and eventually settles.
         await getGate;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { Readable } = require('node:stream');
         return { Body: Readable.from([Buffer.from('irrelevant-by-then')]) };
       }
@@ -434,6 +459,7 @@ describe('@crowi/plugin-storage-aws-s3 verifyConfig (feature-plugin-config-live-
       return {};
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { probeS3RoundTrip } = require('@crowi/plugin-storage-aws-s3') as typeof import('@crowi/plugin-storage-aws-s3');
     // A short cleanup budget so the test doesn't need a real multi-second
     // wait — production callers always use the real 5s default.
@@ -463,6 +489,7 @@ describe('classifyS3Error (feature-plugin-config-live-verification AC-12)', () =
   // established pattern for the SUT — `classifyS3Error` is pure (doesn't
   // touch the mocked SDK at call time), so which module instance it comes
   // from doesn't matter, only consistency with the rest of the file.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { classifyS3Error } = require('@crowi/plugin-storage-aws-s3') as typeof import('@crowi/plugin-storage-aws-s3');
   const classify = classifyS3Error;
 

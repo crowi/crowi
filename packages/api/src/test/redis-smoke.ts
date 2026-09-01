@@ -5,7 +5,7 @@ import { createClient } from 'redis';
 // required directly rather than imported (same pattern
 // `crowi-environment.test.ts` uses for `test-mongo-sentinel.js`; `allowJs`
 // is on for `packages/api`, see `tsconfig.json`).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const sentinel = require('./redis-smoke-sentinel') as {
   REDIS_SMOKE_TARGETS: Record<'shared' | 'config' | 'tls', string>;
   REDIS_SMOKE_CATEGORIES: readonly RedisSmokeCategory[];
@@ -130,7 +130,7 @@ export async function waitUntil(predicate: () => boolean | Promise<boolean>, tim
 }
 
 /**
- * Open a real node-redis v4 client against `url`, run `fn`, and always
+ * Open a real node-redis client against `url`, run `fn`, and always
  * disconnect — the connect/try/finally/disconnect boilerplate shared
  * verbatim by every smoke file that only needs one ad hoc client for its
  * whole test body (lru / editor-cap-counter / rate-limit).

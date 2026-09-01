@@ -138,15 +138,29 @@ export interface LinkCompletionStore {
 }
 
 /**
- * Minimum node-redis v4 surface this store depends on. `time()` backs only
+ * Minimum node-redis surface this store depends on. `time()` backs only
  * `find()`'s non-destructive liveness check — `issue()`/`consumeVerified()`
  * fetch `TIME` atomically INSIDE their own Lua scripts instead of calling
- * this method (see the module doc comment for why).
+ * this method (see the module doc comment for why). The reply shape is
+ * `[unixTimestamp, microseconds]`, both decimal strings — see
+ * {@link msFromRedisTimeReply}.
  */
 export interface MinimalLinkCompletionRedisClient {
   get(key: string): Promise<string | null>;
   eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown>;
-  time(): Promise<Date>;
+  time(): Promise<RedisTimeReply>;
+}
+
+/** Shape of node-redis's `TIME` reply — `[unixTimestamp, microseconds]`, both decimal strings. */
+export type RedisTimeReply = readonly [unixTimestamp: string, microseconds: string];
+
+/** Converts a node-redis `TIME` reply to the epoch-ms number `find()` (and callers wiring their own `LinkCompletionRuntime#now()`, e.g. `federated-auth.ts`) need — shared so the tuple math lives in exactly one place. */
+export function msFromRedisTimeReply(reply: RedisTimeReply): number {
+  const [unixTimestamp, microseconds] = reply;
+  // Matches ISSUE_SCRIPT / CONSUME_SCRIPT's own `math.floor(...)` derivation
+  // of `now` from the same reply shape — a fractional value here would make
+  // JS-side deadline comparisons (`find()`) disagree with the Lua-side ones.
+  return Math.floor(Number(unixTimestamp) * 1000 + Number(microseconds) / 1000);
 }
 
 export interface CreateLinkCompletionStoreOptions {
@@ -428,7 +442,7 @@ function createRedisLinkCompletionStore(client: MinimalLinkCompletionRedisClient
     },
 
     async find(code) {
-      const now = (await client.time()).getTime();
+      const now = msFromRedisTimeReply(await client.time());
       const record = parseRecord(await client.get(recordKeyFor(code)));
       if (!record || !isRecordLive(record, now)) return null;
       return record;

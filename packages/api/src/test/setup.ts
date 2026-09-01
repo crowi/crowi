@@ -20,7 +20,7 @@
 import { createServer, type Server } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
 import type { Http2Bindings, HttpBindings } from '@hono/node-server';
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
 import { dispatchToHonoApp } from 'src/hono/path-rewrite';
@@ -394,7 +394,7 @@ export const Fixture = {
  * `UsernameSchema` model validator (feature-username-validation-contract)
  * rejects — this generator only emits characters the schema allows.
  */
-export const randomUsername = (): string => `user-${faker.random.alphaNumeric(10)}`;
+export const randomUsername = (): string => `user-${faker.string.alphanumeric(10)}`;
 
 /**
  * Usernames every write boundary must reject, as `[label, value]` rows for

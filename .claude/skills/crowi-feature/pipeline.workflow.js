@@ -125,7 +125,7 @@ const VERDICT = {
     summary: { type: 'string' },
     blocking: { type: 'array', items: { type: 'string' } },
     // Non-blocking improvements. autofix=true → an implementer polish pass fixes
-    // them before commit (the default — never defer to a TODO); autofix=false →
+    // them before commit (the default — never defer them anywhere); autofix=false →
     // genuinely out-of-scope, surfaced to the human in the run summary.
     advisories: {
       type: 'array',
@@ -359,7 +359,7 @@ async function runPhase(p) {
           `are met and the quality bar passes; NEEDS_WORK when fixable issues remain; ESCALATE only when ` +
           `a human design decision is genuinely required. Also return advisories[] — non-blocking ` +
           `improvements each tagged autofix (in-scope / mechanical → fixed before commit, the default) or ` +
-          `defer (genuinely out-of-scope → surfaced to the human, NOT written to any TODO). Lean autofix.`,
+          `defer (genuinely out-of-scope → surfaced to the human, NOT written to any backlog). Lean autofix.`,
         { agentType: 'feature-reviewer', label: `review:${ID}${suffix(p)}#${attempt}`, schema: VERDICT },
       )
     if (CODEX_REVIEWER) {
@@ -393,9 +393,9 @@ async function runPhase(p) {
   }
 
   // Default: fix the reviewer's in-scope advisories BEFORE commit rather than
-  // deferring them to a TODO. One polish pass; the implementer re-runs every
+  // deferring them anywhere. One polish pass; the implementer re-runs every
   // required check, so a broken advisory-fix cannot land. `defer` advisories are
-  // left for the human (surfaced in the run summary), never written to a TODO.
+  // left for the human (surfaced in the run summary), never written to a backlog.
   const autofix = (verdict.advisories || []).filter((a) => a && a.autofix)
   if (autofix.length) {
     phase('Build')
@@ -405,7 +405,7 @@ async function runPhase(p) {
         autofix.map((a, i) => `(${i + 1}) ${a.description}`).join('  ') +
         `. Keep the diff tight, refresh commitPlan, and re-run type-check / test / lint / format — they ` +
         `MUST all stay green. If one of these turns out to be a larger change than a local polish, STOP ` +
-        `and set ready=false with the reason (do NOT record it as a TODO); the human decides. Set ` +
+        `and set ready=false with the reason (do NOT park it anywhere); the human decides. Set ` +
         `ready=true once the fixes are in and every required check passes.`,
       { agentType: 'feature-implementer', label: `polish:${ID}${suffix(p)}`, schema: IMPL_RESULT },
     )
@@ -418,7 +418,7 @@ async function runPhase(p) {
   const last = p === PHASES[PHASES.length - 1]
   const done = await agent(
     `crowi-feature COMMITTER for task "${ID}"${t}. Commit per task.commitPlan: split commits ` +
-      `(feat / test / docs(site) / docs(todo) as planned), main-direct, do NOT push. ` +
+      `(feat / test / docs(site) as planned), main-direct, do NOT push. ` +
       (isMulti(p) ? `Mark phase ${p.id} COMMITTED. ` : 'Mark the task COMMITTED. ') +
       (last
         ? 'If the whole task is now COMMITTED with no phases remaining, delete the spec per your instructions. '

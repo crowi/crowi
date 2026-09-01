@@ -1,28 +1,28 @@
-import { createPageViaApi, getPageRenderedAst, listLoadedPluginNamesViaApi, updatePluginConfigViaApi } from '../src/api';
+import { createPageViaApi, getPageRenderedAst, listLoadedPluginNamesViaApi } from '../src/api';
 import { E2E_API_URL, E2E_WEB_URL } from '../src/config';
 import { countPluginRenderCacheRows, forceStaleRendererVersion, getPluginRenderCacheFetchedAt } from '../src/db';
 import { expect, test } from '../src/fixtures';
 
 /**
  * feature-renderer-plugin-boundary Phase 2 (§1/§9) — the dedicated
- * reference-runner integration suite for the three optional renderer
- * plugins packages/api and packages/web no longer import for real
- * (`katex.e2e.test.ts` / `plantuml.e2e.test.ts` / `mermaid.e2e.test.ts` in
- * `@crowi/api`, `render-mdast.test.tsx` in `@crowi/web`, all converted to
- * local fakes — see those files' own doc comments). This is the one place
- * outside the plugin packages themselves, `apps/crowi-runner`, and
- * `packages/e2e` where a genuine `@crowi/plugin-renderer-{katex,plantuml,
- * mermaid}` import is expected — the E2E runner (`packages/e2e/runner/`)
- * resolves them the same way `apps/crowi-runner` does at boot
- * (`createRequire(projectDir)` + `.npmrc`'s `@crowi/plugin-*` hoist).
+ * reference-runner integration suite for the optional renderer plugins
+ * packages/api and packages/web do not import for real
+ * (`katex.e2e.test.ts` / `mermaid.e2e.test.ts` in `@crowi/api`,
+ * `render-mdast.test.tsx` in `@crowi/web`, all use local fakes —
+ * see those files' own doc comments). This is the one place outside the
+ * plugin packages themselves, `apps/crowi-runner`, and `packages/e2e`
+ * where a genuine `@crowi/plugin-renderer-{katex,mermaid}` import is
+ * expected — the E2E runner (`packages/e2e/runner/`) resolves them the
+ * same way `apps/crowi-runner` does at boot (`createRequire(projectDir)`
+ * + `.npmrc`'s `@crowi/plugin-*` hoist).
  *
  * Single scenario, end to end through a real browser + a real API process
  * (separate origins, `E2E_API_URL`/`E2E_WEB_URL` — `packages/e2e/src/config.ts`):
- *   1. all three plugins are loaded.
- *   2. one page is saved mixing KaTeX/PlantUML/Mermaid source.
- *   3. the API side is asserted directly: `PluginRenderCache` rows exist
- *      for PlantUML/Mermaid (KaTeX has none — a synchronous node renderer,
- *      no embed/code-block cache entry), the serialized AST
+ *   1. both plugins are loaded.
+ *   2. one page is saved mixing KaTeX/Mermaid source.
+ *   3. the API side is asserted directly: a `PluginRenderCache` row exists
+ *      for Mermaid (KaTeX has none — a synchronous node renderer, no
+ *      embed/code-block cache entry), the serialized AST
  *      (`page.revision.renderedAst`) carries each plugin's REAL output
  *      including the new `data-crowi-renderer-presentation`/`-state`
  *      contract (spec §3.1).
@@ -39,15 +39,15 @@ import { expect, test } from '../src/fixtures';
  *      page (a real revision UPDATE, which asynchronously invalidates the
  *      whole page's cache the moment it lands) would — a race a black-box
  *      E2E client cannot deterministically avoid. The replayed AST still
- *      carries the `ready` contract (functionally correct) AND each
+ *      carries the `ready` contract (functionally correct) AND the
  *      plugin's cache row's `fetchedAt` is bit-identical to what it was
  *      right after the original save: a real miss/re-render always stamps
  *      a fresh `fetchedAt` on write (`renderer/cache/index.ts`'s
  *      `persistRenderResult`), so an unchanged value can only mean the
  *      plugin's real `render()` was skipped the second time (same-source
  *      cache-hit-skips-render is additionally covered, in isolation, at
- *      the registry/pipeline level by `plantuml.e2e.test.ts` /
- *      `mermaid.e2e.test.ts` in `@crowi/api`).
+ *      the registry/pipeline level by `mermaid.e2e.test.ts` in
+ *      `@crowi/api`).
  *   5. the browser side is asserted: KaTeX's CSS self-serves from the API
  *      origin with `Access-Control-Allow-Origin` set to the web origin
  *      (cross-origin — same guarantee the referenced font URL the CSS
@@ -55,25 +55,11 @@ import { expect, test } from '../src/fixtures';
  *      applies it (the `<link>`'s `.sheet` is non-null and the rendered
  *      `.katex` element's computed `font-family` resolves to KaTeX's own
  *      `KaTeX_Main` font — an HTTP 200 alone proves neither), and the
- *      PlantUML/Mermaid diagrams render `ready` and open the
- *      click-to-enlarge dialog (`renderer-presentation.tsx`).
- *
- * PlantUML's `serverUrl` is pointed at the compose-published
- * `http://localhost:8080` server (spec §9 — `docker-compose.yml`'s
- * `plantuml` service) via the admin plugin-config endpoint
- * (`updatePluginConfigViaApi`) — the same generic endpoint
- * `admin-mail-page.ts`'s UI-driven SMTP setup flow PUTs to, called
- * directly here since the config FORM itself isn't what this spec tests.
- * feature-renderer-plugin-boundary Phase 2 also gave the PlantUML plugin
- * a `reconfigure` hook (`packages/plugin-renderer-plantuml/src/index.ts`)
- * so this PUT actually hot-applies against the shared e2e api process
- * with no restart — completing the "admin edits trigger reconfigure(ctx)"
- * behaviour that plugin's own `registerRenderer` doc comment already
- * described but never wired up.
+ *      Mermaid diagram renders `ready` and opens the click-to-enlarge
+ *      dialog (`renderer-presentation.tsx`).
  */
 
 const KATEX_PLUGIN = '@crowi/plugin-renderer-katex';
-const PLANTUML_PLUGIN = '@crowi/plugin-renderer-plantuml';
 const MERMAID_PLUGIN = '@crowi/plugin-renderer-mermaid';
 
 /** English + Japanese "Enlarge diagram" (`page.diagram_zoom`) — i18n-tolerant literal-key regex, same pattern as `attachments.spec.ts`'s `DOWNLOAD_PATTERN`. */
@@ -90,126 +76,45 @@ function collectHtmlValues(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
-interface HtmlNodeWithData {
-  value: string;
-  data?: Record<string, unknown>;
-}
-
-/**
- * Same walk, but keeping each `html` node's `data` — RFC-0023's
- * structured sidecar (`data.crowiDiagram`) rides on the NODE, not
- * inside the html string, so `collectHtmlValues` above cannot see it.
- */
-function collectHtmlNodes(node: unknown, out: HtmlNodeWithData[] = []): HtmlNodeWithData[] {
-  if (!node || typeof node !== 'object') return out;
-  const record = node as { type?: unknown; value?: unknown; data?: unknown; children?: unknown[] };
-  if (record.type === 'html' && typeof record.value === 'string') {
-    out.push({ value: record.value, data: typeof record.data === 'object' && record.data !== null ? (record.data as Record<string, unknown>) : undefined });
-  }
-  if (Array.isArray(record.children)) {
-    for (const child of record.children) collectHtmlNodes(child, out);
-  }
-  return out;
-}
-
-/** `CrowiDiagramSidecar`'s runtime shape, restated for the assertions below. */
-interface DiagramSidecar {
-  kind: string;
-  alt: string;
-  image: { mediaType: string; base64: string; width: number; height: number };
-}
-
-test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → serialized AST (API), stylesheet CORS + ready-diagram interaction (browser)', async ({
+test('KaTeX / Mermaid: real activation → save render → cache → serialized AST (API), stylesheet CORS + ready-diagram interaction (browser)', async ({
   adminPage,
   userAPage,
 }) => {
-  // Real HTTP round-trip to a live PlantUML server + a forked Mermaid
-  // render-worker pool cold start, on top of normal page save/navigation —
-  // well beyond the config-level 60s default.
+  // A forked Mermaid render-worker pool cold start, on top of normal page
+  // save/navigation — well beyond the config-level 60s default.
   test.setTimeout(120_000);
 
-  await test.step('all three optional renderer plugins are loaded', async () => {
+  await test.step('both optional renderer plugins are loaded', async () => {
     const loaded = await listLoadedPluginNamesViaApi(adminPage.context());
-    expect(loaded).toEqual(expect.arrayContaining([KATEX_PLUGIN, PLANTUML_PLUGIN, MERMAID_PLUGIN]));
-  });
-
-  await test.step('point PlantUML at the compose-published local server', async () => {
-    await updatePluginConfigViaApi(adminPage.context(), {
-      pluginName: PLANTUML_PLUGIN,
-      values: { serverUrl: 'http://localhost:8080', outputFormat: 'svg' },
-    });
+    expect(loaded).toEqual(expect.arrayContaining([KATEX_PLUGIN, MERMAID_PLUGIN]));
   });
 
   const token = `e2erenderer${Date.now()}`;
   const pagePath = `/e2e/renderer-plugins/${token}`;
-  const body = [
-    '# Renderer plugins',
-    '',
-    `Inline math: $x^2 + y^2 = z^2$ (${token})`,
-    '',
-    '```plantuml',
-    '@startuml',
-    'Alice -> Bob: hello',
-    '@enduml',
-    '```',
-    '',
-    '```mermaid',
-    'flowchart TD',
-    '  A --> B',
-    '```',
-    '',
-  ].join('\n');
+  const body = ['# Renderer plugins', '', `Inline math: $x^2 + y^2 = z^2$ (${token})`, '', '```mermaid', 'flowchart TD', '  A --> B', '```', ''].join('\n');
 
-  const pageId = await test.step('save a page mixing all three renderer sources', () => createPageViaApi(userAPage.context(), { path: pagePath, body }));
+  const pageId = await test.step('save a page mixing both renderer sources', () => createPageViaApi(userAPage.context(), { path: pagePath, body }));
 
-  await test.step('the serialized AST carries real KaTeX / PlantUML / Mermaid output, PlantUML AND Mermaid each independently carrying the new ready presentation contract', async () => {
+  await test.step('the serialized AST carries real KaTeX / Mermaid output, Mermaid carrying the new ready presentation contract', async () => {
     const ast = await getPageRenderedAst(userAPage.context(), pageId);
     const htmlFragments = collectHtmlValues(ast);
 
     expect(htmlFragments.join('\n')).toContain('class="katex"');
-
-    const plantumlFragment = htmlFragments.find((f) => f.includes('plantuml-embed'));
-    expect(plantumlFragment).toBeDefined();
-    expect(plantumlFragment).toContain('data-crowi-renderer-presentation="diagram"');
-    expect(plantumlFragment).toContain('data-crowi-renderer-state="ready"');
-    expect(plantumlFragment).toContain('<svg');
 
     const mermaidFragment = htmlFragments.find((f) => f.includes('mermaid-embed'));
     expect(mermaidFragment).toBeDefined();
     expect(mermaidFragment).toContain('data-crowi-renderer-presentation="diagram"');
     expect(mermaidFragment).toContain('data-crowi-renderer-state="ready"');
     expect(mermaidFragment).toContain('src="data:image/svg+xml;base64,');
-
-    // RFC-0023 §10 — the structured sidecar native clients read, on the
-    // real save path (render → PluginRenderCache → stored AST). Mermaid's
-    // is a server-rasterized PNG: the iOS SVG rasterizer cannot draw
-    // Mermaid's own SVG output (`plugin-renderer-mermaid/src/rasterize-png.ts`).
-    // The cache STRIPS an oversized structured payload while still
-    // writing the html, so a regression here is silent everywhere except
-    // this assertion.
-    const mermaidNode = collectHtmlNodes(ast).find((n) => n.value.includes('mermaid-embed'));
-    const mermaidSidecar = mermaidNode?.data?.crowiDiagram as DiagramSidecar | undefined;
-    expect(mermaidSidecar?.kind).toBe('mermaid');
-    expect(mermaidSidecar?.image.mediaType).toBe('image/png');
-    expect(mermaidSidecar?.image.width).toBeGreaterThan(0);
-    expect(mermaidSidecar?.image.height).toBeGreaterThan(0);
-    // Real PNG bytes, not merely a declared mediaType.
-    expect(
-      Buffer.from(mermaidSidecar?.image.base64 ?? '', 'base64')
-        .subarray(0, 8)
-        .toString('hex'),
-    ).toBe('89504e470d0a1a0a');
   });
 
   const cacheFetchedAtAfterSave =
-    await test.step('PluginRenderCache carries exactly one row each for PlantUML and Mermaid (KaTeX has none — a synchronous node renderer, no embed/code-block cache entry)', async () => {
-      expect(await countPluginRenderCacheRows(pageId, PLANTUML_PLUGIN)).toBe(1);
+    await test.step('PluginRenderCache carries exactly one row for Mermaid (KaTeX has none — a synchronous node renderer, no embed/code-block cache entry)', async () => {
       expect(await countPluginRenderCacheRows(pageId, MERMAID_PLUGIN)).toBe(1);
 
-      const plantuml = await getPluginRenderCacheFetchedAt(pageId, PLANTUML_PLUGIN);
       const mermaid = await getPluginRenderCacheFetchedAt(pageId, MERMAID_PLUGIN);
-      if (!plantuml || !mermaid) throw new Error('PluginRenderCache row is missing a fetchedAt right after save');
-      return { plantuml, mermaid };
+      if (!mermaid) throw new Error('PluginRenderCache row is missing a fetchedAt right after save');
+      return { mermaid };
     });
 
   await test.step('forcing the stored AST stale and re-reading re-runs the SAME cache-backed dispatch, proving a genuine cache HIT (bit-identical fetchedAt, no duplicate row) rather than a silent re-render', async () => {
@@ -234,7 +139,6 @@ test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → 
     // that re-renders would ALSO upsert onto this exact row (identical
     // 4-tuple cache key), so this alone cannot tell hit from miss. The
     // fetchedAt comparison below is the actual discriminating proof.
-    expect(await countPluginRenderCacheRows(pageId, PLANTUML_PLUGIN)).toBe(1);
     expect(await countPluginRenderCacheRows(pageId, MERMAID_PLUGIN)).toBe(1);
 
     // `persistRenderResult` always stamps a fresh `fetchedAt = new
@@ -242,9 +146,7 @@ test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → 
     // cache HIT returns the entry as-is and never calls it — so an
     // UNCHANGED `fetchedAt` can only mean the plugin's real render() was
     // skipped this second time.
-    const plantumlFetchedAt = await getPluginRenderCacheFetchedAt(pageId, PLANTUML_PLUGIN);
     const mermaidFetchedAt = await getPluginRenderCacheFetchedAt(pageId, MERMAID_PLUGIN);
-    expect(plantumlFetchedAt?.getTime()).toBe(cacheFetchedAtAfterSave.plantuml.getTime());
     expect(mermaidFetchedAt?.getTime()).toBe(cacheFetchedAtAfterSave.mermaid.getTime());
   });
 
@@ -291,9 +193,9 @@ test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → 
     await expect.poll(() => mathLocator.evaluate((el) => getComputedStyle(el).fontFamily), { timeout: 15_000 }).toContain('KaTeX_Main');
   });
 
-  await test.step('browser: the PlantUML and Mermaid diagrams both render ready and open the click-to-enlarge dialog', async () => {
+  await test.step('browser: the Mermaid diagram renders ready and opens the click-to-enlarge dialog', async () => {
     const zoomButtons = userAPage.getByRole('button', { name: ZOOM_BUTTON_PATTERN });
-    await expect(zoomButtons).toHaveCount(2);
+    await expect(zoomButtons).toHaveCount(1);
     await zoomButtons.first().click();
     await expect(userAPage.getByRole('dialog')).toBeVisible();
   });

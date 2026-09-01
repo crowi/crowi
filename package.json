@@ -31,7 +31,8 @@
       "brace-expansion@1": "1.1.18",
       "brace-expansion@2": "2.1.4",
       "brace-expansion@5": "5.0.9",
-      "postcss@<8.5.23": "8.5.23"
+      "postcss@<8.5.23": "8.5.23",
+      "typescript-eslint@<8.68.0": "8.68.0"
     }
   },
   "scripts": {
@@ -45,7 +46,7 @@
     "build:images": "node scripts/build-images.mjs",
     "test": "turbo run test --concurrency=3 --filter=!@crowi/plugin-renderer-mermaid; s1=$?; turbo run test --concurrency=1 --filter=@crowi/plugin-renderer-mermaid; s2=$?; exit $(( s1 || s2 ))",
     "test:scripts": "node --test scripts/*.test.mjs packages/*/scripts/*.test.mjs .claude/scripts/*.test.mjs .claude/skills/*/tests/*.test.mjs",
-    "test:scripts:sh": "for f in .claude/scripts/orchestrate-watch.test.sh .claude/scripts/task-state.test.sh .claude/skills/crowi-feature/tests/pipeline-contract-v2-review.test.sh .claude/skills/_shared/tests/validate-implementation-spec.test.sh; do echo \"--- $f ---\"; bash \"$f\" || exit 1; done",
+    "test:scripts:sh": "for f in .claude/scripts/orchestrate-watch.test.sh .claude/scripts/task-state.test.sh .claude/skills/crowi-feature/tests/pipeline-contract-v2-review.test.sh .claude/skills/_shared/tests/validate-implementation-spec.test.sh .claude/skills/_shared/tests/e2e-gate.test.sh; do echo \"--- $f ---\"; bash \"$f\" || exit 1; done",
     "test:flake": "node scripts/test-flake-report.mjs",
     "test:flake-taxonomy": "node scripts/test-flake-taxonomy.mjs",
     "test:server": "turbo run test:server",
@@ -69,6 +70,10 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
     "@changesets/cli": "^2.31.0",
+    "@eslint/js": "catalog:",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
+    "eslint": "catalog:",
     "lefthook": "^2.1.6",
     "turbo": "^2.9.16"
   }

@@ -32,7 +32,7 @@ description: crowi の manager ロールでセッションを起動/再起動し
   - **レビュー裁定**: reviewer / planner の verdict を**鵜呑みにせず**、correctness-critical(消失・並行・認証・migration)は実コードで再確認して採否を決める。複数レビュアー(cross-review)は突き合わせて de-conflict し、乖離は自分で裁定。planner へは fix or drop の形で差し戻す。
   - **リリース指揮**: `/crowi-release`(pre-flight 材料出し)。merge / GO はユーザーの明示承認後。
 - **やらないこと**: spec / RFC の執筆(planner の領分 — 大枠は会話で詰めても正本執筆は planner に渡す)、worktree 実装(impl の領分)、`git push`(ユーザー明示指示のみ)、**main / release への直接 push・force push は禁止**(必ず PR 経由 — CLAUDE.md)。
-- **レビュー指摘は fix or drop**(TODO / backlog へ退避しない)。cross-review 依頼はユーザー opt-in か skill 指示のときのみ Workflow / 多エージェントを起こす。
+- **レビュー指摘は fix or drop**(退避先は存在しない)。cross-review 依頼はユーザー opt-in か skill 指示のときのみ Workflow / 多エージェントを起こす。
 - 詳細な規約は CLAUDE.md(常時ロード)と memory(feedback / reference / handoff 系が毎セッション index 済み)に従う。
 
 ## 運用 gotcha(manager 固有・ハマりどころ)

@@ -4,6 +4,18 @@ import { parseRedisDatabaseOrThrow } from './redis-database';
 const debug = Debug('crowi:util:redis-opts');
 
 /**
+ * The reconnect delay curve `buildRedisOpts` pins for every client it
+ * configures: linear backoff capped at 500ms, retrying forever, never
+ * returning `Error`. Exported so `crowi/index.ts`'s bounded-retry boot
+ * override (which replaces this with its own abort-after-N-attempts
+ * variant) and tests can reference the exact same function rather than a
+ * structurally-similar copy.
+ */
+export function redisReconnectForever(retries: number): number {
+  return Math.min(retries * 50, 500);
+}
+
+/**
  * Translate a Crowi-style `REDIS_URL` (`redis://` or `rediss://` with
  * optional `user:password@host:port`) into a node-redis v4
  * `socket`-shaped config.
@@ -26,6 +38,14 @@ const debug = Debug('crowi:util:redis-opts');
  * a secondary, purely numeric isolation axis — NOT a substitute for
  * `util/redis-keyspace.ts`'s instance-scoped key/channel prefix, since
  * Redis pub/sub ignores the selected DB.
+ *
+ * The RESP protocol version, command timeout, keepalive delay, and
+ * reconnect curve are pinned explicitly (`RESP: 2`, `commandOptions.timeout:
+ * undefined`, `socket.keepAlive*`, `socket.reconnectStrategy`) rather than
+ * left to the installed client's own defaults: those defaults are not part
+ * of node-redis's stable contract, while every caller of this function
+ * (boot client, config pub/sub) needs one fixed set of connection semantics
+ * regardless of which client major is installed.
  */
 export function buildRedisOpts(redisUrl: string | null, rejectUnauthorized: boolean): Record<string, unknown> | null {
   if (!redisUrl) return null;
@@ -54,9 +74,22 @@ export function buildRedisOpts(redisUrl: string | null, rejectUnauthorized: bool
   const tlsOpts = u.protocol === 'rediss:' ? { tls: true as const, requestCert: true, rejectUnauthorized } : null;
 
   return {
+    // Not derived from the installed client's own RESP default — pinned to
+    // RESP2 so the wire protocol stays fixed regardless of client major.
+    RESP: 2,
+    // The installed client's own default arms a per-command timeout; an
+    // explicit `timeout: undefined` key (NOT omitting `commandOptions`
+    // entirely, which would keep that default) removes it via the option
+    // merge's object spread.
+    commandOptions: { timeout: undefined },
     socket: {
       host,
       port: portNumber,
+      // Fixed 5-second TCP keepalive probe, independent of the installed
+      // client's own keepalive defaults.
+      keepAlive: true,
+      keepAliveInitialDelay: 5000,
+      reconnectStrategy: redisReconnectForever,
       ...tlsOpts,
     },
     database: parseRedisDatabaseOrThrow(redisUrl),

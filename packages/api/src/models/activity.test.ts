@@ -1,4 +1,4 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
 import mongoose from 'mongoose';
 import { crowi, Fixture } from 'src/test/setup';
 
@@ -100,7 +100,13 @@ describe('Activity', function () {
       const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: Page.GRANT_PUBLIC, creator: userIds[0] }];
       const comments = userIds.map((userId) => ({ page: pageId, creator: userId, comment: faker.lorem.word() }));
 
-      await Promise.all([Fixture.generate('User', users), Fixture.generate('Page', pages), Fixture.generate('Comment', comments)]);
+      // Comment's post-save hook re-fetches its Page (comment.ts) to check
+      // it wasn't concurrently trashed/moved; racing this against the Page
+      // fixture's own save (unordered Promise.all) can find the Page still
+      // unsaved and misfire that check. User and Page are independent and
+      // stay parallel; Comment must wait for Page to exist.
+      await Promise.all([Fixture.generate('User', users), Fixture.generate('Page', pages)]);
+      await Fixture.generate('Comment', comments);
     });
 
     afterEach(async () => {
