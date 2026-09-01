@@ -938,6 +938,9 @@ importers:
       mermaid:
         specifier: ^11.16.1
         version: 11.16.1
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@24.12.4)
     devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*
@@ -13092,7 +13095,7 @@ snapshots:
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:
       '@emnapi/core': 1.10.0
-      '@emnapi/runtime': 1.10.0
+      '@emnapi/runtime': 1.11.2
       '@tybys/wasm-util': 0.10.2
     optional: true
 
