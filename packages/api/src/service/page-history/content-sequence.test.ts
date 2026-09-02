@@ -482,6 +482,60 @@ describe('service/page-history/content-sequence — allocateContentSequence (RFC
     });
   });
 
+  describe('feature-rename-promotes-untracked-page: promotionOnly (RFC-0021 rename-promotion caller)', () => {
+    test('AC-5: does not assign the next sequence to a stale pointer once a concurrent save has moved the Page on to a new one', async () => {
+      const pageId = await createReadyPage('/content-sequence/promotion-only-race', 1);
+      const staleRevision = await createRevision(pageId, 'stale'); // what rename's fresh read saw as the current pointer
+      const winningRevision = await createRevision(pageId, 'winner');
+      // A concurrent content save "wins": its own (non-promotionOnly) pointer
+      // write + allocate call lands before rename's own allocator call runs.
+      await allocateContentSequence(crowi, pageId, winningRevision._id);
+
+      const outcome = await allocateContentSequence(crowi, pageId, staleRevision._id, { promotionOnly: true });
+
+      expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
+      const page = await Page.findById(pageId);
+      expect(page.historySequence).toBe(2); // only the winner's sequence — never a stale n+1 for the loser
+      const reloadedStale = await Revision.findById(staleRevision._id).lean();
+      expect(reloadedStale?.historySequence).toBeUndefined();
+    });
+
+    test('without promotionOnly, the same stale-pointer race instead assigns the next sequence to the old revision (the ordering hazard promotionOnly exists to close)', async () => {
+      const pageId = await createReadyPage('/content-sequence/promotion-only-control', 1);
+      const staleRevision = await createRevision(pageId, 'stale');
+      const winningRevision = await createRevision(pageId, 'winner');
+      await allocateContentSequence(crowi, pageId, winningRevision._id);
+
+      const outcome = await allocateContentSequence(crowi, pageId, staleRevision._id);
+
+      expect(outcome).toEqual({ allocated: true, sequence: 3, materialized: true, alreadySequenced: false });
+      const reloadedStale = await Revision.findById(staleRevision._id).lean();
+      expect(reloadedStale?.historySequence).toBe(3); // sequence 3 landed on a Revision created BEFORE sequence 2's — the hazard
+    });
+
+    test('AC-8: a migrating Page with promotionOnly stays not-eligible and unchanged', async () => {
+      const { pageId, revisionId } = await createUntrackedPageWithRevision('/content-sequence/promotion-only-migrating');
+      await Page.updateOne({ _id: pageId }, { $set: { 'historyTracking.state': 'migrating' } });
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId, { promotionOnly: true });
+
+      expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
+      const page = await Page.findById(pageId);
+      expect(page.historyTracking.state).toBe('migrating');
+      expect(page.historySequence).toBe(0);
+    });
+
+    test('an untracked Page whose pointer matches is still promoted when promotionOnly is set', async () => {
+      const { pageId, revisionId } = await createUntrackedPageWithRevision('/content-sequence/promotion-only-promotes');
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId, { promotionOnly: true });
+
+      expect(outcome).toEqual({ allocated: true, sequence: 1, materialized: true, alreadySequenced: false });
+      const page = await Page.findById(pageId);
+      expect(page.historyTracking.state).toBe('ready');
+    });
+  });
+
   describe('never throws (Error semantics contract)', () => {
     test('an internal DB failure collapses to { allocated: false, reason: "contended" } instead of rejecting', async () => {
       const pageId = await createReadyPage('/content-sequence/db-failure', 0);

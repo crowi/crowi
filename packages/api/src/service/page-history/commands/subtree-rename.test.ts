@@ -5,6 +5,8 @@ import type { PageHistoryEventModel } from 'src/models/page-history-event';
 import type { PageHistoryOperationModel } from 'src/models/page-history-operation';
 import type { RevisionModel } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
+import * as contentSequenceModule from 'src/service/page-history/content-sequence';
+import { readPageHistory } from 'src/service/page-history/read';
 import { crowi, Fixture } from 'src/test/setup';
 import { runPageHistoryRepair } from 'src/util/page-history-repair';
 import { RENAME_TREE_CONCURRENCY } from 'src/util/map-with-concurrency';
@@ -52,6 +54,34 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     const revision = await Revision.prepareRevision(page, 'body', user, { format: 'markdown' });
     await Page.pushRevision(page, revision, user);
     return (await Page.findById(page._id)) as PageDocument;
+  }
+
+  /**
+   * An untracked page that DOES carry a revision pointer, built via raw
+   * writes so the promotion step under test is the only writer that ever
+   * touches `historyTracking`/`historySequence` — going through
+   * `Page.pushRevision` (like `createReadyPage` above) would promote it
+   * before the test even starts. `status` is written explicitly: the schema
+   * default only fills a HYDRATED document's gap, but `enterTransition`'s
+   * CAS pins the literal `status` value (`transition.ts:155`), so a raw doc
+   * missing it can never enter a transition at all — unrelated to the
+   * promotion logic this fixture exists to isolate.
+   */
+  async function createUntrackedPageWithRevision(path: string, body = 'v0'): Promise<PageDocument> {
+    const insertResult = await Page.collection.insertOne({
+      path,
+      status: STATUS_PUBLISHED,
+      grant: Page.GRANT_PUBLIC,
+      creator: user._id,
+      lastUpdateUser: user._id,
+      grantedUsers: [user._id],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const pageId = insertResult.insertedId;
+    const revision = await Revision.create({ page: pageId, path, body, format: 'markdown', author: user._id });
+    await Page.updateOne({ _id: pageId }, { $set: { revision: revision._id } });
+    return (await Page.findById(pageId)) as PageDocument;
   }
 
   const run = (page: PageDocument, toPath: string, idempotencyKey = nextKey()) =>
@@ -1187,6 +1217,189 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     expect(await resumeSubtreeMemberCommand(crowi, member)).toBe('resumed');
     expect(await PageHistoryEvent.countDocuments({ page: page._id, operationId: rightRoot.groupOperationId })).toBe(1);
     expect(await PageHistoryEvent.countDocuments({ page: page._id, operationId: wrongRoot.groupOperationId })).toBe(0);
+  });
+
+  describe('feature-rename-promotes-untracked-page: rename promotes an untracked (pointer-carrying) member in place', () => {
+    test('AC-1: an untracked member with an owned revision pointer is promoted, moved, and reported as a success (repro-then-fix)', async () => {
+      const root = await createReadyPage('/subtree/untracked-promote');
+      const child = await createUntrackedPageWithRevision('/subtree/untracked-promote/child');
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, child],
+        toPath: '/subtree/untracked-promote-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: nextKey(),
+        requestFingerprint: `fingerprint-${String(root._id)}-untracked-promote`,
+        createRedirectPage: false,
+      });
+
+      // Untracked member promotion: verify event is written and member
+      // is reported as success (durable-evidence check passes).
+      expect(outcome.status).toBe('completed');
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+      expect(outcome.status === 'completed' && outcome.successes.map((page) => String(page._id)).sort()).toEqual([root._id, child._id].map(String).sort());
+
+      const reloadedChild = await Page.findById(child._id).lean();
+      expect(reloadedChild).toMatchObject({ path: '/subtree/untracked-promote-moved/child' });
+      expect(reloadedChild.historyTracking?.state).toBe('ready');
+      expect(reloadedChild.historySequence).toBe(2);
+
+      const events = await PageHistoryEvent.find({ page: child._id, kind: 'page_renamed' }).lean();
+      expect(events).toHaveLength(1);
+      expect(events[0].payload.subtree).toBe(true);
+      expect(events[0].sequence).toBe(2);
+
+      const revisions = await Revision.find({ page: child._id }).lean();
+      expect(revisions).toHaveLength(1);
+      expect(revisions[0].historySequence).toBe(1);
+    });
+
+    test('AC-3: history reads back content#1 then event#2, and an older revision below the boundary stays unsequenced', async () => {
+      const root = await createReadyPage('/subtree/untracked-history');
+      const child = await createUntrackedPageWithRevision('/subtree/untracked-history/child', 'current');
+      const older = await Revision.create({
+        page: child._id,
+        path: child.path,
+        body: 'older',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 60_000),
+      });
+      const currentRevisionId = child.revision;
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, child],
+        toPath: '/subtree/untracked-history-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: nextKey(),
+        requestFingerprint: `fingerprint-${String(root._id)}-untracked-history`,
+        createRedirectPage: false,
+      });
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+
+      const result = await readPageHistory(crowi, { pageId: child._id, limit: 50, cursor: null });
+      expect(result.tracking.state).toBe('ready');
+      expect(result.entries.map((entry) => ({ type: entry.type, sequence: entry.sequence, id: entry.id }))).toEqual([
+        { type: 'page_event', sequence: 2, id: expect.any(String) },
+        { type: 'content_revision', sequence: 1, id: String(currentRevisionId) },
+        { type: 'content_revision', sequence: null, id: String(older._id) },
+      ]);
+    });
+
+    test('AC-4: a member whose promotion is contended does not move, and a resend with the same key promotes and succeeds', async () => {
+      const root = await createReadyPage('/subtree/untracked-contended');
+      const child = await createUntrackedPageWithRevision('/subtree/untracked-contended/child');
+      const key = nextKey();
+
+      const allocateSpy = jest.spyOn(contentSequenceModule, 'allocateContentSequence').mockResolvedValueOnce({ allocated: false, reason: 'contended' });
+      let first: Awaited<ReturnType<typeof run>>;
+      try {
+        first = await subtreeRenameCommand(crowi, {
+          page: root,
+          pageId: root._id,
+          memberPages: [root, child],
+          toPath: '/subtree/untracked-contended-moved',
+          actor: user._id,
+          user,
+          source: 'web',
+          idempotencyKey: key,
+          // Matches `run()`'s own default fingerprint formula (root id +
+          // toPath) so the resend below — issued through `run()` — resolves
+          // as the SAME request rather than a fingerprint-mismatch.
+          requestFingerprint: `fingerprint-${String(root._id)}-/subtree/untracked-contended-moved`,
+          createRedirectPage: false,
+        });
+      } finally {
+        allocateSpy.mockRestore();
+      }
+
+      expect(first.status === 'completed' && first.failures).toEqual([{ oldPath: child.path, error: `Failed to update page (${child.path}).` }]);
+      const stillOld = await Page.findById(child._id).lean();
+      expect(stillOld.path).toBe(child.path);
+      expect(stillOld.historyTracking).toBeUndefined();
+      expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: child._id }).lean()).result).toBeNull();
+
+      const replay = await run(root, '/subtree/untracked-contended-moved', key);
+
+      expect(replay.status === 'completed' && replay.failures).toEqual([]);
+      const moved = await Page.findById(child._id).lean();
+      expect(moved.path).toBe('/subtree/untracked-contended-moved/child');
+      expect(moved.historyTracking?.state).toBe('ready');
+      expect(await PageHistoryEvent.countDocuments({ page: child._id, kind: 'page_renamed' })).toBe(1);
+    });
+
+    test('AC-5/AC-16(d): a concurrent content save that wins the promotion race does not get a doubled sequence, and the move still succeeds without a resend', async () => {
+      const root = await createReadyPage('/subtree/untracked-race');
+      const child = await createUntrackedPageWithRevision('/subtree/untracked-race/child');
+      const oldRevisionId = child.revision;
+
+      const originalExists = Revision.exists.bind(Revision);
+      let injected = false;
+      const existsSpy = jest.spyOn(Revision, 'exists').mockImplementation((filter: Record<string, unknown>) => {
+        const query = originalExists(filter);
+        if (!injected && String(filter._id) === String(oldRevisionId)) {
+          injected = true;
+          const exec = query.exec.bind(query);
+          query.exec = (async () => {
+            // Lands the concurrent content save's pointer move + its OWN
+            // (non-promotionOnly) promotion strictly between rename's
+            // ownership check and its own allocator call — the exact
+            // interleaving §処理・データフロー 手順7〜10 describes.
+            const current = (await Page.findById(child._id)) as PageDocument;
+            const newRevision = await Revision.prepareRevision(current, 'concurrent-save', user, { format: 'markdown' });
+            await Page.pushRevision(current, newRevision, user);
+            return exec();
+          }) as typeof query.exec;
+        }
+        return query;
+      });
+
+      let outcome: Awaited<ReturnType<typeof run>>;
+      try {
+        outcome = await subtreeRenameCommand(crowi, {
+          page: root,
+          pageId: root._id,
+          memberPages: [root, child],
+          toPath: '/subtree/untracked-race-moved',
+          actor: user._id,
+          user,
+          source: 'web',
+          idempotencyKey: nextKey(),
+          requestFingerprint: `fingerprint-${String(root._id)}-untracked-race`,
+          createRedirectPage: false,
+        });
+      } finally {
+        existsSpy.mockRestore();
+      }
+
+      // AC-16(d): the move succeeds in the SAME request, no resend needed —
+      // `not-eligible` (promotionOnly kept the old pointer from claiming the
+      // next sequence) still proceeds to the ordinary ready-page rename.
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+
+      const finalChild = await Page.findById(child._id).lean();
+      expect(finalChild.path).toBe('/subtree/untracked-race-moved/child');
+      expect(finalChild.historyTracking?.state).toBe('ready');
+      expect(finalChild.historySequence).toBe(2); // the winner's content (1) + this rename's event (2)
+
+      const reloadedOld = await Revision.findById(oldRevisionId).lean();
+      expect(reloadedOld?.historySequence).toBeUndefined(); // never claimed a sequence
+      const revisions = await Revision.find({ page: child._id }).sort({ createdAt: 1 }).lean();
+      expect(revisions).toHaveLength(2);
+      expect(revisions[1].historySequence).toBe(1); // the concurrent save's own revision, not the stale pointer
+
+      const events = await PageHistoryEvent.find({ page: child._id, kind: 'page_renamed' }).lean();
+      expect(events).toHaveLength(1);
+      expect(events[0].sequence).toBe(2);
+    });
   });
 });
 
