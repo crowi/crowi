@@ -1,5 +1,18 @@
 # @crowi/plugin-renderer-plantuml
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- f149468: The encoder is now verified against a value PlantUML itself publishes as a text-encoding example, instead of relying on a real PlantUML server round trip in the e2e suite (which required a container the local dev compose stack no longer provides, making `pnpm e2e` unrunnable locally). The plugin continues to ship as before; this only changes how its diagram-encoding correctness is verified. Registry / cache / stale-if-error behavior is still covered with a mocked renderer, unchanged.
+- ba38a7e: Upgrade `jest` / `@types/jest` / `jest-environment-node` from the 29.x series to 30.5.0 / 30.0.0 / 30.5.0 across the 16 workspaces that share these versions through the pnpm catalog. `ts-jest` stays on 29.4.12 (already accepts `jest@^30`) and `packages/web`'s vitest stack is untouched — this is a test-tooling-only change with no observable behavior difference for users of any of these packages.
+
+  `@crowi/api`'s three custom Jest extension points (the `CrowiEnvironment` test environment's `handleTestEvent`, the `FailureTaxonomyReporter`'s `onTestResult`/`onRunComplete`, and `globalSetup`'s MongoDB connection resolution) were individually verified against jest 30 and continue to work unchanged, as does the `--no-sparkplug` Node 24 V8 workaround the api's test script depends on.
+
+- Updated dependencies [ba38a7e]
+- Updated dependencies [a334308]
+  - @crowi/plugin-api@1.0.0-alpha.9
+
 ## 0.1.0-alpha.4
 
 ### Minor Changes

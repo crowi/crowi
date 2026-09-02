@@ -1,5 +1,22 @@
 # @crowi/admin-cli
 
+## 0.1.0-alpha.7
+
+### Patch Changes
+
+- ba38a7e: Upgrade `jest` / `@types/jest` / `jest-environment-node` from the 29.x series to 30.5.0 / 30.0.0 / 30.5.0 across the 16 workspaces that share these versions through the pnpm catalog. `ts-jest` stays on 29.4.12 (already accepts `jest@^30`) and `packages/web`'s vitest stack is untouched — this is a test-tooling-only change with no observable behavior difference for users of any of these packages.
+
+  `@crowi/api`'s three custom Jest extension points (the `CrowiEnvironment` test environment's `handleTestEvent`, the `FailureTaxonomyReporter`'s `onTestResult`/`onRunComplete`, and `globalSetup`'s MongoDB connection resolution) were individually verified against jest 30 and continue to work unchanged, as does the `--no-sparkplug` Node 24 V8 workaround the api's test script depends on.
+
+- Updated dependencies [e0dd589]
+- Updated dependencies [ca28907]
+- Updated dependencies [ba38a7e]
+- Updated dependencies [d1fc876]
+- Updated dependencies [af4d198]
+- Updated dependencies [3dad335]
+- Updated dependencies [a334308]
+  - @crowi/api@2.0.0-alpha.18
+
 ## 0.1.0-alpha.6
 
 ### Minor Changes
