@@ -1,5 +1,52 @@
 # @crowi/api
 
+## 2.0.0-alpha.18
+
+### Patch Changes
+
+- e0dd589: Migrate the last 4 eslintrc-based configs (the repo root, `@crowi/api`, `@crowi/collab`, `@crowi/plugin-search-mongo`) to flat config (`eslint.config.mjs`), so every workspace in the repo now lints through the same config format that `@crowi/web` and `@crowi/site` already used. `eslint` itself moves into the pnpm catalog at `^9.39.5`, so all 7 linted workspaces share one version instead of the previous 8.57.1/9 split.
+
+  This is dev tooling only — no runtime behavior, public type, or API shape changes. Every workspace's lint output was diffed line-by-line against the pre-migration baseline and came back identical (0 errors, same warnings, same files, same line numbers), including `@crowi/api`'s guard rules that block ad hoc test-file DB connections and direct Redis `.duplicate()` calls outside the one helper that installs an error listener first — those guards were restructured from 3 eslintrc override blocks down to 2 flat-config entries (flat config turned out to share eslintrc's "later config replaces, not merges, a repeated rule key" behavior, so the restructuring is a smaller version of the same workaround, not a different one) and their existing regression test (`packages/api/src/test/eslint-db-guard.test.ts`) still passes unmodified assertion-for-assertion, now driving the real flat config via ESLint's Node API with `cwd`-only discovery instead of the removed `useEslintrc` option.
+
+  `eslint` stays on the 9.x series rather than moving to 10: `eslint-config-next` (used by `@crowi/web` and `@crowi/site`) pins `eslint-plugin-react`, whose latest release (7.37.5) calls two APIs ESLint 10 removed outright, so linting a `.tsx` file crashes rather than warns. There is currently no published `eslint-config-next` release that resolves this. Flat config is unaffected by that gap — ESLint 9 already reads it natively — so this migration removes eslintrc from the repo entirely without waiting on the upstream fix; bumping to ESLint 10 later is a single catalog version change once `eslint-plugin-react` supports it.
+
+- ca28907: `crowi-admin rebuild backlink` no longer destroys the backlink index when a page has no revision. The rebuild deleted every backlink up front and then crashed on the first page whose revision was missing, leaving the instance with no backlinks and no working way to restore them — the rebuild is itself the documented recovery path. It now resolves every link before deleting anything, so a failed run leaves the previous backlinks in place, and pages without a revision are excluded from the scan.
+- ba38a7e: Upgrade `jest` / `@types/jest` / `jest-environment-node` from the 29.x series to 30.5.0 / 30.0.0 / 30.5.0 across the 16 workspaces that share these versions through the pnpm catalog. `ts-jest` stays on 29.4.12 (already accepts `jest@^30`) and `packages/web`'s vitest stack is untouched — this is a test-tooling-only change with no observable behavior difference for users of any of these packages.
+
+  `@crowi/api`'s three custom Jest extension points (the `CrowiEnvironment` test environment's `handleTestEvent`, the `FailureTaxonomyReporter`'s `onTestResult`/`onRunComplete`, and `globalSetup`'s MongoDB connection resolution) were individually verified against jest 30 and continue to work unchanged, as does the `--no-sparkplug` Node 24 V8 workaround the api's test script depends on.
+
+- d1fc876: Upgrade the `redis` client dependency from 4.7.1 to 6.2.1. Redis-backed features (config sync, presence, rate limiting, LRU, editor-cap, link completion, collab) behave the same as before; `ioredis` (used by the realtime-collab Redis extension) stays on 5.x since the extension pins that major.
+- af4d198: Fix rename so it promotes an untracked page to tracked history in place instead of silently skipping its history event.
+
+  A page created before history tracking existed, or otherwise never promoted by a content save, previously moved successfully on rename but recorded no `page_renamed` event and never became history-tracked — and in a subtree rename, such a member was reported as a failure even though its page moved correctly. Rename now checks the page's current revision pointer right before the move: if it is untracked but owns a valid revision, that page is promoted to tracked history in the same request, the move proceeds as an ordinary tracked rename, and the event is recorded. A page with no revision pointer, or whose pointer cannot be confirmed to belong to it, is left exactly as before — it still moves, just without gaining history tracking. A promotion that cannot complete safely (a transient conflict) is reported the same way other transient rename conflicts are, and retrying succeeds.
+
+- 3dad335: Fix a race in subtree rename where a concurrent duplicate delivery could report a page as failed to move even though the rename succeeded.
+
+  When two deliveries of the same rename request raced under load, a member page's fan-out could read its operation record as missing right before the other delivery created it and moved the page, then derive a from/destination path pair that was already the destination on both sides. That mismatched the delivery that actually moved the page and was reported back as a failure, even though the page landed correctly and no data was lost. The fan-out now reads the page before its operation record and reads that record from the primary, so a request racing a concurrent move always sees either the pre-move page or the already-created operation, never a mix of the two (AC-1, AC-2). Retries on the already-moved page still resume from the saved from/to path (AC-5), duplicate requests with a different body are still rejected before fan-out (AC-3), and all three member-key lookups now read from the primary (AC-4).
+
+- a334308: Upgrade TypeScript 5.8 → 6.0 across the whole workspace catalog, plus the two tools whose own peer ranges gated it: `ts-jest` 29.3 → 29.4 (the current version still excluded TS 6) and `@typescript-eslint` 6.21 → 8.68 (moved into the catalog so all five workspaces that declare it directly stay in lockstep). `eslint` itself is untouched, jest stays on the same major, and TypeScript 7 (a native/Go rewrite still landing ecosystem-wide support) is out of scope — this bump is the sanctioned bridge release for that eventual move.
+
+  Runtime behavior and every public type/API shape are unchanged; the generated `.d.ts` output was diffed against the pre-upgrade build across all 316 declaration files and the only differences found were union-member reordering (an internal declaration-emitter artifact, byte-identical content once sorted) with zero content changes.
+
+  Two compiler-level fallouts were absorbed without weakening `strict` or any other type-safety setting:
+
+  - TS 6 hard-errors on two now-deprecated `tsconfig` options that will disappear in TS 7 (`moduleResolution: "node"` and any `baseUrl`, the latter also implicitly injected by `tsup`'s own declaration bundler on every workspace that ships a `.d.ts`). The shared `tsconfig/base.json` now sets `ignoreDeprecations: "6.0"`, which is TypeScript's own documented bridge flag for this exact transitional release; actually migrating off these options is real resolution-strategy work that belongs with the eventual TS 7 move, not this version bump.
+  - TS 6 stopped auto-including `@types/*` packages for workspaces using `moduleResolution: "bundler"` unless a tsconfig's `types` array names them explicitly. Several `library.json`-based packages picked up this newly-required `types: ["node"]` / `types: ["jest", "node"]`, matching the explicit-`types` convention several sibling packages (`svg-sanitize`, `admin-cli`, the search plugins, etc.) already used for the same reason.
+
+  `@typescript-eslint` 8's `recommended` preset also added `no-require-imports` (superseding the deprecated `no-var-requires` most call sites already had a justified `eslint-disable` comment for) and tightened `no-empty-object-type` against empty `interface X extends Y {}` declarations. Every new diagnostic was resolved individually: existing suppression comments were extended to cover the new rule name, a handful of genuinely dead/redundant `require()` calls were deleted, two `require()` calls were converted to static imports, and three `Pick<...>`-only marker interfaces became plain type aliases (a mechanical, meaning-preserving rewrite, not a design change).
+
+  `@crowi/web` and `@crowi/site` lint through `eslint-config-next`, which bundles its own `typescript-eslint` dependency rather than reading the workspace catalog. That bundled copy (8.53.0) declared `typescript: >=4.8.4 <6.0.0`, a TS6-excluding range. A `pnpm.overrides` entry (`"typescript-eslint@<8.68.0": "8.68.0"`) forces it to the same 8.68.0 already used directly by the five workspaces above, whose peer range (`>=4.8.4 <6.1.0`) accepts TS 6. No new lint errors surfaced in either workspace after the bump.
+
+  One TS6-excluding tool remains in the graph with no available fix: `openapi-typescript` 7.13.0 (used only by `@crowi/api-contract`'s dev-time OpenAPI-types codegen script, `scripts/generate-openapi-types.ts`) declares `typescript: ^5.x`, and 7.13.0 is still the latest release. This surfaces only as a non-fatal `pnpm install` peer-dependency warning — pnpm does not fail installs on unmet peers by default, and the tool isn't part of `type-check` / `build` / `test` / `lint`. It was verified functionally: `pnpm --filter @crowi/api-contract generate` runs clean under TS 6, and `pnpm check:openapi` confirms the regenerated artifacts are byte-identical to the committed ones. Revisit once openapi-typescript ships a TS6-compatible release.
+
+- Updated dependencies [e0dd589]
+- Updated dependencies [ba38a7e]
+- Updated dependencies [a334308]
+  - @crowi/collab@0.1.0-alpha.6
+  - @crowi/plugin-api@1.0.0-alpha.9
+  - @crowi/runner@0.1.0-alpha.3
+  - @crowi/api-contract@2.0.0-alpha.18
+
 ## 2.0.0-alpha.17
 
 ### Minor Changes
