@@ -90,7 +90,7 @@ export async function allocateContentSequence(
   crowi: Crowi,
   pageId: Types.ObjectId,
   revisionId: Types.ObjectId,
-  options?: { maxClaimAttempts?: number; maxDrainAssists?: number },
+  options?: { maxClaimAttempts?: number; maxDrainAssists?: number; promotionOnly?: boolean },
 ): Promise<ContentSequenceOutcome> {
   try {
     // Resolved INSIDE the try: reading these off `options` is the only work
@@ -99,6 +99,13 @@ export async function allocateContentSequence(
     // (`models/page.ts` and `util/replace-url.ts` dropped their catches).
     const maxClaimAttempts = options?.maxClaimAttempts ?? DEFAULT_MAX_CLAIM_ATTEMPTS;
     const maxDrainAssists = options?.maxDrainAssists ?? DEFAULT_MAX_DRAIN_ASSISTS;
+    // RFC-0021 rename-promotion caller only: without this, a promotion
+    // attempt whose pointer lost the race to a concurrent content save would
+    // fall through to `eligibleForNext` and assign the next sequence to the
+    // now-STALE pointer it read — ordering a Revision behind one it actually
+    // precedes. `promotionOnly` closes that off by refusing the "next
+    // sequence on an already-ready Page" branch entirely for this call.
+    const promotionOnly = options?.promotionOnly ?? false;
 
     const Page = crowi.model('Page');
 
@@ -138,7 +145,7 @@ export async function allocateContentSequence(
       // §D-4(b) has no such pointer check — the contract explicitly defers
       // Revision/Page ownership to `materializePendingEntry`'s
       // `assertRevisionOwnedByPage` (spec's Validation contract).
-      const eligibleForNext = state === 'ready';
+      const eligibleForNext = state === 'ready' && !promotionOnly;
       if (!eligibleForPromotion && !eligibleForNext) {
         return { allocated: false, reason: 'not-eligible' };
       }
