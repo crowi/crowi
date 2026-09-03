@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import mongoose from 'mongoose';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 // pageEvent.on('create' | 'update') schedules Backlink.createBySavedPage
@@ -37,6 +38,50 @@ describe('Backlink', () => {
   beforeAll(async () => {
     const createdUsers = await Fixture.generate('User', [{ name: faker.person.fullName(), username: randomUsername(), email: faker.internet.email() }]);
     user = createdUsers[0];
+  });
+
+  describe('.removeByPageIdForHardDelete', () => {
+    it("removeByPageIdForHardDelete deletes inbound, outbound, and self-reference rows in exactly one deleteMany call with the $or filter (asserted via jest.spyOn(Backlink, 'deleteMany')), preserves unrelated rows, and is idempotent", async () => {
+      const pageId = new mongoose.Types.ObjectId();
+      const inboundFromId = new mongoose.Types.ObjectId();
+      const outboundToId = new mongoose.Types.ObjectId();
+      const revisionId = new mongoose.Types.ObjectId();
+      const unrelatedId = new mongoose.Types.ObjectId();
+
+      await Backlink.create({ page: pageId, fromPage: inboundFromId, fromRevision: revisionId }); // inbound: pageId is the link target
+      await Backlink.create({ page: outboundToId, fromPage: pageId, fromRevision: revisionId }); // outbound: pageId is the link source
+      await Backlink.create({ page: pageId, fromPage: pageId, fromRevision: revisionId }); // self-reference
+      await Backlink.create({ page: unrelatedId, fromPage: unrelatedId, fromRevision: revisionId }); // unrelated
+
+      const deleteManySpy = jest.spyOn(Backlink, 'deleteMany');
+      let result: { deletedCount: number };
+      try {
+        result = await Backlink.removeByPageIdForHardDelete(pageId);
+        expect(deleteManySpy).toHaveBeenCalledTimes(1);
+        expect(deleteManySpy).toHaveBeenCalledWith({ $or: [{ page: pageId }, { fromPage: pageId }] });
+      } finally {
+        deleteManySpy.mockRestore();
+      }
+
+      expect(result).toEqual({ deletedCount: 3 });
+      expect(await Backlink.countDocuments({ $or: [{ page: pageId }, { fromPage: pageId }] })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: unrelatedId }, { fromPage: unrelatedId }] })).toBe(1);
+
+      const rerun = await Backlink.removeByPageIdForHardDelete(pageId);
+      expect(rerun).toEqual({ deletedCount: 0 });
+    });
+
+    it('removeByPageIdForHardDelete throws without calling deleteMany when pageId is nullish', async () => {
+      const deleteManySpy = jest.spyOn(Backlink, 'deleteMany');
+
+      try {
+        await expect(Backlink.removeByPageIdForHardDelete(null)).rejects.toThrow(TypeError);
+        await expect(Backlink.removeByPageIdForHardDelete(undefined)).rejects.toThrow(TypeError);
+        expect(deleteManySpy).not.toHaveBeenCalled();
+      } finally {
+        deleteManySpy.mockRestore();
+      }
+    });
   });
 
   describe('.createByAllPages', () => {

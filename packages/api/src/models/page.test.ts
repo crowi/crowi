@@ -1677,9 +1677,24 @@ describe('Page', () => {
     });
 
     test('redirect-origin recursion uses redirect_stub_cleanup for every stub and writes no user deletion records', async () => {
+      const Watcher = crowi.model('Watcher');
+      const Backlink = crowi.model('Backlink');
+
       const target = await Page.createPage('/deletion-record/redirect-target', 'target', user, {});
       const first = await Page.createPage('/deletion-record/redirect-first', 'first', user, {});
       const second = await Page.createPage('/deletion-record/redirect-second', 'second', user, {});
+      // Auto-watch / backlink writers scheduled by the three creates above
+      // must settle before seeding deterministic relation fixtures below —
+      // otherwise a late writer could still be racing the assertions.
+      await crowi.drainSideEffects();
+
+      const otherUserId = new Types.ObjectId();
+      for (const stub of [target, first, second]) {
+        await Watcher.upsertWatcher(otherUserId, 'Page', stub._id, Watcher.STATUS_IGNORE);
+        await Backlink.create({ page: stub._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+        await Backlink.create({ page: new Types.ObjectId(), fromPage: stub._id, fromRevision: new Types.ObjectId() }); // outbound
+      }
+
       await Page.updatePageProperty(first, { redirectTo: second.path });
       await Page.updatePageProperty(second, { redirectTo: target.path });
 
@@ -1696,8 +1711,143 @@ describe('Page', () => {
       expect(cleanupDeletions.map(({ actor }) => String(actor))).toEqual([user._id.toString(), user._id.toString(), user._id.toString()]);
 
       const PageDeletionRecord = crowi.model('PageDeletionRecord');
-      expect(await Page.find({ _id: { $in: [target._id, first._id, second._id] } })).toHaveLength(0);
-      expect(await PageDeletionRecord.countDocuments({ pageId: { $in: [target._id, first._id, second._id] } })).toBe(0);
+      const stubIds = [target._id, first._id, second._id];
+      expect(await Page.find({ _id: { $in: stubIds } })).toHaveLength(0);
+      expect(await PageDeletionRecord.countDocuments({ pageId: { $in: stubIds } })).toBe(0);
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: { $in: stubIds } })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: { $in: stubIds } }, { fromPage: { $in: stubIds } }] })).toBe(0);
+    });
+
+    test('completelyDeletePage still deletes the Page and completes redirect-origin, Activity, and the delete event without throwing when the Backlink relation cleanup rejects', async () => {
+      const Backlink = crowi.model('Backlink');
+      const Activity = crowi.model('Activity');
+      const page = await Page.createPage('/deletion-record/completely-backlink-reject', 'body', user, {});
+
+      const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
+      const redirectOriginSpy = jest.spyOn(Page, 'removeRedirectOriginPageByPath');
+      const activitySpy = jest.spyOn(Activity, 'removeByPage');
+      const pageEvent = crowi.event('Page');
+      const deleteListener = jest.fn();
+      pageEvent.once('delete', deleteListener);
+
+      let redirectOriginCalls: unknown[][];
+      try {
+        await expect(Page.completelyDeletePage(page, user, { deletion: { mode: 'internal_cleanup', actor: null } })).resolves.toBeDefined();
+
+        // Snapshot BEFORE mockRestore() — mockRestore() also clears .mock,
+        // so an assertion after it would silently observe zero calls.
+        redirectOriginCalls = [...redirectOriginSpy.mock.calls];
+        expect(activitySpy).toHaveBeenCalledWith(page._id);
+        expect(deleteListener).toHaveBeenCalledWith(expect.objectContaining({ _id: page._id }), user);
+      } finally {
+        backlinkSpy.mockRestore();
+        redirectOriginSpy.mockRestore();
+        activitySpy.mockRestore();
+        pageEvent.off('delete', deleteListener);
+      }
+
+      expect(redirectOriginCalls).toEqual([[page.path, { mode: 'redirect_stub_cleanup', actor: user._id }]]);
+      expect(await Page.findById(page._id)).toBeNull();
+    });
+
+    test('unlink deletes the redirect stub and completes without throwing when the Backlink relation cleanup rejects', async () => {
+      const Backlink = crowi.model('Backlink');
+      const created = await Page.createPage('/deletion-record/unlink-backlink-reject', 'body', user, {});
+      await Page.updatePageProperty(created, { redirectTo: '/deletion-record/unlink-backlink-reject-destination' });
+      const stub = await Page.findById(created._id);
+
+      const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
+
+      try {
+        await expect(stub.unlink(user)).resolves.toBeUndefined();
+      } finally {
+        backlinkSpy.mockRestore();
+      }
+
+      expect(await Page.findById(stub._id)).toBeNull();
+    });
+
+    test('unlink deletes the redirect stub and completes without throwing when the Watcher relation cleanup rejects', async () => {
+      const Watcher = crowi.model('Watcher');
+      const created = await Page.createPage('/deletion-record/unlink-watcher-reject', 'body', user, {});
+      await Page.updatePageProperty(created, { redirectTo: '/deletion-record/unlink-watcher-reject-destination' });
+      const stub = await Page.findById(created._id);
+
+      const watcherSpy = jest.spyOn(Watcher, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_WATCHER_CLEANUP_FAILURE'));
+
+      try {
+        await expect(stub.unlink(user)).resolves.toBeUndefined();
+      } finally {
+        watcherSpy.mockRestore();
+      }
+
+      expect(await Page.findById(stub._id)).toBeNull();
+    });
+
+    // `completelyDeletePage(target, ...)`'s OWN Activity/delete-event
+    // cleanup (Page.ts's `completelyDeletePage`, run once for the page it
+    // was called with) is distinct from the redirect-origin recursion's
+    // per-stub removals (`removeRedirectOriginPageByPath` -> `removePageById`
+    // -> `deletePageWithMode`), which do not run their own Activity/delete
+    // event — only the relation cleanup (this spec's Watcher/Backlink steps)
+    // is best-effort per stub. This test asserts a stub-level Watcher
+    // rejection neither halts the recursion (every stub's Page row is still
+    // gone) nor disturbs the outer call's own Activity/delete-event
+    // completion for `target`.
+    test("redirect-origin recursion deletes every stub and does not halt when a stub's Watcher relation cleanup rejects, and the outer call's Activity removal and delete event still complete once for the target page", async () => {
+      const Watcher = crowi.model('Watcher');
+      const Activity = crowi.model('Activity');
+
+      const target = await Page.createPage('/deletion-record/redirect-target-watcher-reject', 'target', user, {});
+      const first = await Page.createPage('/deletion-record/redirect-first-watcher-reject', 'first', user, {});
+      const second = await Page.createPage('/deletion-record/redirect-second-watcher-reject', 'second', user, {});
+      await Page.updatePageProperty(first, { redirectTo: second.path });
+      await Page.updatePageProperty(second, { redirectTo: target.path });
+
+      // Call order inside completelyDeletePage(target, ...): target's own
+      // removePageById runs FIRST (before the redirect-origin recursion even
+      // starts), then the recursion visits `second` then `first`. Letting
+      // the first call through unmocked and rejecting only the second call
+      // puts the injected failure on `second` — a stub found by the
+      // recursion, not on `target` itself.
+      const originalRemoveByPageId = Watcher.removeByPageId.bind(Watcher);
+      const watcherSpy = jest
+        .spyOn(Watcher, 'removeByPageId')
+        .mockImplementationOnce((pageId: unknown) => originalRemoveByPageId(pageId))
+        .mockRejectedValueOnce(new Error('MARKER_WATCHER_CLEANUP_FAILURE'));
+      const activitySpy = jest.spyOn(Activity, 'removeByPage');
+      const pageEvent = crowi.event('Page');
+      const deleteListener = jest.fn();
+      pageEvent.on('delete', deleteListener);
+
+      let activityCalls: unknown[][];
+      let watcherCallOrder: string[];
+      try {
+        await expect(Page.completelyDeletePage(target, user, { deletion: { mode: 'internal_cleanup', actor: null } })).resolves.toBeDefined();
+        // Snapshot the call log BEFORE mockRestore() — mockRestore() also
+        // resets .mock.calls, so any assertion made after it would silently
+        // observe zero calls regardless of what actually happened.
+        activityCalls = [...activitySpy.mock.calls];
+        watcherCallOrder = watcherSpy.mock.calls.map(([pageId]) => String(pageId));
+        expect(deleteListener).toHaveBeenCalledTimes(1);
+        expect(deleteListener).toHaveBeenCalledWith(expect.objectContaining({ _id: target._id }), user);
+      } finally {
+        watcherSpy.mockRestore();
+        activitySpy.mockRestore();
+        pageEvent.off('delete', deleteListener);
+      }
+
+      const stubIds = [target._id, first._id, second._id];
+      expect(await Page.find({ _id: { $in: stubIds } })).toHaveLength(0);
+      // Pins the injected rejection onto `second` (a stub found by the
+      // recursion), not `target` itself: target's own removePageById runs
+      // first (unmocked, passes through), then the recursion visits
+      // `second` (rejects) then `first` (unmocked again, passes through).
+      expect(watcherCallOrder).toEqual([target._id.toString(), second._id.toString(), first._id.toString()]);
+      // Only the outer completelyDeletePage(target) call runs
+      // Activity.removeByPage / emits 'delete' — asserted once, for `target`.
+      expect(activityCalls).toHaveLength(1);
+      expect(activityCalls[0]).toEqual([target._id]);
     });
   });
 
