@@ -25,6 +25,7 @@ export interface WatcherModel extends Model<WatcherDocument> {
   watchByPageId(user: Types.ObjectId, pageId: Types.ObjectId, status: string): any;
   getWatchers(target: Types.ObjectId): Promise<Types.ObjectId[]>;
   getIgnorers(target: Types.ObjectId): Promise<Types.ObjectId[]>;
+  removeByPageId(pageId: Types.ObjectId): Promise<{ deletedCount: number }>;
 
   STATUS_WATCH: string;
   STATUS_IGNORE: string;
@@ -87,6 +88,18 @@ export default (crowi: Crowi) => {
 
   watcherSchema.statics.getIgnorers = async function (target) {
     return Watcher.find({ target, status: STATUS_IGNORE }).distinct('user');
+  };
+
+  // A nullish pageId would make mongoose drop the `target` condition
+  // entirely, turning this into a `{ targetModel: 'Page' }`-only filter that
+  // deletes every Watcher row for the whole instance (Page is the only
+  // supported targetModel — see ActivityDefine.getSupportTargetModelNames()).
+  watcherSchema.statics.removeByPageId = async function (pageId) {
+    if (pageId == null) {
+      throw new TypeError('Watcher.removeByPageId requires a non-nullish pageId');
+    }
+    const result = await Watcher.deleteMany({ targetModel: 'Page', target: pageId }).exec();
+    return { deletedCount: result.deletedCount ?? 0 };
   };
 
   // 静的プロパティの定義方法を修正
