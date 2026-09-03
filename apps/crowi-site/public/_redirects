@@ -1,1 +1,12 @@
 /  /ja/  302
+
+/:lang/docs/getting-started            /:lang/docs/develop/getting-started    301
+/:lang/docs/plugins/overview           /:lang/docs/develop/plugins-overview   301
+/:lang/docs/plugins/developing         /:lang/docs/develop/plugins-developing 301
+/:lang/docs/plugins/managing           /:lang/docs/operations/plugins         301
+/:lang/docs/plugins/renderers          /:lang/docs/operations/renderers       301
+/:lang/docs/plugins/storage/gcp        /:lang/docs/operations/storage-gcp     301
+/:lang/docs/reference/architecture     /:lang/docs/develop/architecture       301
+/:lang/docs/reference/rfcs             /:lang/docs/develop/rfcs               301
+/:lang/docs/reference/contributing     /:lang/docs/develop/contributing       301
+/:lang/docs/operations/release-runbook /:lang/docs/develop/release-runbook    301
