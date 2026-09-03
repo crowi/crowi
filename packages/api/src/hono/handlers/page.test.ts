@@ -642,6 +642,19 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
         .send({ page_id: pageAId, new_path: intermediatePath, create_redirect: true });
       expect(renameA.status).toBe(200);
 
+      // Seed WATCH/IGNORE and inbound/outbound Backlink fixtures on the
+      // redirect stub left at stalePath, after draining the rename's own
+      // create-event side effects (auto-watch / backlink writer) so the
+      // baseline is deterministic before adding test-specific rows.
+      await crowi.drainSideEffects();
+      const Watcher = crowi.model('Watcher');
+      const Backlink = crowi.model('Backlink');
+      const stub = await Page.findOne({ path: stalePath });
+      const otherUserId = new Types.ObjectId();
+      await Watcher.upsertWatcher(otherUserId, 'Page', stub._id, Watcher.STATUS_IGNORE);
+      await Backlink.create({ page: stub._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+      await Backlink.create({ page: new Types.ObjectId(), fromPage: stub._id, fromRevision: new Types.ObjectId() }); // outbound
+
       // Create page B at finalPath, then rename to stalePath. The existing
       // redirect page at stalePath should be unlinked and the rename succeed.
       const createB = await request(app).post('/api/pages').set(headers).send({ path: finalPath, body: '# B' });
@@ -663,6 +676,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(pagesAtStale).toHaveLength(1);
       expect(pagesAtStale[0]._id.toString()).toBe(pageBId);
       expect(pagesAtStale[0].redirectTo).toBeNull();
+
+      // The unlinked stub's WATCH/IGNORE and inbound/outbound Backlink rows
+      // are gone too (AC-5).
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: stub._id })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: stub._id }, { fromPage: stub._id }] })).toBe(0);
     });
 
     it('returns 409 PAGE_REVISION_ERROR when revision_id is stale', async () => {
@@ -1800,6 +1818,17 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       await Bookmark.create({ page: pageId, user: userId });
       await Comment.create({ page: pageId, creator: userId, comment: 'bye', commentPosition: -1 });
 
+      // WATCH/IGNORE and inbound/outbound Backlink fixtures (AC-4), seeded
+      // after draining the create's own auto-watch/backlink side effects.
+      await crowi.drainSideEffects();
+      const Watcher = crowi.model('Watcher');
+      const Backlink = crowi.model('Backlink');
+      const pageObjectId = new Types.ObjectId(pageId);
+      const otherUserId = new Types.ObjectId();
+      await Watcher.upsertWatcher(otherUserId, 'Page', pageObjectId, Watcher.STATUS_IGNORE);
+      await Backlink.create({ page: pageObjectId, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+      await Backlink.create({ page: new Types.ObjectId(), fromPage: pageObjectId, fromRevision: new Types.ObjectId() }); // outbound
+
       expect(await Bookmark.countDocuments({ page: pageId })).toBe(1);
       expect(await Comment.countDocuments({ page: pageId })).toBe(1);
 
@@ -1812,6 +1841,8 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       expect(pageDoc).toBeNull();
       expect(await Bookmark.countDocuments({ page: pageId })).toBe(0);
       expect(await Comment.countDocuments({ page: pageId })).toBe(0);
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: pageObjectId })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: pageObjectId }, { fromPage: pageObjectId }] })).toBe(0);
       const PageDeletionRecord = crowi.model('PageDeletionRecord');
       expect(await PageDeletionRecord.findOne({ pageId }).lean()).toMatchObject({
         path,
@@ -2053,6 +2084,16 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
       const redirectStub = await Page.findOne({ path });
       expect(redirectStub).not.toBeNull();
 
+      // WATCH/IGNORE and inbound/outbound Backlink fixtures on the occupant
+      // stub (AC-6), seeded after draining the delete's own side effects.
+      await crowi.drainSideEffects();
+      const Watcher = crowi.model('Watcher');
+      const Backlink = crowi.model('Backlink');
+      const otherUserId = new Types.ObjectId();
+      await Watcher.upsertWatcher(otherUserId, 'Page', redirectStub._id, Watcher.STATUS_IGNORE);
+      await Backlink.create({ page: redirectStub._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+      await Backlink.create({ page: new Types.ObjectId(), fromPage: redirectStub._id, fromRevision: new Types.ObjectId() }); // outbound
+
       // The redirect stub at the original path is the input the UI would consult,
       // but the revertDeletedPage contract takes the trashed page's id (per planner).
       const completelyDeletePageSpy = jest.spyOn(Page, 'completelyDeletePage');
@@ -2085,6 +2126,105 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
       expect(pagesAtPath[0].redirectTo).toBeNull();
       const PageDeletionRecord = crowi.model('PageDeletionRecord');
       expect(await PageDeletionRecord.countDocuments({ pageId: redirectStub?._id })).toBe(0);
+
+      // The occupant stub's WATCH/IGNORE and inbound/outbound Backlink rows
+      // are gone too (AC-6).
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: redirectStub._id })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: redirectStub._id }, { fromPage: redirectStub._id }] })).toBe(0);
+    });
+
+    it('revert deletes the occupant stub and creates the operation record even when its Backlink or Watcher relation cleanup rejects', async () => {
+      const Backlink = crowi.model('Backlink');
+      const Watcher = crowi.model('Watcher');
+
+      // --- Variant 1: only the Backlink relation cleanup rejects ---
+      const backlinkRejectPath = `${PATH_PREFIX}revert-relation-cleanup-reject-backlink`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: backlinkRejectPath, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const backlinkRejectPageId = createRes.body.page._id;
+
+      const deleteRes = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: backlinkRejectPageId });
+      expect(deleteRes.status).toBe(200);
+      const backlinkRejectStub = await Page.findOne({ path: backlinkRejectPath });
+      expect(backlinkRejectStub).not.toBeNull();
+      await crowi.drainSideEffects();
+
+      const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
+
+      const backlinkRestoreKey = idempotencyKey();
+      try {
+        const res = await request(app)
+          .post('/api/pages/revert')
+          .set(headers)
+          .set('Idempotency-Key', backlinkRestoreKey)
+          .send({ page_id: backlinkRejectPageId });
+
+        expect(res.status).toBe(200);
+        expect(res.body.page._id).toBe(backlinkRejectPageId);
+        expect(res.body.page.path).toBe(backlinkRejectPath);
+        expect(res.body.page.status).toBe('published');
+      } finally {
+        backlinkSpy.mockRestore();
+      }
+
+      // The occupant stub's Page row is gone despite the relation cleanup
+      // rejection (best-effort, AC-16).
+      expect(await Page.findOne({ _id: backlinkRejectStub._id })).toBeNull();
+
+      // A restore operation record was created and completed normally — the
+      // rejection did not prevent it, and a resubmission with the same key
+      // replays rather than re-running the destructive destination cleanup.
+      const backlinkReplay = await request(app)
+        .post('/api/pages/revert')
+        .set(headers)
+        .set('Idempotency-Key', backlinkRestoreKey)
+        .send({ page_id: backlinkRejectPageId });
+      expect(backlinkReplay.status).toBe(200);
+      expect(backlinkReplay.headers['idempotency-replayed']).toBe('true');
+      expect(backlinkReplay.body.page.path).toBe(backlinkRejectPath);
+
+      // --- Variant 2: only the Watcher relation cleanup rejects ---
+      const watcherRejectPath = `${PATH_PREFIX}revert-relation-cleanup-reject-watcher`;
+
+      const createRes2 = await request(app).post('/api/pages').set(headers).send({ path: watcherRejectPath, body: '# initial' });
+      expect(createRes2.status).toBe(200);
+      const watcherRejectPageId = createRes2.body.page._id;
+
+      const deleteRes2 = await request(app).delete('/api/pages').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: watcherRejectPageId });
+      expect(deleteRes2.status).toBe(200);
+      const watcherRejectStub = await Page.findOne({ path: watcherRejectPath });
+      expect(watcherRejectStub).not.toBeNull();
+      await crowi.drainSideEffects();
+
+      const watcherSpy = jest.spyOn(Watcher, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_WATCHER_CLEANUP_FAILURE'));
+
+      const watcherRestoreKey = idempotencyKey();
+      try {
+        const res = await request(app).post('/api/pages/revert').set(headers).set('Idempotency-Key', watcherRestoreKey).send({ page_id: watcherRejectPageId });
+
+        expect(res.status).toBe(200);
+        expect(res.body.page._id).toBe(watcherRejectPageId);
+        expect(res.body.page.path).toBe(watcherRejectPath);
+        expect(res.body.page.status).toBe('published');
+      } finally {
+        watcherSpy.mockRestore();
+      }
+
+      // The occupant stub's Page row is gone despite the relation cleanup
+      // rejection (best-effort, AC-16).
+      expect(await Page.findOne({ _id: watcherRejectStub._id })).toBeNull();
+
+      // Same replay guarantee holds for the Watcher-only rejection.
+      const watcherReplay = await request(app)
+        .post('/api/pages/revert')
+        .set(headers)
+        .set('Idempotency-Key', watcherRestoreKey)
+        .send({ page_id: watcherRejectPageId });
+      expect(watcherReplay.status).toBe(200);
+      expect(watcherReplay.headers['idempotency-replayed']).toBe('true');
+      expect(watcherReplay.body.page.path).toBe(watcherRejectPath);
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {

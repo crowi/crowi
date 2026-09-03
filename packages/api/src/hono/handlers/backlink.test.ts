@@ -127,6 +127,25 @@ describe('Routes /api/backlinks (Hono)', () => {
       expect(res.body.hasNext).toBe(false);
     });
 
+    it('drops a backlink whose fromPage row no longer exists', async () => {
+      const target = await createPageViaApi(accessToken, `${PATH_PREFIX}target-dangling`, '# target');
+      const source = await createPageViaApi(accessToken, `${PATH_PREFIX}source-dangling`, `<${target.path}>`);
+      await waitForBacklinkCount(target._id, 1, accessToken);
+
+      // A Backlink row whose fromPage no longer resolves to a live Page —
+      // as if the source page had been hard-deleted before the relation
+      // cleanup ran, or the row is otherwise dangling.
+      const Backlink = crowi.model('Backlink');
+      await Backlink.create({ page: new Types.ObjectId(target._id), fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() });
+
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.backlinks).toHaveLength(1);
+      expect(res.body.backlinks[0].fromPage._id).toBe(source._id);
+      expect(res.body.hasNext).toBe(false);
+    });
+
     it('hasNext is true when there are more than `limit` records, and trims to `limit`', async () => {
       const target = await createPageViaApi(accessToken, `${PATH_PREFIX}target-more`, '# target');
       await Promise.all([

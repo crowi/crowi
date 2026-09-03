@@ -1,14 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { Types } from 'mongoose';
 import ts from 'typescript';
 
+import type { BacklinkModel } from 'src/models/backlink';
 import type { PageDeletionRecordModel } from 'src/models/page-deletion-record';
 import type { PageHistoryEventModel } from 'src/models/page-history-event';
 import type { PageDocument, PageModel } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
+import type { WatcherModel } from 'src/models/watcher';
 import { crowi, Fixture } from 'src/test/setup';
-import { deletePageWithMode, type PageDeletionMode } from './deletion';
+import { deletePageWithMode, PageCleanupIncompleteError, type PageDeletionMode } from './deletion';
 import { readPageHistory } from './read';
 
 const NON_RECORDING_MODES = ['creation_cancel', 'redirect_stub_cleanup', 'internal_cleanup'] as const satisfies readonly PageDeletionMode[];
@@ -107,12 +110,16 @@ describe('service/page-history/deletion', () => {
   let Page: PageModel;
   let PageDeletionRecord: PageDeletionRecordModel;
   let PageHistoryEvent: PageHistoryEventModel;
+  let Watcher: WatcherModel;
+  let Backlink: BacklinkModel;
   let user: UserDocument;
 
   beforeAll(async () => {
     Page = crowi.model('Page');
     PageDeletionRecord = crowi.model('PageDeletionRecord');
     PageHistoryEvent = crowi.model('PageHistoryEvent');
+    Watcher = crowi.model('Watcher');
+    Backlink = crowi.model('Backlink');
     [user] = await Fixture.generate('User', [{ name: 'Deletion Tester', username: 'deletion-tester', email: 'deletion-tester@example.com' }]);
   });
 
@@ -256,6 +263,133 @@ describe('service/page-history/deletion', () => {
       expect(await PageDeletionRecord.countDocuments({ pageId: page._id })).toBe(0);
       expect(await Page.findById(page._id)).toBeNull();
       expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+    });
+
+    // Seeds a WATCH row, an IGNORE row, and one inbound + one outbound
+    // Backlink row for `page`, so a single `deletePageWithMode` call can be
+    // asserted against all four relation rows at once.
+    const seedRelationFixtures = async (page: PageDocument) => {
+      // The create above schedules an async auto-watch write for `user` on
+      // `page` (and a Backlink rebuild). `upsertWatcher` is a
+      // `findOneAndUpdate` upsert with no unique index backing it, so a
+      // late auto-watch write racing this fixture's own WATCH upsert for
+      // the SAME (user, 'Page', page._id) triple can insert a second row
+      // instead of updating the existing one — draining first prevents that.
+      await crowi.drainSideEffects();
+      const otherUserId = new Types.ObjectId();
+      await Watcher.upsertWatcher(user._id, 'Page', page._id, Watcher.STATUS_WATCH);
+      await Watcher.upsertWatcher(otherUserId, 'Page', page._id, Watcher.STATUS_IGNORE);
+      await Backlink.create({ page: page._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+      await Backlink.create({ page: new Types.ObjectId(), fromPage: page._id, fromRevision: new Types.ObjectId() }); // outbound
+    };
+
+    test("deletePageWithMode deletes the target page's WATCH/IGNORE and inbound/outbound Backlink rows as part of its post-delete best-effort cleanup, alongside existing revisions/history-events cleanup", async () => {
+      const page = await Page.createPage('/deletion-record/relation-cleanup', 'body', user, {});
+      await createHistoryEvent(page);
+      await seedRelationFixtures(page);
+
+      await deletePageWithMode(crowi, {
+        pageId: page._id,
+        path: page.path,
+        actor: user._id,
+        mode: 'internal_cleanup',
+      });
+
+      expect(await Page.findById(page._id)).toBeNull();
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: page._id })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: page._id }, { fromPage: page._id }] })).toBe(0);
+      expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+    });
+
+    test('deletePageWithMode deletes the Page and still runs watchers, revisions, and history-events without throwing when only the backlinks relation cleanup rejects', async () => {
+      const page = await Page.createPage('/deletion-record/backlinks-reject', 'body', user, {});
+      await createHistoryEvent(page);
+      await seedRelationFixtures(page);
+
+      const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
+
+      try {
+        await expect(
+          deletePageWithMode(crowi, {
+            pageId: page._id,
+            path: page.path,
+            actor: user._id,
+            mode: 'internal_cleanup',
+          }),
+        ).resolves.toBeUndefined();
+      } finally {
+        backlinkSpy.mockRestore();
+      }
+
+      expect(await Page.findById(page._id)).toBeNull();
+      // watchers step still ran despite the backlinks rejection.
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: page._id })).toBe(0);
+      // The rejected step leaves its rows as orphans (best-effort, D-1).
+      expect(await Backlink.countDocuments({ $or: [{ page: page._id }, { fromPage: page._id }] })).toBe(2);
+      // revisions / history-events aggregation is unaffected — no error surfaces.
+      expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+    });
+
+    test('deletePageWithMode deletes the Page and still runs backlinks, revisions, and history-events without throwing when only the watchers relation cleanup rejects', async () => {
+      const page = await Page.createPage('/deletion-record/watchers-reject', 'body', user, {});
+      await createHistoryEvent(page);
+      await seedRelationFixtures(page);
+
+      const watcherSpy = jest.spyOn(Watcher, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_WATCHER_CLEANUP_FAILURE'));
+
+      try {
+        await expect(
+          deletePageWithMode(crowi, {
+            pageId: page._id,
+            path: page.path,
+            actor: user._id,
+            mode: 'internal_cleanup',
+          }),
+        ).resolves.toBeUndefined();
+      } finally {
+        watcherSpy.mockRestore();
+      }
+
+      expect(await Page.findById(page._id)).toBeNull();
+      // backlinks step still ran despite the watchers rejection.
+      expect(await Backlink.countDocuments({ $or: [{ page: page._id }, { fromPage: page._id }] })).toBe(0);
+      // The rejected step leaves its rows as orphans (best-effort, D-1).
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: page._id })).toBe(2);
+      // revisions / history-events aggregation is unaffected — no error surfaces.
+      expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+    });
+
+    test('backlinks/watchers rejections never appear in PageCleanupIncompleteError.steps, even when revisions/history-events also fail', async () => {
+      const page = await Page.createPage('/deletion-record/relation-and-history-reject', 'body', user, {});
+      await createHistoryEvent(page);
+      await seedRelationFixtures(page);
+
+      const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
+      const watcherSpy = jest.spyOn(Watcher, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_WATCHER_CLEANUP_FAILURE'));
+      const historyEventSpy = jest.spyOn(PageHistoryEvent, 'deleteMany').mockImplementationOnce(
+        () =>
+          ({
+            exec: () => Promise.reject(new Error('MARKER_HISTORY_EVENT_FAILURE')),
+          }) as unknown as ReturnType<typeof PageHistoryEvent.deleteMany>,
+      );
+
+      try {
+        const error = await deletePageWithMode(crowi, {
+          pageId: page._id,
+          path: page.path,
+          actor: user._id,
+          mode: 'internal_cleanup',
+        }).catch((err) => err);
+
+        expect(error).toBeInstanceOf(PageCleanupIncompleteError);
+        expect((error as PageCleanupIncompleteError).steps).toEqual(['history-events']);
+      } finally {
+        backlinkSpy.mockRestore();
+        watcherSpy.mockRestore();
+        historyEventSpy.mockRestore();
+      }
+
+      expect(await Page.findById(page._id)).toBeNull();
     });
   });
 

@@ -15,6 +15,7 @@ export interface BacklinkDocument extends Document {
 export interface BacklinkModel extends Model<BacklinkDocument> {
   findByPageId(pageId: Types.ObjectId, limit: any, offset: any): Promise<BacklinkDocument[]>;
   removeByPageId(pageId: Types.ObjectId): any;
+  removeByPageIdForHardDelete(pageId: Types.ObjectId): Promise<{ deletedCount: number }>;
   removeBySavedPage(savedPage: any);
   createByParameters(parameters: any): Promise<BacklinkDocument>;
   createBySavedPage(savedPage: any): Promise<BacklinkDocument[]>;
@@ -93,6 +94,19 @@ export default (crowi: Crowi) => {
   backlinkSchema.statics.removeByPageId = function (pageId) {
     // FIXME: removeByPageId is a bit confusable name. Should it removeByFromPageId ?
     return Backlink.deleteMany({ fromPage: pageId });
+  };
+
+  // Hard-delete-only cascade: removes both directions (the target Page's
+  // inbound rows AND its own outbound rows as a source) in one deleteMany,
+  // unlike `removeByPageId` above (outbound-only, keyed on `fromPage`). A
+  // nullish pageId would make mongoose drop both `$or` branches to `{}`,
+  // deleting the entire backlinks collection — guard against that first.
+  backlinkSchema.statics.removeByPageIdForHardDelete = async function (pageId) {
+    if (pageId == null) {
+      throw new TypeError('Backlink.removeByPageIdForHardDelete requires a non-nullish pageId');
+    }
+    const result = await Backlink.deleteMany({ $or: [{ page: pageId }, { fromPage: pageId }] }).exec();
+    return { deletedCount: result.deletedCount ?? 0 };
   };
 
   backlinkSchema.statics.removeBySavedPage = async function (savedPage) {
