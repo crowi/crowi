@@ -8,7 +8,7 @@ a **core pipeline that conforms to CommonMark + GFM (GitHub Flavored
 Markdown)**, combined with a few Crowi-specific extensions and additional
 installable **renderer plugins**.
 
-See [RFC-0002: Renderer plugin architecture](../reference/rfcs) for the design
+See [RFC-0002: Renderer plugin architecture](../develop/rfcs) for the design
 philosophy of the renderer.
 
 ## Basic Markdown
@@ -145,7 +145,7 @@ Writing `@[card](url)` fetches the target page's OGP meta tags (`og:title` /
 `og:description` / `og:image` / `og:site_name`) and renders a link-preview
 card. This is a Crowi core feature that requires no installation and is
 always on (see "Markdown features built into core" in
-[Renderer plugins](../plugins/renderers) for details).
+[Renderer plugins](../operations/renderers) for details).
 
 ```markdown
 @[card](https://example.com/some-article)
@@ -172,7 +172,7 @@ always on (see "Markdown features built into core" in
   you save. This placeholder is deliberately the same visual contract as the
   unified fallback card above.
 - The image is a direct link to the source site (no proxying or caching).
-  See [Renderer plugins](../plugins/renderers) for SSRF safeguard details.
+  See [Renderer plugins](../operations/renderers) for SSRF safeguard details.
 
 ### Inline URL expansion
 
@@ -294,7 +294,7 @@ status: approved
 ## Extensions via renderer plugins
 
 The following syntax only works when the corresponding **renderer plugin** is
-enabled. See [Managing plugins](../plugins/managing) for how to manage
+enabled. See [Managing plugins](../operations/plugins) for how to manage
 plugins.
 
 ### Math — `@crowi/plugin-renderer-katex`
@@ -333,7 +333,7 @@ B --> A: reply
 ````
 
 - Rendering requires a PlantUML server. The server URL is configured from
-  the admin screen at `/admin/plugins` (see [Renderer plugins](../plugins/renderers)
+  the admin screen at `/admin/plugins` (see [Renderer plugins](../operations/renderers)
   for the operational steps).
 - Rendered results are cached so that a transient PlantUML server outage does
   not flood it with requests.
@@ -362,7 +362,7 @@ flowchart LR
   corresponding line into view on the other side.
 - Diagram source is limited to 20KB. A diagram with a syntax error shows a
   fixed error placeholder. For the other limits and the security design,
-  see the Mermaid section of [Renderer plugins](../plugins/renderers).
+  see the Mermaid section of [Renderer plugins](../operations/renderers).
 - ` ```mermaid ` fences saved before the plugin was enabled keep rendering
   as plain code blocks until the page is re-saved.
 
@@ -388,6 +388,6 @@ right after the `#` in an ATX heading.
 ## Related pages
 
 - [Pages](./pages) — page basics
-- [Managing plugins](../plugins/managing) — enabling renderer plugins
-- [Renderer plugins](../plugins/renderers) — configuring renderer plugins
-- [RFCs and architecture](../reference/rfcs) — RFC-0002 renderer design
+- [Managing plugins](../operations/plugins) — enabling renderer plugins
+- [Renderer plugins](../operations/renderers) — configuring renderer plugins
+- [RFCs and architecture](../develop/rfcs) — RFC-0002 renderer design

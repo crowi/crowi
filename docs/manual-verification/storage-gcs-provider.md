@@ -279,8 +279,8 @@ just one:
 - [ ] `packages/plugin-storage-gcs/README.md`
 - [ ] `apps/crowi-site/content/docs/ja/operations/storage.mdx` and
       `apps/crowi-site/content/docs/en/operations/storage.mdx`
-- [ ] `apps/crowi-site/content/docs/ja/plugins/overview.mdx` and
-      `apps/crowi-site/content/docs/en/plugins/overview.mdx` list `gcs` /
+- [ ] `apps/crowi-site/content/docs/ja/develop/plugins-overview.mdx` and
+      `apps/crowi-site/content/docs/en/develop/plugins-overview.mdx` list `gcs` /
       `@crowi/plugin-storage-gcs` among the first-party plugins
 
 Each of the operations docs (README + site, ja + en) must cover, in its

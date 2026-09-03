@@ -69,7 +69,7 @@ Add the S3 storage plugin to `plugins` in `crowi.config.json` and set
 
 `@crowi/plugin-storage-aws-s3` depends on `@crowi/plugin-aws`, the shared
 AWS credentials base, so the dependency plugin is loaded automatically.
-For details on plugin resolution, see [Managing plugins](../plugins/managing).
+For details on plugin resolution, see [Managing plugins](./plugins).
 
 ### 2. Configure the bucket and credentials
 
@@ -100,7 +100,7 @@ applies the new bucket / credentials **without a server restart** via
 To store files on Google Cloud Storage, use the `@crowi/plugin-storage-gcs`
 plugin.
 
-> **Tip**: For creating the bucket, service account, and IAM grants on the Google Cloud side, see [Google Cloud setup](../plugins/storage/gcp).
+> **Tip**: For creating the bucket, service account, and IAM grants on the Google Cloud side, see [Google Cloud setup](./storage-gcp).
 
 ### 1. Enable the plugin
 
@@ -448,5 +448,5 @@ Exit codes:
 
 - [Configuration](./configuration) — overview of `crowi.config.json`
 - [Encrypting sensitive config](./encryption) — encrypting S3 credentials
-- [Managing plugins](../plugins/managing) — adding and enabling plugins
+- [Managing plugins](./plugins) — adding and enabling plugins
 - [Backup](./backup) — backing up data

@@ -69,7 +69,7 @@ Amazon S3 (または S3 互換ストレージ) にファイルを保存するに
 `@crowi/plugin-storage-aws-s3` は AWS の共通クレデンシャル基盤である
 `@crowi/plugin-aws` に依存しているため、依存プラグインは自動で
 読み込まれます。プラグインの解決方法の詳細は
-[プラグインの管理](../plugins/managing) を参照してください。
+[プラグインの管理](./plugins) を参照してください。
 
 ### 2. バケットとクレデンシャルを設定する
 
@@ -99,7 +99,7 @@ S3 のバケット名と AWS のクレデンシャルは、管理画面から設
 Google Cloud Storage にファイルを保存するには、`@crowi/plugin-storage-gcs`
 プラグインを使います。
 
-> **Tip**: バケット・サービスアカウント・IAM 権限を Google Cloud 側で用意する手順は [GCP の設定](../plugins/storage/gcp) を参照してください。
+> **Tip**: バケット・サービスアカウント・IAM 権限を Google Cloud 側で用意する手順は [GCP の設定](./storage-gcp) を参照してください。
 
 ### 1. プラグインを有効化する
 
@@ -492,5 +492,5 @@ crowi-admin rebuild attachment-display-derivatives --gc --confirm
 
 - [設定](./configuration) — `crowi.config.json` の全体像
 - [機密設定の暗号化](./encryption) — S3 クレデンシャルの暗号化
-- [プラグインの管理](../plugins/managing) — プラグインの追加・有効化
+- [プラグインの管理](./plugins) — プラグインの追加・有効化
 - [バックアップ](./backup) — データのバックアップ
