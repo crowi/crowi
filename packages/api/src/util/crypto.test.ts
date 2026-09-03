@@ -52,11 +52,17 @@ describe('util/crypto', () => {
 
   test('decrypt throws when the auth tag is tampered', () => {
     const encrypted = encrypt('secret value');
-    // Flip a bit in the auth tag segment.
-    const [, , tagB64, ctB64] = encrypted.split(':');
+    // `enc:v1:<iv>:<tag>:<ct>` splits into 5 — the prefix occupies 0 and 1, so
+    // the payload starts at index 2. Binding from index 2 lines the names up
+    // with the segments; taking the tag from index 2 instead would hand
+    // `decrypt` the IV as its auth tag (12 bytes, not 16) and the real tag as
+    // the ciphertext, which throws for the wrong reason and never exercises a
+    // tag flip at all.
+    const [, , ivB64, tagB64, ctB64] = encrypted.split(':');
     const tagBytes = Buffer.from(tagB64, 'base64');
+    expect(tagBytes).toHaveLength(16);
     tagBytes[0] ^= 0x01;
-    const tampered = `enc:v1:${encrypted.split(':')[2]}:${tagBytes.toString('base64')}:${ctB64}`;
+    const tampered = `enc:v1:${ivB64}:${tagBytes.toString('base64')}:${ctB64}`;
 
     expect(() => decrypt(tampered)).toThrow();
   });
