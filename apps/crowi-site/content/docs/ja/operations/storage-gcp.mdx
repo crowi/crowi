@@ -3,7 +3,7 @@ title: GCP の設定
 description: GCS ドライバのために Google Cloud 側でバケット・サービスアカウント・権限を用意する
 ---
 
-このページは **Google Cloud 側の準備手順** だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順、エミュレータ) は [ストレージドライバ](../../operations/storage) を参照してください。
+このページは **Google Cloud 側の準備手順** だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順、エミュレータ) は [ストレージドライバ](./storage) を参照してください。
 
 コマンドはすべて `gcloud` CLI 前提です。同じ操作は Google Cloud コンソールからも行えます。
 
@@ -165,7 +165,7 @@ gcloud storage rm gs://<BUCKET_NAME>/healthcheck.txt \
 
 ## 7. Crowi 側の設定へ
 
-バケットとクレデンシャルが用意できたら、[ストレージドライバ](../../operations/storage) の GCS の節に進んでください。
+バケットとクレデンシャルが用意できたら、[ストレージドライバ](./storage) の GCS の節に進んでください。
 
 **GCS バケット** 欄にはバケット名を入力します。`gs://` スキーマと末尾のスラッシュは Google Cloud Storage SDK 側で除去されるため、`gs://<BUCKET_NAME>` の形で入力しても正しく解決されます。
 

@@ -5,7 +5,7 @@ description: Installing, enabling, and configuring plugins from the admin UI
 
 This page explains how to add plugins to Crowi 2.0 and configure them
 from the admin screen. We recommend reading
-[Plugin architecture](./overview) first for how plugins work overall.
+[Plugin architecture](../develop/plugins-overview) first for how plugins work overall.
 
 ## A plugin is enabled in two stages
 
@@ -116,7 +116,7 @@ and each affected field name with a flag saying whether it is set — never
 configuration values, URLs, or secrets.
 
 For declaring readiness requirements in a plugin, see
-[Plugin development](./developing).
+[Plugin development](../develop/plugins-developing).
 
 ### Schema-driven config form
 
@@ -150,7 +150,7 @@ Sensitive fields are auto-encrypted on write and decrypted on read
 using the same `KeyProvider` as the core sensitive Config. The admin UI
 renders them with a secret input (`<SecretField>`: saved badge / clear
 pending / undo). For `CROWI_ENCRYPTION_KEY`, the prerequisite for
-encryption, see [Config encryption](../operations/encryption).
+encryption, see [Config encryption](./encryption).
 
 ### The `@action` marker
 
@@ -214,7 +214,7 @@ on removal.
 
 ## Related pages
 
-- How plugins work → [Plugin architecture](./overview)
+- How plugins work → [Plugin architecture](../develop/plugins-overview)
 - The list of renderer plugins → [Renderer plugins](./renderers)
-- Choosing storage → [Storage](../operations/storage)
-- Configuring the search backend → [Search setup](../operations/search-setup)
+- Choosing storage → [Storage](./storage)
+- Configuring the search backend → [Search setup](./search-setup)

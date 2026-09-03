@@ -5,7 +5,7 @@ description: プラグインのインストール、有効化、管理 UI から
 
 このページでは、Crowi 2.0 にプラグインを導入し、管理画面から設定する
 手順を説明します。プラグインの仕組み全体については
-[プラグインアーキテクチャ](./overview) を先に読むことをおすすめします。
+[プラグインアーキテクチャ](../develop/plugins-overview) を先に読むことをおすすめします。
 
 ## プラグインは 2 段階で有効になる
 
@@ -116,7 +116,7 @@ URL、SMTP のホスト名、Resend の API キーなど — **管理者にだ�
 返しません。
 
 プラグイン側でこの宣言を行う方法は
-[プラグイン開発](./developing) を参照してください。
+[プラグイン開発](../develop/plugins-developing) を参照してください。
 
 ### スキーマ駆動の設定フォーム
 
@@ -150,7 +150,7 @@ z.string().describe('@sensitive AWS secret access key')
 自動暗号化され、読み取り時に復号されます。管理 UI ではシークレット用の
 入力欄 (`<SecretField>`: 保存済みバッジ / 入力中のクリア / 取り消し) で
 レンダリングされます。暗号化の前提となる `CROWI_ENCRYPTION_KEY` の設定に
-ついては [設定の暗号化](../operations/encryption) を参照してください。
+ついては [設定の暗号化](./encryption) を参照してください。
 
 ### `@action` マーカー
 
@@ -212,7 +212,7 @@ z.string().describe('@action "Test connection" POST /test')
 
 ## 関連ページ
 
-- プラグインの仕組み → [プラグインアーキテクチャ](./overview)
+- プラグインの仕組み → [プラグインアーキテクチャ](../develop/plugins-overview)
 - レンダラプラグインの一覧 → [レンダラプラグイン](./renderers)
-- ストレージの選択 → [ストレージ](../operations/storage)
-- 検索バックエンドの設定 → [検索のセットアップ](../operations/search-setup)
+- ストレージの選択 → [ストレージ](./storage)
+- 検索バックエンドの設定 → [検索のセットアップ](./search-setup)

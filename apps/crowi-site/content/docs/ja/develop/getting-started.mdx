@@ -9,7 +9,7 @@ description: Crowi 2.0 をローカルで動かすまでの 5 分間クイック
 > **注意**: Crowi v2 は現在 alpha 開発中です。安定版リリースはまだ
 > ありません。**本番環境では使用しないでください。** ここで説明するのは
 > あくまで開発・評価用のローカル起動手順です。本番向けの詳細な
-> インストールは [インストール](./operations/installation) を参照して
+> インストールは [インストール](../operations/installation) を参照して
 > ください。
 
 ## 動作環境
@@ -84,7 +84,7 @@ pnpm --filter @crowi/api crypto:gen-key
 
 で 32 バイトの AES-256 鍵を生成し、出力値を `.env` の
 `CROWI_ENCRYPTION_KEY` に貼り付けてください。詳細は
-[設定の暗号化](./operations/encryption) を参照してください。
+[設定の暗号化](../operations/encryption) を参照してください。
 
 ## 5. 開発サーバの起動
 
@@ -119,7 +119,7 @@ pnpm dev:site    # crowi.wiki LP + ドキュメント (このサイト、:4303)
 
 ## 次のステップ
 
-- 本番環境への導入手順 → [インストール](./operations/installation)
-- ページの作成・編集の基本 → [ページ](./guide/pages)
-- 設定項目の一覧 → [設定](./operations/configuration)
-- 開発に参加したい場合 → [コントリビュート](./reference/contributing)
+- 本番環境への導入手順 → [インストール](../operations/installation)
+- ページの作成・編集の基本 → [ページ](../guide/pages)
+- 設定項目の一覧 → [設定](../operations/configuration)
+- 開発に参加したい場合 → [コントリビュート](./contributing)
