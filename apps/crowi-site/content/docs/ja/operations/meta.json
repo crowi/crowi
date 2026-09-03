@@ -1,23 +1,30 @@
 {
-  "title": "運用",
+  "title": "管理と運用",
+  "root": true,
   "pages": [
+    "---導入---",
     "installation",
     "self-hosting",
     "deployment",
     "aws-lightsail",
+    "---設定---",
     "configuration",
     "encryption",
     "storage",
-    "admin",
-    "federated-auth",
+    "storage-gcp",
+    "search-setup",
     "mail",
-    "slack",
+    "renderers",
+    "plugins",
     "redis",
     "realtime-collab",
     "mcp",
-    "search-setup",
+    "---管理画面---",
+    "admin",
+    "federated-auth",
+    "slack",
+    "---保守---",
     "backup",
-    "upgrading-from-v1",
-    "release-runbook"
+    "upgrading-from-v1"
   ]
 }

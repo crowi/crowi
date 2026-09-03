@@ -1,23 +1,30 @@
 {
-  "title": "Operations",
+  "title": "Administration & operations",
+  "root": true,
   "pages": [
+    "---Install---",
     "installation",
     "self-hosting",
     "deployment",
     "aws-lightsail",
+    "---Configure---",
     "configuration",
     "encryption",
     "storage",
-    "admin",
-    "federated-auth",
+    "storage-gcp",
+    "search-setup",
     "mail",
-    "slack",
+    "renderers",
+    "plugins",
     "redis",
     "realtime-collab",
     "mcp",
-    "search-setup",
+    "---Admin panel---",
+    "admin",
+    "federated-auth",
+    "slack",
+    "---Maintain---",
     "backup",
-    "upgrading-from-v1",
-    "release-runbook"
+    "upgrading-from-v1"
   ]
 }

@@ -1,0 +1,15 @@
+{
+  "title": "開発",
+  "root": true,
+  "pages": [
+    "getting-started",
+    "architecture",
+    "contributing",
+    "---プラグイン---",
+    "plugins-overview",
+    "plugins-developing",
+    "---設計と運営---",
+    "rfcs",
+    "release-runbook"
+  ]
+}

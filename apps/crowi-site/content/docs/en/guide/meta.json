@@ -1,4 +1,23 @@
 {
-  "title": "User Guide",
-  "pages": ["pages", "markdown", "realtime-editing", "revisions", "comments", "reactions", "notifications", "attachments", "search", "trash", "profile", "sharing", "cli"]
+  "title": "Guide",
+  "root": true,
+  "pages": [
+    "---Write pages---",
+    "pages",
+    "markdown",
+    "attachments",
+    "realtime-editing",
+    "revisions",
+    "---Collaborate---",
+    "comments",
+    "reactions",
+    "notifications",
+    "---Find & organise---",
+    "search",
+    "trash",
+    "---Account & tools---",
+    "profile",
+    "cli",
+    "sharing"
+  ]
 }

@@ -1,0 +1,15 @@
+{
+  "title": "Development",
+  "root": true,
+  "pages": [
+    "getting-started",
+    "architecture",
+    "contributing",
+    "---Plugins---",
+    "plugins-overview",
+    "plugins-developing",
+    "---Design & release---",
+    "rfcs",
+    "release-runbook"
+  ]
+}

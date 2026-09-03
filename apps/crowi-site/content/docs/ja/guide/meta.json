@@ -1,4 +1,23 @@
 {
-  "title": "使い方ガイド",
-  "pages": ["pages", "markdown", "realtime-editing", "revisions", "comments", "reactions", "notifications", "attachments", "search", "trash", "profile", "sharing", "cli"]
+  "title": "ガイド",
+  "root": true,
+  "pages": [
+    "---ページを書く---",
+    "pages",
+    "markdown",
+    "attachments",
+    "realtime-editing",
+    "revisions",
+    "---協働する---",
+    "comments",
+    "reactions",
+    "notifications",
+    "---探す・整理する---",
+    "search",
+    "trash",
+    "---アカウントとツール---",
+    "profile",
+    "cli",
+    "sharing"
+  ]
 }
