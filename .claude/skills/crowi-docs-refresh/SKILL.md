@@ -23,8 +23,7 @@ site は push で Cloudflare Pages に deploy されるため、main に merge �
 
 ## 対象 / 非対象
 
-- 対象: `apps/crowi-site/content/docs/{ja,en}/`(guide / plugins / operations /
-  reference の 4 section)+ 必要なら LP 側の feature 記述。
+- 対象: `apps/crowi-site/content/docs/{ja,en}/`(読者別の 3 タブ = `guide/` 利用者 / `operations/` 管理者・運用者 / `develop/` 開発者・コントリビュータ)+ 必要なら LP 側の feature 記述。
 - 非対象: wiki(`/crowi/spec/...`)— spec の publish は crowi-design の領分。
   `docs/rfcs/` — RFC は設計文書であり user docs ではない。README 群。
 
@@ -83,9 +82,12 @@ stale 成果物を掃除する(codex-runs の invocation 跨ぎ再利用に注�
   その出力を下敷きにする。
 - **en は Codex terra に draft させ、ja は Claude が書く**(en の翻訳ではなく
   既存 ja docs の文体で書き直す)。書き上がったら逆モデルで事実照合。
-- 置き場所は既存 4 section の構造に従う(新記法 → guide/markdown、plugin →
-  plugins/、env・deploy → operations/、API 面 → reference/)。新ページより
-  既存ページへの追記を優先。
+- **置き場所は 2 段階で決める**。まず読者(利用者 → `guide/`、管理者・運用者 → `operations/`、開発者・コントリビュータ → `develop/`)、次に文書タイプ(導入 / 手順 / 参照 / 解説)。1 ページには 1 タイプだけを書く。新ページより既存ページへの追記を優先。
+- 3 つのフォルダは Fumadocs の root フォルダ(= サイドバーのタブ)。ページを足したら該当 `meta.json` の `pages` に登録する(未登録ページはサイドバーに出ない)。タブ内のグループはセパレータ(`"---名前---"`)で分ける。
+- 一覧表(環境変数・設定キー・CLI オプション)は 1 か所にだけ置き、他のページはそこへリンクする。手順ページには「なぜ・いつ使うか」だけを書く。
+- 利用者・運用者向けページ(`guide/` `operations/`)に RFC 番号・spec id(`feature-*`)・ファイルパス・関数名・ミドルウェア名・CSS トークン・モデルのフィールド名を書かない。書けるのは `develop/` のみ。
+- 経緯を書かない(「以前は」「旧バージョンでは」)。例外は `operations/upgrading-from-v1` の v1 との差分説明。
+- ページを移動・改名したら `public/_redirects` に 301 を足し、リンク元の相対リンクを張り替える(検知は Step 4 の `check:links`)。
 - **ja / en を同時に書く**。片方だけの commit を作らない。
 
 ### Step 3: 陳腐化調査(claim 検証)
@@ -119,7 +121,10 @@ b. **機械照合 sweep(Codex terra へ offload)**: 「以下の docs の claim 
 git diff --name-only HEAD -- apps/crowi-site/content \
   | sed -e 's|/docs/ja/|/docs/*/|' -e 's|/docs/en/|/docs/*/|' \
   | sort | uniq -c | awk '$1 == 1 {print "PARITY MISS:", $2}'
-pnpm --filter @crowi/site build    # Fumadocs は壊れた mdx / リンクでビルドが落ちる
+pnpm --filter @crowi/site build    # Fumadocs は壊れた mdx でビルドが落ちる(壊れたリンクは落ちない)
+# ページ間の相対リンクが解決するか(静的エクスポートは壊れたリンクを素のアンカーとして
+# 出力するので、ビルドでは検知できない)。site の lint に chain 済みなので pnpm lint でも走る。
+pnpm --filter @crowi/site check:links
 pnpm --filter @crowi/site lint && pnpm --filter @crowi/site type-check
 ```
 

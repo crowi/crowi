@@ -488,22 +488,26 @@ committer が `docs(site)` commit に分割)、
 ```
 apps/crowi-site/content/docs/
 ├── ja/                       # 日本語 (正本)
-│   ├── getting-started.mdx
-│   ├── guide/                # 利用者向け機能ガイド (pages / markdown / search / ...)
-│   ├── operations/           # 運用・管理者向け (installation / configuration / env / admin / mcp / ...)
-│   ├── plugins/              # プラグイン (overview / managing / developing / renderers)
-│   ├── reference/            # 設計資料 (architecture / rfcs / contributing)
-│   └── {category}/meta.json  # カテゴリ内のページ順 + タイトル
+│   ├── index.mdx
+│   ├── guide/                # 利用者 (pages / markdown / search / ...)
+│   ├── operations/           # 管理者・運用者 (installation / configuration / admin / plugins / ...)
+│   ├── develop/              # 開発者・コントリビュータ (architecture / plugins-developing / rfcs / ...)
+│   └── {tab}/meta.json       # タブ内のページ順 + タイトル
 └── en/                       # 英語 (ja とミラー構成・同じファイル名)
 ```
 
+- **読者で置き場所を決める**: `guide/` `operations/` `develop/` は Fumadocs の root フォルダ
+  (= サイドバーのタブ) で、分割の軸は読者。置き場所と書いてよい内容の規約は
+  crowi-docs-refresh skill が正本。
 - **二言語ミラー構成**: `ja/` と `en/` は同じファイル名・同じ構成。**必ず両方を更新**する
   (片方だけだと乖離する)。ja を正本として書き、en はその英訳を当てる。
 - **frontmatter 必須**: 各 `.mdx` は先頭に `title` と `description` を持つ
   (`--- title: ... / description: ... ---`)。新規ページにも必ず付ける。
-- **meta.json**: 新規 `.mdx` を **追加** したときは、そのカテゴリの `meta.json` の
+- **meta.json**: 新規 `.mdx` を **追加** したときは、そのタブの `meta.json` の
   `pages` 配列に **ja / en 両方とも** ファイル名 (拡張子なし) を追記して順序に組み込む。
-  既存ページの編集だけなら meta.json は触らなくてよい。
+  未登録のページはサイドバーに出ない。既存ページの編集だけなら meta.json は触らなくてよい。
+- **移動・改名したとき**: `apps/crowi-site/public/_redirects` に 301 を足し、リンク元の
+  相対リンクを張り替える (`pnpm --filter @crowi/site check:links` が検知する)。
 
 ### 要否の判定 (v2 は design writer、legacy は planner が行う)
 

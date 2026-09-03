@@ -11,7 +11,7 @@ description: |
 
 リリースは CI が自動化済み。この skill は **CI の外側に残る人間側の仕事** — 「いつ切るか」
 の判断材料づくりと「ちゃんと出たか」の検証 — を定型化する。運用者向けの正本ドキュメントは
-`apps/crowi-site/content/docs/{ja,en}/operations/release-runbook.mdx`(外部設定・
+`apps/crowi-site/content/docs/{ja,en}/develop/release-runbook.mdx`(外部設定・
 Trusted Publisher 等はそちら)。この skill はエージェント手順に徹する。
 
 ## CI がやること / この skill がやること(境界表・workflow 実測 2026-07)
@@ -110,7 +110,7 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
 
 通常運用では CI が publish → tag → image → 告知まで行う(冒頭の境界表)。この節は CI が
 使えないときだけの経路。**運用の正本は
-`apps/crowi-site/content/docs/{ja,en}/operations/release-runbook.mdx`** で、外部設定・
+`apps/crowi-site/content/docs/{ja,en}/develop/release-runbook.mdx`** で、外部設定・
 dist-tag・channel 切替はそちらが持つ。
 
 手順は CI がやっていることを手で行う:
