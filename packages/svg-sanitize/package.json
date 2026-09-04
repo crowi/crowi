@@ -24,7 +24,7 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
-    "@xmldom/xmldom": "^0.9.10"
+    "@xmldom/xmldom": "^0.9.12"
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
