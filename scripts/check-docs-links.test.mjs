@@ -43,12 +43,29 @@ describe('check-docs-links', () => {
         { href: './mail', line: 5 },
       ])
     })
+
+    it('keeps checking after a nested example fence closes its outer block', () => {
+      // guide/markdown.mdx really contains this shape: a ```` block whose body
+      // shows a ``` example. A parity toggle would leave the rest of the file
+      // treated as code and silently stop checking its links.
+      const source = ['````markdown', '```plantuml', 'A -> B', '```', '````', '[real](./storage)'].join('\n')
+
+      assert.deepEqual(extractRelativeLinks(source), [{ href: './storage', line: 6 }])
+    })
+
+    it('does not let the other fence character close an open block', () => {
+      const source = ['~~~md', '[sample](./not-a-page)', '```', '[still-code](./nope)', '~~~', '[real](./mail)'].join('\n')
+
+      assert.deepEqual(extractRelativeLinks(source), [{ href: './mail', line: 6 }])
+    })
   })
 
   describe('resolveLink', () => {
     const root = mkdtempSync(join(tmpdir(), 'crowi-docs-links-'))
     const localeRoot = join(root, DOCS_DIR, 'ja')
     const page = join(localeRoot, 'operations', 'storage.mdx')
+    /** @type {Set<string>} */
+    let pages
 
     before(() => {
       mkdirSync(join(localeRoot, 'operations'), { recursive: true })
@@ -58,7 +75,8 @@ describe('check-docs-links', () => {
       writeFileSync(join(localeRoot, 'operations', 'storage.mdx'), '')
       writeFileSync(join(localeRoot, 'operations', 'encryption.mdx'), '')
       writeFileSync(join(localeRoot, 'guide', 'markdown.mdx'), '')
-      writeFileSync(join(root, DOCS_DIR, 'ja', 'develop', 'index.mdx'), '')
+      writeFileSync(join(localeRoot, 'develop', 'index.mdx'), '')
+      pages = new Set(collectDocsFiles(root))
     })
 
     after(() => {
@@ -66,30 +84,45 @@ describe('check-docs-links', () => {
     })
 
     it('resolves siblings, other folders and folder index pages', () => {
-      assert.deepEqual(resolveLink(page, './encryption', localeRoot), { ok: true })
-      assert.deepEqual(resolveLink(page, '../guide/markdown', localeRoot), { ok: true })
-      assert.deepEqual(resolveLink(page, '../develop', localeRoot), { ok: true })
-      assert.deepEqual(resolveLink(page, '../index', localeRoot), { ok: true })
+      assert.deepEqual(resolveLink(page, './encryption', localeRoot, pages), { ok: true })
+      assert.deepEqual(resolveLink(page, '../guide/markdown', localeRoot, pages), { ok: true })
+      assert.deepEqual(resolveLink(page, '../develop', localeRoot, pages), { ok: true })
     })
 
     it('ignores the fragment when resolving', () => {
-      assert.deepEqual(resolveLink(page, './encryption#鍵の生成', localeRoot), { ok: true })
+      assert.deepEqual(resolveLink(page, './encryption#鍵の生成', localeRoot, pages), { ok: true })
     })
 
-    it('accepts an explicit .mdx destination', () => {
-      assert.deepEqual(resolveLink(page, './encryption.mdx', localeRoot), { ok: true })
-      assert.equal(resolveLink(page, './gone.mdx', localeRoot).ok, false)
+    it('rejects an explicit .mdx destination because site URLs carry no extension', () => {
+      const result = resolveLink(page, './encryption.mdx', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /no file extension/)
+    })
+
+    it('rejects a trailing index segment because index.mdx is served at its folder URL', () => {
+      const result = resolveLink(page, '../index', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /folder URL/)
+    })
+
+    it('rejects a wrong-case destination even on a case-insensitive filesystem', () => {
+      const result = resolveLink(page, './Encryption', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /no such page/)
     })
 
     it('reports a destination that has no page', () => {
-      const result = resolveLink(page, '../plugins/managing', localeRoot)
+      const result = resolveLink(page, '../plugins/managing', localeRoot, pages)
 
       assert.equal(result.ok, false)
       assert.match(result.reason, /no such page/)
     })
 
     it('reports a destination that escapes the locale directory', () => {
-      const result = resolveLink(page, '../../en/operations/storage', localeRoot)
+      const result = resolveLink(page, '../../en/operations/storage', localeRoot, pages)
 
       assert.equal(result.ok, false)
       assert.match(result.reason, /resolves outside/)
@@ -128,7 +161,12 @@ describe('check-docs-links', () => {
       assert.equal(checked, 6)
       assert.deepEqual(
         violations.map((violation) => `${violation.file}:${violation.line} ${violation.href}`),
-        [`${join(DOCS_DIR, 'en', 'operations', 'storage.mdx')}:1 ../plugins/managing`, `${join(DOCS_DIR, 'ja', 'operations', 'storage.mdx')}:1 ../plugins/managing`],
+        [
+          `${join(DOCS_DIR, 'en', 'operations', 'storage.mdx')}:1 ../plugins/managing`,
+          `${join(DOCS_DIR, 'en', 'operations', 'storage.mdx')}:2 ../index`,
+          `${join(DOCS_DIR, 'ja', 'operations', 'storage.mdx')}:1 ../plugins/managing`,
+          `${join(DOCS_DIR, 'ja', 'operations', 'storage.mdx')}:2 ../index`,
+        ],
       )
     })
   })

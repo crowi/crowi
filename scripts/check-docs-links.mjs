@@ -12,20 +12,36 @@
 // against the *source directory* of the file that contains it, so `./sibling`
 // is the same folder and `../other/page` is a sibling folder.
 //
+// Destinations are matched against the collected page list rather than probed
+// with existsSync, so a wrong-case destination fails here even on a
+// case-insensitive filesystem (macOS). The production host serves
+// case-sensitively, and pre-push is the gate that runs on a developer laptop.
+//
+// Two destination shapes resolve to a file on disk but have no URL, so they are
+// rejected rather than blessed: an explicit `.mdx` / `.md` extension (site URLs
+// carry none) and a trailing `index` segment (index.mdx is served at its folder
+// URL, never at `<folder>/index`).
+//
 // Out of scope (skipped, not resolved): external URLs, `mailto:`, root-absolute
 // paths (docs pages use those for wiki-content examples like `/foo bar`), and
 // same-page anchors. Fragments are stripped before resolving, so
 // `./redis#acl` only checks that `redis.mdx` exists — not the heading.
+// JSX attributes are not scanned, so `<Card href="…">` is not covered.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DOCS_DIR = join('apps', 'crowi-site', 'content', 'docs')
 const PAGE_EXT = /\.mdx?$/
 const LINK_RE = /\]\(([^)]*)\)/g
-const FENCE_RE = /^\s*(```|~~~)/
+// An opening fence is 3+ backticks or tildes; the closing fence must use the
+// same character and be at least as long (CommonMark). Tracking the marker
+// instead of toggling a boolean keeps a nested example fence — ```` wrapping
+// ``` , which guide/markdown.mdx really contains — from inverting the state and
+// silently switching link checking off for the rest of the file.
+const FENCE_RE = /^\s{0,3}(`{3,}|~{3,})/
 
 /**
  * Strip the optional link title and angle brackets from a markdown destination.
@@ -55,14 +71,23 @@ function isFileRelative(href) {
 export function extractRelativeLinks(source) {
   /** @type {{href: string, line: number}[]} */
   const links = []
-  let inFence = false
+  /** @type {string | null} */
+  let openFence = null
 
   source.split('\n').forEach((text, index) => {
-    if (FENCE_RE.test(text)) {
-      inFence = !inFence
+    const fence = FENCE_RE.exec(text)?.[1]
+    if (fence) {
+      if (openFence === null) {
+        openFence = fence
+        return
+      }
+      // Only a fence of the same character and at least the opening length
+      // closes the block; anything shorter or of the other character is
+      // content inside it.
+      if (fence[0] === openFence[0] && fence.length >= openFence.length) openFence = null
       return
     }
-    if (inFence) return
+    if (openFence !== null) return
 
     for (const match of text.matchAll(LINK_RE)) {
       const href = normalizeHref(match[1])
@@ -77,19 +102,28 @@ export function extractRelativeLinks(source) {
  * @param {string} fromFile absolute path of the page holding the link
  * @param {string} href a file-relative link destination
  * @param {string} localeRoot absolute path of content/docs/<locale>
+ * @param {Set<string>} pages every page path that exists, exactly as on disk
  * @returns {{ok: true} | {ok: false, reason: string}}
  */
-export function resolveLink(fromFile, href, localeRoot) {
+export function resolveLink(fromFile, href, localeRoot, pages) {
   const path = href.split('#')[0].split('?')[0]
   if (path === '' || path === './') return { ok: true }
+
+  if (PAGE_EXT.test(path)) {
+    return { ok: false, reason: 'site URLs carry no file extension — drop the .mdx / .md' }
+  }
 
   const target = resolve(dirname(fromFile), path)
   if (target !== localeRoot && !target.startsWith(localeRoot + sep)) {
     return { ok: false, reason: `resolves outside ${relative(ROOT, localeRoot)}` }
   }
 
-  const candidates = PAGE_EXT.test(path) ? [target] : [`${target}.mdx`, join(target, 'index.mdx')]
-  if (candidates.some((candidate) => existsSync(candidate))) return { ok: true }
+  if (basename(target) === 'index') {
+    return { ok: false, reason: 'index.mdx is served at its folder URL — link to the folder instead' }
+  }
+
+  const candidates = [`${target}.mdx`, join(target, 'index.mdx')]
+  if (candidates.some((candidate) => pages.has(candidate))) return { ok: true }
 
   return { ok: false, reason: `no such page (looked for ${candidates.map((c) => relative(ROOT, c)).join(' / ')})` }
 }
@@ -115,6 +149,7 @@ export function collectDocsFiles(root = ROOT) {
  */
 export function findBrokenLinks(files, root = ROOT) {
   const docsRoot = join(root, DOCS_DIR)
+  const pages = new Set(files)
   /** @type {{file: string, line: number, href: string, reason: string}[]} */
   const violations = []
   let checked = 0
@@ -125,7 +160,7 @@ export function findBrokenLinks(files, root = ROOT) {
 
     for (const { href, line } of extractRelativeLinks(readFileSync(file, 'utf8'))) {
       checked += 1
-      const result = resolveLink(file, href, localeRoot)
+      const result = resolveLink(file, href, localeRoot, pages)
       if (!result.ok) violations.push({ file: relative(root, file), line, href, reason: result.reason })
     }
   }
