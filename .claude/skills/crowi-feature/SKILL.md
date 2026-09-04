@@ -517,7 +517,7 @@ legacy は `context.docsTargets.assessment` に判定を記録する:
 | assessment | 例 | docs 更新 |
 |---|---|---|
 | `user-visible` | 新しいページ機能 / 編集挙動 / 検索 / 通知 / 添付 等、エンドユーザーが触る変化 | `guide/` を更新 |
-| `operator-visible` | 新 env / 新 admin 設定 / インストール手順 / プラグイン運用の変化 | `operations/` or `plugins/` を更新 |
+| `operator-visible` | 新 env / 新 admin 設定 / インストール手順 / プラグイン運用の変化 | `operations/` を更新 |
 | `internal-only` | 内部 refactor / 内部 API / テスト / 観測できない最適化 | **skip** (`entries: []`) |
 
 `internal-only` のときは docs 更新も `docs(site)` commit も作らない。
@@ -525,7 +525,7 @@ legacy は `context.docsTargets.assessment` に判定を記録する:
 ### 対象ファイルの探し方 (v2 は design writer、legacy は planner)
 
 1. spec の機能領域に対応する既存 `.mdx` を探す
-   (`ls apps/crowi-site/content/docs/ja/{guide,operations,plugins}` + grep で関連語を検索)。
+   (`ls apps/crowi-site/content/docs/ja/{guide,operations,develop}` + grep で関連語を検索)。
    - 既存ページがあれば `action: "edit"`、その ja / en パスを `docsTargets.entries[]` に書く。
    - 該当が無く新規トピックなら `action: "create"`、適切なカテゴリに新ファイル名を決め、
      `metaUpdate: true` を立てる (implementer が meta.json に追記する目印)。
