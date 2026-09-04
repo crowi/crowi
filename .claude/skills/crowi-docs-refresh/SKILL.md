@@ -123,7 +123,8 @@ git diff --name-only HEAD -- apps/crowi-site/content \
   | sort | uniq -c | awk '$1 == 1 {print "PARITY MISS:", $2}'
 pnpm --filter @crowi/site build    # Fumadocs は壊れた mdx でビルドが落ちる(壊れたリンクは落ちない)
 # ページ間の相対リンクが解決するか(静的エクスポートは壊れたリンクを素のアンカーとして
-# 出力するので、ビルドでは検知できない)。site の lint に chain 済みなので pnpm lint でも走る。
+# 出力するので、ビルドでは検知できない)。リポジトリルートの pnpm lint と pre-push、
+# それに docs.yml (ci.yml が docs だけの push を skip するため) からも走る。
 pnpm --filter @crowi/site check:links
 pnpm --filter @crowi/site lint && pnpm --filter @crowi/site type-check
 ```

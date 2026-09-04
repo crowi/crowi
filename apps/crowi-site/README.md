@@ -74,6 +74,6 @@ Docs は読者別の 3 タブ (Fumadocs の root フォルダ) に分かれて�
 1. 読者に対応するフォルダに `<slug>.mdx` を作る。**ja / en の両方**を揃えると言語スイッチャーが自然に動作する。
 2. 同じフォルダの `meta.json` の `pages` にスラッグを追加する。未登録のページはサイドバーに出ない。タブ内のグループ見出しは `"---名前---"` のセパレータで書く。
 3. ページを移動・改名したら `public/_redirects` に 301 を足し、リンク元の相対リンクを張り替える。
-4. `pnpm --filter @crowi/site check:links` で相対リンクが解決するか確認する (`lint` からも走る)。
+4. `pnpm --filter @crowi/site check:links` で相対リンクが解決するか確認する (リポジトリルートの `pnpm lint` からも走る)。
 
 読者と文書タイプによる置き場所の決め方・書いてよい内容の規約は [crowi-docs-refresh skill](../../.claude/skills/crowi-docs-refresh/SKILL.md) にある。

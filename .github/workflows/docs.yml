@@ -1,0 +1,43 @@
+name: Docs
+
+# ci.yml deliberately skips its whole pipeline for docs-only pushes
+# (paths-ignore covers '**/*.mdx' and 'apps/crowi-site/**'), so the link guard
+# chained into `pnpm lint` never runs for exactly the change class it protects.
+# The Cloudflare Pages deploy does not cover it either: a static export emits an
+# unresolvable relative link as a plain anchor and still builds green.
+#
+# This workflow is the missing gate. It is deliberately tiny — the checker
+# imports nothing outside the node standard library, so there is no install
+# step and nothing to cache.
+on:
+  push:
+    branches: [main, dev, dev2-2]
+    paths: &docs-paths
+      - 'apps/crowi-site/content/docs/**'
+      - 'scripts/check-docs-links.mjs'
+      - 'scripts/check-docs-links.test.mjs'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [main, dev, dev2-2]
+    paths: *docs-paths
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Runs on Linux, so a destination whose case differs from the file on
+      # disk fails here even when the author's macOS checkout accepted it.
+      - name: Check docs relative links
+        run: node scripts/check-docs-links.mjs
+
+      - name: Test the link checker
+        run: node --test scripts/check-docs-links.test.mjs

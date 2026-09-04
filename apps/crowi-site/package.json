@@ -7,7 +7,7 @@
     "dev": "next dev --turbopack --port ${PORT_SITE:-4303}",
     "build": "next build",
     "start": "next start --port ${PORT_SITE:-4303}",
-    "lint": "eslint && pnpm run check:links",
+    "lint": "eslint",
     "check:links": "node ../../scripts/check-docs-links.mjs",
     "type-check": "tsc --noEmit",
     "postinstall": "fumadocs-mdx",
