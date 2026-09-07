@@ -996,10 +996,6 @@ components:
                 - email
                 - createdAt
             - type: 'null'
-        liker:
-          type: array
-          items:
-            type: string
         commentCount:
           type: number
           default: 0
@@ -1021,13 +1017,20 @@ components:
         latestRevision:
           type: string
         likerCount:
-          type: number
+          type: integer
+          minimum: 0
         seenUsersCount:
-          type: number
+          type: integer
+          minimum: 0
+        isLiked:
+          type: boolean
       required:
         - _id
         - path
         - createdAt
+        - likerCount
+        - seenUsersCount
+        - isLiked
     RenderedAstEnvelope:
       type: object
       properties:
@@ -1318,10 +1321,6 @@ components:
             - name
             - email
             - createdAt
-        liker:
-          type: array
-          items:
-            type: string
         commentCount:
           type: number
           default: 0
@@ -1343,14 +1342,21 @@ components:
         latestRevision:
           type: string
         likerCount:
-          type: number
+          type: integer
+          minimum: 0
         seenUsersCount:
-          type: number
+          type: integer
+          minimum: 0
+        isLiked:
+          type: boolean
       required:
         - _id
         - path
         - revision
         - createdAt
+        - likerCount
+        - seenUsersCount
+        - isLiked
     Revision:
       type: object
       properties:
@@ -1949,10 +1955,6 @@ components:
                       - email
                       - createdAt
                   - type: 'null'
-              liker:
-                type: array
-                items:
-                  type: string
               commentCount:
                 type: number
                 default: 0
@@ -1974,13 +1976,20 @@ components:
               latestRevision:
                 type: string
               likerCount:
-                type: number
+                type: integer
+                minimum: 0
               seenUsersCount:
-                type: number
+                type: integer
+                minimum: 0
+              isLiked:
+                type: boolean
             required:
               - _id
               - path
               - createdAt
+              - likerCount
+              - seenUsersCount
+              - isLiked
         pager:
           type: object
           properties:
@@ -2271,10 +2280,6 @@ components:
                     - email
                     - createdAt
                 - type: 'null'
-            liker:
-              type: array
-              items:
-                type: string
             commentCount:
               type: number
               default: 0
@@ -2296,13 +2301,20 @@ components:
             latestRevision:
               type: string
             likerCount:
-              type: number
+              type: integer
+              minimum: 0
             seenUsersCount:
-              type: number
+              type: integer
+              minimum: 0
+            isLiked:
+              type: boolean
           required:
             - _id
             - path
             - createdAt
+            - likerCount
+            - seenUsersCount
+            - isLiked
         contentPage:
           type:
             - object
@@ -2576,10 +2588,6 @@ components:
                     - email
                     - createdAt
                 - type: 'null'
-            liker:
-              type: array
-              items:
-                type: string
             commentCount:
               type: number
               default: 0
@@ -2601,13 +2609,20 @@ components:
             latestRevision:
               type: string
             likerCount:
-              type: number
+              type: integer
+              minimum: 0
             seenUsersCount:
-              type: number
+              type: integer
+              minimum: 0
+            isLiked:
+              type: boolean
           required:
             - _id
             - path
             - createdAt
+            - likerCount
+            - seenUsersCount
+            - isLiked
         total:
           type: number
       required:
@@ -2884,10 +2899,6 @@ components:
                 - name
                 - email
                 - createdAt
-            liker:
-              type: array
-              items:
-                type: string
             commentCount:
               type: number
               default: 0
@@ -2909,14 +2920,21 @@ components:
             latestRevision:
               type: string
             likerCount:
-              type: number
+              type: integer
+              minimum: 0
             seenUsersCount:
-              type: number
+              type: integer
+              minimum: 0
+            isLiked:
+              type: boolean
           required:
             - _id
             - path
             - revision
             - createdAt
+            - likerCount
+            - seenUsersCount
+            - isLiked
       required:
         - page
     UpdatePageRequest:
@@ -3322,10 +3340,6 @@ components:
                       - email
                       - createdAt
                   - type: 'null'
-              liker:
-                type: array
-                items:
-                  type: string
               commentCount:
                 type: number
                 default: 0
@@ -3347,13 +3361,20 @@ components:
               latestRevision:
                 type: string
               likerCount:
-                type: number
+                type: integer
+                minimum: 0
               seenUsersCount:
-                type: number
+                type: integer
+                minimum: 0
+              isLiked:
+                type: boolean
             required:
               - _id
               - path
               - createdAt
+              - likerCount
+              - seenUsersCount
+              - isLiked
       required:
         - pages
     Attachment:
@@ -8671,10 +8692,6 @@ paths:
                                 - email
                                 - createdAt
                             - type: 'null'
-                        liker:
-                          type: array
-                          items:
-                            type: string
                         commentCount:
                           type: number
                           default: 0
@@ -8696,13 +8713,20 @@ paths:
                         latestRevision:
                           type: string
                         likerCount:
-                          type: number
+                          type: integer
+                          minimum: 0
                         seenUsersCount:
-                          type: number
+                          type: integer
+                          minimum: 0
+                        isLiked:
+                          type: boolean
                       required:
                         - _id
                         - path
                         - createdAt
+                        - likerCount
+                        - seenUsersCount
+                        - isLiked
                 required:
                   - pages
         '401':
@@ -10437,10 +10461,6 @@ paths:
                                 - email
                                 - createdAt
                             - type: 'null'
-                        liker:
-                          type: array
-                          items:
-                            type: string
                         commentCount:
                           type: number
                           default: 0
@@ -10462,13 +10482,20 @@ paths:
                         latestRevision:
                           type: string
                         likerCount:
-                          type: number
+                          type: integer
+                          minimum: 0
                         seenUsersCount:
-                          type: number
+                          type: integer
+                          minimum: 0
+                        isLiked:
+                          type: boolean
                       required:
                         - _id
                         - path
                         - createdAt
+                        - likerCount
+                        - seenUsersCount
+                        - isLiked
                   recentBookmarks:
                     type: array
                     items:
@@ -10748,10 +10775,6 @@ paths:
                                     - email
                                     - createdAt
                                 - type: 'null'
-                            liker:
-                              type: array
-                              items:
-                                type: string
                             commentCount:
                               type: number
                               default: 0
@@ -10773,13 +10796,20 @@ paths:
                             latestRevision:
                               type: string
                             likerCount:
-                              type: number
+                              type: integer
+                              minimum: 0
                             seenUsersCount:
-                              type: number
+                              type: integer
+                              minimum: 0
+                            isLiked:
+                              type: boolean
                           required:
                             - _id
                             - path
                             - createdAt
+                            - likerCount
+                            - seenUsersCount
+                            - isLiked
                         user:
                           anyOf:
                             - type: string
@@ -11220,10 +11250,6 @@ paths:
                                     - email
                                     - createdAt
                                 - type: 'null'
-                            liker:
-                              type: array
-                              items:
-                                type: string
                             commentCount:
                               type: number
                               default: 0
@@ -11245,13 +11271,20 @@ paths:
                             latestRevision:
                               type: string
                             likerCount:
-                              type: number
+                              type: integer
+                              minimum: 0
                             seenUsersCount:
-                              type: number
+                              type: integer
+                              minimum: 0
+                            isLiked:
+                              type: boolean
                           required:
                             - _id
                             - path
                             - createdAt
+                            - likerCount
+                            - seenUsersCount
+                            - isLiked
                         user:
                           anyOf:
                             - type: string
@@ -11704,10 +11737,6 @@ paths:
                                 - email
                                 - createdAt
                             - type: 'null'
-                        liker:
-                          type: array
-                          items:
-                            type: string
                         commentCount:
                           type: number
                           default: 0
@@ -11729,13 +11758,20 @@ paths:
                         latestRevision:
                           type: string
                         likerCount:
-                          type: number
+                          type: integer
+                          minimum: 0
                         seenUsersCount:
-                          type: number
+                          type: integer
+                          minimum: 0
+                        isLiked:
+                          type: boolean
                       required:
                         - _id
                         - path
                         - createdAt
+                        - likerCount
+                        - seenUsersCount
+                        - isLiked
                   pager:
                     type: object
                     properties:
@@ -12144,10 +12180,6 @@ paths:
                                 - email
                                 - createdAt
                             - type: 'null'
-                        liker:
-                          type: array
-                          items:
-                            type: string
                         commentCount:
                           type: number
                           default: 0
@@ -12169,13 +12201,20 @@ paths:
                         latestRevision:
                           type: string
                         likerCount:
-                          type: number
+                          type: integer
+                          minimum: 0
                         seenUsersCount:
-                          type: number
+                          type: integer
+                          minimum: 0
+                        isLiked:
+                          type: boolean
                       required:
                         - _id
                         - path
                         - createdAt
+                        - likerCount
+                        - seenUsersCount
+                        - isLiked
                   pager:
                     type: object
                     properties:
@@ -12478,7 +12517,10 @@ paths:
           in: query
       responses:
         '200':
-          description: Bookmark for the page (or null when not bookmarked)
+          description: >-
+            Bookmark for the page (or null when not bookmarked). `page` is a
+            bare page id — this route never populates the page
+            (feature-page-relations-collections D-2).
           content:
             application/json:
               schema:
@@ -12492,309 +12534,9 @@ paths:
                       _id:
                         type: string
                       page:
-                        type: object
-                        properties:
-                          _id:
-                            type: string
-                          path:
-                            type: string
-                          revision:
-                            anyOf:
-                              - type: string
-                              - type: object
-                                properties:
-                                  _id:
-                                    type: string
-                                  path:
-                                    type: string
-                                  body:
-                                    type: string
-                                  format:
-                                    type: string
-                                    default: markdown
-                                  author:
-                                    type:
-                                      - object
-                                      - 'null'
-                                    properties:
-                                      _id:
-                                        type: string
-                                      id:
-                                        type: string
-                                      username:
-                                        type: string
-                                      name:
-                                        type: string
-                                      email:
-                                        type: string
-                                        format: email
-                                      image:
-                                        type:
-                                          - string
-                                          - 'null'
-                                      createdAt:
-                                        type: string
-                                    required:
-                                      - _id
-                                      - username
-                                      - name
-                                      - email
-                                      - createdAt
-                                  createdAt:
-                                    type: string
-                                  meta:
-                                    type: object
-                                    properties:
-                                      toc:
-                                        type: array
-                                        items:
-                                          type: object
-                                          properties:
-                                            level:
-                                              type: integer
-                                              minimum: 1
-                                              maximum: 6
-                                            text:
-                                              type: string
-                                            anchorId:
-                                              type: string
-                                          required:
-                                            - level
-                                            - text
-                                            - anchorId
-                                      wikiLinks:
-                                        type: array
-                                        items:
-                                          type: object
-                                          properties:
-                                            raw:
-                                              type: string
-                                            target:
-                                              type: string
-                                            displayText:
-                                              type: string
-                                          required:
-                                            - raw
-                                            - target
-                                      mentions:
-                                        type: array
-                                        items:
-                                          type: object
-                                          properties:
-                                            username:
-                                              type: string
-                                          required:
-                                            - username
-                                      codeBlockLanguages:
-                                        type: array
-                                        items:
-                                          type: string
-                                      rawSpaceLinks:
-                                        type: array
-                                        items:
-                                          type: string
-                                  renderedAst:
-                                    anyOf:
-                                      - $ref: '#/components/schemas/RenderedAstEnvelope'
-                                      - $ref: >-
-                                          #/components/schemas/LegacyRenderedAstRoot
-                                  renderedAstArtifactKey:
-                                    type: string
-                                    maxLength: 64
-                                  rendererVersion:
-                                    type: string
-                                  parentRevisionId:
-                                    type:
-                                      - string
-                                      - 'null'
-                                  type:
-                                    type: string
-                                    enum:
-                                      - snapshot
-                                      - incremental
-                                  savedBy:
-                                    anyOf:
-                                      - type: string
-                                      - type: object
-                                        properties:
-                                          _id:
-                                            type: string
-                                          id:
-                                            type: string
-                                          username:
-                                            type: string
-                                          name:
-                                            type: string
-                                          email:
-                                            type: string
-                                            format: email
-                                          image:
-                                            type:
-                                              - string
-                                              - 'null'
-                                          createdAt:
-                                            type: string
-                                        required:
-                                          - _id
-                                          - username
-                                          - name
-                                          - email
-                                          - createdAt
-                                      - type: 'null'
-                                  contributors:
-                                    type: array
-                                    items:
-                                      anyOf:
-                                        - type: string
-                                        - type: object
-                                          properties:
-                                            _id:
-                                              type: string
-                                            id:
-                                              type: string
-                                            username:
-                                              type: string
-                                            name:
-                                              type: string
-                                            email:
-                                              type: string
-                                              format: email
-                                            image:
-                                              type:
-                                                - string
-                                                - 'null'
-                                            createdAt:
-                                              type: string
-                                          required:
-                                            - _id
-                                            - username
-                                            - name
-                                            - email
-                                            - createdAt
-                                  message:
-                                    type: string
-                                  editVia:
-                                    type: string
-                                    enum:
-                                      - web
-                                      - oauth
-                                      - pat
-                                required:
-                                  - _id
-                                  - path
-                                  - body
-                                  - createdAt
-                          redirectTo:
-                            type:
-                              - string
-                              - 'null'
-                          status:
-                            type:
-                              - string
-                              - 'null'
-                            enum:
-                              - wip
-                              - published
-                              - deleted
-                              - deprecated
-                              - draft
-                              - null
-                          grant:
-                            type: number
-                          grantedUsers:
-                            type: array
-                            items:
-                              type: string
-                          creator:
-                            anyOf:
-                              - type: string
-                              - type: object
-                                properties:
-                                  _id:
-                                    type: string
-                                  id:
-                                    type: string
-                                  username:
-                                    type: string
-                                  name:
-                                    type: string
-                                  email:
-                                    type: string
-                                    format: email
-                                  image:
-                                    type:
-                                      - string
-                                      - 'null'
-                                  createdAt:
-                                    type: string
-                                required:
-                                  - _id
-                                  - username
-                                  - name
-                                  - email
-                                  - createdAt
-                              - type: 'null'
-                          lastUpdateUser:
-                            anyOf:
-                              - type: string
-                              - type: object
-                                properties:
-                                  _id:
-                                    type: string
-                                  id:
-                                    type: string
-                                  username:
-                                    type: string
-                                  name:
-                                    type: string
-                                  email:
-                                    type: string
-                                    format: email
-                                  image:
-                                    type:
-                                      - string
-                                      - 'null'
-                                  createdAt:
-                                    type: string
-                                required:
-                                  - _id
-                                  - username
-                                  - name
-                                  - email
-                                  - createdAt
-                              - type: 'null'
-                          liker:
-                            type: array
-                            items:
-                              type: string
-                          commentCount:
-                            type: number
-                            default: 0
-                          extended:
-                            type: object
-                            additionalProperties: {}
-                          createdAt:
-                            type: string
-                          updatedAt:
-                            type: string
-                          currentRevision:
-                            type:
-                              - string
-                              - 'null'
-                          yjsCheckpointAt:
-                            type:
-                              - string
-                              - 'null'
-                          latestRevision:
-                            type: string
-                          likerCount:
-                            type: number
-                          seenUsersCount:
-                            type: number
-                        required:
-                          - _id
-                          - path
-                          - createdAt
+                        type:
+                          - string
+                          - 'null'
                       user:
                         anyOf:
                           - type: string
@@ -13216,10 +12958,6 @@ paths:
                                   - email
                                   - createdAt
                               - type: 'null'
-                          liker:
-                            type: array
-                            items:
-                              type: string
                           commentCount:
                             type: number
                             default: 0
@@ -13241,13 +12979,20 @@ paths:
                           latestRevision:
                             type: string
                           likerCount:
-                            type: number
+                            type: integer
+                            minimum: 0
                           seenUsersCount:
-                            type: number
+                            type: integer
+                            minimum: 0
+                          isLiked:
+                            type: boolean
                         required:
                           - _id
                           - path
                           - createdAt
+                          - likerCount
+                          - seenUsersCount
+                          - isLiked
                       user:
                         anyOf:
                           - type: string
@@ -13776,10 +13521,6 @@ paths:
                                     - email
                                     - createdAt
                                 - type: 'null'
-                            liker:
-                              type: array
-                              items:
-                                type: string
                             commentCount:
                               type: number
                               default: 0
@@ -13801,13 +13542,20 @@ paths:
                             latestRevision:
                               type: string
                             likerCount:
-                              type: number
+                              type: integer
+                              minimum: 0
                             seenUsersCount:
-                              type: number
+                              type: integer
+                              minimum: 0
+                            isLiked:
+                              type: boolean
                           required:
                             - _id
                             - path
                             - createdAt
+                            - likerCount
+                            - seenUsersCount
+                            - isLiked
                         user:
                           anyOf:
                             - type: string
@@ -15807,10 +15555,6 @@ paths:
                           - name
                           - email
                           - createdAt
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -15832,14 +15576,21 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - revision
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '401':
@@ -16236,10 +15987,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -16261,13 +16008,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -16618,10 +16372,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -16643,13 +16393,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -17047,10 +16804,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -17072,13 +16825,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -17594,10 +17354,6 @@ paths:
                                 - email
                                 - createdAt
                             - type: 'null'
-                        liker:
-                          type: array
-                          items:
-                            type: string
                         commentCount:
                           type: number
                           default: 0
@@ -17619,13 +17375,20 @@ paths:
                         latestRevision:
                           type: string
                         likerCount:
-                          type: number
+                          type: integer
+                          minimum: 0
                         seenUsersCount:
-                          type: number
+                          type: integer
+                          minimum: 0
+                        isLiked:
+                          type: boolean
                       required:
                         - _id
                         - path
                         - createdAt
+                        - likerCount
+                        - seenUsersCount
+                        - isLiked
                   pager:
                     type: object
                     properties:
@@ -17916,10 +17679,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -17941,13 +17700,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                   contentPage:
                     type:
                       - object
@@ -18221,10 +17987,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -18246,13 +18008,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                   total:
                     type: number
                 required:
@@ -18684,10 +18453,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -18709,13 +18474,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -19071,7 +18843,7 @@ paths:
         - page
       security:
         - bearerAuth: []
-      summary: Add the current user to the page liker list
+      summary: Add the current user to the page like relation
       requestBody:
         content:
           application/json:
@@ -19084,7 +18856,11 @@ paths:
                 - page_id
       responses:
         '200':
-          description: The page with the updated liker list
+          description: >-
+            The page, viewer-scoped: `likerCount` / `seenUsersCount` are the
+            current relation counts (not a liker ID array —
+            feature-page-relations-collections D-2), `isLiked` reflects the
+            caller's own membership as of this response.
           content:
             application/json:
               schema:
@@ -19361,10 +19137,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -19386,13 +19158,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -19470,7 +19249,7 @@ paths:
         - page
       security:
         - bearerAuth: []
-      summary: Remove the current user from the page liker list
+      summary: Remove the current user from the page like relation
       requestBody:
         content:
           application/json:
@@ -19483,7 +19262,11 @@ paths:
                 - page_id
       responses:
         '200':
-          description: The page with the updated liker list
+          description: >-
+            The page, viewer-scoped: `likerCount` / `seenUsersCount` are the
+            current relation counts (not a liker ID array —
+            feature-page-relations-collections D-2), `isLiked` reflects the
+            caller's own membership as of this response.
           content:
             application/json:
               schema:
@@ -19760,10 +19543,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -19785,13 +19564,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -20159,10 +19945,6 @@ paths:
                           - name
                           - email
                           - createdAt
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -20184,14 +19966,21 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - revision
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                   granted:
                     type: boolean
                 required:
@@ -20833,10 +20622,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -20858,13 +20643,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -21308,10 +21100,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -21333,13 +21121,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                 required:
                   - page
         '400':
@@ -21722,10 +21517,6 @@ paths:
                               - email
                               - createdAt
                           - type: 'null'
-                      liker:
-                        type: array
-                        items:
-                          type: string
                       commentCount:
                         type: number
                         default: 0
@@ -21747,13 +21538,20 @@ paths:
                       latestRevision:
                         type: string
                       likerCount:
-                        type: number
+                        type: integer
+                        minimum: 0
                       seenUsersCount:
-                        type: number
+                        type: integer
+                        minimum: 0
+                      isLiked:
+                        type: boolean
                     required:
                       - _id
                       - path
                       - createdAt
+                      - likerCount
+                      - seenUsersCount
+                      - isLiked
                   renamed_count:
                     type: number
                 required:
@@ -22497,7 +22295,12 @@ paths:
           in: query
       responses:
         '200':
-          description: Liker list (newest-liked first when known) with full totalCount
+          description: >-
+            Liker list (newest-liked first when known) with full totalCount.
+            Sourced from the `likes` relation collection; `likedAt` falls back
+            to a best-effort `ACTION_LIKE` Activity join only for a migrated row
+            with a null relation timestamp (feature-page-relations-collections
+            D-1/D-3).
           content:
             application/json:
               schema:
@@ -25022,10 +24825,6 @@ paths:
                                     - email
                                     - createdAt
                                 - type: 'null'
-                            liker:
-                              type: array
-                              items:
-                                type: string
                             commentCount:
                               type: number
                               default: 0
@@ -25047,13 +24846,20 @@ paths:
                             latestRevision:
                               type: string
                             likerCount:
-                              type: number
+                              type: integer
+                              minimum: 0
                             seenUsersCount:
-                              type: number
+                              type: integer
+                              minimum: 0
+                            isLiked:
+                              type: boolean
                           required:
                             - _id
                             - path
                             - createdAt
+                            - likerCount
+                            - seenUsersCount
+                            - isLiked
                       required:
                         - pageId
                         - path
