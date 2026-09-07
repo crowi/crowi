@@ -58,6 +58,8 @@ export async function deletePageWithMode(crowi: Crowi, input: PageDeletionInput,
   const Revision = crowi.model('Revision');
   const Backlink = crowi.model('Backlink');
   const Watcher = crowi.model('Watcher');
+  const Like = crowi.model('Like');
+  const Seen = crowi.model('Seen');
 
   if (input.mode === 'user_hard_delete') {
     // Losing the Page without its evidence is irreversible. The opposite
@@ -87,6 +89,12 @@ export async function deletePageWithMode(crowi: Crowi, input: PageDeletionInput,
   await runBestEffortCleanup('PageYjsUpdate.deleteMany', input.pageId, () => PageYjsUpdate.deleteMany({ pageId: input.pageId }).exec());
   await runBestEffortCleanup('Backlink.removeByPageIdForHardDelete', input.pageId, () => Backlink.removeByPageIdForHardDelete(input.pageId));
   await runBestEffortCleanup('Watcher.removeByPageId', input.pageId, () => Watcher.removeByPageId(input.pageId));
+  // feature-page-relations-collections D-6 — same best-effort sibling
+  // treatment: a failure here leaves an orphan `likes`/`seens` row, never
+  // a terminal error (there is no undo-the-delete recovery path — see
+  // this function's `steps[]` comment above and D-6's discussion of why).
+  await runBestEffortCleanup('Like.removeByPageId', input.pageId, () => Like.removeByPageId(input.pageId));
+  await runBestEffortCleanup('Seen.removeByPageId', input.pageId, () => Seen.removeByPageId(input.pageId));
 
   // A failed cleanup never skips its sibling. The Page is already gone, so
   // callers need one terminal error containing every incomplete step.

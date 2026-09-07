@@ -63,6 +63,7 @@ import {
   visiblePageStatusOr,
 } from 'src/models/page';
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
+import type { SeenDocument } from 'src/models/seen';
 import type { UserDocument } from 'src/models/user';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
 import { restorePageCommand } from 'src/service/page-history/commands/restore';
@@ -70,7 +71,7 @@ import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-
 import { trashPageCommand } from 'src/service/page-history/commands/trash';
 import { completeOperation, createPageHistoryOperation, hasOperationCompletionEvidence, resolvePageHistoryOperation } from 'src/service/page-history/operation';
 import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
-import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
+import { type EnrichedPage, computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse, populatePageRelationData } from 'src/util/page-response';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
@@ -135,6 +136,18 @@ type SubtreeRenameResult =
   | { ok: false; kind: 'validation'; conflicts: { path: string; reasons: string[] }[] }
   | { ok: false; kind: 'execution'; message: string };
 
+/**
+ * D-2 singleton convenience — every mutation endpoint in this file returns
+ * exactly one Page, so this always resolves to a fixed 3-(or 2-)query
+ * bulk-enrichment batch of size 1. List-shaped endpoints (getPage list,
+ * listPages) batch multiple Page objects into ONE `populatePageRelationData`
+ * call instead of calling this per element (F-2's bulk-query budget).
+ */
+async function enrichOne(crowi: Crowi, page: PageDocument, requestUser: UserDocument | null): Promise<EnrichedPage> {
+  const [enriched] = await populatePageRelationData(crowi, [page], requestUser);
+  return enriched;
+}
+
 // `Page` isn't an importable singleton (models/page.ts exports a
 // crowi-bound factory, `export default (crowi) => {...}`) — it's a local
 // `crowi.model('Page')` inside `registerPageRoutes`. So this module-level
@@ -171,6 +184,21 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   const Revision = crowi.model('Revision');
   const User = crowi.model('User');
   const Watcher = crowi.model('Watcher');
+  const Like = crowi.model('Like');
+  const Seen = crowi.model('Seen');
+  const Activity = crowi.model('Activity');
+
+  // D-6/F-1: post-write existence guard shared by like/unlike/seen — a
+  // hard delete can race between `loadGrantedPage` and the relation
+  // write. Primary-pinned (spec D-2/D-6): a secondary read could still
+  // see the just-deleted Page as present.
+  const pageStillExists = async (pageId: Types.ObjectId): Promise<boolean> => (await Page.countDocuments({ _id: pageId }).read('primary').exec()) > 0;
+
+  // Mutation-endpoint convenience: `Page.populatePageData` (revision /
+  // creator / lastUpdateUser) followed by `enrichOne` (D-2 relation
+  // counts) is the shape every single-Page mutation response needs.
+  const populateAndEnrich = async (page: PageDocument, requestUser: UserDocument | null): Promise<EnrichedPage> =>
+    enrichOne(crowi, await Page.populatePageData(page, null), requestUser);
 
   // RFC-0010 — per-route scope guards (web sessions hold all scopes, so
   // these only narrow OAuth tokens). Registered before the openapi
@@ -247,21 +275,23 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   app.use('/pages/link-access', linkAccessRateLimitMiddleware);
 
   /**
-   * Build the seen-users response. `seenUsersCount` reflects the full
-   * raw id-array length (matching the legacy `populatePageData`) so
-   * inactive users dropped by `findUsersByIds`' status filter do not
-   * deflate the count. `limit` only caps the returned `seenUsers` list.
+   * Build the seen-users response from Seen relation rows (D-1). `seenRows`
+   * must already be the FULL unbounded set for the page — `seenUsersCount`
+   * is this array's length, never a separate (possibly `limit`-shrunk)
+   * count query. `limit`, when given, slices the already `_id`-ascending
+   * rows (`Seen.findByPageId`'s default sort) BEFORE populating — the
+   * final wire order is then whatever `User.findUsersByIds` returns
+   * (`createdAt` desc, active-only), independent of the Seen row order.
    */
-  const buildSeenUsersResponse = async (seenUserIds: ReadonlyArray<unknown>, limit?: number) => {
-    const ids = seenUserIds.filter((id) => id != null);
-    const seenUsersCount = ids.length;
+  const buildSeenUsersResponse = async (seenRows: SeenDocument[], limit?: number) => {
+    const seenUsersCount = seenRows.length;
 
-    if (ids.length === 0) {
+    if (seenUsersCount === 0) {
       return { seenUsers: [] as UserPublic[], seenUsersCount };
     }
 
-    const idsToFetch = limit !== undefined ? ids.slice(0, limit) : ids;
-    const populated = (await User.findUsersByIds(idsToFetch)) as UserDocument[];
+    const rowsToFetch = limit !== undefined ? seenRows.slice(0, limit) : seenRows;
+    const populated = (await User.findUsersByIds(rowsToFetch.map((row) => row.user))) as UserDocument[];
     return {
       seenUsers: populated.map(toUserPublic),
       seenUsersCount,
@@ -297,7 +327,8 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          const pageResponse = pageToResponse(page, { withMeta: true, withRenderedAst: true });
+          const enrichedPage = await enrichOne(crowi, page, user);
+          const pageResponse = pageToResponse(enrichedPage, { withMeta: true, withRenderedAst: true });
 
           // On-the-fly fallback for legacy revisions — one pipeline run
           // produces both meta + renderedAst, stored values win on merge.
@@ -533,7 +564,21 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             pages = pages.filter((page) => String(page._id) !== contentId);
           }
 
-          const pageResponses = pages.map((page) => pageToResponse(page));
+          // F-2: one batched enrichment call for every Page object this
+          // response carries (`pages` + `portalPage` + `contentPage`) —
+          // never one call per page. Positions are known (pages first,
+          // then portal, then content) so the result is split back by
+          // slicing rather than re-deriving an id map; `populatePageRelationData`
+          // guarantees the returned array mirrors the input 1:1 in order.
+          const relationTargets: PageDocument[] = [...pages];
+          const portalIndex = portalPage ? relationTargets.push(portalPage) - 1 : -1;
+          const contentIndex = contentPage ? relationTargets.push(contentPage) - 1 : -1;
+          const enrichedTargets = await populatePageRelationData(crowi, relationTargets, user);
+          const enrichedPages = enrichedTargets.slice(0, pages.length);
+          const enrichedPortalPage = portalIndex >= 0 ? enrichedTargets[portalIndex] : null;
+          const enrichedContentPage = contentIndex >= 0 ? enrichedTargets[contentIndex] : null;
+
+          const pageResponses = enrichedPages.map((page) => pageToResponse(page));
           // The portal document is rendered as a full page (PageContent)
           // by the web client, so — unlike the list rows — it needs
           // `renderedAst`. Mirror the getPage detail path: emit meta +
@@ -541,7 +586,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // version-mismatched revisions still render instead of getting
           // stuck on the "Rendering…" placeholder. List rows stay lean
           // (no renderedAst) as before.
-          const portalPageResponse = portalPage ? pageToResponse(portalPage, { withMeta: true, withRenderedAst: true }) : null;
+          const portalPageResponse = enrichedPortalPage ? pageToResponse(enrichedPortalPage, { withMeta: true, withRenderedAst: true }) : null;
           if (portalPageResponse?.revision && portalPage && isPopulatedRevision(portalPage.revision)) {
             const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
               crowi,
@@ -562,7 +607,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // §4 — content page emitted lean (no renderedAst): the client uses
           // it only to drive the portalize banner (id / path / revision id),
           // never to render the page body.
-          const contentPageResponse = contentPage ? pageToResponse(contentPage) : null;
+          const contentPageResponse = enrichedContentPage ? pageToResponse(enrichedContentPage) : null;
 
           const prev = offset > 0 ? Math.max(0, offset - limit) : null;
           const next = pages.length === limit ? offset + limit : null;
@@ -659,7 +704,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             throw new Error('Failed to create page.');
           }
 
-          const populated = await Page.populatePageData(created, null);
+          const populated = await populateAndEnrich(created, user);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -703,7 +748,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // history view can flag API-token edits.
           const updateOptions = { grant: grant ?? pageData.grant, editVia: c.get('authContext').kind };
           const updated = (await Page.updatePage(pageData, body, user, updateOptions)) as PageDocument;
-          const populated = await Page.populatePageData(updated, null);
+          const populated = await populateAndEnrich(updated, user);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -747,7 +792,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // so the test harness's `drainSideEffects()` can await it before
           // asserting on the search driver.
           crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
-          const populated = await Page.populatePageData(updated, null);
+          const populated = await populateAndEnrich(updated, user);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -760,7 +805,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         }
       })
       // --------------------------------------------------------------
-      // POST /pages/seen — seenPage (idempotent via Page.seen addToSet)
+      // POST /pages/seen — seenPage (idempotent via Seen.add upsert)
       // --------------------------------------------------------------
       .openapi(seenPageRoute, async (c) => {
         const user = c.get('user');
@@ -774,8 +819,20 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         const loaded = await loadGrantedPage(Page, page_id, user);
         if ('error' in loaded) return c.json(PAGE_NOT_FOUND_BODY, 404);
 
-        const updated = (await loaded.page.seen(user)) as PageDocument;
-        return c.json(await buildSeenUsersResponse(updated.seenUsers), 200);
+        const { document: seenDoc } = await Seen.add(loaded.page._id, user._id);
+
+        // D-6/F-1: delete/insert race — the Page may have been hard-deleted
+        // between `loadGrantedPage` and this write.
+        if (!(await pageStillExists(loaded.page._id))) {
+          if (seenDoc != null) await Seen.removeByPageId(loaded.page._id);
+          throw new Error('Page not found (deleted during seen)');
+        }
+
+        // AC-13: this is a read-back of the write this same request just
+        // made — primary-pinned, unlike the separate GET /pages/seen-users
+        // request (F-1).
+        const seenRows = await Seen.findByPageId(loaded.page._id, { readPreference: 'primary' });
+        return c.json(await buildSeenUsersResponse(seenRows), 200);
       })
       // --------------------------------------------------------------
       // GET /pages/seen-users — getSeenUsers
@@ -794,10 +851,11 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(PAGE_NOT_FOUND_BODY, 404);
         }
 
-        return c.json(await buildSeenUsersResponse(loaded.page.seenUsers, limit), 200);
+        const seenRows = await Seen.findByPageId(loaded.page._id);
+        return c.json(await buildSeenUsersResponse(seenRows, limit), 200);
       })
       // --------------------------------------------------------------
-      // POST /pages/like — likePage
+      // POST /pages/like — likePage (D-1 atomic upsert via Like.add)
       // --------------------------------------------------------------
       .openapi(likePageRoute, async (c) => {
         const user = c.get('user');
@@ -813,10 +871,32 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(PAGE_NOT_FOUND_BODY, 404);
         }
 
-        // `like` is a no-op when the user already liked the page.
-        await loaded.page.like(user);
-        const populated = await Page.populatePageData(loaded.page, null);
-        return c.json({ page: pageToResponse(populated) }, 200);
+        const { document: likeDoc, inserted } = await Like.add(loaded.page._id, user._id);
+
+        // D-6/F-1: delete/insert race guard, unconditional (transition or
+        // not) — every outlet that returns a Page must pass through this.
+        if (!(await pageStillExists(loaded.page._id))) {
+          if (likeDoc != null) await Like.remove(loaded.page._id, user._id);
+          throw new Error('Page not found (deleted during like)');
+        }
+
+        if (inserted) {
+          // D-1: narrow (not close) the like/unlike interleaving window —
+          // re-confirm the row is still there, primary-pinned, immediately
+          // before creating the Activity. If an unlike raced ahead of us,
+          // skip Activity creation (there is nothing to notify about).
+          const stillLiked = await Like.existsByPageAndUser(loaded.page._id, user._id, { readPreference: 'primary' });
+          if (stillLiked) {
+            try {
+              await Activity.createByPageLike(loaded.page, user);
+            } catch (err) {
+              debug('Activity create (like) failed:', (err as Error).message);
+            }
+          }
+        }
+
+        const enriched = await populateAndEnrich(loaded.page, user);
+        return c.json({ page: pageToResponse(enriched) }, 200);
       })
       // --------------------------------------------------------------
       // POST /pages/unlike — unlikePage
@@ -835,9 +915,24 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(PAGE_NOT_FOUND_BODY, 404);
         }
 
-        await loaded.page.unlike(user);
-        const populated = await Page.populatePageData(loaded.page, null);
-        return c.json({ page: pageToResponse(populated) }, 200);
+        const { removed } = await Like.remove(loaded.page._id, user._id);
+
+        // D-6/F-1: unlike deletes a row, so there is nothing of THIS
+        // request's own to compensate — just detect and propagate.
+        if (!(await pageStillExists(loaded.page._id))) {
+          throw new Error('Page not found (deleted during unlike)');
+        }
+
+        if (removed) {
+          try {
+            await Activity.removeByPageUnlike(loaded.page, user);
+          } catch (err) {
+            debug('Activity remove (unlike) failed:', (err as Error).message);
+          }
+        }
+
+        const enriched = await populateAndEnrich(loaded.page, user);
+        return c.json({ page: pageToResponse(enriched) }, 200);
       })
       // --------------------------------------------------------------
       // POST /pages/link-access — claimPageLinkAccess (grant-on-first-
@@ -870,7 +965,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
           }
 
-          const populated = await Page.populatePageData(page, null);
+          const populated = await populateAndEnrich(page, user);
           return c.json({ page: pageToResponse(populated), granted }, 200);
         } catch (err) {
           const error = err as Error;
@@ -959,8 +1054,11 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               deletion: { mode: 'user_hard_delete', actor: user._id },
             });
             // The document is gone from Mongo; echo the in-memory snapshot
-            // so the client knows what was deleted.
-            return c.json({ page: pageToResponse(pageData) }, 200);
+            // so the client knows what was deleted. `completelyDeletePage`
+            // has already run the Like/Seen best-effort cleanup, so this
+            // enrichment call reflects that (typically 0/0/false).
+            const enrichedDeleted = await enrichOne(crowi, pageData, user);
+            return c.json({ page: pageToResponse(enrichedDeleted) }, 200);
           }
 
           if (revision_id && !pageData.isUpdatable(revision_id)) {
@@ -1001,7 +1099,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const current = (await Page.findById(pageData._id)) as PageDocument | null;
             if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
             if (isTransitionalPageStatus(current.status)) return c.json(inProgressBody, 409);
-            const populatedReplay = await Page.populatePageData(current, null);
+            const populatedReplay = await populateAndEnrich(current, user);
             c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populatedReplay) }, 200);
           };
@@ -1042,7 +1140,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
             }
             crowi.trackSideEffect(indexPageInSearchById(crowi, String(operation.page)));
-            const populatedResumed = await Page.populatePageData(resumedOutcome.page, null);
+            const populatedResumed = await populateAndEnrich(resumedOutcome.page, user);
             c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populatedResumed) }, 200);
           };
@@ -1114,7 +1212,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // reindex calls above; tracked via `trackSideEffect` so tests can
           // `drainSideEffects()` before asserting on the search driver.
           crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
-          const populated = await Page.populatePageData(trashOutcome.page, null);
+          const populated = await populateAndEnrich(trashOutcome.page, user);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -1174,7 +1272,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const current = (await Page.findById(pageData._id)) as PageDocument | null;
             if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
             if (isTransitionalPageStatus(current.status)) return c.json(restoreInProgress, 409);
-            const populatedReplay = await Page.populatePageData(current, null);
+            const populatedReplay = await populateAndEnrich(current, user);
             c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populatedReplay) }, 200);
           };
@@ -1213,7 +1311,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (await hasOperationCompletionEvidence(crowi, operation)) {
               await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
             }
-            const populatedResumed = await Page.populatePageData(resumedOutcome.page, null);
+            const populatedResumed = await populateAndEnrich(resumedOutcome.page, user);
             c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populatedResumed) }, 200);
           };
@@ -1298,7 +1396,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           if (await hasOperationCompletionEvidence(crowi, restoreCreated.operation)) {
             await completeOperation(crowi, restoreOperationId, { status: 'succeeded' });
           }
-          const populated = await Page.populatePageData(restoreOutcome.page, null);
+          const populated = await populateAndEnrich(restoreOutcome.page, user);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -1363,7 +1461,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // the grant-update branch skipped (visibility is preserved).
           const updateOptions = { editVia: c.get('authContext').kind };
           const updated = (await Page.updatePage(pageData, oldRevision.body, user, updateOptions)) as PageDocument;
-          const populated = await Page.populatePageData(updated, null);
+          const populated = await populateAndEnrich(updated, user);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;
@@ -1464,7 +1562,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               const movedRoot =
                 outcome.successes.find((page) => page._id.equals(page_id)) ?? ((await Page.findPageByIdForReentry(page_id, user)) as PageDocument | null);
               if (!movedRoot) return c.json(PAGE_NOT_FOUND_BODY, 404);
-              const populated = await Page.populatePageData(movedRoot, null);
+              const populated = await populateAndEnrich(movedRoot, user);
               c.header('Idempotency-Replayed', 'true');
               return c.json({ page: pageToResponse(populated), renamed_count: outcome.successes.length }, 200);
             } catch (err) {
@@ -1559,7 +1657,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const { outcome } = result;
             const movedRoot = outcome.successes.find((page) => page._id.equals(pageData._id)) ?? ((await Page.findById(pageData._id)) as PageDocument | null);
             if (!movedRoot) return c.json(PAGE_NOT_FOUND_BODY, 404);
-            const populated = await Page.populatePageData(movedRoot, null);
+            const populated = await populateAndEnrich(movedRoot, user);
             if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populated), renamed_count: outcome.successes.length }, 200);
           }
@@ -1610,7 +1708,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (isTransitionalPageStatus(current.status)) {
               return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
             }
-            const populatedReplay = await Page.populatePageData(current, null);
+            const populatedReplay = await populateAndEnrich(current, user);
             c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populatedReplay), renamed_count: 1 }, 200);
           };
@@ -1656,7 +1754,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (await hasOperationCompletionEvidence(crowi, operation)) {
               await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
             }
-            const populatedResumed = await Page.populatePageData(resumedOutcome.page, null);
+            const populatedResumed = await populateAndEnrich(resumedOutcome.page, user);
             c.header('Idempotency-Replayed', 'true');
             return c.json({ page: pageToResponse(populatedResumed), renamed_count: 1 }, 200);
           };
@@ -1763,7 +1861,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           if (await hasOperationCompletionEvidence(crowi, created.operation)) {
             await completeOperation(crowi, operationId, { status: 'succeeded' });
           }
-          const populated = await Page.populatePageData(outcome.page, null);
+          const populated = await populateAndEnrich(outcome.page, user);
           return c.json({ page: pageToResponse(populated), renamed_count: 1 }, 200);
         } catch (err) {
           const error = err as Error;
