@@ -12,17 +12,7 @@ Crowi にアップロードされた添付ファイルは、**ストレージド
 > ストレージの選択は `crowi.config.json` の `storage.driver` と、対応する
 > `@crowi/plugin-storage-*` パッケージの組み合わせで行います。
 
-## 利用できるドライバ
-
-| ドライバ名 | 提供プラグイン | 保存先 |
-| ---------- | -------------- | ------ |
-| `local` | `@crowi/plugin-storage-local` (デフォルトで常に有効) | サーバのローカルファイルシステム |
-| `s3` | `@crowi/plugin-storage-aws-s3` | Amazon S3 (互換ストレージ含む) |
-| `gcs` | `@crowi/plugin-storage-gcs` | Google Cloud Storage |
-
-`@crowi/plugin-storage-local` は **暗黙のデフォルトプラグイン** として常に
-読み込まれます。`crowi.config.json` に何も書かなければ、`local` ドライバが
-使われます。
+指定できるドライバ名と提供プラグインの対応は [crowi.config.json](../reference/config-file) にあります。`@crowi/plugin-storage-local` は **暗黙のデフォルトプラグイン** として常に読み込まれるため、`crowi.config.json` に何も書かなければ `local` ドライバが使われます。
 
 ## ローカルストレージ (local)
 
@@ -268,13 +258,7 @@ crowi-admin rebuild storage copy --from local --to s3 --dry-run
 - 1 件単位のエラーはイテレーションを止めず、`failed` カウントに加算
   されます。再実行は安全です (local / S3 ドライバはキー単位で上書きします)。
 
-終了コードは次のとおりです。
-
-| 終了コード | 意味 |
-| ---------- | ---- |
-| `0` | 全件コピー成功 (または dry-run 完了) |
-| `1` | 致命的エラー (初期化失敗、または処理開始前の例外) |
-| `2` | 部分的失敗 (コピーは走ったが 1 件以上失敗 — 再実行を推奨) |
+終了コードは [crowi-admin](../reference/admin-cli) にまとめてあります。
 
 ### 推奨される移行手順
 
@@ -321,22 +305,7 @@ crowi-admin rebuild attachment-display-derivatives --gc
 crowi-admin rebuild attachment-display-derivatives --gc --confirm
 ```
 
-主なフラグ:
-
-| フラグ | 説明 |
-| ------ | ---- |
-| `--dry-run` | Mongo・ストレージのどちらにも書き込まず、対象件数と内訳のみ報告する |
-| `--concurrency <n>` | 並列ワーカー数 (既定 `2`)。容量見積もりは後述 |
-| `--force` | 現行 recipe で既に記述済みのレコードも再評価・上書きする |
-| `--repair-missing` | 現行 recipe の `resized` レコードだけを対象に、保存先に実体が残っているかを確認し、無いものだけ再生成する (デコード・再エンコードは行わない軽量モード) |
-| `--only-missing` | 表示用コピーが未記録の添付ファイルのみを対象にする |
-| `--only-stale` | 記録済みの recipe バージョンが現行と異なる添付ファイルのみを対象にする |
-| `--page-id <id>` | 指定したページの添付ファイルのみを対象にする |
-| `--since <iso>` | この ISO 8601 タイムスタンプ以降に作成された添付ファイルのみを対象にする |
-| `--until <iso>` | この ISO 8601 タイムスタンプ以前に作成された添付ファイルのみを対象にする |
-| `--gc` | 無参照になった派生オブジェクトの候補を報告する (local ドライバのみ、v1) |
-| `--gc-grace-hours <n>` | `--gc` の候補から除外する猶予期間 (既定 24 時間)。生成中の `put`→publish の間隙を無参照と誤認しないための安全マージン |
-| `--confirm` | `--gc` の候補を実際に削除する (指定しない限り report-only) |
+オプションの一覧は [crowi-admin](../reference/admin-cli) にあります。
 
 ポイント:
 
@@ -362,14 +331,7 @@ crowi-admin rebuild attachment-display-derivatives --gc --confirm
 - 項目単位の失敗があっても実行は継続し、Attachment ID と分類済みの
   理由を出力します。
 
-終了コードは次のとおりです。
-
-| 終了コード | 意味 |
-| ---------- | ---- |
-| `0` | 全件成功 (または dry-run 完了) |
-| `1` | 致命的エラー (初期化失敗、または処理開始前の例外) |
-| `2` | 部分的失敗 (1 件以上のアイテムが失敗 — `failed` の内容を確認して再実行を検討) |
-| SIGINT による中断時 | 上記に関わらず非ゼロで終了する |
+終了コードは [crowi-admin](../reference/admin-cli) にまとめてあります (中断したときは非ゼロで終了します)。
 
 > **Note**: **ストレージドライバを移行した直後は `--force` の実行が
 > 必須です。** `storage copy` は original のみをコピーし、派生ファイルは

@@ -1,0 +1,89 @@
+---
+title: crowi-admin
+description: crowi-admin のサブコマンド・オプション・終了コードの一覧
+---
+
+`crowi-admin` は MongoDB に直接つないで保守作業を行う運用者向け CLI です。サーバの中 (ssh / kubectl exec) で、`@crowi/api` が入った runner プロジェクトのディレクトリから実行します。何をいつ実行するかは各手順ページを参照してください。
+
+## サブコマンド
+
+| コマンド | 用途 | 手順 |
+| --- | --- | --- |
+| `migrate list` | 登録済みのデータ移行を、対象バージョン範囲とレイヤーとともに一覧する | [v1 からの移行](../operations/upgrading-from-v1) |
+| `migrate plan` | 未適用の移行をプレビューする (既定は preflight レイヤー) | [v1 からの移行](../operations/upgrading-from-v1) |
+| `migrate apply` | 未適用の移行を適用する (既定は preflight レイヤー) | [v1 からの移行](../operations/upgrading-from-v1) |
+| `migrate status` | 直近の適用結果と未適用の件数を表示する | [v1 からの移行](../operations/upgrading-from-v1) |
+| `rebuild renderer` | ページのレンダリング済み HTML キャッシュを作り直す | [管理画面](../operations/admin) |
+| `rebuild rendered-ast` | 現在のリビジョンに保存されたレンダリング結果を稼働中のレンダラで作り直す | [管理画面](../operations/admin) |
+| `rebuild search` | 有効な検索ドライバでインデックスを再構築する | [検索バックエンドのセットアップ](../operations/search-setup) |
+| `rebuild backlink` | 全ページの被リンクインデックスを再構築する | [管理画面](../operations/admin) |
+| `rebuild storage copy` | 保存済みオブジェクトを別のストレージドライバへコピーする | [ストレージ設定](../operations/storage) |
+| `rebuild attachment-display-derivatives` | 添付画像の表示用コピーを生成・修復・回収する | [ストレージ設定](../operations/storage) |
+| `replace url` | 全ページ本文の URL / ホスト文字列を一括置換する | [v1 からの移行](../operations/upgrading-from-v1) |
+| `watcher backfill` | 自動ウォッチ以前に作られたページのウォッチ行を補完する (冪等) | [通知](../guide/notifications) |
+| `page-history repair` | ページのメタデータ変更履歴の内部状態を修復する | [管理画面](../operations/admin) |
+
+## オプション
+
+| コマンド | オプション | 既定値 | 意味 |
+| --- | --- | --- | --- |
+| `migrate list` | `--json` | オフ | 機械可読な JSON で出力する |
+| `migrate plan` | `--all-layers` | オフ | preflight だけでなく boot レイヤーも含める |
+| `migrate plan` | `--json` | オフ | 機械可読な JSON で出力する |
+| `migrate apply` | `--all-layers` | オフ | preflight だけでなく boot レイヤーも含める |
+| `migrate apply` | `--dry-run` | オフ | 検出だけを行い、何も記録しない |
+| `migrate apply` | `--id <id>` | — | この ID の移行だけを適用する |
+| `migrate apply` | `--continue-on-error` | オフ | 失敗しても後続の移行を続ける (既定は中断) |
+| `migrate status` | `--json` | オフ | 機械可読な JSON で出力する |
+| `rebuild renderer` | `--only-stale` | オフ | キャッシュが古いページだけを再生成する |
+| `rebuild renderer` | `--dry-run` | オフ | 書き込まずに対象を報告する |
+| `rebuild rendered-ast` | `--dry-run` | オフ | 書き込まずに対象リビジョン数を数える |
+| `rebuild rendered-ast` | `--concurrency <n>` | `4` | 再レンダリングの並列ワーカー数 |
+| `rebuild search` | `--dry-run` | オフ | 書き込まずに対象を報告する |
+| `rebuild backlink` | `--dry-run` | オフ | 書き込まずに対象を報告する |
+| `rebuild storage copy` | `--from <name>` | (必須) | コピー元のドライバ名 |
+| `rebuild storage copy` | `--to <name>` | (必須) | コピー先のドライバ名 |
+| `rebuild storage copy` | `--dry-run` | オフ | コピーせずに対象キーを列挙する |
+| `rebuild attachment-display-derivatives` | `--dry-run` | オフ | データベースにもストレージにも書き込まず、対象件数と内訳だけを報告する |
+| `rebuild attachment-display-derivatives` | `--concurrency <n>` | `2` | ステージと生成の並列ワーカー数 |
+| `rebuild attachment-display-derivatives` | `--force` | オフ | 現行レシピで生成済みの添付も再評価する |
+| `rebuild attachment-display-derivatives` | `--repair-missing` | オフ | 生成済みの記録があるのに保存先に実体が無いものだけを作り直す |
+| `rebuild attachment-display-derivatives` | `--only-missing` | オフ | 表示用コピーが未記録の添付だけを対象にする |
+| `rebuild attachment-display-derivatives` | `--only-stale` | オフ | 記録されたレシピの版が現行と違う添付だけを対象にする |
+| `rebuild attachment-display-derivatives` | `--page-id <id>` | — | 指定したページの添付だけを対象にする |
+| `rebuild attachment-display-derivatives` | `--since <iso>` | — | この ISO 8601 時刻以降に作られた添付だけを対象にする |
+| `rebuild attachment-display-derivatives` | `--until <iso>` | — | この ISO 8601 時刻以前に作られた添付だけを対象にする |
+| `rebuild attachment-display-derivatives` | `--gc` | オフ | 参照されなくなった表示用コピーを報告する (ローカルドライバのみ) |
+| `rebuild attachment-display-derivatives` | `--gc-grace-hours <n>` | `24` | `--gc` の候補から除外する猶予時間 |
+| `rebuild attachment-display-derivatives` | `--confirm` | オフ | `--gc` の候補を実際に削除する (既定は報告のみ) |
+| `replace url` | `--from <s>` | (必須) | 置換元の文字列。`https://old.example` のようにスキーム付きの完全なオリジンを指定する |
+| `replace url` | `--to <s>` | (必須) | 置換先の文字列 |
+| `replace url` | `--dry-run` | オフ | 書き込まずに対象を報告する |
+| `replace url` | `--include-trash` | オフ | ゴミ箱・非推奨のページも対象に含める (既定は公開ページのみ) |
+| `replace url` | `--user <email>` | 最古の管理者 | 新しいリビジョンの作成者として記録するユーザー |
+| `replace url` | `--yes` | オフ | 確認プロンプトをスキップする |
+| `replace url` | `--force` | オフ | `--from` にスキームが無い場合でも実行する |
+| `watcher backfill` | `--dry-run` | オフ | 書き込まずに作成されるウォッチ行の件数を報告する |
+| `page-history repair` | `--outbox` | オン (既定の走査) | 取り残された履歴エントリを流し切る |
+| `page-history repair` | `--scan` | オフ | 連番が未付与のリビジョンに採番する |
+| `page-history repair` | `--transitions` | オフ | 途中で止まった移動操作を着地させるか報告する |
+| `page-history repair` | `--batch-size <n>` | `200` | 1 往復で読み込むページ数の上限 |
+| `page-history repair` | `--resume-after <pageId>` | — | ページ単位の再開位置 |
+| `page-history repair` | `--resume-after-operation <operationId>` | — | `--transitions` の操作単位の再開位置 |
+
+グローバルオプションは `--help` と `--version` の 2 つだけです。接続先は環境変数 (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`) から解決されます。
+
+## 終了コード
+
+| コード | 意味 | 返すコマンド |
+| --- | --- | --- |
+| `0` | 成功 (dry-run の完走を含む) | すべて |
+| `1` | 致命的エラー (初期化失敗、オプションの値が不正、処理開始前の例外) | すべて |
+| `2` | 部分的失敗 — 完走したが 1 件以上失敗した (再実行を推奨) | `rebuild storage copy` / `rebuild attachment-display-derivatives` / `replace url` / `page-history repair` |
+| `130` | 中断 (Ctrl-C)。片付けと進捗サマリの出力後に終了する | `rebuild attachment-display-derivatives` |
+
+## 関連ページ
+
+- [v1 からの移行](../operations/upgrading-from-v1) — データ移行の手順
+- [ストレージ設定](../operations/storage) — ドライバの切り替えとファイル移行
+- [環境変数](./env) — `crowi-admin` が読む接続先の変数

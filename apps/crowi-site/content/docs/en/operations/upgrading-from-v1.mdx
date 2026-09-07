@@ -350,16 +350,7 @@ editor and the visibility untouched, and notifies no watchers (and auto-watches
 no one). Listings and notifications do not move, which is what you want for a
 domain cleanup.
 
-Main options:
-
-| Option | Description |
-| ---- | ---- |
-| `--from <s>` / `--to <s>` | (required) The string to replace / its replacement. For safety, pass a **full origin with a scheme**, e.g. `https://old.example`. |
-| `--dry-run` | Report what would change without writing. |
-| `--include-trash` | Also rewrite trashed / deprecated pages (default: published only). |
-| `--user <email>` | User recorded as the author of the new revisions (default: the oldest admin). |
-| `--yes` | Skip the confirmation prompt (without it, the command refuses to write when there is no TTY). |
-| `--force` | Proceed even when `--from` has no scheme (a bare host). |
+The options are listed in [crowi-admin](../reference/admin-cli). Without `--yes` and without a TTY, the command refuses to write.
 
 > **Caution**: Passing a **bare host without a scheme** like `old.example` to
 > `--from` risks corrupting longer hosts that share the prefix, such as

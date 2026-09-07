@@ -323,10 +323,7 @@ The command is idempotent, so the final re-run only costs time proportional to t
 
 `crowi-admin page-history repair` repairs the internal state behind page metadata history.
 
-- `--outbox` (default) — drains any unprocessed entry a crashed writer left behind on the page.
-- `--scan` — assigns sequence numbers to revisions that have none, on pages that are ready to record history. Not run by default.
-- `--transitions` — settles renames, deletes and restores that stopped partway. Not run by default.
-- `--batch-size <n>` (default 200) bounds how many pages are loaded per round trip; `--resume-after <pageId>` resumes a scan that was killed partway. The transition sweep resumes from `--resume-after-operation <operationId>` instead — a separate cursor, because one counts operations and the other counts pages.
+By default it only drains the unprocessed entries a crashed writer left behind on pages. Assigning sequence numbers to revisions that have none (`--scan`) and settling renames, deletes and restores that stopped partway (`--transitions`) run only when asked for explicitly. The options are listed in [crowi-admin](../reference/admin-cli).
 
 ```bash
 # Drain leftover outbox entries (the default)

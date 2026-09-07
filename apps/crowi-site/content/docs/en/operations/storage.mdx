@@ -13,17 +13,7 @@ itself is provided by the corresponding `@crowi/plugin-storage-*` plugin.
 > `storage.driver` field in `crowi.config.json` and the matching
 > `@crowi/plugin-storage-*` package.
 
-## Available drivers
-
-| Driver name | Provided by | Storage target |
-| ----------- | ----------- | -------------- |
-| `local` | `@crowi/plugin-storage-local` (always enabled by default) | The server's local filesystem |
-| `s3` | `@crowi/plugin-storage-aws-s3` | Amazon S3 (including S3-compatible storage) |
-| `gcs` | `@crowi/plugin-storage-gcs` | Google Cloud Storage |
-
-`@crowi/plugin-storage-local` is always loaded as an **implicit default
-plugin**. If you write nothing in `crowi.config.json`, the `local` driver
-is used.
+The driver names you can select and the plugin that provides each one are listed in [crowi.config.json](../reference/config-file). `@crowi/plugin-storage-local` is always loaded as an **implicit default plugin**, so if you write nothing in `crowi.config.json` the `local` driver is used.
 
 ## Local storage (local)
 
@@ -270,13 +260,7 @@ Key points:
   `failed` count. Re-running is safe (the local / S3 drivers overwrite
   by key).
 
-The exit codes are as follows.
-
-| Exit code | Meaning |
-| --------- | ------- |
-| `0` | Everything copied successfully (or dry-run completed) |
-| `1` | Fatal error (init failed, or an exception before work started) |
-| `2` | Partial failure (the copy ran but one or more keys failed — retry recommended) |
+The exit codes are listed in [crowi-admin](../reference/admin-cli).
 
 ### Recommended migration steps
 
@@ -324,22 +308,7 @@ crowi-admin rebuild attachment-display-derivatives --gc
 crowi-admin rebuild attachment-display-derivatives --gc --confirm
 ```
 
-Key flags:
-
-| Flag | Description |
-| ---- | ----------- |
-| `--dry-run` | Writes nothing to Mongo or storage; reports only the target count and breakdown |
-| `--concurrency <n>` | Worker pool size (default `2`) — see the capacity estimate below |
-| `--force` | Re-evaluate and overwrite records already described under the current recipe |
-| `--repair-missing` | Only targets current-recipe `resized` records; checks whether the stored object still exists and regenerates only the ones that are actually gone (a lighter mode — no decode/re-encode for objects that are still present) |
-| `--only-missing` | Only targets attachments with no display copy recorded yet |
-| `--only-stale` | Only targets attachments whose recorded recipe version is not the current one |
-| `--page-id <id>` | Only targets attachments on this page |
-| `--since <iso>` | Only targets attachments created on/after this ISO 8601 timestamp |
-| `--until <iso>` | Only targets attachments created on/before this ISO 8601 timestamp |
-| `--gc` | Reports candidate derivative objects with no referencing Attachment (local driver only, v1) |
-| `--gc-grace-hours <n>` | Excludes `--gc` candidates newer than this many hours (default 24) — a safety margin against mistaking an in-flight `put`→publish for an orphan |
-| `--confirm` | Actually deletes `--gc` candidates (report-only otherwise) |
+The options are listed in [crowi-admin](../reference/admin-cli).
 
 Key points:
 
@@ -368,14 +337,7 @@ Key points:
 - A per-item failure does not stop the run; the Attachment ID and a
   classified reason are printed for each one.
 
-Exit codes:
-
-| Exit code | Meaning |
-| --------- | ------- |
-| `0` | Everything succeeded (or dry-run completed) |
-| `1` | Fatal error (init failed, or an exception before work started) |
-| `2` | Partial failure (one or more items failed — check the `failed` list and consider re-running) |
-| Interrupted by SIGINT | Exits non-zero regardless of the above |
+The exit codes are listed in [crowi-admin](../reference/admin-cli) (an interrupted run exits non-zero).
 
 > **Note**: **Running `--force` is required right after a storage
 > migration.** `storage copy` only copies originals, never derivatives

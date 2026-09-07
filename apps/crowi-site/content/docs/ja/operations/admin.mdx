@@ -288,10 +288,7 @@ crowi-admin rebuild rendered-ast --concurrency 8
 
 `crowi-admin page-history repair` は、ページのメタデータ変更履歴の内部状態を修復するコマンドです。
 
-- `--outbox` (既定) — クラッシュした writer がページに残した未処理エントリを流し切ります。
-- `--scan` — 履歴を記録する状態になっているページのうち、連番が未付与のリビジョンに採番します。既定では走りません。
-- `--transitions` — 途中で止まった rename / 削除 / 復元を着地させます。既定では走りません。
-- `--batch-size <n>` (既定 200) は 1 往復で読み込むページ数の上限、`--resume-after <pageId>` は中断した走査の再開位置です。`--transitions` の再開位置は `--resume-after-operation <operationId>` で、`--resume-after` とは別立てです (前者は操作を、後者はページを数えるため)。
+既定ではクラッシュした writer がページに残した未処理エントリを流し切るだけで、未採番リビジョンへの採番 (`--scan`) と、途中で止まった rename / 削除 / 復元の着地 (`--transitions`) は明示的に指定したときだけ走ります。オプションの一覧は [crowi-admin](../reference/admin-cli) にあります。
 
 ```bash
 # 残った outbox エントリを流す (既定)
