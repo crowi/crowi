@@ -1,239 +1,65 @@
 ---
 title: Renderer plugins
-description: Plugins that extend Markdown rendering (KaTeX / PlantUML / Mermaid and more), plus the core-integrated emoji and link-card features
+description: Enabling and configuring the plugins that add maths, diagrams and v1-compatible syntax
 ---
 
-Renderer plugins add parse, transform, and render behaviour to Crowi's
-server-side Markdown pipeline. For the design details, see
-[RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
-(Renderer Plugin Architecture).
+Renderer plugins add maths and diagrams to page bodies. For the notation authors write, see [Markdown syntax](../guide/markdown); for how the pipeline works, see [The renderer pipeline](../develop/renderer-pipeline).
 
-This page covers the **overview and list** of renderer plugins. For the
-syntax you can actually write as a user, see
-[Markdown syntax](../guide/markdown); for plugin installation steps, see
-[Managing plugins](./plugins).
+Enabling one works like any other plugin: add it to the runner project's dependencies and list it in `plugins` in `crowi.config.json` ([Installing and configuring plugins](./plugins)).
 
-## How the renderer pipeline works
+## The bundled renderer plugins
 
-Crowi's renderer rests on three design commitments:
+| Plugin | What it renders | External dependency | Settings |
+| ------ | --------------- | ------------------- | -------- |
+| `@crowi/plugin-renderer-katex` | `$inline$` and `$$display$$` maths | None | None |
+| `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` blocks, via a PlantUML server | A PlantUML server | Server URL, output format |
+| `@crowi/plugin-renderer-mermaid` | ` ```mermaid ` blocks, rendered in-process | None | None |
+| `@crowi/plugin-renderer-crowi-legacy` | Crowi v1 syntax quirks (off by default) | None | None |
 
-- **SSR-first**: Every renderer plugin must produce HTML on the server.
-  Client-side rendering of plugin content is forbidden because it causes
-  layout shift.
-- **No external API calls while editing**: Plugins that fetch external
-  data reserve space with a placeholder while editing and only fetch at
-  explicit moments such as page save.
-- **No new syntax (mostly)**: Plugins extend behaviour, not grammar.
+## PlantUML
 
-The core renderer pipeline (TOC / wikilink / mention / code block) is
-registered **before** plugins. Renderer plugins append on top of it.
+This plugin needs an external PlantUML server, and you provide it: Crowi's compose file does not bundle one.
 
-## Caching and failure behaviour
+Set the **server URL** and the **output format (`svg` or `png`)** in the plugin's settings in the admin panel. The default URL points at a compose-internal hostname and will not resolve as-is. If you run `plantuml/plantuml-server` on your development machine, it is `http://localhost:8080`.
 
-Crowi caches server-rendered results for embed and code-block plugins. It uses
-stale-while-revalidate: a cached result is served immediately while Crowi
-refreshes it in the background. Once an entry has been expired beyond its stale
-window, Crowi waits for a new render.
+Rendered diagrams are cached for an hour and failures for five minutes. When a diagram rendered successfully before, it keeps showing even while the PlantUML server is down.
 
-Failures are cached too, with a retry cadence based on their cause:
+## Mermaid
 
-- **Temporary upstream failures** — network, timeout, and unknown errors retry
-  after about 5 minutes.
-- **Persistent failures** — a policy-blocked URL or a not-found response, such
-  as a 404, retries after about 1 hour.
-- **Authorization failures** — retry after 1 minute.
-- **Rate limits** — when a rate-limited upstream provides `Retry-After`, Crowi
-  honours it, capped at 24 hours (without the header, about 5 minutes).
+There is nothing to configure — enabling the plugin is enough. Diagrams render on the server rather than in the browser and are embedded as a sanitised image.
 
-**Keeping a previous render** — if a re-render fails for a transient cause and
-the embed or diagram rendered successfully before, its last good rendering
-stays on screen for up to 24 hours from that success; each later view of the page triggers a retry on the cadence above. A
-not-found response receives the same retention period. This prevents a flaky
-upstream or a restarting PlantUML server from immediately replacing an existing
-card or diagram with an error placeholder.
+The limits are:
 
-**Policy and access changes** — a URL newly blocked by the SSRF guard, or an
-authorization failure, takes effect on the next re-render. The old rendering is
-not retained.
+- 20KB of diagram source, and 60KB for the generated SVG
+- At most 50 diagrams per page save or preview
+- Four concurrent renders per api process and two per user within one process (more replicas raise the total proportionally)
+- 600 preview requests per user per 60 seconds while editing
 
-**Failure display** — a feature that provides an embed can supply its own
-failure rendering, such as the built-in link-card feature's fallback card that
-remains a working link. Otherwise, Crowi shows a generic placeholder.
+A diagram with a syntax error shows a fixed error graphic. A diagram that could not be rendered because the server was busy is retried automatically the next time the page is opened.
 
-## Markdown features built into core
+Existing ` ```mermaid ` fences keep displaying as code blocks until an author saves the page again; enabling the plugin does not re-render past pages in bulk.
 
-Emoji shortcodes and link cards used to ship as two separate renderer plugins
-(`@crowi/plugin-renderer-emoji` / `@crowi/plugin-renderer-link-card`). Both are
-now absorbed into Crowi core (`@crowi/api`) as always-on Markdown features that
-require no installation. They work regardless of any plugin's install state
-and never appear in `crowi.config.json`'s `plugins` array.
+> **Note**: Rendering already happens in an isolated child process with no way out to the network, but consider container- or OS-level egress control as defence in depth.
 
-### Emoji shortcodes
+## crowi-legacy
 
-Shortcodes like `:smile:` and `:rocket:` are converted to Unicode emoji via
-`remark-emoji`. It does no I/O and no caching. Code blocks and inline code are
-intentionally skipped, and unknown shortcodes (`:not-emoji:`) pass through
-verbatim. An `accessible` mode that wraps emoji in
-`<span role="img" aria-label="smile">` for screen readers is on by default.
-See [Markdown syntax](../guide/markdown) for the syntax itself.
+A compatibility plugin that reproduces Crowi v1's non-standard syntax quirks — treating `##hoge` with no space after the hashes as a heading, for instance. It is bundled but **off by default**; an instance migrated from v1 enables it in the admin panel.
 
-### Link cards `@[card](url)`
+## Rendering features that are not plugins
 
-`@[card](url)` is a built-in embed that reserves the `card` name on the
-embed-tag registration seam, `registry.addEmbedTag(name, renderer)`, for Crowi
-core itself — a third-party plugin cannot override the `card` tag. It fetches
-the target page's OGP meta tags (`og:title` / `og:description` / `og:image` /
-`og:site_name`) and renders a link-preview card with a title, description,
-domain, and (if available) a thumbnail image. For the syntax itself, see the
-"Link cards" section of [Markdown syntax](../guide/markdown).
+Emoji shortcodes and link cards are part of Crowi itself: always on, nothing to install, and never listed in `crowi.config.json`.
 
-- **On by default**: like GitHub, Slack, and Notion, link-card rendering
-  defaults to on (`security:linkCardEnabled` defaults to `true`). Operators who
-  want to stop outbound OGP fetches can disable it from the admin UI under
-  Security → "Allow link cards for external URLs". Once disabled, no new
-  render performs any DNS resolution or HTTP request from that point on.
-- **Unified fallback card**: whether the admin setting is off, the OGP fetch
-  failed, or the host is unreachable (e.g. an air-gapped deployment), Crowi
-  shows the exact same fallback card — no OGP title / description / image, just
-  the URL itself as the title, with no error-red styling. This is deliberately
-  the same visual contract as the editor's live-preview placeholder card.
-  Unlike the editor placeholder, though, the fallback card rendered on a saved
-  page is a real link with `href` / `target="_blank"` /
-  `rel="noopener noreferrer"` (the earlier dedicated error card labelled
-  "Preview unavailable" no longer exists).
-- **Images are direct links**: `og:image` is embedded as a direct link to the
-  source site — there is no image proxying or caching.
-- **SSRF guard**: the target hostname's resolved DNS address is rejected if it
-  is private / loopback / link-local / unique-local / a metadata address (e.g.
-  `169.254.169.254`), whether specified as a literal IP, resolved via DNS, or
-  reached via a redirect (redirects are not followed automatically — up to 3
-  hops are followed manually, re-validating on every hop). Any scheme other
-  than `http(s)` is rejected immediately. The fetch times out after 5 seconds
-  and reads at most the first 512KB of the response.
-- Display consistency for saved pages: flipping the toggle from true to false
-  does not remove an already-rendered, displayable card — it just stops new
-  fetches. Flipping it back from false to true does not retroactively
-  materialize cards on existing pages either; a card only (re)appears the next
-  time the page is saved or explicitly re-rendered.
-- **No allowlist/denylist UI** — if you need to block specific domains from
-  being embedded, wait for a future admin setting or fork the code to add your
-  own guard.
+Link cards (`@[card](url)`) are the one with operator-facing settings.
 
-> **Note**: This is a different thing from `@crowi/plugin-renderer-github-embed`
-> (GitHub PR / Issue cards, planned in RFC-0002 but not yet shipped as of
-> Phase 7). The `card` tag is a generic, service-agnostic OGP link card; the
-> planned github-embed is a GitHub-PR/Issue-specific rich card with a
-> different purpose and implementation.
-
-## First-party renderer plugins
-
-The Crowi repository ships the following four renderer plugins.
-
-| Plugin | Role | External dependency | Status |
-| ------ | ---- | ------------------- | ------ |
-| `@crowi/plugin-renderer-katex` | Renders `$inline$` / `$$display$$` LaTeX math to HTML server-side via KaTeX | None | Landed (Phase 6) |
-| `@crowi/plugin-renderer-plantuml` | Renders ` ```plantuml ` blocks via a PlantUML server and embeds SVG/PNG | PlantUML server | Landed (Phase 6) |
-| `@crowi/plugin-renderer-mermaid` | Renders ` ```mermaid ` blocks server-side (browserless) and embeds a sanitized SVG | None (self-contained, server-side) | Landed (Phase 6.1) |
-| `@crowi/plugin-renderer-crowi-legacy` | Reproduces Crowi v1 syntax quirks (e.g. `##hoge` heading without a space) | None | Landed (Phase 6), default-off |
-
-### KaTeX
-
-`@crowi/plugin-renderer-katex` parses `$inline$` and `$$display$$` LaTeX
-math via `remark-math` and renders it to HTML via
-`katex.renderToString`. It supports the standard KaTeX commands. Macro
-and `\newcommand` customisation is planned for a future release.
-
-### PlantUML
-
-`@crowi/plugin-renderer-plantuml` renders ` ```plantuml ` fenced code
-blocks by sending them to an operator-configured PlantUML server. The
-diagram source is deflate + base64 encoded, and the SVG (sanitised) or
-PNG returned by the server is embedded.
-
-This plugin requires an external server, and you have to run one
-yourself — Crowi's `docker-compose.yml` no longer ships a PlantUML
-service (the bundled dev renderer is Mermaid, which needs no server).
-The plugin's default `serverUrl` is `http://plantuml:8080`, a
-compose-internal hostname that only resolves from inside a compose
-network, so point `serverUrl` at your own server in the admin UI —
-`http://localhost:8080` if you run `plantuml/plantuml-server` on the
-host next to `pnpm dev`. The output format (`svg` / `png`) is also
-selectable there.
-Render results are cached with a 1-hour TTL, and failures such as
-network errors are cached as errors for 5 minutes. If a diagram rendered
-successfully before, a briefly unreachable PlantUML server keeps the last
-good diagram on screen (later views retry on the error cadence); see
-[Caching and failure behaviour](#caching-and-failure-behaviour) above.
-
-### Mermaid
-
-`@crowi/plugin-renderer-mermaid` renders ` ```mermaid ` fenced code
-blocks entirely server-side. Mermaid's JS never runs in the browser —
-the page only ever receives the final, sanitized SVG embedded as a
-base64-encoded `<img>`. No operator configuration is required — just
-enable the plugin (there is nothing to set in the admin UI). It
-supports the main diagram types Mermaid provides: flowchart, sequence,
-class, state, ER, journey, pie, and git-graph.
-
-**Security**: diagrams are rendered not in the browser but inside a
-`fork()`ed, isolated child process, by a strictly-configured Mermaid
-instance that never loads external resources. The generated SVG is run
-through a DOM-based sanitizer (exposed by the `@crowi/plugin-api` SDK as
-`sanitizeSvg`, shared with PlantUML) that strips `script` tags, event handlers,
-`javascript:` URLs, and similar
-constructs before being embedded in an `<img>` as a base64 `data:`
-URL. Diagram directives that override configuration and syntax that
-references external resources are rejected at the input stage, scanning
-the entire source. The child process itself also has a deny-by-default
-boundary that removes/blocks network-capable APIs (`fetch` /
-`XMLHttpRequest` / `node:net` and similar), preventing outbound reach
-even at a layer below sanitization.
-
-**Theme**: diagrams are always rendered in a single (light) theme. In
-dark mode, the area surrounding the diagram is shown as a neutral
-(white) surface.
-
-<Callout title="Handling SVG in your own renderer">
-This sanitizer is available from the SDK. `@crowi/plugin-api` exports
-`sanitizeSvg` (and `extractSvgDimensions` for reading an SVG's dimensions) —
-the same implementation the first-party PlantUML and Mermaid renderers use. If
-your renderer produces or relays SVG, use it rather than writing your own
-sanitizing pass; `@crowi/plugin-api` is the only dependency you need.
-</Callout>
-
-**Limits**: diagram source is capped at 20KB and the generated SVG at
-60KB. Up to 50 diagrams can be processed per page save or preview
-request. Concurrent rendering is capped per API process
-(replica): up to 4 diagrams at a time, of which at most 2 per user
-within the same process (multi-replica deployments scale accordingly).
-The live editor preview is rate-limited
-to 600 requests/60s per user. A diagram with a syntax error shows a
-fixed error placeholder. A transient failure (e.g. server overload) is
-retried automatically the next time the page is opened.
-
-**Effect on existing pages**: existing ` ```mermaid ` fences keep
-displaying as plain code blocks until the author explicitly re-saves
-the page. Enabling the plugin does not bulk re-render past pages.
-
-> **Operators**: in addition to the child-process network boundary
-> above, consider container/OS-level egress control (e.g. network
-> namespace isolation) as additional defense-in-depth.
-
-### crowi-legacy
-
-`@crowi/plugin-renderer-crowi-legacy` is a compatibility plugin that
-reproduces Crowi v1 non-standard-Markdown quirks (e.g. treating `##hoge`
-with no space after the hashes as a heading). It is bundled but
-**off by default**, and migration users from v1 enable it from the
-admin UI.
-
-Note that the v1 behaviour of turning a single newline into `<br>` was
-in this plugin in an earlier development stage, but it has since moved
-into the core pipeline as a Crowi-wide default.
+- **They are on by default.** To stop Crowi fetching OGP metadata from external sites, turn off "Allow link cards for external links" under Security in the admin panel. From that moment, new renders perform no DNS resolution and no HTTP request at all.
+- **When disabled, when a fetch fails, and in an air-gapped network, the same fallback card is shown.** It carries no OGP title, description or image — just the URL as its title — and still works as a link.
+- **`og:image` is embedded as a direct link** to the source site; Crowi neither proxies nor caches it.
+- **Fetches run behind an SSRF guard.** A host that resolves to a private, loopback or metadata address is refused.
+- **Toggling does not rebuild existing pages.** After turning the setting back on, an existing page picks the cards up the next time it is saved or re-rendered.
+- There is no per-domain allow or deny list.
 
 ## Related pages
 
-- Markdown syntax for users → [Markdown syntax](../guide/markdown)
-- Installing and configuring plugins → [Managing plugins](./plugins)
-- How plugins work → [Plugin architecture](../develop/plugins-overview)
-- Building your own renderer → [Developing plugins](../develop/plugins-developing)
+- [Markdown syntax](../guide/markdown) — the notation authors write
+- [Installing and configuring plugins](./plugins) — how to enable a plugin
+- [The renderer pipeline](../develop/renderer-pipeline) — how rendering works and where it extends
