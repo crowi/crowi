@@ -234,8 +234,8 @@ as a PR exits pre mode and produces stable versions.
 
 <Callout type="warn">
   **`latest` points to v2 only at stable** (prereleases do not take `latest`).
-  Flipping the bare npm `crowi` package and Docker `latest` / `latest-slim` to v2 is
-  done in sync with `feature-crowi-quickstart-package`.
+  Flipping the bare npm `crowi` package and Docker `latest` / `latest-slim` to v2
+  happens together with the bare-package cleanup at the stable release.
 </Callout>
 
 <Callout type="info">
@@ -332,6 +332,6 @@ an `es-v*` tag push (auxiliary).
 
 ## Related
 
-- [Deployment](../operations/deployment) — wiring the images to the api
-- [Self-hosting](../operations/self-hosting) — building the images from your own runner
-- [Setting up the search backend](../operations/search-setup) — configuring search that uses the ES image
+- [Deployment topologies](../operations/deployment) — wiring the images to the api
+- [Self-hosting (your own runner project)](../operations/self-hosting) — building the images from your own runner
+- [Search backend setup](../operations/search-setup) — configuring search that uses the ES image

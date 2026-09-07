@@ -119,7 +119,7 @@ include Page (with grant) / Revision / User / Comment / Bookmark / Like
 Attachment, among others.
 
 Sensitive config (OAuth secrets, AWS keys, SMTP password, Slack token)
-is encrypted with AES-256-GCM. See [Config encryption](../operations/encryption)
+is encrypted with AES-256-GCM. See [Encrypting sensitive settings](../operations/encryption)
 for details.
 
 ### Real-time collaboration
@@ -128,7 +128,7 @@ Hocuspocus is not a separate process — it is attached inside the api
 process as the `@crowi/collab` library. It uses the api's `http.Server`
 in `ws noServer` mode to handle `/collab/*` upgrades (collab) and
 `/presence/*` upgrades (RFC-0005 page presence). See
-[Operating real-time collaboration](../operations/realtime-collab) for
+[Operating realtime collaboration](../operations/realtime-collab) for
 details.
 
 ### Official Docker images
@@ -181,17 +181,9 @@ Web client calls aligned against the same types. After editing
 contracts, regenerate the dts with
 `pnpm --filter @crowi/api-contract build`.
 
-## Migration history
-
-The migration to Crowi 2.0 proceeded feature by feature. Legacy Express
-controllers + Swig views were re-implemented as Hono handlers + Next.js
-pages, and the legacy Express mount (`/_api/*`, `/login`, etc.) was
-fully retired as part of the RFC-0006 cutover on 2026-05-22. The
-current phase status is reflected in the [release notes](https://github.com/crowi/crowi/releases).
-
 ## Related pages
 
 - The list of design proposals → [RFC index](./rfcs)
 - Getting involved in development → [Contributing](./contributing)
 - How plugins work → [Plugin architecture](./plugins-overview)
-- Operating real-time collaboration → [Operating real-time collaboration](../operations/realtime-collab)
+- Running collaborative editing in production → [Operating realtime collaboration](../operations/realtime-collab)

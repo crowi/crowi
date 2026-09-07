@@ -1,5 +1,5 @@
 ---
-title: Mail / SMTP setup
+title: Mail delivery
 description: Configuring outgoing mail and test delivery
 ---
 
@@ -45,9 +45,9 @@ Two things are needed to send:
   credentials. Those are entered in the relevant plugin's settings under
   `/admin/plugins`.
 
-Neither requires **restarting the server** after a change. Saving `from`
-rebuilds the mail service, and saving a plugin's settings calls that
-plugin's `reconfigure` so the new connection details take effect.
+Neither requires **restarting the server** after a change. Saving the sender
+address rebuilds the mail service, and saving a plugin's settings makes that
+plugin pick up the new connection details straight away.
 
 > **Note**: The links inside invitation / activation / password-reset /
 > email-change messages have to be absolute URLs, so they do not work
@@ -55,22 +55,20 @@ plugin's `reconfigure` so the new connection details take effect.
 
 ## Configuring mail in the admin UI
 
-Opening `/admin/mail` shows the sender address and which driver is
-currently active. Internally, `GET /api/admin/mail` retrieves the
-following values.
+Opening `/admin/mail` shows three things.
 
 | Setting | Description |
 | ------- | ----------- |
-| `from` | Sender mail address (e.g. `crowi@example.com`). The only field editable on this screen |
-| `activeDriver` | The name of the currently active mail driver (e.g. `smtp`). Read-only |
-| `activePlugin` | The npm name of the plugin that registered that driver. Read-only |
+| Sender address | The address mail is sent from (e.g. `crowi@example.com`). The only field editable on this screen |
+| Active driver | The mail driver currently in use (e.g. `smtp`). Read-only |
+| Providing plugin | The plugin that registered that driver. Read-only |
 
-`activePlugin` is rendered as a link to the plugin settings page where the
+The plugin is rendered as a link to the plugin settings page where the
 connection details belong. **The SMTP host / auth, the Resend API key and
 the AWS credentials for SES do not appear on this screen** — they live in
 their respective plugin settings.
 
-Saving calls `PUT /api/admin/mail`, which updates `from`.
+Saving updates the sender address.
 
 ### Handling of sensitive values
 
@@ -82,8 +80,8 @@ settings screen masks them on input.
   encrypted when stored in MongoDB. **When it is not set, they are stored
   as plaintext.**
 - For how that works, see the "`@sensitive` marker" section of
-  [Managing plugins](./plugins) and
-  [Encrypting sensitive config](./encryption).
+  [Installing and configuring plugins](./plugins) and
+  [Encrypting sensitive settings](./encryption).
 
 ## Sending via SMTP
 
@@ -155,8 +153,8 @@ the plugin's `apiKey` setting.
 ## Sending a test mail
 
 You can verify that mail settings are correct with the **test send**
-feature in the admin UI. It calls `POST /api/admin/mail/test` and
-sends a test mail **to the operating administrator's own mail address**.
+feature in the admin UI. It sends a test mail **to the operating
+administrator's own mail address**.
 
 - The test send uses **only the saved settings**. Values typed on the
   screen but not yet saved are not used, so save first, then run it.
@@ -204,7 +202,7 @@ even while it is still within its lifetime.
 
 | Symptom | What to check |
 | ------- | ------------- |
-| No mail is sent at all | Whether `from` is set at `/admin/mail`. Whether `activeDriver` is the driver you expect. Whether that plugin's connection details are filled in |
+| No mail is sent at all | Whether the sender address is set at `/admin/mail`. Whether the active driver is the one you expect. Whether that plugin's connection details are filled in |
 | Test send returns `502` | If `MAIL_FROM_NOT_CONFIGURED`, set `from` at `/admin/mail`. If `MAIL_TEST_FAILED`, check the SMTP host / port, the credentials, and whether a firewall is blocking the send port (the detailed cause is logged on the api server) |
 | Authentication error | Whether both the SMTP user and password are entered. Whether the password was saved empty and is now unset |
 | Settings changes are not reflected | Changes are applied on save, so normally they are immediate. If they still are not, restart the API |
@@ -213,6 +211,6 @@ even while it is still within its lifetime.
 ## Next steps
 
 - [Configuration](./configuration) — environment variables in general
-- [Encrypting sensitive config](./encryption) — encrypting SMTP passwords / SES keys
-- [Admin](./admin) — overview of the admin UI
+- [Encrypting sensitive settings](./encryption) — encrypting SMTP passwords / SES keys
+- [Admin panel](./admin) — overview of the admin UI
 - [Notifications](../guide/notifications) — the user-facing notification feature
