@@ -1,0 +1,107 @@
+---
+title: Set up a development environment
+description: Clone the monorepo and run api, web and the plugins locally
+---
+
+This page is for working **on Crowi itself**. To run Crowi for your team, see [Run the official images](../operations/install-docker); to just try it out, see the [Quickstart](../guide/quickstart).
+
+## Requirements
+
+| Software | Version | Used for |
+| -------- | ------- | -------- |
+| Node.js | 24.x | Runtime for api and web (pinned by `.nvmrc` and `engines`) |
+| pnpm | Whatever the root `package.json` declares in `packageManager` | Package manager (the monorepo uses pnpm workspaces). Run `corepack enable` once and the repository decides which version is used |
+| Docker / Docker Compose | Current | Runs MongoDB / Redis / Elasticsearch / Mailpit in containers |
+
+You do not need to install the middleware on the host: `docker compose up -d` brings all of it up. If you use `nvm`, running `nvm use` at the repository root switches to the Node.js version in `.nvmrc`.
+
+## Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/crowi/crowi.git
+cd crowi
+
+# 2. Install dependencies (this also installs the lefthook Git hooks)
+pnpm install
+
+# 3. Start the development middleware
+docker compose up -d
+
+# 4. Create the environment file
+cp .env.example .env
+
+# 5. Start api, web and the plugins
+pnpm dev
+```
+
+Open **http://localhost:4304** in a browser and Crowi appears. The first visit shows the installer, so create an administrator user.
+
+`:4304` is a same-origin reverse proxy in front of api and web (Caddy when it is installed, otherwise a dependency-free node fallback). **It is the only supported entrypoint in development**: opening the bare web port `:4302` bypasses it and the WebSockets behind realtime collaboration, presence and notifications will not connect.
+
+Crowi starts with the defaults in `.env.example`, but setting `CROWI_ENCRYPTION_KEY` is recommended. Without it, sensitive settings are stored in plaintext and a warning is logged at boot.
+
+```bash
+pnpm --filter @crowi/api crypto:gen-key
+```
+
+generates a 32-byte AES-256 key; paste the output into `.env` ([Encrypting sensitive settings](../operations/encryption)).
+
+### Ports
+
+| App | Port | What it is |
+| --- | ---- | ---------- |
+| dev proxy | `4304` | **The entrypoint** — same-origin proxy in front of api, web and the WebSocket namespaces |
+| `@crowi/api` | `4301` | The Hono API server (bare) |
+| `@crowi/web` | `4302` | The Next.js frontend (bare — no realtime WS) |
+| `@crowi/site` | `4303` | The crowi.wiki landing page and docs (optional) |
+
+### The development middleware
+
+`docker compose up -d` with no profile starts only the middleware Crowi depends on; the apps themselves run on the host under `pnpm dev`.
+
+| Service | Image | Host port |
+| ------- | ----- | --------- |
+| `mongodb` | `mongo:8` | `27017` |
+| `redis` | `redis:8.8.0` | `6379` |
+| `elasticsearch` | Custom image (9.4.0 + `analysis-kuromoji`) | `9200` |
+| `mailpit` | `axllent/mailpit:latest` | `1025` (SMTP) / `8025` (web UI) |
+
+The Elasticsearch image is a custom build with the Japanese morphological analyser `analysis-kuromoji` bundled ([Search backend setup](../operations/search-setup)). Mailpit is an inbox for reading the mail Crowi sends.
+
+### Running one side only
+
+```bash
+pnpm dev:api     # api and plugins only (no Next.js)
+pnpm dev:web     # the Next.js frontend only
+pnpm dev:site    # the crowi.wiki landing page and docs (:4303)
+```
+
+## Running the whole stack in Docker
+
+To run api and web in containers as well, use the `app` profile.
+
+```bash
+docker compose --profile app up -d --build
+```
+
+The api and web images are built from the monorepo and Caddy is placed in front; the entrypoint is **http://localhost:4302**. The api image is built from the reference runner project `apps/crowi-runner` and bakes its `crowi.config.json` in. Compose re-mounts that same file, so the driver selection can be overridden without a rebuild.
+
+## Build, test and type-check
+
+Run these at the repository root.
+
+```bash
+pnpm build        # build every package
+pnpm test         # run every package's tests (Jest for the api)
+pnpm type-check   # type-check api, web and site
+pnpm lint         # lint (errors=0 required)
+```
+
+`pnpm install` installs the lefthook Git hooks: Biome formats staged files on commit and `pnpm lint` runs on push.
+
+## Next steps
+
+- [Architecture](./architecture) — the monorepo layout and how api and web relate
+- [Contributing](./contributing) — branches, commits and review
+- [Developing plugins](./plugins-developing) — write your own plugin

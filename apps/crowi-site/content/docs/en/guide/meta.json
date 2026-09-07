@@ -2,6 +2,8 @@
   "title": "Guide",
   "root": true,
   "pages": [
+    "---Get started---",
+    "quickstart",
     "---Write pages---",
     "pages",
     "markdown",
@@ -17,7 +19,8 @@
     "trash",
     "---Account & tools---",
     "profile",
+    "account-security",
     "cli",
-    "sharing"
+    "mcp"
   ]
 }

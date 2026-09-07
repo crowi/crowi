@@ -1,0 +1,37 @@
+---
+title: Choose an installation path
+description: Decide between the official images, your own runner project, and a worked example
+---
+
+A Crowi deployment is **api (Hono) + web (Next.js) + MongoDB** at minimum, with a reverse proxy in front presenting them as a single origin. How much of that you assemble yourself gives you four ways to start.
+
+## Where to start
+
+| Installation path | Suits you when | Steps |
+| --- | --- | --- |
+| **Official images + the bundled compose file** | You run one host and want a production-shaped stack quickly | [Run the official images](./install-docker) |
+| **Official images + your own proxy or orchestrator** | You put Crowi behind an existing nginx or Kubernetes and terminate TLS yourself | [Run the official images](./install-docker) → [Deployment topologies](./deployment) |
+| **Your own runner project** | You need a plugin the official images do not bundle, or you want to pin a driver set and build the image in-house | [Self-hosting (your own runner project)](./self-hosting) |
+| **Follow a worked example** | You want one concrete cloud walkthrough end to end | [Running on AWS Lightsail](./aws-lightsail) |
+
+If you only want to try Crowi out, the compose setup in the [Quickstart](../guide/quickstart) runs it without standing up a server.
+
+## What every path needs
+
+| Dependency | Required? | Used for |
+| --- | --- | --- |
+| MongoDB | Required | Pages, revisions, users and everything else Crowi stores |
+| Redis | Optional on a single instance, **required for multiple replicas** | Pub/sub for collaboration, presence and notifications; config sync; rate limiting |
+| Elasticsearch / OpenSearch | Optional | Full-text search. By default MongoDB alone backs search ([Search backend setup](./search-setup)) |
+| S3 / GCS | Optional | Attachment storage. The default is the local disk ([Storage](./storage)) |
+| SMTP / SES / Resend | Optional | Invitation and password-reset mail ([Mail delivery](./mail)) |
+
+You point Crowi at all of these through the environment variables and `crowi.config.json` described in [Configuration](./configuration), plus the admin panel.
+
+## After it is running
+
+- [Configuration](./configuration) — how environment variables, the config file and the admin panel relate
+- [Encrypting sensitive settings](./encryption) — encrypt the credentials Crowi stores
+- [Deployment topologies](./deployment) — reverse proxy and upload limits
+- [Backup](./backup) — what you need in order to restore
+- [Upgrading](./upgrade) — the version-by-version replacement steps

@@ -2,6 +2,8 @@
   "title": "ガイド",
   "root": true,
   "pages": [
+    "---はじめる---",
+    "quickstart",
     "---ページを書く---",
     "pages",
     "markdown",
@@ -17,7 +19,8 @@
     "trash",
     "---アカウントとツール---",
     "profile",
+    "account-security",
     "cli",
-    "sharing"
+    "mcp"
   ]
 }

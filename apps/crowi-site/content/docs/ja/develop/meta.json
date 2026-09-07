@@ -2,12 +2,13 @@
   "title": "開発",
   "root": true,
   "pages": [
-    "getting-started",
+    "dev-setup",
     "architecture",
     "contributing",
     "---プラグイン---",
     "plugins-overview",
     "plugins-developing",
+    "renderer-pipeline",
     "---設計と運営---",
     "rfcs",
     "release-runbook"

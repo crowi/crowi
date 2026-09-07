@@ -3,7 +3,8 @@
   "root": true,
   "pages": [
     "---Install---",
-    "installation",
+    "index",
+    "install-docker",
     "self-hosting",
     "deployment",
     "aws-lightsail",
@@ -18,13 +19,13 @@
     "plugins",
     "redis",
     "realtime-collab",
-    "mcp",
     "---Admin panel---",
     "admin",
     "federated-auth",
     "slack",
     "---Maintain---",
     "backup",
+    "upgrade",
     "upgrading-from-v1"
   ]
 }
