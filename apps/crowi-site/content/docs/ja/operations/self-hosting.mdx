@@ -1,13 +1,13 @@
 ---
-title: セルフホスティング（カスタムランナープロジェクト）
-description: 自前のランナープロジェクトで api イメージを作り、web フロントエンドまで結線して本番デプロイする手順
+title: セルフホスティング (自前の runner プロジェクト)
+description: 自前の runner プロジェクトで api イメージを作り、web フロントエンドまで結線して本番デプロイする手順
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 このページは、**公式の full / slim イメージでは要件を満たせない場合に、自前の
-ランナープロジェクトを作って本番デプロイする** 運用者向けの手順です。具体的には
+runner プロジェクトを作って本番デプロイする** 運用者向けの手順です。具体的には
 次のようなケースを想定しています。
 
 - 公式イメージに同梱されない **独自プラグイン**（社内 npm レジストリのものなど）を
@@ -15,48 +15,25 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 - ストレージ / 検索 / メール / レンダラのドライバを **任意の組み合わせ** で固定したい
 - イメージの依存を必要最小限に絞り、ビルドパイプラインを自社で管理したい
 
-公式イメージ（モノレポ同梱の `apps/crowi-runner` / `apps/crowi-runner-slim` から
-ビルドするもの）で足りる場合は、[インストール](./installation) の「公式 Docker
-イメージのビルド」で十分です。ここではその一歩先、**ランナープロジェクトを一から
-作る** 場合を扱います。
+公開されている full / slim イメージで足りる場合は、[公式イメージで動かす](./install-docker)
+だけで十分です。ここではその一歩先、**runner プロジェクトを一から作る** 場合を
+扱います。
 
 <Callout type="info">
   Crowi の本番構成は「**api（Hono）+ web（Next.js）+ MongoDB（+ 任意で Redis /
   Elasticsearch / S3）**」です。`@crowi/api` は **プラグインを同梱しない** ため、
-  どのドライバを使うかはランナープロジェクトが所有します。この前提は
+  どのドライバを使うかは runner プロジェクトが所有します。この前提は
   [設定](./configuration) の「プラグインの解決方法」で詳説しています。
 </Callout>
 
 ## 全体像
 
-単一ドメイン + リバースプロキシ構成（推奨）の場合、リクエストは次のように
-振り分けます。
+`web` と `api` は別コンテナで、いずれもコンテナ内ポート `3000` で待ち受けます。ブラウザにはその前段に置いた
+リバースプロキシの 1 オリジンだけを見せ、`/api`・`/files` とリアルタイムの WebSocket を api へ振り分けます。
+プロキシの設定例 (Caddy / nginx)、WebSocket の Upgrade 透過、アップロードの body size 上限は
+[デプロイ構成](./deployment) にまとめてあります。**本番投入前に必ず読んでください。**
 
-```
-                         ┌──────────────────────────────┐
-  ブラウザ ──HTTPS──▶ リバースプロキシ (nginx / Caddy 等)
-                         │  /            → web  :3000     │
-                         │  /api/*       → api  :3000     │
-                         │  /collab/*    → api  :3000 (WS) │
-                         └──────────────────────────────┘
-                                   │            │
-                              ┌────▼───┐   ┌────▼───┐
-                              │  web   │   │  api   │──▶ MongoDB / Redis / ...
-                              └────────┘   └────────┘
-```
-
-`web` と `api` は別コンテナで、いずれもコンテナ内ポート `3000` で待ち受けます。
-`/collab/*` は WebSocket なので、プロキシ側で **Upgrade ヘッダの引き渡し** を
-有効にしてください。
-
-前段プロキシの body size 上限も忘れずに crowi のアップロード上限
-(`CROWI_UPLOAD_MAX_BYTES`、既定 50MB)より少し大きい値にしてください
-(完全に同じ値では multipart のフレーミング分だけ不足します)。**nginx の
-`client_max_body_size` の既定は 1MB** で、放置すると crowi の上限より先に
-プロキシが 413 を返します。具体的な設定行は [デプロイ構成](./deployment) の
-「アップロードの body size 上限」を参照してください。
-
-## ランナープロジェクトを作る
+## runner プロジェクトを作る
 
 <Steps>
 
@@ -77,11 +54,11 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
     "start": "crowi-api"
   },
   "dependencies": {
-    "@crowi/api": "2.0.0-alpha.0",
-    "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.0",
-    "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0"
+    "@crowi/api": "2.0.0-alpha.17",
+    "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.17",
+    "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.17",
+    "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.17",
+    "@crowi/plugin-renderer-katex": "2.0.0-alpha.17"
   }
 }
 ```
@@ -135,16 +112,10 @@ api が起動時に読む環境変数を用意します。最低限 `MONGO_URI`�
 MONGO_URI=mongodb://mongodb:27017/crowi
 REDIS_URL=redis://redis:6379          # 複数レプリカ運用では必須
 CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
-WS_TOKEN_SECRET=...                    # 全 api レプリカで同一値にする
+WS_TOKEN_SECRET=...
 ```
 
 各変数の意味は [設定](./configuration) の「環境変数」を参照してください。
-
-<Callout type="warn">
-  `WS_TOKEN_SECRET` を未設定にするとプロセスごとにランダム生成されます。
-  単一インスタンスの検証用途なら許容されますが、**複数レプリカでは全レプリカで
-  同一値** にしないと、リアルタイム共同編集の WebSocket 認証が片側で失敗します。
-</Callout>
 
 </Step>
 
@@ -152,8 +123,8 @@ WS_TOKEN_SECRET=...                    # 全 api レプリカで同一値にす�
 
 ### ローカルで起動確認
 
-依存をインストールし、**プロジェクトディレクトリを cwd にして** 起動します
-（`process.cwd()` が `projectDir` になる必要があります）。
+依存をインストールし、**runner プロジェクトのディレクトリを作業ディレクトリにして**
+起動します。
 
 ```bash
 pnpm install   # または npm install
@@ -169,15 +140,15 @@ api は起動時にこのプロジェクトの `node_modules/` からプラグ�
 
 ## api の Docker イメージを作る
 
-ランナープロジェクトをそのままイメージ化します。公式イメージと同じく、
-`WORKDIR` をランナープロジェクトのルート（= `projectDir`）にし、
+runner プロジェクトをそのままイメージ化します。公式イメージと同じく、
+`WORKDIR` を runner プロジェクトのルートにし、
 `node_modules/@crowi/api/dist/app.js` を実行します。
 
 ```dockerfile title="Dockerfile"
 FROM node:24-bookworm-slim
 WORKDIR /app
 
-# ランナープロジェクトのマニフェストを先に入れて依存だけ先に解決（キャッシュ効率）
+# runner プロジェクトのマニフェストを先に入れて依存だけ先に解決（キャッシュ効率）
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
 RUN corepack enable && pnpm install --prod || npm install --omit=dev
 
@@ -203,17 +174,16 @@ CMD ["node", "node_modules/@crowi/api/dist/app.js"]
 
 ## web フロントエンドを結線する
 
-web は `packages/web/Dockerfile` からビルドします。ビルド済みの
-`crowi/crowi-web` イメージは **描画専任** の Next サーバで、**絶対 API URL を一切
-焼き込みません**。ブラウザは自分のオリジンの相対パス `/api`・`/files` を叩き、
+web は公開されている `crowi/crowi-web` イメージをそのまま使います。これは **描画専任** の
+Next サーバで、**絶対 API URL を一切焼き込みません**。ブラウザは自分のオリジンの相対パス `/api`・`/files` を叩き、
 WebSocket URL は `window.location` から導出します。よって 1 つのイメージが任意の
 api 先で動きますが、それらのパスを api へ振る **前段リバースプロキシが必要** です。
 
 <Callout type="warn">
-  web サーバを直接公開して `/api` の proxy を任せ **ない** でください。`output:
-  'standalone'` では Next の `rewrites()` proxy 宛先が **ビルド時に焼かれ**
-  (`CROWI_API_URL` を実行時に読まない)、直接公開した web サーバは build 時の既定先に
-  proxy してしまい api に届きません。前段にリバースプロキシを置いてください。
+  web サーバを直接公開して `/api` の proxy を任せ **ない** でください。web に内蔵の
+  proxy は宛先を **ビルド時に焼き込み** (`CROWI_API_URL` を実行時に読まない)、
+  直接公開した web サーバは build 時の既定先に proxy してしまい api に届きません。
+  前段にリバースプロキシを置いてください。
 </Callout>
 
 推奨構成は web と api の前段に **同一オリジン + リバースプロキシ** を置く形です。
@@ -234,7 +204,7 @@ MongoDB（必要に応じて Redis / Elasticsearch）を起動し、到達可能
 <Step>
 ### マイグレーションを適用
 v1 からのアップグレードや preflight マイグレーションがある場合は、api 起動前に
-適用します。詳細は [v1 からのアップグレード](./upgrading-from-v1) を参照してください。
+適用します。詳細は [v1 からの移行](./upgrading-from-v1) を参照してください。
 </Step>
 
 <Step>
@@ -245,71 +215,18 @@ api を起動して `/api/app/info` が 200 を返すことを確認してから
 </Steps>
 
 <Callout type="info">
-  複数レプリカで運用する場合は、`REDIS_URL`（共同編集/プレゼンス/通知の pub/sub・
-  編集者上限カウンタ・設定同期・rate limiting・LRU）が
-  **必須** で、`WS_TOKEN_SECRET` を全 api レプリカで同一値にします。詳細は
-  [リアルタイム共同編集](./realtime-collab) を参照してください。
+  複数レプリカで運用する場合は、`REDIS_URL`・`CROWI_MULTI_INSTANCE`・
+  `WS_TOKEN_SECRET` の扱いが変わります。[設定](./configuration) の環境変数表と
+  [リアルタイム共同編集の運用](./realtime-collab) を参照してください。
 </Callout>
-
-## `/api` prefix の一括切替 (cutover)
-
-`v2` セグメントを取り除くリリース以降、api の公開 HTTP prefix は
-`/api/v2` ではなく `/api` になります。これは listener boundary の
-rename であり、段階的なバージョン展開ではありません — api は旧 prefix
-に対するランタイム alias やリダイレクトを一切提供しません。ある api
-レプリカが新バージョンで起動している時点で、そのレプリカへの
-`/api/v2/*` へのリクエストはすべてただの 404 になります。逆に、
-旧バージョンのまま動いているレプリカは、アップグレード済みの
-web / CLI / MCP クライアントが送る prefix なしの `/api/*` を理解
-できません。新旧 2 世代の listener は互いの prefix を解釈できないため、
-このアップグレードは段階的に展開できません。
-
-### 協調的な drain/restart — 1 台ずつのローリング再起動は不可
-
-<Callout type="warn">
-  **このリリースを 1 台ずつ順にロールアウトしないでください。**
-  sticky session のない load balancer 配下で api レプリカを 1 台ずつ
-  入れ替える通常のローリング再起動（[リアルタイム共同編集](./realtime-collab)
-  参照）を行うと、旧 prefix のレプリカと新 prefix のレプリカが同じ
-  プールに同時に存在してしまいます。リクエストがどちらの prefix を
-  使うかに関わらず、fleet のおよそ半分がそれを 404 にします。
-  代わりに、**全 api レプリカを揃えて停止し**、全レプリカへ新バージョンを
-  デプロイしてから、揃えて再起動してください — あるいは新バージョンで
-  新しい fleet を用意しておき、トラフィックを一括で切り替える
-  （blue/green）方法でも構いません。local dev を含む単一インスタンス
-  構成は影響を受けません — レプリカが 1 台しかないため、新旧 prefix の
-  混在はそもそも起こりません。
-</Callout>
-
-### Preflight 確認
-
-実際のトラフィックを流す前に、デプロイツールの「完了」シグナルだけを
-信用せず、全レプリカが実際に切り替わっていることを確認します。各
-レプリカへ**個別に**（load balancer 経由だとリクエストごとに 1 台しか
-サンプリングできないため）以下を実行してください:
-
-- `GET /api/openapi.json` が全レプリカで **200** を返すこと。
-- `GET /api/v2/openapi.json` が全レプリカで **404** を返すこと。
-
-いずれかのチェックに失敗したレプリカは、まだ旧 prefix のまま
-（または再起動されていない）です — その場合は本番トラフィックを
-fleet に流さないでください。
-
-### ロールバック
-
-ロールバック時は同じチェックを逆方向で行います。ロールバックした
-レプリカへトラフィックを戻す前に、`GET /api/openapi.json` が
-**404** を、`GET /api/v2/openapi.json` が **200** を返すことを
-確認してください。アップグレード時と同様に、ロールバックも
-全レプリカを揃えて行います — ロールバック済みと未ロールバックの
-レプリカが混在した fleet は、部分アップグレードと同じ prefix 分裂の
-問題を抱えることになります。
 
 ## 次のステップ
 
+- [デプロイ構成](./deployment) — リバースプロキシと公開オリジン
 - [設定](./configuration) — 環境変数と `crowi.config.json` の全体像
 - [機密設定の暗号化](./encryption) — `CROWI_ENCRYPTION_KEY` のセットアップ
-- [ストレージドライバ](./storage) — `storage.driver` の切り替え
-- [検索のセットアップ](./search-setup) — Elasticsearch の設定
-- [プラグインの管理](./plugins) — プラグインの追加・有効化
-- [v1 からのアップグレード](./upgrading-from-v1) — 既存 Crowi からの移行
+- [ストレージ設定](./storage) — `storage.driver` の切り替え
+- [検索バックエンドのセットアップ](./search-setup) — Elasticsearch の設定
+- [プラグインの導入と設定](./plugins) — プラグインの追加・有効化
+- [バージョンアップ](./upgrade) — 版ごとの入れ替え手順
+- [v1 からの移行](./upgrading-from-v1) — 既存 Crowi からの移行
