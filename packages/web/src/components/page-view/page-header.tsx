@@ -92,7 +92,7 @@ export function PageHeader({
   activeTocId = null,
   presence,
 }: PageHeaderProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   // feature-mobile-presence-card — the header's mobile and desktop
   // presence surfaces are DIFFERENT DOM (not one tree styled two ways),
@@ -156,7 +156,7 @@ export function PageHeader({
   // omit it; the `LivePresenceRow` / `MobilePresenceCard` gates below
   // narrow it before use.
 
-  const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
+  const isLiked = page.isLiked;
   // Separate "link-only" (RESTRICTED — anyone with the URL can view)
   // from "private" (SPECIFIED / OWNER — listed users only) so the
   // header reflects the actual sharing posture instead of collapsing

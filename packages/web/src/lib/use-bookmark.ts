@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import { userPageKeys } from './page-query-keys';
-import type { Bookmark } from '@crowi/api-contract';
+import type { Bookmark, GetBookmark } from '@crowi/api-contract';
 
 /**
  * Query key factory for bookmark-related queries.
@@ -32,14 +32,18 @@ export function useBookmark(pageId: string | undefined) {
   return useQuery({
     queryKey: pageId ? bookmarkKeys.detail(pageId) : bookmarkKeys.all,
     queryFn: async () => {
-      if (!pageId) return null as Bookmark | null;
+      if (!pageId) return null as GetBookmark | null;
       const response = await apiClient.bookmarks.$get({ query: { page_id: pageId } });
       // 401 — treat as not bookmarked rather than throwing, to keep
       // page rendering quiet for signed-out users.
-      if (response.status === 401) return null as Bookmark | null;
+      if (response.status === 401) return null as GetBookmark | null;
       if (response.ok) {
         const body = await response.json();
-        return body.bookmark as Bookmark | null;
+        // feature-page-relations-collections D-2 — `GET /bookmarks` never
+        // populates `page` (bare id string, its own response schema); this
+        // hook's only consumers check `bookmark !== null` and never read
+        // `bookmark.page`, so the narrower type changes nothing at call sites.
+        return body.bookmark;
       }
       throw new Error('Failed to fetch bookmark');
     },
