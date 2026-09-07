@@ -8,6 +8,7 @@
     "---Plugins---",
     "plugins-overview",
     "plugins-developing",
+    "plugin-api",
     "renderer-pipeline",
     "---Design & release---",
     "rfcs",

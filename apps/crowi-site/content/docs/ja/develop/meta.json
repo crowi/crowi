@@ -8,6 +8,7 @@
     "---プラグイン---",
     "plugins-overview",
     "plugins-developing",
+    "plugin-api",
     "renderer-pipeline",
     "---設計と運営---",
     "rfcs",

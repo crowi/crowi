@@ -1,0 +1,16 @@
+{
+  "title": "リファレンス",
+  "root": true,
+  "pages": [
+    "env",
+    "config-file",
+    "admin-cli",
+    "cli",
+    "markdown",
+    "ports",
+    "redis-keys",
+    "plugins",
+    "api",
+    "glossary"
+  ]
+}
