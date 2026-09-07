@@ -21,9 +21,10 @@ import type { MigrationLogger } from './types';
  * `block` is the safe default (§4.2.7) for `blocking` migrations: if
  * `user-unique-prepare` hasn't run before v2 boot, *every replica fail-fasts*
  * with a clear error before autoIndex would otherwise hit E11000 (§9) on
- * not-yet-deduped data. The operator then runs `crowi-admin migrate apply`
- * once and brings the cluster up. A pending `cosmetic` migration never blocks
- * boot: its `isPending` re-scans the live corpus, so new content could keep it
+ * not-yet-deduped data. The operator then runs
+ * `crowi-admin migrate apply --id user-unique-prepare` and brings the
+ * cluster up. A pending `cosmetic` migration never blocks boot: its
+ * `isPending` re-scans the live corpus, so new content could keep it
  * pending forever and a uniform block would deadlock the cluster (BUG 2).
  */
 
@@ -40,7 +41,8 @@ export class PreflightBlockedError extends Error {
   constructor(pendingIds: string[]) {
     super(
       `Boot refused: ${pendingIds.length} preflight migration(s) are unapplied [${pendingIds.join(', ')}]. ` +
-        'Run `crowi-admin migrate apply` against this database before starting the application ' +
+        'Run `crowi-admin migrate plan` to inspect them, then apply each pending id individually with ' +
+        '`crowi-admin migrate apply --id <id>` before starting the application ' +
         `(set ${POLICY_ENV_VAR}=warn to override at your own risk).`,
     );
     this.name = 'PreflightBlockedError';
@@ -149,10 +151,14 @@ export async function runBootMigrations(crowi: Crowi, options: RunBootMigrations
       // result object (and its severity split) is not returned on this path.
       throw new PreflightBlockedError(pendingBlockingIds);
     }
-    // warn: operator explicitly accepts the data-integrity risk.
+    // warn: operator explicitly accepts the data-integrity risk. The message
+    // deliberately does not name a specific failure mechanism (e.g. autoIndex
+    // E11000) — different blocking migrations risk different things when
+    // skipped, so it points at each pending id's own operations
+    // documentation instead.
     console.warn(
       `[crowi:migration] WARNING: ${pendingBlockingIds.length} preflight migration(s) unapplied ` +
-        `[${pendingBlockingIds.join(', ')}] — data-integrity risk; autoIndex may fail with E11000.`,
+        `[${pendingBlockingIds.join(', ')}] — data-integrity risk; see the operations documentation for each pending migration before proceeding.`,
     );
   }
 

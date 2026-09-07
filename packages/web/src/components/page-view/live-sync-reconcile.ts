@@ -63,11 +63,11 @@ const PAGE_LEVEL_KEYS: ReadonlyArray<keyof PageWithRevision> = [
   'grantedUsers',
   'status',
   'creator',
-  'liker',
   'commentCount',
   'extended',
   'likerCount',
   'seenUsersCount',
+  'isLiked',
 ];
 
 /** Whether any page-level (non-revision) field differs between `current` and `fetched`. */

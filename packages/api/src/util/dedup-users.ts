@@ -13,12 +13,15 @@
  * hand during the 2026-05 incident (uniqueness spec §c):
  *
  *   pages.creator, pages.lastUpdateUser                       (scalar)
- *   pages.grantedUsers[], pages.liker[], pages.seenUsers[]    (array)
+ *   pages.grantedUsers[], pages.liker[], pages.seenUsers[]    (array; the
+ *     latter two are legacy v1 fields left untouched here — see
+ *     feature-page-relations-collections D-6)
  *   revisions.author, revisions.savedBy                       (scalar)
  *   revisions.contributors[]                                  (array)
  *   comments.creator, bookmarks.user, attachments.creator,
  *   shares.creator, watchers.user, activities.user,
- *   notifications.user, updateposts.creator                  (scalar)
+ *   notifications.user, updateposts.creator,
+ *   likes.user, seens.user                                    (scalar)
  *
  * Array fields use `$addToSet(to)` then `$pull(from)` so the surviving id
  * appears at most once. `bookmarks` carries a unique `{ page, user }` index, so
@@ -59,10 +62,13 @@ export const SCALAR_USER_REFS: readonly ScalarRef[] = [
   { collection: 'revisions', field: 'author' },
   { collection: 'revisions', field: 'savedBy' },
   { collection: 'comments', field: 'creator' },
-  // `bookmarks.user`: the compound-unique conflict (a page both users
-  // bookmarked) is resolved first by UNIQUE_PER_USER_REFS below; the remaining
+  // `bookmarks.user` / `likes.user` / `seens.user`: the compound-unique
+  // conflict (a page both users already like/bookmark/have-seen) is
+  // resolved first by UNIQUE_PER_USER_REFS below; the remaining
   // non-conflicting rows reassign here like any other scalar.
   { collection: 'bookmarks', field: 'user' },
+  { collection: 'likes', field: 'user' },
+  { collection: 'seens', field: 'user' },
   { collection: 'attachments', field: 'creator' },
   { collection: 'shares', field: 'creator' },
   { collection: 'watchers', field: 'user' },
@@ -80,13 +86,18 @@ export const ARRAY_USER_REFS: readonly ArrayRef[] = [
 ];
 
 /**
- * Collections with a unique `{ <pageField>, user }` index where reassigning a
+ * Collections with a unique `{ page, user }` index where reassigning a
  * losing user's row onto the survivor could collide with an existing survivor
  * row. Those losing rows are deleted before the generic scalar reassign so the
- * `$set` never trips the compound unique index. `bookmarks` is the only such
- * collection in the §c set.
+ * `$set` never trips the compound unique index. `bookmarks` was the only such
+ * collection in the original §c set; `likes` / `seens` (feature-page-relations-collections
+ * D-6) share the same `{ page, user }` shape and collision risk.
  */
-const UNIQUE_PER_USER_REFS: readonly { collection: string; userField: string }[] = [{ collection: 'bookmarks', userField: 'user' }];
+export const UNIQUE_PER_USER_REFS: readonly { collection: string; userField: string }[] = [
+  { collection: 'bookmarks', userField: 'user' },
+  { collection: 'likes', userField: 'user' },
+  { collection: 'seens', userField: 'user' },
+];
 
 export interface ReassignResult {
   /** Per-collection.field count of documents updated (scalar + array). */

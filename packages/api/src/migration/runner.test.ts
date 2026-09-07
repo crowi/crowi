@@ -271,6 +271,30 @@ describe('runBootMigrations — two layers (§4.2.1/§4.2.7)', () => {
   });
 });
 
+describe('AC-17: PreflightBlockedError recovery guidance uses --id, never a bare apply', () => {
+  it('lists every pending id and never recommends a bare `crowi-admin migrate apply`', async () => {
+    const { def: a } = pendingOnce('frt-id-a', 'preflight');
+    const { def: b } = pendingOnce('frt-id-b', 'preflight');
+    const registry = new MigrationRegistry([a, b]);
+
+    let caught: unknown;
+    try {
+      await runBootMigrations(crowi, { registry, policy: 'block' });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(PreflightBlockedError);
+    const message = (caught as Error).message;
+    expect(message).toContain('frt-id-a');
+    expect(message).toContain('frt-id-b');
+    expect(message).toContain('migrate plan');
+    expect(message).toContain('migrate apply --id');
+    // A bare `apply` with no `--id` is never suggested.
+    expect(message).not.toMatch(/migrate apply(?!\s+--id)/);
+  });
+});
+
 describe('registered migration severities (regression guard)', () => {
   it('keeps user-unique-prepare classified as blocking (else E11000 re-surfaces)', () => {
     expect(userUniquePrepare.severity).toBe('blocking');

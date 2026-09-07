@@ -104,7 +104,7 @@ const plugin: CrowiPlugin = {
   // Read-only: driver.ts / index.ts read Page/Bookmark/User via
   // ctx.model() to build search documents and resolve grants; no
   // writes.
-  modelAccess: ['Page', 'Bookmark', 'User'],
+  modelAccess: ['Page', 'Bookmark', 'User', 'Like'],
   adminPlacement: {
     label: 'Elasticsearch',
     icon: 'search',
@@ -275,10 +275,24 @@ interface UserModelLike {
   countDocuments: (q?: unknown) => { exec: () => Promise<number> };
 }
 
+/**
+ * feature-page-relations-collections D-1/AC-9 — `Like.getCountsByPageIds`
+ * (`packages/api/src/models/like.ts`), typed narrowly to what this driver
+ * calls. Unlike `BookmarkModelLike.aggregate` above (which the driver
+ * feeds a raw pipeline it owns), this delegates the id-set scoping and
+ * `string -> ObjectId` cast entirely to the model static — a plugin has no
+ * mongoose dependency of its own to build an `ObjectId` with (see the
+ * static's own doc comment).
+ */
+interface LikeModelLike {
+  getCountsByPageIds: (pageIds: string[]) => Promise<Map<string, number>>;
+}
+
 function buildDriver(cell: StateCell<ESDriverState>, ctx: PluginContext): ElasticsearchDriver {
   const Page = ctx.model('Page') as PageModelLike;
   const Bookmark = ctx.model('Bookmark') as BookmarkModelLike;
   const User = ctx.model('User') as UserModelLike;
+  const Like = ctx.model('Like') as LikeModelLike;
 
   return createElasticsearchDriver(cell, {
     log: ctx.log,
@@ -299,6 +313,7 @@ function buildDriver(cell: StateCell<ESDriverState>, ctx: PluginContext): Elasti
       }
       return map;
     },
+    getLikeCountsBulk: (pageIds) => Like.getCountsByPageIds(pageIds),
     countUsers: () => User.countDocuments({}).exec(),
   });
 }

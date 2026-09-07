@@ -1,4 +1,5 @@
 import type { SearchableDoc } from '@crowi/plugin-api';
+import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import { STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT, STATUS_WIP, isTransitionalPageStatus } from 'src/models/page';
 import Debug from 'debug';
@@ -78,6 +79,15 @@ export async function indexPageInSearch(crowi: Crowi, page: PageLike): Promise<v
     }
 
     const creator = isPopulatedUser(target.creator) ? target.creator : null;
+    // C-API/AC-9 — Like collection is the sole `like_count` source now; no
+    // legacy `target.liker` fallback (spec §やらないこと: no compatibility
+    // shim). Best-effort like the rest of this function: a count failure
+    // must not abort indexing the page itself.
+    const Like = crowi.model('Like');
+    const likeCount = await Like.countByPageId(new Types.ObjectId(id)).catch((err) => {
+      debug('like count fetch failed for page %s: %s', id, (err as Error).message);
+      return 0;
+    });
 
     const doc: SearchableDoc = {
       id,
@@ -88,7 +98,7 @@ export async function indexPageInSearch(crowi: Crowi, page: PageLike): Promise<v
         grant: target.grant,
         granted_users: (target.grantedUsers ?? []).map(toStringId),
         comment_count: target.commentCount ?? 0,
-        like_count: target.liker?.length ?? 0,
+        like_count: likeCount,
         created_at: target.createdAt,
         updated_at: target.updatedAt,
       },

@@ -210,8 +210,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
   /**
    * Fetch the target revision's body and swap it into the cache with a
-   * shallow-merge that preserves page-level fields (grant / liker /
-   * commentCount / …). Guarded by a `revision.createdAt` monotonicity
+   * shallow-merge that preserves page-level fields (grant / isLiked /
+   * likerCount / commentCount / …). Guarded by a `revision.createdAt` monotonicity
    * check so an out-of-order / stale fetch never rewinds the cache.
    * Returns whether the cache was actually advanced.
    *

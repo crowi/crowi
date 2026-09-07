@@ -1,7 +1,9 @@
+import { Types } from 'mongoose';
 import request from 'supertest';
 import type { SearchDriver, SearchHits, SearchQuery, SearchableDoc } from '@crowi/plugin-api';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import * as pageResponse from 'src/util/page-response';
 
 /**
  * Compact wrapper for the `GET /api/search` request shape used in every
@@ -212,6 +214,42 @@ describe('Routes /api/search (Hono)', () => {
         expect(hit.page.creator).not.toBeNull();
         expect(hit.page.creator.username).toBe(username);
       });
+    });
+
+    // AC-4/D-2 — the authorized hit set is enriched in ONE batched call
+    // (F-2), and each hit carries its own real likerCount/isLiked.
+    it('AC-4: batch-enriches authorized hits with real likerCount/isLiked, in one call', async () => {
+      const pageA = await createPageViaApi(accessToken, `${PATH_PREFIX}enriched-a`, '# a');
+      const pageB = await createPageViaApi(accessToken, `${PATH_PREFIX}enriched-b`, '# b');
+      const Like = crowi.model('Like');
+      await Like.add(new Types.ObjectId(pageA._id), new Types.ObjectId(userId));
+
+      const driver = buildMockDriver({
+        total: 2,
+        hits: [
+          { id: pageA._id, path: pageA.path },
+          { id: pageB._id, path: pageB.path },
+        ],
+      });
+
+      const populatePageRelationDataSpy = jest.spyOn(pageResponse, 'populatePageRelationData');
+      try {
+        await withMockDriver(driver, async () => {
+          const res = await search(accessToken, { q: 'enriched' });
+          expect(res.status).toBe(200);
+          expect(populatePageRelationDataSpy).toHaveBeenCalledTimes(1);
+
+          const byId = new Map<string, { likerCount: number; isLiked: boolean }>(
+            res.body.data.map((d: { pageId: string; page: { likerCount: number; isLiked: boolean } }) => [d.pageId, d.page]),
+          );
+          expect(byId.get(pageA._id)?.likerCount).toBe(1);
+          expect(byId.get(pageA._id)?.isLiked).toBe(true);
+          expect(byId.get(pageB._id)?.likerCount).toBe(0);
+          expect(byId.get(pageB._id)?.isLiked).toBe(false);
+        });
+      } finally {
+        populatePageRelationDataSpy.mockRestore();
+      }
     });
 
     it('returns an empty data array (and skips Mongo) when the driver yields no hits', async () => {

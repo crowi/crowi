@@ -1,5 +1,5 @@
-import { createAdaptorServer } from '@hono/node-server';
 import type { Http2Bindings, HttpBindings } from '@hono/node-server';
+import { createAdaptorServer } from '@hono/node-server';
 import Debug from 'debug';
 import http from 'http';
 import mongoose from 'mongoose';
@@ -321,13 +321,13 @@ class Crowi {
     this.emitEnvValidationWarnings();
     // `CLI_SKIP_STEPS` (boot-steps.ts) is the single, named place that
     // records what the CLI omits — redis / bootMigrations / seedOAuthClients
-    // / mailer / lru. The remaining steps (encryption, database, models,
-    // config, renderer, plugins) run in the same order `runInitLayers()`
-    // would run them, minus the skipped ones; the `renderer` step itself
-    // reads `ctx.mode === 'cli'` to skip the page-save side-effect listeners
-    // (mention dispatch / render-cache invalidation) — a migration's
-    // `updatePage` writes must not @-ping users or race the teardown
-    // connection close.
+    // / mailer / lru / relationUniqueIndexes. The remaining steps
+    // (encryption, database, models, config, renderer, plugins) run in the
+    // same order `runInitLayers()` would run them, minus the skipped ones;
+    // the `renderer` step itself reads `ctx.mode === 'cli'` to skip the
+    // page-save side-effect listeners (mention dispatch / render-cache
+    // invalidation) — a migration's `updatePage` writes must not @-ping
+    // users or race the teardown connection close.
     const ordered = resolveBootOrder(ALL_BOOT_STEPS, { skip: CLI_SKIP_STEPS });
     for (const bootStep of ordered) {
       await bootStep.run(this, { mode: 'cli' });
@@ -717,6 +717,22 @@ class Crowi {
     keys.forEach((key) => {
       this.model(key, models[key](this));
     });
+  }
+
+  /**
+   * Build the `Like` / `Seen` `{page,user}` unique index. Both models
+   * register with `autoIndex: false` specifically so nothing builds this
+   * index before the cutover migration's data is safe to enforce
+   * uniqueness against. This method is the ONLY caller of both
+   * statics outside that migration's own `prepare-target-index` stage; it
+   * is invoked from the `relationUniqueIndexes` boot step
+   * (`boot-steps.ts`), placed immediately after `bootMigrations` so it is
+   * only reached once every blocking preflight migration — including this
+   * one — has been confirmed clean.
+   */
+  async ensureRelationUniqueIndexes(): Promise<void> {
+    await this.model('Like').ensureUniqueIndex();
+    await this.model('Seen').ensureUniqueIndex();
   }
 
   setupEvents() {

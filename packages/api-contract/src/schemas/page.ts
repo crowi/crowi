@@ -150,7 +150,6 @@ export const PageSchema = z.object({
   grantedUsers: z.array(z.string()).optional(),
   creator: z.union([z.string(), PageUserSchema]).nullable().optional(),
   lastUpdateUser: z.union([z.string(), PageUserSchema]).nullable().optional(),
-  liker: z.array(z.string()).optional(),
   commentCount: z.number().default(0),
   extended: PageExtendedSchema,
   createdAt: z.string(),
@@ -166,8 +165,15 @@ export const PageSchema = z.object({
   yjsCheckpointAt: z.string().nullable().optional(),
   // dynamic fields
   latestRevision: z.string().optional(),
-  likerCount: z.number().optional(),
-  seenUsersCount: z.number().optional(),
+  // feature-page-relations-collections D-2 — Like / Seen are independent
+  // relation collections now; the wire no longer carries the full liker
+  // ID array (removed above), only these derived, viewer-scoped fields.
+  // Required (not optional): every response path routes through
+  // `populatePageRelationData` before serialising a Page, so these are
+  // always present.
+  likerCount: z.number().int().nonnegative(),
+  seenUsersCount: z.number().int().nonnegative(),
+  isLiked: z.boolean(),
 });
 export type Page = z.infer<typeof PageSchema>;
 

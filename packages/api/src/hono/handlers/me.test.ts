@@ -1,9 +1,11 @@
+import { Types } from 'mongoose';
 import request from 'supertest';
 
 import { app, crowi } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
+import * as pageResponse from 'src/util/page-response';
 
 import { PROFILE_PICTURE_MAX_BYTES } from './attachment';
 
@@ -382,6 +384,48 @@ describe('Routes /api/me (Hono)', () => {
       const res = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${accessToken}`);
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ pages: [] });
+    });
+
+    // AC-4/D-2 — the final (ordered, capped-at-5) page set is enriched in
+    // ONE batched call, and each page carries its own real likerCount/isLiked.
+    it('AC-4: batch-enriches the final recently-viewed set with real likerCount/isLiked, in one call', async () => {
+      const authHeader = { Authorization: `Bearer ${accessToken}` };
+      const PATH_PREFIX = '/hono-me-rvp-test/';
+      const pageA = await request(app)
+        .post('/api/pages')
+        .set(authHeader)
+        .send({ path: `${PATH_PREFIX}a`, body: '# a' });
+      const pageB = await request(app)
+        .post('/api/pages')
+        .set(authHeader)
+        .send({ path: `${PATH_PREFIX}b`, body: '# b' });
+      expect(pageA.status).toBe(200);
+      expect(pageB.status).toBe(200);
+
+      const Like = crowi.model('Like');
+      await Like.add(new Types.ObjectId(pageA.body.page._id), new Types.ObjectId(pageA.body.page.creator._id));
+
+      // `crowi.lru` is Redis-backed and may be unwired in this test
+      // environment — stub the read directly so the test exercises the
+      // handler's enrichment/ordering logic without depending on live Redis.
+      const lruGetSpy = jest.spyOn(crowi.lru, 'get').mockResolvedValueOnce([pageA.body.page._id, pageB.body.page._id]);
+      const populatePageRelationData = jest.spyOn(pageResponse, 'populatePageRelationData');
+      try {
+        const res = await request(app).get('/api/me/recently-viewed-pages').set(authHeader);
+        expect(res.status).toBe(200);
+        expect(populatePageRelationData).toHaveBeenCalledTimes(1);
+
+        const byId = new Map<string, { likerCount: number; isLiked: boolean }>(
+          res.body.pages.map((p: { _id: string; likerCount: number; isLiked: boolean }) => [p._id, p]),
+        );
+        expect(byId.get(pageA.body.page._id)?.likerCount).toBe(1);
+        expect(byId.get(pageA.body.page._id)?.isLiked).toBe(true);
+        expect(byId.get(pageB.body.page._id)?.likerCount).toBe(0);
+      } finally {
+        lruGetSpy.mockRestore();
+        populatePageRelationData.mockRestore();
+        await crowi.model('Page').deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
+      }
     });
   });
 

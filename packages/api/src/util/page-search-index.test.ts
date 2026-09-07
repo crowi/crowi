@@ -1,4 +1,5 @@
 import type { SearchDriver, SearchableDoc } from '@crowi/plugin-api';
+import { Types } from 'mongoose';
 import { crowi } from 'src/test/setup';
 import { createTestUser, createPageViaApi } from 'src/test/test-helpers';
 import { indexPageInSearch, indexPageInSearchById } from './page-search-index';
@@ -197,6 +198,34 @@ describe('indexPageInSearch — index-side status exclusion (feature-restricted-
 
     expect(driver.indexed).toHaveLength(1);
     expect(driver.indexed[0]?.id).toBe(page._id);
+  });
+
+  // feature-page-relations-collections AC-9 — like_count is sourced from
+  // the Like relation collection (a single count fetch), never
+  // `doc.liker` (removed).
+  it('AC-9: projects like_count from a single Like.countByPageId fetch', async () => {
+    const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-count`, '# liked');
+    const Like = crowi.model('Like');
+    const Page = crowi.model('Page');
+    await Like.add(new Types.ObjectId(page._id), new Types.ObjectId());
+    await Like.add(new Types.ObjectId(page._id), new Types.ObjectId());
+
+    const countSpy = jest.spyOn(Like, 'countByPageId');
+    const doc = await Page.findById(page._id).populate('revision').populate('creator');
+    const driver = buildMockDriver();
+
+    try {
+      await withMockDriver(driver, async () => {
+        await indexPageInSearch(crowi, doc);
+      });
+      expect(countSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      countSpy.mockRestore();
+      await Like.removeByPageId(new Types.ObjectId(page._id));
+    }
+
+    expect(driver.indexed).toHaveLength(1);
+    expect(driver.indexed[0]?.meta?.like_count).toBe(2);
   });
 
   it('re-indexes a page once its status returns to published', async () => {

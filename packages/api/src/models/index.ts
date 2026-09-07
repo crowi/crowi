@@ -11,6 +11,7 @@ import OAuthAuthorizationCode from './oauth-authorization-code';
 import OAuthClient from './oauth-client';
 import OAuthDeviceCode from './oauth-device-code';
 import OAuthRefreshToken from './oauth-refresh-token';
+import Like from './like';
 import Page from './page';
 import PageDeletionRecord from './page-deletion-record';
 import PageHistoryEvent from './page-history-event';
@@ -20,6 +21,7 @@ import PendingAuthRegistration from './pending-auth-registration';
 import PersonalAccessToken from './personal-access-token';
 import PluginRenderCache from './plugin-render-cache';
 import Revision from './revision';
+import Seen from './seen';
 import Share from './share';
 import ShareAccess from './share-access';
 import Tracking from './tracking';
@@ -41,6 +43,8 @@ export default {
   Revision,
   Backlink,
   Bookmark,
+  Like,
+  Seen,
   Comment,
   Attachment,
   UpdatePost,

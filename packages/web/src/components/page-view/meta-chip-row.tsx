@@ -59,8 +59,8 @@ export function MetaChipRow({ page, forceClose = false }: MetaChipRowProps) {
 
   const displayUser = resolveDisplayUser(page);
 
-  const likerCount = page.likerCount ?? page.liker?.length ?? 0;
-  const seenUsersCount = page.seenUsersCount ?? 0;
+  const likerCount = page.likerCount;
+  const seenUsersCount = page.seenUsersCount;
   const commentCount = page.commentCount ?? 0;
 
   const { data: backlinkData } = useBacklinks(page._id, { limit: BACKLINK_COUNT_LIMIT });

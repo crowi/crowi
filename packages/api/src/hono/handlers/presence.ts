@@ -31,6 +31,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
+import type { LikeDocument } from 'src/models/like';
 import type { UserDocument } from 'src/models/user';
 import ActivityDefine from 'src/util/activity-define';
 import { createPresenceTokenUtil } from 'src/util/presence-token';
@@ -46,6 +47,7 @@ export const registerPresenceRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
   const Page = crowi.model('Page');
   const User = crowi.model('User');
   const Activity = crowi.model('Activity');
+  const Like = crowi.model('Like');
 
   // Resolve / sign helper once per server (closure-captures the secret).
   // Same construction-time-capture caveat as `pageCollab`: tests pin
@@ -91,18 +93,24 @@ export const registerPresenceRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
         }
       })
       // --------------------------------------------------------------
-      // GET /pages/:id/likers — liked-by list (RFC-0005 Phase 3)
+      // GET /pages/:id/likers — liked-by list (RFC-0005 Phase 3,
+      // feature-page-relations-collections D-1/D-3/F-3)
       // --------------------------------------------------------------
       //
-      // The liker list is sourced from `page.liker` (the authoritative
-      // ObjectId set). `likedAt` is a best-effort enrichment: we look
-      // up the `ACTION_LIKE` Activity rows for the page in one query
-      // and join them in. Entries without an Activity row keep
-      // `likedAt: null` (likes recorded before activity logging
-      // existed, or rows pruned by retention).
+      // The liker list is sourced from the `likes` relation collection
+      // (the authoritative `{page,user}` set — no page-embedded array
+      // anymore). `likedAt` is the row's own `createdAt` for a live like;
+      // only a migrated row with a null `createdAt` falls back to a
+      // best-effort join against the `ACTION_LIKE` Activity rows for the
+      // page. Rows without a resolvable timestamp keep `likedAt: null`.
       //
-      // Sorted newest-liked first; entries with an unknown `likedAt`
-      // sort last so the list order stays stable.
+      // Sorted newest-liked first; ties (and unresolved `likedAt`, which
+      // always ties) break by user id ascending for a stable order.
+      // `limit` is applied AFTER excluding users who can no longer be
+      // populated (deleted / non-active) — same order as the legacy
+      // array-based implementation this replaces (see D-3/F-3), so a
+      // `limit=N` call never silently shrinks below `min(N, active liker
+      // count)` while `totalCount` still reports the full relation size.
       .openapi(getLikersRoute, async (c) => {
         const user = c.get('user');
         const { id: pageId } = c.req.valid('param');
@@ -120,36 +128,57 @@ export const registerPresenceRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
         }
 
         try {
-          const likerIds = (loaded.page.liker ?? []).filter((id) => id != null);
-          const totalCount = likerIds.length;
+          // D-1: unbounded fetch — no server-side cap, no dedicated
+          // sort/covering index. totalCount is this array's length, not a
+          // separate count query (D-1's fixed one-shot-fetch contract).
+          const likeRows = await Like.findByPageId(loaded.page._id);
+          const totalCount = likeRows.length;
 
           if (totalCount === 0) {
             return c.json({ users: [] as Liker[], totalCount }, 200);
           }
 
-          // Best-effort `likedAt` join: map userId -> most recent LIKE
-          // activity. The two reads are independent, so run them together.
-          const [activities, populated] = await Promise.all([
-            Activity.find({
+          const likedAtByUser = new Map<string, Date | null>();
+          const nullRows: LikeDocument[] = [];
+          for (const row of likeRows) {
+            if (row.createdAt != null) {
+              likedAtByUser.set(row.user.toString(), row.createdAt);
+            } else {
+              nullRows.push(row);
+            }
+          }
+
+          // D-3: best-effort `likedAt` join, limited to the migrated rows
+          // that have no relation timestamp of their own.
+          if (nullRows.length > 0) {
+            const activities = await Activity.find({
               target: loaded.page._id,
               targetModel: ActivityDefine.MODEL_PAGE,
               action: ActivityDefine.ACTION_LIKE,
+              user: { $in: nullRows.map((row) => row.user) },
             })
               .select('user createdAt')
-              .lean(),
-            User.findUsersByIds(likerIds) as Promise<UserDocument[]>,
-          ]);
-          const likedAtByUser = new Map<string, Date>();
-          for (const activity of activities) {
-            const uid = String(activity.user);
-            const at = activity.createdAt as Date | undefined;
-            if (!at) continue;
-            const existing = likedAtByUser.get(uid);
-            if (!existing || at.getTime() > existing.getTime()) likedAtByUser.set(uid, at);
+              .lean();
+            for (const activity of activities) {
+              const uid = String(activity.user);
+              const at = activity.createdAt as Date | undefined;
+              if (!at) continue;
+              const existing = likedAtByUser.get(uid);
+              if (!existing || at.getTime() > existing.getTime()) likedAtByUser.set(uid, at);
+            }
+            for (const row of nullRows) {
+              const uid = row.user.toString();
+              if (!likedAtByUser.has(uid)) likedAtByUser.set(uid, null);
+            }
           }
 
+          // F-3 step 4: populate first (excludes deleted/non-active users),
+          // THEN sort by likedAt, THEN slice — never the reverse, or a
+          // `limit` would silently drop active users behind an excluded one.
+          const populated = (await User.findUsersByIds(likeRows.map((row) => row.user))) as UserDocument[];
+
           const likers: Liker[] = populated.map((u) => {
-            const likedAt = likedAtByUser.get(u._id.toString());
+            const likedAt = likedAtByUser.get(u._id.toString()) ?? null;
             return {
               id: u._id.toString(),
               username: u.username ?? '',
@@ -159,12 +188,16 @@ export const registerPresenceRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
             };
           });
 
-          // Newest-liked first; unknown `likedAt` sorts last.
+          // Newest-liked first; ties (incl. both unresolved) break by user
+          // id ascending for a deterministic, stable order (D-3).
           likers.sort((a, b) => {
-            if (a.likedAt && b.likedAt) return b.likedAt.localeCompare(a.likedAt);
+            if (a.likedAt && b.likedAt) {
+              if (a.likedAt !== b.likedAt) return b.likedAt.localeCompare(a.likedAt);
+              return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+            }
             if (a.likedAt) return -1;
             if (b.likedAt) return 1;
-            return 0;
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
           });
 
           const users = limit !== undefined ? likers.slice(0, limit) : likers;

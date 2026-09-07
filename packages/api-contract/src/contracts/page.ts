@@ -343,7 +343,7 @@ export const likePageRoute = createRoute({
   path: '/pages/like',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'Add the current user to the page liker list',
+  summary: 'Add the current user to the page like relation',
   request: {
     body: {
       content: { 'application/json': { schema: PageIdBodySchema } },
@@ -351,7 +351,8 @@ export const likePageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'The page with the updated liker list',
+      description:
+        "The page, viewer-scoped: `likerCount` / `seenUsersCount` are the current relation counts (not a liker ID array — feature-page-relations-collections D-2), `isLiked` reflects the caller's own membership as of this response.",
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
@@ -374,7 +375,7 @@ export const unlikePageRoute = createRoute({
   path: '/pages/unlike',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'Remove the current user from the page liker list',
+  summary: 'Remove the current user from the page like relation',
   request: {
     body: {
       content: { 'application/json': { schema: PageIdBodySchema } },
@@ -382,7 +383,8 @@ export const unlikePageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'The page with the updated liker list',
+      description:
+        "The page, viewer-scoped: `likerCount` / `seenUsersCount` are the current relation counts (not a liker ID array — feature-page-relations-collections D-2), `isLiked` reflects the caller's own membership as of this response.",
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
