@@ -1,14 +1,13 @@
-import { createAdaptorServer, getRequestListener } from '@hono/node-server';
+import { type Server as HttpServer, createServer as httpCreateServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { Http2Bindings, HttpBindings } from '@hono/node-server';
+import { createAdaptorServer, getRequestListener } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono } from 'hono';
-import { createServer as httpCreateServer, type Server as HttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-
-import { version as pkgVersion } from '../../package.json';
 import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 import { crowi } from 'src/test/setup';
 import { redisReconnectForever } from 'src/util/redis-opts';
+import { version as pkgVersion } from '../../package.json';
 
 /**
  * The v4-compatible pins `buildRedisOpts` adds to every result (see
@@ -70,6 +69,69 @@ describe('Test for Crowi application context', () => {
   describe('.setupDatabase', () => {
     test('setup completed', () => {
       expect(crowi.getMongo().connection.readyState).toBe(1);
+    });
+  });
+
+  describe('AC-10: .ensureRelationUniqueIndexes', () => {
+    // Swap in fake `Like` / `Seen` model registrations for the duration of
+    // each test and restore the real ones afterward — other tests in this
+    // (per-file) `crowi` singleton rely on the real models being registered.
+    // `crowi` itself is only populated once `setup.ts`'s `beforeAll` runs,
+    // so these must be captured lazily (not at `describe`-body eval time).
+    let realLike: ReturnType<typeof crowi.model<'Like'>>;
+    let realSeen: ReturnType<typeof crowi.model<'Seen'>>;
+
+    beforeAll(() => {
+      realLike = crowi.model('Like');
+      realSeen = crowi.model('Seen');
+    });
+
+    afterEach(() => {
+      crowi.model('Like', realLike);
+      crowi.model('Seen', realSeen);
+    });
+
+    test('propagates a Seen rejection unchanged', async () => {
+      const seenError = new Error('seen index build failed');
+      crowi.model('Like', { ensureUniqueIndex: async () => undefined } as unknown as typeof realLike);
+      crowi.model('Seen', {
+        ensureUniqueIndex: async () => {
+          throw seenError;
+        },
+      } as unknown as typeof realSeen);
+
+      await expect(crowi.ensureRelationUniqueIndexes()).rejects.toBe(seenError);
+    });
+
+    test('awaits Like before resolving — a Like-then-Seen implementation without awaiting Like would pass this incorrectly', async () => {
+      let resolveLike: (() => void) | undefined;
+      const likeDeferred = new Promise<void>((resolve) => {
+        resolveLike = resolve;
+      });
+      let seenCalled = false;
+      crowi.model('Like', { ensureUniqueIndex: () => likeDeferred } as unknown as typeof realLike);
+      crowi.model('Seen', {
+        ensureUniqueIndex: async () => {
+          seenCalled = true;
+        },
+      } as unknown as typeof realSeen);
+
+      let settled = false;
+      const promise = crowi.ensureRelationUniqueIndexes().then(() => {
+        settled = true;
+      });
+
+      // Before Like resolves, Seen must not have been reached and the
+      // overall method promise must still be pending (await-leak detector).
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(seenCalled).toBe(false);
+      expect(settled).toBe(false);
+
+      resolveLike?.();
+      await promise;
+      expect(seenCalled).toBe(true);
+      expect(settled).toBe(true);
     });
   });
 

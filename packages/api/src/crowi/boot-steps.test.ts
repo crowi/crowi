@@ -1,3 +1,5 @@
+import type Crowi from 'src/crowi';
+
 import { ALL_BOOT_STEPS, type BootStep, CLI_SKIP_STEPS, resolveBootOrder } from './boot-steps';
 
 const stub = (name: string, after: string[] = []): BootStep => ({
@@ -61,7 +63,7 @@ describe('resolveBootOrder', () => {
 });
 
 describe('ALL_BOOT_STEPS', () => {
-  it('declares each of the 11 runInitLayers steps exactly once', () => {
+  it('declares each of the 12 runInitLayers steps exactly once', () => {
     const names = ALL_BOOT_STEPS.map((s) => s.name);
     expect(names).toEqual([
       'encryption',
@@ -70,6 +72,7 @@ describe('ALL_BOOT_STEPS', () => {
       'redis',
       'config',
       'bootMigrations',
+      'relationUniqueIndexes',
       'seedOAuthClients',
       'renderer',
       'plugins',
@@ -111,11 +114,45 @@ describe('ALL_BOOT_STEPS', () => {
       redis: 'setupRedisClient',
       config: 'setupConfig',
       bootMigrations: 'runBootMigrations',
+      relationUniqueIndexes: 'ensureRelationUniqueIndexes',
       seedOAuthClients: 'seedOAuthClients',
       renderer: 'setupRenderer',
       plugins: 'setupPlugins',
       mailer: 'setupMailer',
       lru: 'setupLRU',
     });
+  });
+
+  it('AC-10: the relationUniqueIndexes step run() awaits crowi.ensureRelationUniqueIndexes()', async () => {
+    const step = ALL_BOOT_STEPS.find((s) => s.name === 'relationUniqueIndexes');
+    expect(step).toBeDefined();
+    expect(step?.after).toEqual(['models', 'bootMigrations']);
+
+    let resolveDeferred: (() => void) | undefined;
+    const deferred = new Promise<void>((resolve) => {
+      resolveDeferred = resolve;
+    });
+    let called = false;
+    const fakeCrowi = {
+      ensureRelationUniqueIndexes: () => {
+        called = true;
+        return deferred;
+      },
+    } as unknown as Crowi;
+
+    let settled = false;
+    const runPromise = Promise.resolve(step?.run(fakeCrowi, { mode: 'server' })).then(() => {
+      settled = true;
+    });
+
+    // The step must have actually called the method (not skip it)…
+    expect(called).toBe(true);
+    // …and await its promise — it must NOT be settled before the fake resolves.
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveDeferred?.();
+    await runPromise;
+    expect(settled).toBe(true);
   });
 });
