@@ -1,0 +1,89 @@
+---
+title: プラグイン SDK
+description: CrowiPlugin / PluginContext / 拡張ポイント / スキーママーカーの参照
+---
+
+`@crowi/plugin-api` が公開する型の参照です。書き方のチュートリアルは [プラグイン開発](./plugins-developing)、プラグインの一覧は [ファーストパーティプラグイン](../reference/plugins) を参照してください。
+
+## `CrowiPlugin`
+
+すべてのプラグインは `CrowiPlugin` を満たすオブジェクトを **デフォルトエクスポート** します。ランタイムは起動時に npm パッケージ名で動的 import します。
+
+| フィールド | 役割 |
+| ---------- | ---- |
+| `name` | npm パッケージ名。設定行 (`plugin:<name>:*`) とページメタデータの名前空間を兼ねる |
+| `version` | プラグイン自身のバージョン (npm パッケージの semver) |
+| `requires` | 実行時に必要な他プラグインの npm 名。依存グラフを解決して先に読み込む |
+| `modelAccess` | 触ってよいコアモデル名の許可リスト。宣言しないモデルには一切アクセスできない |
+| `exposesConfigToDependents` | 依存側のプラグインに自分の設定を読ませるかどうか |
+| `configSchema` | グローバル設定を表す Zod スキーマ。管理 UI がこれから設定フォームを生成する |
+| `configAtomicGroups` | まとめて保存・検証する設定フィールドの束 (`name` / `keys` / `sensitive`) |
+| `pageMetadataSchema` | ページ単位のメタデータスキーマ。宣言するとページ編集 UI に入力欄が出る |
+| `adminPlacement` | 管理サイドバーでの表示位置 (`section` / `label` / `icon`) |
+| `readiness` | 必須設定が未入力のときに管理画面へ出す警告の宣言 |
+| `onInstall` / `onUninstall` | 初回有効化時 / 削除時のフック |
+| `reconfigure` | 管理 UI から設定が変わったときに呼ばれる。保持している接続を作り直す |
+| `verifyConfig` | 保存された設定で実際に接続できるかを確かめる。結果は管理 UI に出る |
+
+## 拡張ポイント
+
+`register*` はすべて任意です。実装したものだけがその拡張として登録されます。
+
+| フィールド | 登録するもの |
+| --- | --- |
+| `registerStorage` | 添付ファイルの保存先ドライバ |
+| `registerSearch` | 全文検索のドライバ |
+| `registerMailSender` | メール送信のドライバ |
+| `registerRenderer` | 本文の記法を足すレンダラ |
+| `registerAuth` | 外部アカウントでのサインインのプロバイダ |
+| `registerNotifier` | 通知の宛先 |
+| `registerHooks` | コアのイベントバスへのリスナ |
+| `registerRoutes` | `/api/plugins/<name>/...` 配下の HTTP ルート |
+
+`adminPlacement.section` を省略した場合、セクションは登録した拡張の種類から導出されます。どれにも解決しなかったときは「設定」グループに出ます。
+
+`adminPlacement.section` に指定できる値は `settings` / `shared` / `storage` / `mail` / `notification` / `auth` / `search` / `renderer` / `platform` です。
+
+## `PluginContext`
+
+各 `register*` とライフサイクルフックには `PluginContext` が渡されます。これがコアの状態に触れる唯一の窓口で、プラグインはコアを直接 import しません。
+
+| メンバー | 役割 |
+| --- | --- |
+| `config<T>()` | 自分の設定を `configSchema` でパースした型付きの値として読む |
+| `dependencyConfig<T>(name)` | `requires` に宣言した依存プラグインの設定を読む |
+| `setConfig(key, value)` | 設定フィールドを 1 つ書き込む |
+| `pageMetadata` | 自分の名前空間に閉じたページメタデータの読み書き (`get` / `set`) |
+| `model(name)` | `modelAccess` で許可したコアモデルにアクセスする |
+| `state<T>(initial)` | ドライバが持つ接続などを保持する `StateCell` を返す |
+| `log` | プラグイン名で自動プレフィックスされる構造化ロガー |
+
+`model()` は `modelAccess` の許可リストで閉じています。資格情報を保持するモデルは許可リストに書いても起動時に失敗し、実行時にも返りません。設定値の対称暗号化を行う API はこの context にありません。
+
+`dependencyConfig` は資格情報を共有するベースプラグインのためのもので、`@crowi/plugin-aws` が持つリージョンとアクセスキーを、依存する AWS 系プラグインが自前のスキーマで重複定義せずに読み取れます。
+
+### `StateCell`
+
+`reconfigure` で作り直す資源 (ストレージのクライアント、メールのトランスポート、検索クライアントなど) を保持する箱です。同じ引数の `state()` は同じセルを返すため、`register*` で作ったセルを `reconfigure` から差し替えられます。
+
+| メンバー | 役割 |
+| --- | --- |
+| `withValue(fn)` | 現在の値を取り出して `fn` に渡す。差し替えと競合しない読み方 |
+
+## スキーママーカー
+
+設定フィールドの Zod スキーマの `describe()` の先頭にマーカーを書くと、管理 UI の扱いが変わります。
+
+| マーカー | 書き方 | 効果 |
+| --- | --- | --- |
+| `@sensitive` | `@sensitive <説明>` | 保存時に自動暗号化し、読み取り時に復号する。管理 UI ではシークレット用の入力欄になる |
+| `@action` | `@action "<ラベル>" <METHOD> <path>` | フィールドの隣にボタンを出し、押すとそのプラグインのルートを呼ぶ |
+
+`@sensitive` の暗号化は `CROWI_ENCRYPTION_KEY` を前提にします ([機密設定の暗号化](../operations/encryption))。`@action` の宛先は `registerRoutes` で登録したルートです。
+
+## 関連ページ
+
+- [プラグイン開発](./plugins-developing) — 最小のプラグインから設定スキーマ・ドライバまで
+- [プラグインアーキテクチャ](./plugins-overview) — 設計の原則と解決の仕組み
+- [ファーストパーティプラグイン](../reference/plugins) — 配布しているプラグインの一覧
+- [プラグインの導入と設定](../operations/plugins) — 運用者側の導入手順

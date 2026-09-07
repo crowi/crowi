@@ -126,22 +126,17 @@ without that they would still appear, under Settings. A plugin naming a section
 the sidebar has no heading for falls back the same way, so getting the section
 wrong can never make a plugin's config page unreachable.
 
-### The `@sensitive` marker
+### Sensitive settings and action buttons
 
-A plugin can mark a setting with `@sensitive`, and that setting is then
-treated as **sensitive**: encrypted on write and decrypted on read with the
-same key as core's own sensitive settings, and rendered in the admin UI as a
-secret input (saved badge / clear pending / undo). For `CROWI_ENCRYPTION_KEY`,
-the prerequisite for encryption, see
-[Encrypting sensitive settings](./encryption); for how a plugin declares the
-marker, see [Developing plugins](../develop/plugins-developing).
+A setting a plugin declares as sensitive is encrypted on write and decrypted
+on read with the same key as core's own sensitive settings, and rendered in
+the admin UI as a secret input (saved badge / clear pending / undo). For
+`CROWI_ENCRYPTION_KEY`, the prerequisite for encryption, see
+[Encrypting sensitive settings](./encryption).
 
-### The `@action` marker
-
-A plugin can mark a setting with `@action` to put an action button next to
-it. Pressing the button calls an endpoint the plugin provides, so operations
-like "Test connection" or "Authorise with Google" work without the plugin
-writing a dedicated UI.
+Action buttons like "Test connection" or "Authorise with Google" also appear
+when a plugin declares them on a setting. For how a plugin declares either,
+see [Plugin SDK](../develop/plugin-api).
 
 ## Clearing the render cache
 
@@ -191,3 +186,4 @@ on removal.
 - The list of renderer plugins → [Renderer plugins](./renderers)
 - Choosing storage → [Storage](./storage)
 - Configuring the search backend → [Search backend setup](./search-setup)
+- The list of published plugins → [First-party plugins](../reference/plugins)

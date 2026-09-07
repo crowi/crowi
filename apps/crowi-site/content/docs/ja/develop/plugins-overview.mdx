@@ -39,38 +39,17 @@ Crowi のプラグインモデルは、次のいくつかの原則の上に成�
 Crowi のプラグインは、貢献する拡張ポイントによっておおよそ次の種類に
 分かれます。1 つのプラグインが複数の拡張ポイントを実装することもできます。
 
-| 種類 | 拡張ポイント | 例 |
-| ---- | ------------ | -- |
-| ストレージ | `registerStorage` | `@crowi/plugin-storage-local`、`@crowi/plugin-storage-aws-s3`、`@crowi/plugin-storage-gcs` |
-| 検索 | `registerSearch` | `@crowi/plugin-search-mongo`、`@crowi/plugin-search-elasticsearch`、`@crowi/plugin-search-opensearch` |
-| メール | `registerMailSender` | `@crowi/plugin-mail-smtp`、`@crowi/plugin-mail-aws-ses`、`@crowi/plugin-mail-resend` |
-| レンダラ | `registerRenderer` | `@crowi/plugin-renderer-katex` / `-plantuml` / `-mermaid` / `-crowi-legacy` |
-| 認証 | `registerAuth` | `@crowi/plugin-google` (Google での OIDC サインイン) |
-| 通知 / 連携 | `registerNotifier` / `registerRoutes` | `@crowi/plugin-slack` (Slack 連携 — ページリンクの unfurl) |
-| ベース (設定のみ) | (register なし) | `@crowi/plugin-aws` — 後続の AWS 系プラグインに資格情報を共有 |
-| ルート | `registerRoutes` | プラグインの HTTP ルート (受信 Webhook / `@action` ボタン / OAuth コールバック)。`@crowi/plugin-slack` の Slack Events API 受信口などに使われます |
+- **ストレージ / 検索 / メール** — それぞれ「ドライバ」を `crowi.config.json`
+  の `storage.driver` / `search.driver` / `mail.driver` で選択します。複数の
+  ドライバプラグインを導入しておき、設定でどれを使うか切り替えられます。
+- **レンダラ** — 本文の記法を足します。ドライバ選択はありません。
+- **認証** — 外部アカウントでのサインインを足します。
+- **通知 / 連携** — 通知の宛先と、受信 Webhook などの HTTP ルートを足します。
+- **ベース (設定のみ)** — 後続のプラグインに資格情報を共有します。
 
-ストレージ・検索・メールは、それぞれ「ドライバ」を `crowi.config.json`
-の `storage.driver` / `search.driver` / `mail.driver` で選択する形に
-なっています。複数のドライバプラグインを導入しておき、設定でどれを使うか
-切り替えられます。
-
-### ファーストパーティプラグイン
-
-Crowi モノレポでメンテナンスされているプラグインは次のとおりです。
-
-| レジストリ | ドライバ |
-| ---------- | -------- |
-| ストレージ | `local` (`@crowi/plugin-storage-local`)、`aws-s3` (`@crowi/plugin-storage-aws-s3`)、`gcs` (`@crowi/plugin-storage-gcs`) |
-| 検索 | `mongo` (`@crowi/plugin-search-mongo`)、`elasticsearch` (`@crowi/plugin-search-elasticsearch`)、`opensearch` (`@crowi/plugin-search-opensearch`) |
-| メール | `smtp` (`@crowi/plugin-mail-smtp`)、`ses` (`@crowi/plugin-mail-aws-ses`)、`resend` (`@crowi/plugin-mail-resend`) |
-| レンダラ | `@crowi/plugin-renderer-plantuml` / `-katex` / `-mermaid` / `-crowi-legacy` |
-| 認証 | `@crowi/plugin-google` (Google サインイン — 設定は [外部アカウントでのサインイン](../operations/federated-auth)) |
-| 連携 | `@crowi/plugin-slack` (Slack でのページリンク unfurl — 設定は [Slack 連携](../operations/slack)) |
-| 共有ベース | `@crowi/plugin-aws` (AWS 系プラグインが要求する設定のみの依存) |
-
-すべてのプラグインが対象とするプラグイン SDK は `@crowi/plugin-api`
-です。
+拡張ポイントの型は [プラグイン SDK](./plugin-api)、配布しているプラグインと
+ドライバ名の一覧は [ファーストパーティプラグイン](../reference/plugins) に
+あります。
 
 ### 暗黙のデフォルトプラグイン
 
@@ -85,49 +64,9 @@ Crowi モノレポでメンテナンスされているプラグインは次の�
 追加のプラグインを列挙して `*.driver` を切り替えると、これらのデフォルト
 の上に選択肢が積み増されます。
 
-## `CrowiPlugin` インターフェース
+## `CrowiPlugin` と `PluginContext`
 
-すべてのプラグインは、`@crowi/plugin-api` が公開する `CrowiPlugin` 型を
-満たすオブジェクトを **デフォルトエクスポート** します。ランタイムは
-起動時に `await import('<plugin-name>')` でこれを読み込みます。
-
-主なフィールドは次のとおりです。
-
-| フィールド | 役割 |
-| ---------- | ---- |
-| `name` | npm パッケージ名。設定行 (`plugin:<name>:*`) とページメタデータの名前空間を兼ねます。 |
-| `version` | プラグイン自身のバージョン (npm パッケージの semver)。 |
-| `requires` | 実行時に必要な他プラグインの npm 名。依存グラフを解決して先に読み込みます。 |
-| `configSchema` | プラグインのグローバル設定値を表す Zod スキーマ。管理 UI がこれを辿って設定フォームを自動生成します。 |
-| `pageMetadataSchema` | ページ単位のメタデータスキーマ。指定するとページ編集 UI にプラグイン用の入力欄が出ます。 |
-| `adminPlacement` | 管理サイドバーでの表示位置 (`section` / `label` / `icon`)。 |
-| `register*` | 各拡張ポイントへの登録コールバック (storage / search / auth / notifier / renderer / routes)。実装するものだけ宣言します。 |
-| `onInstall` / `onUninstall` | 初回有効化 / 削除時のフック。v1 設定の移行などに使います。 |
-| `reconfigure` | 管理 UI から設定が変わったときに呼ばれ、キャッシュした接続などを更新します。 |
-
-`register*` コールバックはすべて任意です。ストレージだけ提供するプラグイン
-なら `registerStorage` だけ実装すれば十分です。
-
-## PluginContext
-
-各 `register*` コールバックには `PluginContext` が渡されます。これが、
-プラグインがコアの状態に触れる唯一の窓口です。プラグインは
-`@crowi/server` を直接 import せず、必ず context 経由でやり取りします。
-
-`PluginContext` が提供するもの:
-
-- `config<T>()` — このプラグインの型付き設定 (`configSchema` でパース) を読む
-- `dependencyConfig<T>(name)` — `requires` に宣言した依存プラグインの設定を読む
-- `setConfig(key, value)` — 設定フィールドを 1 つ書き込む
-- `pageMetadata` — このプラグインの名前空間に閉じたページメタデータの読み書き
-- `model(name)` — コアの Mongoose モデル (Page / User / Comment …) にアクセス
-- `crypto` — `KeyProvider` を使った対称 暗号化 / 復号
-- `log` — プラグイン名で自動プレフィックスされる構造化ロガー
-
-`dependencyConfig` は、`@crowi/plugin-aws` のような資格情報共有プラグインの
-ために用意されています。ベースプラグインが `region` / `accessKeyId` /
-`secretAccessKey` を持ち、`@crowi/plugin-storage-aws-s3` などの依存先が
-自前のスキーマで重複定義せずにそれを読み取れます。
+プラグインは `@crowi/plugin-api` の `CrowiPlugin` 型を満たすオブジェクトを **デフォルトエクスポート** し、コアの状態には `register*` に渡される `PluginContext` からだけ触れます (コアを直接 import しません)。フィールドとメンバーの一覧は [プラグイン SDK](./plugin-api) にあります。
 
 ## runner プロジェクトと `@crowi/runner` ライブラリ
 
@@ -181,3 +120,4 @@ api の再ビルドは伴いません。具体的な手順は
 - レンダラプラグインの一覧 → [レンダラプラグイン](../operations/renderers)
 - 独自プラグインの作り方 → [プラグイン開発](./plugins-developing)
 - アーキテクチャ全体像 → [アーキテクチャ](./architecture)
+- SDK の型 → [プラグイン SDK](./plugin-api)

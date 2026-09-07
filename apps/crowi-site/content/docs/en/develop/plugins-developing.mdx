@@ -100,13 +100,10 @@ const myPlugin: CrowiPlugin = {
 export default myPlugin;
 ```
 
-Two markers placed in a schema field's description change the admin UI
-behaviour:
+Two markers placed in a schema field's description — `@sensitive` and
+`@action` — change the admin UI behaviour. Their format and effect are
+listed in [Plugin SDK](./plugin-api).
 
-| Marker | Format | Effect |
-| ------ | ------ | ------ |
-| `@sensitive` | `z.string().describe('@sensitive ...')` | Auto-encrypts on write. Rendered as a secret input. |
-| `@action` | `z.string().describe('@action "Test" POST /test')` | Renders an action button next to the field; calls a `registerRoutes` endpoint. |
 
 ### Sidebar placement (`adminPlacement`)
 
@@ -192,17 +189,15 @@ post-2.0 repository/HTTP layer separation; only grant `User`
 ## Extension points
 
 All `register*` callbacks of `CrowiPlugin` are optional. Implement only
-what the plugin contributes.
+what the plugin contributes. All eight are listed in
+[Plugin SDK](./plugin-api).
 
-| Callback | What it extends |
-| -------- | --------------- |
-| `registerStorage` | A file storage driver |
-| `registerSearch` | A full-text search backend |
-| `registerAuth` | An authentication provider |
-| `registerNotifier` | A notifier plugin |
-| `registerRenderer` | Markdown renderer extensions |
-| `registerRoutes` | The plugin's own HTTP endpoints. Registered routes are mounted at `/api/plugins/<plugin>/<path>`, and each one picks its authentication with `auth: 'user' | 'admin' | 'public'` (`public` is for webhooks that authenticate themselves, such as Slack's request signing). |
-| `registerHooks` | Event subscription (internal-only in v2.0; not yet a stable extension point) |
+Routes registered through `registerRoutes` are mounted at
+`/api/plugins/<plugin>/<path>`, and each one picks its authentication with
+`auth: 'user' | 'admin' | 'public'` (`public` is for webhooks that
+authenticate themselves, such as Slack's request signing). `registerHooks`
+is internal-only in v2.0 and not yet a stable extension point.
+
 
 You can also declare lifecycle hooks:
 
@@ -378,4 +373,5 @@ runtime use, but a good sample of how the contract is used).
 - How plugins work → [Plugin architecture](./plugins-overview)
 - Installing the plugin you built → [Installing and configuring plugins](../operations/plugins)
 - The list of renderer plugins → [Renderer plugins](../operations/renderers)
+- The SDK types and markers → [Plugin SDK](./plugin-api)
 - The list of design proposals → [RFC index](./rfcs)
