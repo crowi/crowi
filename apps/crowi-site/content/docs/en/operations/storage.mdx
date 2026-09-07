@@ -1,5 +1,5 @@
 ---
-title: Storage drivers
+title: Storage
 description: Configuring local / S3 file storage
 ---
 
@@ -69,7 +69,7 @@ Add the S3 storage plugin to `plugins` in `crowi.config.json` and set
 
 `@crowi/plugin-storage-aws-s3` depends on `@crowi/plugin-aws`, the shared
 AWS credentials base, so the dependency plugin is loaded automatically.
-For details on plugin resolution, see [Managing plugins](./plugins).
+For details on plugin resolution, see [Installing and configuring plugins](./plugins).
 
 ### 2. Configure the bucket and credentials
 
@@ -83,7 +83,7 @@ The S3 bucket name and AWS credentials are configured from the admin UI.
 
 The access key ID and secret access key are registered as sensitive, so
 they are automatically encrypted at rest when `CROWI_ENCRYPTION_KEY` is
-set. See [Encrypting sensitive config](./encryption) for details.
+set. See [Encrypting sensitive settings](./encryption) for details.
 
 > **Tip**: When using an EC2 / ECS instance role or IRSA, leave the
 > access keys blank — the AWS SDK's default credential resolution
@@ -100,7 +100,7 @@ applies the new bucket / credentials **without a server restart** via
 To store files on Google Cloud Storage, use the `@crowi/plugin-storage-gcs`
 plugin.
 
-> **Tip**: For creating the bucket, service account, and IAM grants on the Google Cloud side, see [Google Cloud setup](./storage-gcp).
+> **Tip**: For creating the bucket, service account, and IAM grants on the Google Cloud side, see [Setting up GCS storage](./storage-gcp).
 
 ### 1. Enable the plugin
 
@@ -137,9 +137,9 @@ already saved, updating only the other fields and leaving the key field
 blank does **not** clear the stored key — the admin UI never re-sends an
 unchanged secret.
 
-The service-account key is a secret field: `GET /api/admin/plugins/config`
-never returns its raw value, only `{ hasValue: true }` once one is
-stored, and its contents are never written to application logs.
+The service-account key is a secret field: the admin panel never reads back
+its raw value — it only shows whether a key is stored — and its contents are
+never written to application logs.
 
 **Leaving Service account key JSON blank** uses
 [Application Default Credentials (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials)
@@ -156,24 +156,10 @@ every failing field in `issues`.
 
 ### 3. Required IAM permissions
 
-The driver calls three GCS object operations: `storage.objects.create`
-(upload), `storage.objects.get` (download), and `storage.objects.delete`
-(delete). A minimal custom role built from exactly these three permissions
-is sufficient — the driver never lists objects. The predefined **Storage
-Object User** role (`roles/storage.objectUser`) also works and additionally
-bundles `storage.objects.list`, which the driver doesn't call but which
-comes along with the role at no extra grant. No `storage.buckets.*`
-permission is needed — Crowi never creates, lists, or configures buckets.
-
-**Generating V4 signed URLs (`signBlob`) is a separate permission.** A
-connection using an inline service-account key signs locally with the
-private key, needing no extra permission. A connection using ADC needs
-the IAM Credentials `signBlob` permission
-(`roles/iam.serviceAccountTokenCreator` on itself, or an explicit
-`iam.serviceAccounts.signBlob` grant) to sign. Crowi's attachment
-delivery routes (`/api/attachments/:id`, etc.) do not call `signedUrl()`
-today and always serve through the Crowi proxy, so missing `signBlob`
-does not affect normal upload/download.
+The driver only creates, reads and deletes objects — it never touches buckets
+and never lists objects. Which roles to grant, and why V4 signed URLs
+(`signBlob`) need a separate permission, are covered in [Setting up GCS
+storage](./storage-gcp).
 
 ### 4. The prefix is not an IAM boundary
 
@@ -242,40 +228,12 @@ copy.
    regenerate display derivatives from the originals now on GCS (see the
    Note under "crowi-admin rebuild attachment-display-derivatives" below).
 
-### Opt-in emulator for development/testing
-
-This plugin's unit/integration tests use an opt-in
-`fsouza/fake-gcs-server` service (`docker-compose.yml`'s `crowi-test-gcs`,
-`gcs-test` profile) that normal CI never starts.
-
-```bash
-docker compose --profile gcs-test up -d crowi-test-gcs
-STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
-docker compose --profile gcs-test stop crowi-test-gcs
-```
-
-Against this real GCS-JSON-API-compatible server, the opt-in suite
-verifies Buffer/Readable upload-download round-trips, prefix mapping to
-the correct physical object name, idempotent delete (existing object
-succeeds, already-absent object is a no-op), missing-object `get()`
-converting to the shape the unmodified `isMissingFileError` classifies as
-missing, and a local-to-GCS `runStorageCopy` round-trip.
-
-This emulator only accepts anonymous requests — it does not exercise ADC
-discovery, real IAM permission checks, or `signBlob` availability.
-Verifying real ADC / IAM / signed-URL behavior requires a real GCS
-bucket.
-
 ## Checking the current storage status
 
-Opening the storage screen in the admin UI (`/admin/storage`) shows the
-list of registered drivers and which driver is currently active.
-Internally it calls `GET /api/admin/storage`, which returns the
-following for each driver.
-
-- `driverName` — the driver name (`local` / `s3`, etc.)
-- `pluginName` — the name of the plugin that registered the driver
-- `isActive` — whether it is the driver selected in `crowi.config.json`
+Opening the storage screen in the admin UI (`/admin/storage`) lists every
+registered driver. For each one it shows the driver name (`local` / `s3`, and
+so on), the plugin that provides it, and whether it is the driver selected in
+`crowi.config.json`.
 
 ## Switching drivers and migrating files
 
@@ -373,9 +331,9 @@ Key flags:
 | `--dry-run` | Writes nothing to Mongo or storage; reports only the target count and breakdown |
 | `--concurrency <n>` | Worker pool size (default `2`) — see the capacity estimate below |
 | `--force` | Re-evaluate and overwrite records already described under the current recipe |
-| `--repair-missing` | Only targets current-recipe `resized` records; probes existence via `get()` and regenerates only the ones whose object is actually gone (a lighter mode — no decode/re-encode for objects that are still present) |
-| `--only-missing` | Only targets attachments with no `derivatives.display` recorded yet |
-| `--only-stale` | Only targets attachments whose recorded `recipeVersion` is not the current one |
+| `--repair-missing` | Only targets current-recipe `resized` records; checks whether the stored object still exists and regenerates only the ones that are actually gone (a lighter mode — no decode/re-encode for objects that are still present) |
+| `--only-missing` | Only targets attachments with no display copy recorded yet |
+| `--only-stale` | Only targets attachments whose recorded recipe version is not the current one |
 | `--page-id <id>` | Only targets attachments on this page |
 | `--since <iso>` | Only targets attachments created on/after this ISO 8601 timestamp |
 | `--until <iso>` | Only targets attachments created on/before this ISO 8601 timestamp |
@@ -444,9 +402,27 @@ Exit codes:
 > expiration would silently delete live derivatives and degrade delivery
 > to the original fallback. It is not a substitute for `--gc`.
 
+## Limits on uploads from the editor
+
+While editing a page, people can **paste** an image or **drag and drop** a
+file straight into the editor (the reader-facing description is in
+[Attachments](../guide/attachments)). Three limits matter operationally.
+
+- **Rate limit**: **20 uploads per user per minute** from the editor. Past
+  that the server answers 429 and the editor shows "upload limit reached, try
+  again in N seconds".
+- **Size limit**: **50 MB per file** by default. `CROWI_UPLOAD_MAX_BYTES`
+  lowers it ([Configuration](./configuration)); it cannot be raised, because
+  the value doubles as a memory budget. A single drag-and-drop carries at most
+  five files.
+- **File types**: a fixed allow list decides what may be attached, and it is
+  the same whichever route is used (attachment button, paste, drag and drop).
+  [Attachments](../guide/attachments) lists it. There is no per-instance
+  setting.
+
 ## Next steps
 
 - [Configuration](./configuration) — overview of `crowi.config.json`
-- [Encrypting sensitive config](./encryption) — encrypting S3 credentials
-- [Managing plugins](./plugins) — adding and enabling plugins
+- [Encrypting sensitive settings](./encryption) — encrypting S3 credentials
+- [Installing and configuring plugins](./plugins) — adding and enabling plugins
 - [Backup](./backup) — backing up data

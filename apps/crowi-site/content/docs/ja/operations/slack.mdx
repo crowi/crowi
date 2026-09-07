@@ -6,33 +6,23 @@ description: Crowi のページリンクを Slack で unfurl (リッチプレビ
 `@crowi/plugin-slack` を有効にすると、Crowi のページ URL を Slack に貼った
 ときに **unfurl** (リッチプレビュー) されるようになります。公開ページは
 タイトル・抜粋・パンくず・更新日時のカードに、非公開ページは内容を伏せた
-最小カードに展開されます。設計の詳細は
-[RFC-0013](https://github.com/crowi/crowi/blob/main/docs/rfcs/0013-slack-plugin.md)
-を参照してください。
-
-> **Note**: Phase 1 は unfurl のみです。スラッシュコマンドや通知連携は
-> 後続フェーズで追加されます。
+最小カードに展開されます。現在の Slack 連携でできるのは、この unfurl だけです
+(Slack への通知転送はまだありません)。
 
 ## 仕組み
 
-Slack 連携は他のプラグインと同様、ランナープロジェクトに
-`@crowi/plugin-slack` を追加して有効化します。プラグインは次の 2 つの
-HTTP ルートを提供します。
+Slack 連携は他のプラグインと同様、runner プロジェクトに
+`@crowi/plugin-slack` を追加して有効化します。
 
-| ルート | 認証 | 用途 |
-| ------ | ---- | ---- |
-| `POST /api/plugins/@crowi/plugin-slack/events` | Slack 署名のみ (公開) | Slack Events API の受信口。`link_shared` を受けて `chat.unfurl` を呼ぶ |
-| `POST /api/plugins/@crowi/plugin-slack/manifest` | 管理者 (JWT) | Slack App manifest の生成 (管理画面のボタンから呼ばれる) |
-
-受信口は Crowi の認証に対しては公開ですが、**Slack のリクエスト署名**
-(HMAC-SHA256、±5 分のリプレイガード付き) で検証され、署名が一致しない
-リクエストは拒否されます。
+プラグインは Slack からのイベントを受け取る口を 1 つ公開します。この口は
+Crowi のログインを要求しませんが、**Slack のリクエスト署名** (リプレイ対策
+つき) で検証され、署名が一致しないリクエストは拒否されます。
 
 ## セットアップ
 
 ### 1. プラグインを有効化する
 
-ランナープロジェクトの `package.json` の依存に `@crowi/plugin-slack` を
+runner プロジェクトの `package.json` の依存に `@crowi/plugin-slack` を
 追加し、`crowi.config.json` の `plugins` 配列に列挙します。
 
 ```json
@@ -99,25 +89,15 @@ app manifest」** を選び、インストール先のワークスペースを�
 ## データ漏洩ガード
 
 Slack の unfurl はチャンネルにいる全員に見えるため、可視性に注意が
-必要です。Phase 1 では次のルールで内容を制御します。
+必要です。内容は次のルールで制御されます。
 
 - **公開 (Public) ページ** のみ、タイトル + 抜粋 + パンくず + 更新日時の
   リッチカードを表示します。
 - それ以外 (リンクを知っている人のみ / 特定ユーザー / 自分のみ) は、
   「🔒 Restricted page」という **本文を含まない** 最小カードになります。
 
-Slack ユーザーと Crowi ユーザーを紐付けた grant 認識つきの完全な unfurl
-は、アカウントリンク (後続フェーズ) を前提とするため v1 では行いません。
-
-## 開発環境での注意 (トンネル)
-
-Slack は `localhost` に到達できないため、開発環境では ngrok や
-cloudflared などのトンネルで Crowi を公開する必要があります。生成される
-manifest の `request_url` をトンネルの公開 URL にするには、環境変数
-`SLACK_MANIFEST_REQUEST_URL` にその公開オリジン (例:
-`https://abc123.ngrok.app`) を設定します。未設定の場合は `CLIENT_URL` が
-使われます。本番環境では `CLIENT_URL` が既に公開オリジンなので、通常は
-設定不要です。
+Slack のユーザーと Crowi のユーザーを紐付けて公開範囲を判定する unfurl は
+行いません。
 
 ## トラブルシューティング
 

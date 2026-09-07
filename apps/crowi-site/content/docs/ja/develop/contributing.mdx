@@ -5,10 +5,7 @@ description: Crowi 2.0 の開発に参加するための開発フロー・規約
 
 このページは、Crowi 2.0 のコードベースに変更を加えるための開発フローと
 規約をまとめたものです。開発環境のセットアップ自体は
-[はじめに](./getting-started) を先に済ませてください。
-
-> **注意**: Crowi v2 は alpha 開発中です。ここで説明する規約は開発が
-> 進むにつれて変わる可能性があります。
+[開発環境をつくる](./dev-setup) を先に済ませてください。
 
 ## 開発コマンド
 
@@ -103,6 +100,49 @@ pnpm changeset status     # 蓄積された未公開 changeset 一覧
 - Mongoose ドキュメントの型は `models/xxx.ts` の `XxxDocument` を import
   します。
 
+## ローカルでの動作確認
+
+ふだんの `pnpm test` では動かさない、手で立ち上げて確かめる類の検証をまとめます。
+
+### 共同編集を 2 レプリカで確かめる
+
+同梱の compose 構成から実際に 2 レプリカを立てます。準備は 2 点です — api の固定ホストポート公開を外すこと (レプリカ間で衝突します) と、全レプリカが同じ `WS_TOKEN_SECRET` を読むように `.env` に書いておくことです。
+
+```bash
+# 1. スケール用の override (ホストポート公開を外し、複数レプリカを宣言する)
+cat > compose.scale.yml <<'YAML'
+services:
+  api:
+    ports: !override []
+    environment:
+      CROWI_MULTI_INSTANCE: "2"
+YAML
+
+# 2. api を 2 レプリカで起動
+docker compose -f docker-compose.yml -f compose.scale.yml --profile app up -d --scale api=2
+
+# 3. 2 つ立っていることを確認
+docker compose ps api
+```
+
+2 つのブラウザウィンドウで同じページを開き、それぞれの編集が相手に伝わること、片方のレプリカを止めても再接続して編集が続けられることを確認します。想定される挙動と既知の制約は [リアルタイム共同編集の運用](../operations/realtime-collab) を参照してください。
+
+### GCS ストレージドライバをエミュレータで確かめる
+
+GCS ドライバのテストは、通常の CI では起動しない opt-in のエミュレータサービスを使います。
+
+```bash
+docker compose --profile gcs-test up -d crowi-test-gcs
+STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
+docker compose --profile gcs-test stop crowi-test-gcs
+```
+
+エミュレータが検証するのは、アップロード・ダウンロードの往復、オブジェクト名のマッピング、冪等な削除、存在しないオブジェクトの扱い、ローカルから GCS へのコピーです。**匿名リクエストを受け付けるだけなので、認証情報の解決や IAM 権限、署名付き URL の可否は再現しません。** そこまで確かめるには実際の GCS バケットが必要です。
+
+### Slack 連携をトンネル越しに確かめる
+
+Slack は `localhost` に到達できないため、ngrok や cloudflared などのトンネルで Crowi を公開します。生成される manifest の request URL をトンネルの公開 URL にするには、環境変数 `SLACK_MANIFEST_REQUEST_URL` にその公開オリジン (例: `https://abc123.ngrok.app`) を設定してください。未設定なら `CLIENT_URL` が使われます。
+
 ## 新しいエンドポイントを追加するには
 
 レガシーの Express + ts-rest スタックは RFC-0006 で完全に廃止されました
@@ -123,6 +163,6 @@ Crowi 2.0 全体のフェーズ状況は[リリースノート](https://github.c
 
 ## 関連ページ
 
-- 開発環境のセットアップ → [はじめに](./getting-started)
+- 開発環境のセットアップ → [開発環境をつくる](./dev-setup)
 - アーキテクチャ全体像 → [アーキテクチャ](./architecture)
 - 設計提案の一覧 → [RFC インデックス](./rfcs)

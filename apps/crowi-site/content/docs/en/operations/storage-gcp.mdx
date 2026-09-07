@@ -1,9 +1,9 @@
 ---
-title: Google Cloud setup
+title: Setting up GCS storage
 description: Prepare the bucket, service account, and permissions on the Google Cloud side for the GCS driver
 ---
 
-This page covers **the Google Cloud side only**. For registering the resulting bucket with Crowi (admin fields, migration, the emulator), see [Storage drivers](./storage).
+This page covers **the Google Cloud side only**. For registering the resulting bucket with Crowi (admin fields, migration), see [Storage](./storage).
 
 Every command below uses the `gcloud` CLI. The same steps can be performed from the Google Cloud console.
 
@@ -161,11 +161,11 @@ Generating signed URLs is a different capability from object CRUD, and what it r
 - **Key JSON** — the private key signs locally; no extra permission or API call is involved.
 - **ADC** — the IAM Credentials `signBlob` permission is required (`roles/iam.serviceAccountTokenCreator` on the identity itself, or an explicit `iam.serviceAccounts.signBlob` grant).
 
-Crowi's attachment delivery routes do not call `signedUrl()` today — they always stream through the API proxy. **Missing `signBlob` does not affect normal upload or download.**
+Crowi's attachment delivery routes do not hand out signed URLs today — they always stream through the API proxy. **Missing `signBlob` does not affect normal upload or download.**
 
 ## 7. Continue on the Crowi side
 
-Once the bucket and credentials exist, continue with the GCS section of [Storage drivers](./storage).
+Once the bucket and credentials exist, continue with the GCS section of [Storage](./storage).
 
 Enter the bucket name in the **GCS bucket** field. A `gs://` scheme and any trailing slashes are stripped by the Google Cloud Storage SDK, so `gs://<BUCKET_NAME>` resolves correctly too.
 

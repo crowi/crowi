@@ -5,10 +5,7 @@ description: A guide to the development flow and conventions for contributing to
 
 This page collects the development flow and conventions for making
 changes to the Crowi 2.0 codebase. Set up your development environment
-via [Getting started](./getting-started) first.
-
-> **Caution**: Crowi v2 is under active alpha development. The
-> conventions described here may change as development progresses.
+via [Set up a development environment](./dev-setup) first.
 
 ## Development commands
 
@@ -102,6 +99,49 @@ pnpm changeset status     # list accumulated, unpublished changesets
 - Prefer `Pick<>` / `Omit<>` over re-typing fields.
 - For Mongoose document types, import `XxxDocument` from `models/xxx.ts`.
 
+## Checking things locally
+
+Some verification is not part of `pnpm test` and has to be brought up by hand.
+
+### Collaboration across two replicas
+
+Run two real replicas from the bundled compose setup. Two things need preparing: drop the api's fixed host port (replicas would collide on it) and put a shared `WS_TOKEN_SECRET` in `.env` so every replica reads the same one.
+
+```bash
+# 1. A scaling override: no host port, and a multi-replica declaration
+cat > compose.scale.yml <<'YAML'
+services:
+  api:
+    ports: !override []
+    environment:
+      CROWI_MULTI_INSTANCE: "2"
+YAML
+
+# 2. Start the api with two replicas
+docker compose -f docker-compose.yml -f compose.scale.yml --profile app up -d --scale api=2
+
+# 3. Confirm both are up
+docker compose ps api
+```
+
+Open the same page in two browser windows and check that each side sees the other's edits, and that stopping one replica lets the client reconnect and keep editing. The expected behaviour and the known limitations are in [Operating realtime collaboration](../operations/realtime-collab).
+
+### The GCS storage driver against an emulator
+
+The GCS driver's tests use an opt-in emulator service that normal CI does not start.
+
+```bash
+docker compose --profile gcs-test up -d crowi-test-gcs
+STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
+docker compose --profile gcs-test stop crowi-test-gcs
+```
+
+The emulator covers upload/download round trips, object-name mapping, idempotent deletes, missing objects, and copying from local storage to GCS. **It only accepts anonymous requests, so it reproduces neither credential resolution nor IAM permissions nor signed URLs.** Checking those needs a real GCS bucket.
+
+### The Slack integration through a tunnel
+
+Slack cannot reach `localhost`, so expose Crowi through a tunnel such as ngrok or cloudflared. To point the generated manifest's request URL at the tunnel, set `SLACK_MANIFEST_REQUEST_URL` to that public origin (for example `https://abc123.ngrok.app`). Without it, `CLIENT_URL` is used.
+
 ## Adding new endpoints
 
 The legacy Express + ts-rest stack was fully retired by RFC-0006
@@ -122,6 +162,6 @@ The current phase status of the wider Crowi 2.0 work is reflected in the
 
 ## Related pages
 
-- Setting up the development environment → [Getting started](./getting-started)
+- Setting up the development environment → [Set up a development environment](./dev-setup)
 - The overall architecture → [Architecture](./architecture)
 - The list of design proposals → [RFC index](./rfcs)

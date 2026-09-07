@@ -3,12 +3,6 @@ title: Migrating from v1
 description: Upgrading from Crowi v1 to v2 (Reignite), and the current state of data compatibility
 ---
 
-> **Caution**: Crowi 2.0 — codename *Reignite* — is currently under
-> **active alpha development**. There is no stable v2 release yet, and
-> **migrating a production v1 to v2 is not recommended at this time**. Use
-> it for evaluation purposes only. See the [release notes](https://github.com/crowi/crowi/releases) for the
-> latest progress.
-
 This page explains how to think about data compatibility when migrating
 from Crowi v1 to v2, and the migration paths available today.
 
@@ -38,7 +32,7 @@ to carry over to v2.
 > SMTP passwords, etc.) with AES-256-GCM. Plaintext config rows inherited
 > from v1 are still readable as-is, but if you enable encryption you can
 > re-encrypt them with the crypto feature in the admin panel. See
-> [Encrypting sensitive data](./encryption) for details.
+> [Encrypting sensitive settings](./encryption) for details.
 
 ## Current state of the migration path
 
@@ -56,9 +50,18 @@ For this reason, we strongly recommend that for now you **do not migrate
 production data**, and limit yourself to trying it out in a verification
 environment using a copy of your v1 data.
 
+## Re-entering credentials
+
+The storage and mail credentials that lived in v1's core config
+(`crowi:upload:aws:*`, `crowi:mail:aws:*`, `crowi:mail:smtpPassword` and the
+like) do not exist in v2. **Enable the matching plugin and enter the values
+again**: they are stored in that plugin's namespace and encrypted
+automatically when [Encrypting sensitive settings](./encryption) is configured. Nothing is
+migrated automatically and the old keys are never read as a fallback.
+
 ## The migration framework (crowi-admin migrate)
 
-v1 → v2 data migrations run through the RFC-0008 migration framework,
+v1 → v2 data migrations run through the migration commands,
 exposed as the `crowi-admin migrate plan | apply | status | list`
 namespace. Because `crowi-admin` connects directly to MongoDB, run it from
 the runner project directory (where `@crowi/api` is installed). In the
@@ -132,10 +135,7 @@ crowi-admin migrate status
 > data-integrity `blocking` migration does. If you ever need to boot with a
 > `blocking` migration still pending — a controlled, single-instance
 > investigation, for example — set `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`
-> to downgrade its boot refusal to a warning. (Earlier docs advised "always
-> keep `block`" to avoid serving a half-migrated database; with per-migration
-> severity that blanket rule no longer holds — cosmetic migrations were never
-> a data-integrity hazard.)
+> to downgrade its boot refusal to a warning.
 >
 > **Multi-instance note**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` (env var)
 > takes precedence over the `migration.preflightUnappliedPolicy` admin Config.
@@ -144,11 +144,11 @@ crowi-admin migrate status
 > **consistently on every replica** (e.g. one Kubernetes ConfigMap injected
 > into all pods) so the whole cluster agrees.
 
-The migrations registered as of the v2 alpha are:
+The registered migrations are:
 
 | ID | Layer | Severity | What it does |
 | ---- | ---- | ---- | ---- |
-| `page-status-default` | boot | — | Backfill `page.status` (RFC-0004) |
+| `page-status-default` | boot | — | Backfill `page.status` |
 | `revisions-schema-unify` | boot | — | Unify the revision schema (backfill `type:snapshot`) |
 | `wikilink-format` | preflight | cosmetic | Convert wikilink syntax |
 | `user-unique-prepare` | preflight | **blocking** | Deduplicate users (prepare for the unique index) |
@@ -185,31 +185,29 @@ if no admin user is resolvable.
 
 This migration **excludes code regions** — a `</…>` or wikilink-like string
 inside a fenced code block or inline code is left untouched (no false-positive
-rewrite). Its **`apply` also preserves the page's `updatedAt` / `lastUpdateUser`**:
-a migration rewrite is a maintenance operation, not a user edit, so it does not
-bump those fields — page list ordering and "last edited by" stay intact.
+rewrite). Applying it also **preserves each page's last-updated time and last
+editor**: a migration rewrite is a maintenance operation, not a user edit, so
+page list ordering and "last edited by" stay intact.
 
 > **Tip**: v1-era wikilink syntax can also be interpreted at render time
 > by the `@crowi/plugin-renderer-crowi-legacy` plugin. If you would rather
 > not convert the data itself, enabling that plugin is an alternative.
-> For plugins, see [Plugin overview](../develop/plugins-overview).
+> For plugins, see [Plugin architecture](../develop/plugins-overview).
 
 ### Recovering corrupted HTML close tags (wikilink-html-recover)
 
-An earlier version of the `wikilink-format` migration mistook the
+Where the `wikilink-format` migration was run on an older Crowi, the
 **deprecated HTML close tags** used in headings and inline markup
-(`</font>`, `</center>`, `</marquee>`, `</blink>`, `</applet>`) for v1
-angle-bracket wikilinks and rewrote them into the wikilink form
-(`[[/font]]`). These tags were missing from `KNOWN_HTML_ELEMENTS`; they are
-registered now, so **no new corruption occurs**. Bodies that were already
-mangled into `[[/font]]`, however, do not self-heal because `wikilink-format`
-never re-runs.
+(`</font>`, `</center>`, `</marquee>`, `</blink>`, `</applet>`) may have been
+rewritten into the wikilink form (`[[/font]]`). The current migration leaves
+them alone, but bodies already mangled that way do not self-heal, because
+`wikilink-format` never re-runs.
 
 The `wikilink-html-recover` preflight migration reverts the corrupted form
 `[[/<x>]]` back to `</x>` **only for those five deprecated tags**
-(`font` / `center` / `marquee` / `blink` / `applet`) — the only names that were
-missing from `KNOWN_HTML_ELEMENTS`, so the only close tags the misfire could
-ever have produced. Every other single-segment wikilink is left untouched,
+(`font` / `center` / `marquee` / `blink` / `applet`) — the only close tags the
+misfire could ever have produced. Every other single-segment wikilink is left
+untouched,
 including ones whose name happens to be a standard HTML element
 (`[[/section]]`, `[[/div]]`, `[[/br]]`): those were always known, so
 `wikilink-format` never rewrote them and they are **genuine wikilinks**.
@@ -309,7 +307,7 @@ rebuild the search index on the v2 side.
 crowi-admin rebuild search
 ```
 
-See [Setting up the search backend](./search-setup) for details.
+See [Search backend setup](./search-setup) for details.
 
 ### Storage migration
 
@@ -347,8 +345,8 @@ crowi-admin replace url --from https://old.example --to https://new.example
 ```
 
 The replacement is a **quiet rewrite that is invisible to end users**. It
-pushes a new revision per page, but leaves `updatedAt` / the last-update user /
-the grant (visibility) untouched, and notifies no watchers (and auto-watches
+pushes a new revision per page, but leaves the last-updated time, the last
+editor and the visibility untouched, and notifies no watchers (and auto-watches
 no one). Listings and notifications do not move, which is what you want for a
 domain cleanup.
 
@@ -384,8 +382,8 @@ relative form `![shot.png](/files/<id>)`, or the absolute form
 `![shot.png](https://wiki.example/files/<id>)` when the editor pasted a full
 URL). Crowi 2.0 serves attachments from a dedicated stream endpoint at
 `/api/attachments/<id>` and the legacy `/files/<id>` compat route was
-removed, so **v1-form URLs now 404 — those images are broken**. The id is
-the same 24-hex `Attachment._id` in both v1 and v2, so the fix is **just a URL
+removed, so **v1-form URLs now 404 — those images are broken**. The id is the
+same 24-hex attachment id in both v1 and v2, so the fix is **just a URL
 rewrite** (no id remap).
 
 The `files-url-to-attachments` preflight migration walks the current-revision
@@ -456,9 +454,6 @@ Before actually trying a migration, complete the following.
 
 - v2's data shape is compatible with v1, and existing wiki data carries
   over.
-- However, v2 is under active alpha development and the migration path is
-  still in progress. **Production migration is not recommended at this
-  time.**
 - The `crowi-admin migrate` framework (with `plan` / `apply` and the
   preflight-block boot guard), plus `rebuild search` / `rebuild storage copy`
   and `replace url` for bulk URL replacement after a domain change, are

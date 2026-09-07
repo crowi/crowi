@@ -1,5 +1,5 @@
 ---
-title: Managing plugins
+title: Installing and configuring plugins
 description: Installing, enabling, and configuring plugins from the admin UI
 ---
 
@@ -40,9 +40,7 @@ and need no extra install.
 ### 2. List it in crowi.config.json
 
 Add the plugin's npm package name to the `plugins` array in the runner
-project's `crowi.config.json` (in the monorepo, that is
-`apps/crowi-runner/crowi.config.json`; a self-hosting operator edits the
-one in their own runner project).
+project's `crowi.config.json`.
 
 ```json
 {
@@ -105,88 +103,65 @@ the mail settings screen (`/admin/mail`) instead, and it never shows up as
 a row on `/admin/plugins` (only a plugin's own configuration gap appears
 there).
 
-Previously this kind of misconfiguration only surfaced when an upload, a
-search, or a test email failed. The banner makes it visible as soon as the
-instance is configured.
-
-Non-admins never see the banner and never make the readiness request. For
-each issue, the `GET /admin/plugins/readiness` response includes only an
-`id`, its source (plugin or core setting), a display label, a target link,
-and each affected field name with a flag saying whether it is set — never
-configuration values, URLs, or secrets.
+Non-admins never see the banner and never make the request behind it. The
+check only ever reports **which settings are missing** — never configuration
+values, URLs, or secrets.
 
 For declaring readiness requirements in a plugin, see
-[Plugin development](../develop/plugins-developing).
+[Developing plugins](../develop/plugins-developing).
 
 ### Schema-driven config form
 
-The config form is **auto-generated** by the runtime walking the
-plugin's declared `configSchema` (a Zod schema). The plugin does not
-need to ship a React component.
+The config form is **generated automatically** from the settings a plugin
+declares. The plugin does not need to ship a screen of its own.
 
-Each plugin also adds its own entry to the admin sidebar. The placement
-is decided by the plugin's `adminPlacement`, and the section (storage /
-mail / notification / auth …) is derived automatically from the kind of
-`register*` hooks.
+Each plugin also adds its own entry to the admin sidebar. The plugin decides
+where that entry goes, and the section (storage / mail / notification / auth …)
+follows from the kind of extension it provides.
 
 **Anything that does not resolve to a section defaults to the Settings
-group.** Config-only base plugins with no `register*` hooks (such as
-`@crowi/plugin-aws`) declare `section: 'shared'` to *choose* Shared
-services — not to become visible; without it they would still appear, under
-Settings. Entries naming a section the sidebar has no heading for
-(`notification` / `auth`) fall back the same way, so getting the section
+group.** Config-only base plugins that provide no driver of their own (such as
+`@crowi/plugin-aws`) can opt into Shared services — not to become visible;
+without that they would still appear, under Settings. A plugin naming a section
+the sidebar has no heading for falls back the same way, so getting the section
 wrong can never make a plugin's config page unreachable.
 
 ### The `@sensitive` marker
 
-When a `configSchema` field's description starts with `@sensitive`, that
-field is treated as **sensitive**.
-
-```ts
-z.string().describe('@sensitive AWS secret access key')
-```
-
-Sensitive fields are auto-encrypted on write and decrypted on read
-using the same `KeyProvider` as the core sensitive Config. The admin UI
-renders them with a secret input (`<SecretField>`: saved badge / clear
-pending / undo). For `CROWI_ENCRYPTION_KEY`, the prerequisite for
-encryption, see [Config encryption](./encryption).
+A plugin can mark a setting with `@sensitive`, and that setting is then
+treated as **sensitive**: encrypted on write and decrypted on read with the
+same key as core's own sensitive settings, and rendered in the admin UI as a
+secret input (saved badge / clear pending / undo). For `CROWI_ENCRYPTION_KEY`,
+the prerequisite for encryption, see
+[Encrypting sensitive settings](./encryption); for how a plugin declares the
+marker, see [Developing plugins](../develop/plugins-developing).
 
 ### The `@action` marker
 
-When a field's description starts with `@action`, an action button is
-rendered next to that field.
-
-```ts
-z.string().describe('@action "Test connection" POST /test')
-```
-
-The format is `@action "<label>" <method> <path>`. Pressing the button
-calls the endpoint the plugin provides via `registerRoutes` (a path
-relative to `/api/plugins/<name>/...`). Operations like "Test
-connection" or "Authorise with Google" can be offered without the
-plugin writing a dedicated UI.
+A plugin can mark a setting with `@action` to put an action button next to
+it. Pressing the button calls an endpoint the plugin provides, so operations
+like "Test connection" or "Authorise with Google" work without the plugin
+writing a dedicated UI.
 
 ## Clearing the render cache
 
-Renderer plugins (such as PlantUML) cache their rendering results in the
-MongoDB `PluginRenderCache`. The `/admin/plugins` screen has a button to
-clear all render cache at once. Use it after a plugin's output shape
-changes, for example.
+Renderer plugins (such as PlantUML) cache their rendering results. The
+`/admin/plugins` screen has a button to clear all render cache at once.
+Use it after a plugin's output shape changes, for example.
 
 ## A single plugin's activation failure does not stop the boot
 
-Each plugin's activation (`activate()`) and HTTP route registration
-(`registerRoutes`) are isolated per plugin. If one plugin throws during
-boot, other plugins still load and the server still starts.
+Activating a plugin and registering the HTTP routes it provides are
+isolated per plugin. If one plugin throws during boot, other plugins still
+load and the server still starts.
 
-- **When `activate()` fails**: that plugin is excluded from the "loaded"
+- **When activation fails**: that plugin is excluded from the "loaded"
   set — it has no config form and none of its drivers get registered. The
   server log gets a line reading `[crowi:plugin:<name>] activation
   failed; plugin disabled: <error message>`. The plugin still shows up in
   the `/admin/plugins` list, with an "Activation failed" badge on its
   row; hover the badge to see the failure reason.
-- **When `registerRoutes` fails**: the plugin itself activated
+- **When route registration fails**: the plugin itself activated
   successfully, so it appears in the list as usual, but none of the
   endpoints it would have mounted under `/api/plugins/<name>/...` are
   registered. The log gets a line reading `[crowi:plugin:<name>]
@@ -200,9 +175,7 @@ if needed — remove the plugin from the `plugins` array in
 > **Note**: Even if a plugin that provides an implicit-default driver
 > (such as `storage.driver` / `search.driver`) fails to activate, the
 > current implementation still lets the boot continue — that driver is
-> treated as "not registered" and legacy in-core handling takes over. A
-> future change may add stricter hard-fail handling specifically for
-> those implicit-default drivers.
+> treated as "not registered" and legacy in-core handling takes over.
 
 ## Removing a plugin
 
@@ -217,4 +190,4 @@ on removal.
 - How plugins work → [Plugin architecture](../develop/plugins-overview)
 - The list of renderer plugins → [Renderer plugins](./renderers)
 - Choosing storage → [Storage](./storage)
-- Configuring the search backend → [Search setup](./search-setup)
+- Configuring the search backend → [Search backend setup](./search-setup)

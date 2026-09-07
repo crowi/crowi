@@ -1,9 +1,9 @@
 ---
-title: GCP の設定
+title: GCS ストレージのセットアップ
 description: GCS ドライバのために Google Cloud 側でバケット・サービスアカウント・権限を用意する
 ---
 
-このページは **Google Cloud 側の準備手順** だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順、エミュレータ) は [ストレージドライバ](./storage) を参照してください。
+このページは **Google Cloud 側の準備手順** だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順) は [ストレージ設定](./storage) を参照してください。
 
 コマンドはすべて `gcloud` CLI 前提です。同じ操作は Google Cloud コンソールからも行えます。
 
@@ -161,11 +161,11 @@ gcloud storage rm gs://<BUCKET_NAME>/healthcheck.txt \
 - **キー JSON 方式** — 秘密鍵でローカル署名するため、追加の権限も API 呼び出しも不要です
 - **ADC 方式** — IAM Credentials の `signBlob` 権限が必要です (`roles/iam.serviceAccountTokenCreator` を自分自身に付与するか、`iam.serviceAccounts.signBlob` を個別付与)
 
-ただし Crowi の添付ファイル配信ルートは現状 `signedUrl()` を呼び出さず、常に Crowi の API プロキシ経由で配信します。**`signBlob` が無くても通常のアップロード・ダウンロードには影響しません。**
+ただし Crowi の添付ファイル配信ルートは現状 署名付き URL を発行せず、常に Crowi の API プロキシ経由で配信します。**`signBlob` が無くても通常のアップロード・ダウンロードには影響しません。**
 
 ## 7. Crowi 側の設定へ
 
-バケットとクレデンシャルが用意できたら、[ストレージドライバ](./storage) の GCS の節に進んでください。
+バケットとクレデンシャルが用意できたら、[ストレージ設定](./storage) の GCS の節に進んでください。
 
 **GCS バケット** 欄にはバケット名を入力します。`gs://` スキーマと末尾のスラッシュは Google Cloud Storage SDK 側で除去されるため、`gs://<BUCKET_NAME>` の形で入力しても正しく解決されます。
 

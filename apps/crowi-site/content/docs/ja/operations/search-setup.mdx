@@ -16,15 +16,9 @@ Crowi の全文検索は **検索ドライバ** という差し替え可能な�
 セットアップとインデックス構築の手順を説明します。利用者向けの検索の
 使い方は [検索](../guide/search) を参照してください。
 
-> **Note**: Crowi 2.0 (Reignite) は alpha 開発中で、Elasticsearch バック
-> エンドはまだ調整中です (ES のバージョン更新と、検索ドライバのプラグイン
-> 化)。本ページの手順は現行の dev 環境に基づいていますが、詳細は今後
-> 変わる可能性があります。最新状況は[リリースノート](https://github.com/crowi/crowi/releases)を参照して
-> ください。
-
 ## アーキテクチャ概要
 
-- 検索ドライバはプラグイン経由で `SearchRegistry` に登録されます。
+- 検索ドライバはプラグインとして読み込まれます。
 - どのドライバを使うかは `crowi.config.json` の `search.driver` で指定
   します (デフォルトは `mongo`)。
 - Elasticsearch ドライバの接続情報は、Mongo の Config 名前空間
@@ -35,7 +29,7 @@ Crowi の全文検索は **検索ドライバ** という差し替え可能な�
 ## Elasticsearch プラグインの有効化
 
 デフォルトの `mongo` ドライバから Elasticsearch に切り替えるには、
-ランナープロジェクトの依存に `@crowi/plugin-search-elasticsearch` を
+runner プロジェクトの依存に `@crowi/plugin-search-elasticsearch` を
 宣言し、`crowi.config.json` の `plugins` 配列にプラグイン名を加え、
 `search.driver` を `elasticsearch` に設定します。
 
@@ -52,24 +46,15 @@ Crowi の全文検索は **検索ドライバ** という差し替え可能な�
 
 設定後に api を再起動すると、プラグインがロードされ検索ドライバが
 登録されます。プラグインの導入手順全般は
-[プラグインの管理](./plugins) を参照してください。
+[プラグインの導入と設定](./plugins) を参照してください。
 
-## Elasticsearch を起動する
+## Elasticsearch を用意する
 
-開発環境では `docker-compose.yml` に Elasticsearch サービスが含まれて
-います。
+Elasticsearch (または OpenSearch) は運用者が用意します。日本語のページを
+検索する場合は、形態素解析プラグイン `analysis-kuromoji` を入れたクラスタが
+必要です (後述の `kuromoji` アナライザーがこれを使います)。
 
-```bash
-docker compose up -d
-```
-
-dev 用の Elasticsearch イメージ (`elasticsearch.Dockerfile`) は、素の
-Elasticsearch に `analysis-kuromoji` プラグインをプリインストールした
-カスタムイメージです。これにより、後述の `kuromoji` アナライザーが
-追加設定なしで使えます。
-
-> **Caution**: dev イメージには日本語形態素解析の `analysis-sudachi`
-> プラグインは **含まれていません**。`sudachi` アナライザーを使う場合は、
+> **Caution**: `sudachi` アナライザーを使う場合は、
 > 自前で `analysis-sudachi` プラグインと辞書を組み込んだ派生イメージを
 > ビルドする必要があります。
 
@@ -95,12 +80,12 @@ Elasticsearch に `analysis-kuromoji` プラグインをプリインストール
 | アナライザー | クラスタ要件 |
 | ------------ | ------------ |
 | `default` | 追加の ES プラグイン不要。 |
-| `kuromoji` | `analysis-kuromoji` プラグインが必要。dev イメージにはプリインストール済み。 |
-| `sudachi` | サードパーティの `analysis-sudachi` プラグイン + 辞書が必要。dev イメージには含まれないため、派生イメージのビルドが必須。 |
+| `kuromoji` | `analysis-kuromoji` プラグインが必要。 |
+| `sudachi` | サードパーティの `analysis-sudachi` プラグイン + 辞書が必要。 |
 
 日本語コンテンツが主体の Wiki では `kuromoji` が無難な選択です。
 プラグイン未導入のクラスタで `kuromoji` / `sudachi` を選ぶと、後述の
-インデックス再構築 (`rebuild()`) が失敗します。
+インデックス再構築が失敗します。
 
 ## インデックスの構築
 
@@ -116,22 +101,22 @@ crowi-admin rebuild search
 
 1. `.env` を読み込み、`MONGO_URI` などを Crowi のブート時と同じ経路で
    解決します。
-2. アクティブな検索ドライバを解決し、その `rebuild()` を呼び出します。
+2. アクティブな検索ドライバを解決し、インデックスの再構築を依頼します。
 3. Elasticsearch ドライバの場合、タイムスタンプ付きの新しいインデックスを
    作成し、全ページを bulk indexing したうえで `<indexName>-current`
    エイリアスを新インデックスへ切り替えます。古いインデックスは削除
    されます。
 
 `crowi-admin` は MongoDB に直接接続する運用者向け CLI です。`@crowi/api`
-がインストールされたディレクトリ (通常は runner パッケージ) から実行
+がインストールされたディレクトリ (通常は runner プロジェクト) から実行
 してください。
 
 > **Tip**: エイリアス方式により、再構築中もダウンタイムなく既存
 > インデックスへの検索が継続できます。新インデックスの構築完了後に
 > 一括でエイリアスが切り替わります。
 
-ドライバが永続インデックスを持たない場合 (`rebuild()` を実装しない場合)、
-管理画面の Search セクションには再構築のヒントは表示されません。
+再構築すべき永続インデックスを持たないドライバの場合、管理画面の
+Search セクションには再構築のヒントは表示されません。
 
 ## 検索ドライバの状態確認
 
@@ -145,7 +130,7 @@ api 再起動で行います。管理画面全般については [管理画面](
 
 - **`url` が空でドライバが無効**: 接続情報が未設定です。管理画面の
   プラグイン設定で `url` を設定してください。`url` が空のときは
-  `query()` がエラーを投げ、`index()` は no-op になります。
+  検索はエラーになり、インデックスも作られません。
 - **`rebuild` が失敗する**: `kuromoji` / `sudachi` を選んでいるのに対応
   する ES プラグインがクラスタに入っていない可能性があります。`crowi-admin
   rebuild search` はエラー時に ES クラスタのレスポンス本文を出力するので、

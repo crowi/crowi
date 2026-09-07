@@ -9,13 +9,12 @@ and use the left sidebar to move between sections.
 
 ## Accessing the admin panel
 
-- The admin panel is accessible **only to users with `user.admin === true`**.
+- The admin panel is accessible **only to administrators**.
   A user without permission who opens anything under `/admin` sees an
   "Access denied" card.
-- Authorization is also enforced on the API side. Admin endpoints are
-  mounted under the `jwtAdminRequired` middleware (= JWT auth +
-  `user.admin === true`), so requests that bypass the UI are still
-  rejected with 401 / 403.
+- Authorization is enforced on the API side as well: administrative API
+  calls are restricted to administrators, so a request that bypasses the UI
+  is rejected too.
 - The first administrator is granted automatically to the first user
   created during installation. Subsequent admin grants are done from the
   [Users](#users) section.
@@ -36,58 +35,30 @@ headings are grouped as follows.
 | Shared services | (config-only base plugins, e.g. AWS) | Plugin-dependent |
 | Storage | Storage (+ storage plugins) | Available |
 | Mail | Mail | Available |
-| Notification | Notification | In progress |
 | Search | Search (search index + search-backend plugins) | Available |
 | Renderers | (renderer plugins, e.g. PlantUML) | Plugin-dependent |
 
-Loaded plugins are injected into the sidebar as links to their settings
-pages. The target group comes from the plugin's **`adminPlacement.section`**
-declaration, or is derived from the **extension hook** it registers:
-
-| Hook / declaration | Group |
-| ------------------ | ----- |
-| `registerStorage` | Storage |
-| `registerSearch` | Search |
-| `registerRenderer` | Renderers |
-| `registerMailSender` | Mail |
-| `registerNotifier` / `registerAuth` | Settings (the fallback below) |
-| config-only (no hook) | Settings, or Shared services when it declares `section: 'shared'` |
-
-`adminPlacement.section` also accepts `notification` and `auth`, but the
-sidebar **has no heading for either**. An entry that names a section with no
-heading — or derives one from `registerNotifier` / `registerAuth` — **falls
-back to the Settings group** rather than being dropped. Auth-provider plugins
-take this path by default, since their section is derived from
-`registerAuth`. The fallback is what keeps a plugin's config page from
-becoming reachable only by typing its URL when it names a section the
-sidebar does not render.
+Loaded plugins appear in the sidebar as links to their settings pages. Which
+group they land in comes from the plugin's own declaration; without one, it
+follows the capability the plugin provides (storage, search, renderer, mail).
+Anything with no matching heading goes into Settings.
 
 For example, the Elasticsearch search plugin appears under "Search" and the
 PlantUML renderer plugin under "Renderers" (only plugins that declare a config
 schema are shown).
 
-> **Note**: As of a point in the v2 alpha, **Authentication moved into the
-> Settings group** (directly under Security). The former standalone "Auth" and
-> "Maintenance" groups were removed; Search now has its own "Search" group and
-> renderers a "Renderers" group. Backlink rebuilding moved from the admin panel
-> to the `crowi-admin` CLI, so the Backlink sidebar entry was removed.
-
 ## App
 
-Basic site settings. Maps to `GET/PUT /admin/app`.
+Basic site settings.
 
 - Configure app-wide items such as the **site title**.
 - Keys that contain sensitive values are masked on input; saving while
   left blank keeps the existing value (this prevents accidentally
   overwriting it with an empty string).
 
-> **Note**: In older versions, App settings included AWS S3 upload
-> credentials. In v2 those have moved to the [Storage](#storage) section
-> and the storage plugin settings.
-
 ## Security
 
-New-user registration settings. Maps to `GET/PUT /admin/security`.
+New-user registration settings.
 
 - **Registration mode (registrationMode)**: Controls how new users register.
   - `Open` — anyone can register; usable right after email confirmation.
@@ -107,44 +78,34 @@ New-user registration settings. Maps to `GET/PUT /admin/security`.
   - `@example.com` — any local-part at that domain
   - `example.com` — that domain or any subdomain of it
 
-> **Note**: The legacy **site-wide HTTP Basic auth**
-> (`security:basicName` / `security:basicSecret`) was **removed** in v2
-> (breaking change). It could not reliably gate a single-page app in the
-> Next.js + Hono architecture and was never actually enforced. If you need a
-> site-wide Basic-auth gate, configure it at your **reverse proxy** (e.g.
-> nginx). Any leftover config rows in the DB are simply ignored.
+> **Note**: If you need a site-wide Basic-auth gate, configure it at the
+> **reverse proxy** in front of Crowi (e.g. nginx), not in Crowi itself.
 
 ## Authentication
 
-Settings related to the authentication method. Maps to
-`GET/PUT /admin/auth`.
+Settings related to the authentication method.
 
-**As of 2.0.0-alpha this screen is an explanatory, read-only notice.**
+**This screen is an explanatory, read-only notice.**
 Third-party (Google / GitHub) sign-in was removed from core, and the two
 settings that depend on it cannot be edited.
 
-- **requireThirdPartyAuth** (make third-party auth mandatory) and
-  **disablePasswordAuth** (disable password login) would leave every
-  account with no way to sign in, so **the toggles are not rendered** and
-  the API rejects any request that tries to enable them with
+- **Requiring third-party authentication** and **disabling password login**
+  would leave every account with no way to sign in, so **the toggles are not
+  rendered** and the API rejects any request that tries to enable them with
   `400 THIRD_PARTY_AUTH_UNAVAILABLE`.
-- The config keys and schema are kept, inert, for a future auth-provider
-  plugin. If a previously-enabled value is still in the database, the
-  screen shows a warning.
+- Both settings are kept, inert, for a future auth-provider plugin. If one of
+  them was enabled in the past and the value is still stored, the screen shows
+  a warning.
 
-> **Note**: The fields for entering Google / GitHub clientId and client
-> secret are gone from this screen too. **Google sign-in has already
-> returned as the auth-provider plugin `@crowi/plugin-google`** — it is
-> configured under plugin settings (`/admin/plugins`) rather than here.
-> See [Signing in with an external account](./federated-auth) for the
-> setup. The `requireThirdPartyAuth` / `disablePasswordAuth` settings on
-> this screen stay uneditable: they have not yet been reworked around
-> plugin-provided auth.
+> **Note**: Settings for external sign-in such as Google live under plugin
+> settings (`/admin/plugins`) rather than on this screen. See
+> [Signing in with an external account](./federated-auth) for the setup. The
+> two login-method settings on this screen stay uneditable: they have not yet
+> been reworked around plugin-provided auth.
 
 ## Mail
 
-Mail delivery settings. Maps to `GET/PUT /admin/mail` and
-`POST /admin/mail/test`.
+Mail delivery settings.
 
 - The only field editable on this screen is the **sender address
   (`from`)**.
@@ -156,11 +117,11 @@ Mail delivery settings. Maps to `GET/PUT /admin/mail` and
   registered email address so you can verify the configuration (it uses
   the saved settings).
 
-See [Mail settings](./mail) for details.
+See [Mail delivery](./mail) for details.
 
 ## Users
 
-List, search, and manage users. Maps to the `GET /admin/users` family of
+List, search, and manage users. Maps to the
 endpoints.
 
 | Operation | Description |
@@ -227,7 +188,7 @@ row activates (sets ACTIVE) that user. The badge refreshes on an interval.
 ## Storage
 
 A read-only page that shows the status of the attachment storage
-(storage driver). Maps to `GET /admin/storage`.
+(storage driver).
 
 - Shows the currently active driver and the list of all loaded drivers.
 - **Driver switching is not done from the admin panel.** Edit
@@ -236,7 +197,7 @@ A read-only page that shows the status of the attachment storage
   `crowi-admin rebuild storage copy --from <a> --to <b>` CLI.
 
 For storage configuration and plugins in general, see
-[Storage settings](./storage).
+[Storage](./storage).
 
 ## Plugins
 
@@ -244,12 +205,12 @@ Lists loaded plugins and lets you edit each plugin's configuration.
 
 - `/admin/plugins` lists the loaded plugins.
 - `/admin/plugins/edit?name=<plugin-name>` edits an individual plugin's
-  configuration. The form is auto-generated from the plugin's Zod schema;
+  configuration. The form is generated from the settings the plugin declares;
   for sensitive fields only "whether a value is set" round-trips — the
   plaintext is never shown.
 - Field labels and descriptions are **localized** to the admin UI language
-  when the plugin ships a `configI18n` catalog (missing locales or fields fall
-  back to the Zod `.describe()` default text).
+  when the plugin ships translations (missing locales or fields fall back to
+  the plugin's own default wording).
 - Clearing the render cache per-plugin or globally is also done here.
 
 ### Connection check after saving
@@ -299,16 +260,16 @@ Against the API directly, `PUT /admin/plugins/config` answers with
 `confirmLinkedIdentities: true` saves it. That flag is never persisted into the
 plugin's stored configuration.
 
-For installing and managing plugins see [Managing plugins](./plugins),
-and for how plugins work see [Plugin overview](../develop/plugins-overview).
+For installing and managing plugins see [Installing and configuring plugins](./plugins),
+and for how plugins work see [Plugin architecture](../develop/plugins-overview).
 
 ## Page deletion records
 
 When a user permanently deletes a page, Crowi stores an admin-only deletion
-record containing the `pageId`, final path, actor, timestamp, and deletion
-mode. It does not store the body, ACL, sharing tokens, or request metadata.
-The `pageId` identifies the deleted page; it is not a reference to a current
-Page. If the path is reused later, administrators can inspect the historical
+record containing the page's ID, its final path, the actor, the timestamp and
+the deletion mode. It does not store the body, ACL, sharing tokens, or request
+metadata. The ID identifies the page that was deleted; it is not a reference to
+a page that exists now. If the path is reused later, administrators can inspect the historical
 deletions without associating them with the replacement page.
 
 Deletion records do not expire automatically. Investigations for rarely
@@ -324,23 +285,19 @@ feature was introduced cannot be reconstructed retroactively.
 
 ## Search
 
-A page to check the status of the search driver. Maps to `GET /admin/search`.
+A page to check the status of the search driver.
 
 - Shows the currently active search driver and the index status.
 - Index rebuilds are not done from the admin panel — use the
   `crowi-admin rebuild search` CLI.
 - Search-backend plugins such as Elasticsearch are auto-injected into **this
-  "Search" group** (derived from `registerSearch`) as a settings-page link.
+  "Search" group** as a settings-page link.
 
-See [Setting up the search backend](./search-setup) for details.
-
-> **Note**: The **Backlink** rebuild page that used to live under the
-> "Maintenance" group was removed. Backlink rebuilding is now a
-> `crowi-admin backlink rebuild`-style CLI operation.
+See [Search backend setup](./search-setup) for details.
 
 ## Rebuilding rendered ASTs (rebuild rendered-ast)
 
-`crowi-admin rebuild rendered-ast` regenerates the pre-rendered AST stored on each page's **current revision** (`Revision.renderedAst`) with the running renderer pipeline ([RFC-0023](https://github.com/crowi/crowi/blob/main/docs/rfcs/0023-client-agnostic-rendered-ast.md)). It belongs to the same rebuild family as `rebuild search` / `rebuild storage copy` and is safe to run any number of times (idempotent).
+`crowi-admin rebuild rendered-ast` regenerates the pre-rendered output stored on each page's **current revision** with the running renderer. It belongs to the same rebuild family as `rebuild search` / `rebuild storage copy` and is safe to run any number of times (idempotent).
 
 ```bash
 # Pre-deployment verification (no writes) — only counts eligible revisions
@@ -353,7 +310,7 @@ crowi-admin rebuild rendered-ast
 crowi-admin rebuild rendered-ast --concurrency 8
 ```
 
-**When to run it (rollout procedure)**: after deploying a release that bumps the renderer pipeline's version, **run it with real writes immediately**. The read path serves a stored AST verbatim only when its version is an **exact match** for the running pipeline, so this is not a major-bump-only procedure — minor and patch bumps invalidate stored ASTs just as thoroughly. From the bump onward, every read of a page whose stored AST predates the new version triggers a full re-render on the fly (and the result is never persisted) — this read amplification is an **intended interim cost** that only goes away once the backfill completes. Conversely, **avoid real-write runs before that deployment** — pre-deploy verification must stay `--dry-run` only (even before the bump, a real-write run would rewrite legacy revisions that carry no `rendererVersion`).
+**When to run it (rollout procedure)**: after deploying a release that bumps the renderer pipeline's version, **run it with real writes immediately**. The read path serves a stored AST verbatim only when its version is an **exact match** for the running pipeline, so this is not a major-bump-only procedure — minor and patch bumps invalidate stored ASTs just as thoroughly. From the bump onward, every read of a page whose stored AST predates the new version triggers a full re-render on the fly (and the result is never persisted) — this read amplification is an **intended interim cost** that only goes away once the backfill completes. Conversely, **avoid real-write runs before that deployment** — pre-deploy verification must stay `--dry-run` only (even before the bump, a real-write run would rewrite legacy revisions that carry no recorded renderer version).
 
 **Declaring completion**: the save path stamps each api replica's own binary version, so as long as even one old-version replica is still routable, new old-version revisions keep being minted after your backfill finished. Only declare the backfill complete once both of the following hold:
 
@@ -364,10 +321,10 @@ The command is idempotent, so the final re-run only costs time proportional to t
 
 ## Repairing page history (page-history repair)
 
-`crowi-admin page-history repair` repairs the internal state behind page metadata history ([RFC-0021](https://github.com/crowi/crowi/blob/main/docs/rfcs/0021-page-metadata-change-history.md)).
+`crowi-admin page-history repair` repairs the internal state behind page metadata history.
 
-- `--outbox` (default) — drains any unprocessed entry a crashed writer left behind in `Page.pendingHistoryEntry`.
-- `--scan` — assigns `historySequence` to unsequenced revisions on pages that are ready to record history. Not run by default.
+- `--outbox` (default) — drains any unprocessed entry a crashed writer left behind on the page.
+- `--scan` — assigns sequence numbers to revisions that have none, on pages that are ready to record history. Not run by default.
 - `--transitions` — settles renames, deletes and restores that stopped partway. Not run by default.
 - `--batch-size <n>` (default 200) bounds how many pages are loaded per round trip; `--resume-after <pageId>` resumes a scan that was killed partway. The transition sweep resumes from `--resume-after-operation <operationId>` instead — a separate cursor, because one counts operations and the other counts pages.
 
@@ -387,11 +344,11 @@ crowi-admin page-history repair --transitions
 
 Passing `--scan` on its own **turns the default outbox pass off**. Say `--outbox --scan` when you want both.
 
-**The first writer has landed (RFC-0021 Phase 2a).** Every content save — creating a page, creating a draft, an HTTP update or revert, a collaborative editor save, and `crowi-admin replace url` — now assigns its Revision a page-local `historySequence`, promoting that page's `historyTracking` to `ready` on its first tracked save.
+Every content save — creating a page, creating a draft, an update or revert, a collaborative editor save, and `crowi-admin replace url` — assigns its revision a page-local sequence number and turns history tracking on for that page.
 
 Assignment runs as a **separate, resumable step after the pointer write has committed**, never as part of it, so a crash between the two cannot fail the save. This repair command is what recovers an assignment interrupted that way.
 
-`--scan` **skips Revisions younger than ten minutes** (`RepairScanOptions.minAgeMs`'s default), so it cannot mistake an assignment still in flight for one that failed and run it twice. It also skips Revisions older than the page's tracking start, which would otherwise be given sequences out of order. Run it after that window if you want it to pick up recent writes.
+`--scan` **skips revisions younger than ten minutes**, so it cannot mistake an assignment still in flight for one that failed and run it twice. It also skips revisions older than the page's tracking start, which would otherwise be given sequences out of order. Run it after that window if you want it to pick up recent writes.
 
 ### Settling a stopped move (`--transitions`)
 
@@ -412,15 +369,3 @@ Read the `blocked` entries. Each one names the operation, the page and the path:
 The command is **deliberately not exhaustive**. Rewriting a page it cannot classify would risk damaging a page nobody asked it to touch, so it stops at telling you which one to look at.
 
 Grant changes and draft publishes do not move a path, so they are never part of this sweep.
-
-## Sections in progress
-
-The following are not yet complete as of the v2 alpha.
-
-- **Notification** — The admin page for global notification settings,
-  including Slack integration, is in progress. The sidebar entry appears,
-  but the functionality is being implemented incrementally.
-
-Crowi 2.0 (Reignite) is under active alpha development, so the structure
-of the admin panel will continue to change. See the
-[release notes](https://github.com/crowi/crowi/releases) for the latest status.

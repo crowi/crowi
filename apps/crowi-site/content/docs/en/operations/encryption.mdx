@@ -1,5 +1,5 @@
 ---
-title: Encrypting sensitive config
+title: Encrypting sensitive settings
 description: Encrypting sensitive config with CROWI_ENCRYPTION_KEY
 ---
 
@@ -34,38 +34,25 @@ list at boot and follow the encryption path. For example:
 
 | Namespace:key | Description |
 | ------------- | ----------- |
-| `crowi:google:clientSecret` | Google OAuth client secret |
-| `crowi:github:clientSecret` | GitHub OAuth client secret |
-| `notification:slack:clientSecret` / `token` | Slack integration secret / token |
+| `notification:slack:clientSecret` / `token` | Legacy Slack integration secret / token |
 
-> **Note**: OAuth (Google / GitHub) secrets stay in core config until auth
-> providers become plugins; once they do, they move to the plugin namespace
-> like the other integrations.
+Credentials for external sign-in (Google and friends), storage and mail live
+in **their own plugin's namespace** (`crowi:plugin:<plugin>:<field>`) rather
+than in core config, and are encrypted the same way. For what changes when
+migrating from v1, see [Migrating from v1](./upgrading-from-v1).
 
-> **Note (migrating from old Crowi)**: The legacy core-namespace credentials
-> from older versions — `crowi:upload:aws:*`, `crowi:mail:aws:*`,
-> `crowi:mail:smtpPassword` — **have been removed**. In the new Crowi you simply
-> **enable the matching plugin and re-enter the values** (they are saved as the
-> plugin's `@sensitive` fields and encrypted automatically). There is no
-> automatic migration of the old data and no fallback read of the old keys.
-
-> **Note**: User passwords (`User.password`) are separately hashed with
-> bcrypt and are not part of this encryption. API tokens and shared-page
-> secret words use a different mechanism, since they need equality
-> lookups.
+> **Note**: User passwords are separately hashed with
+> bcrypt and are not part of this encryption. Personal access tokens use a
+> different mechanism, since they need equality lookups.
 
 ## Generating the master key
 
 `CROWI_ENCRYPTION_KEY` must be a **base64-encoded 32-byte value** (which
 decodes to exactly 32 bytes = the AES-256 key length). Generate it with
-one of the following.
+it.
 
 ```bash
-# Option 1: openssl
 openssl rand -base64 32
-
-# Option 2: the script bundled with Crowi
-pnpm --filter @crowi/api crypto:gen-key
 ```
 
 Set the generated value in `.env`.
@@ -79,21 +66,12 @@ values.
 
 ## How encryption works
 
-The encryption logic is implemented in
-`packages/api/src/util/crypto.ts`.
+Encryption uses AES-256-GCM, and an encrypted value carries an `enc:v1:`
+prefix. Looking at the database, that prefix is how you tell an encrypted
+value from a plaintext one.
 
-- **Algorithm**: AES-256-GCM (authenticated encryption)
-- **Stored format**: `enc:v1:<base64(iv)>:<base64(authTag)>:<base64(ciphertext)>`
-- The IV is regenerated on every call, so **the same plaintext yields a
-  different ciphertext each time** (non-deterministic). This means
-  equality lookups on encrypted values are not possible, but that is
-  fine because sensitive config is always loaded by `(namespace, key)`.
-- Sensitive keys are encrypted automatically by `Config.updateByParams`
-  (= saving config) and decrypted automatically by
-  `Config.loadAllConfig` (= loading config).
-
-Ciphertexts carry the `enc:v1:` prefix, so whether a value is encrypted
-can be determined from the presence of that prefix.
+Sensitive keys are encrypted when saved and decrypted when loaded. There is
+nothing for an operator to run.
 
 ## Legacy mode (when the key is unset)
 
@@ -118,26 +96,19 @@ settings screen in the admin UI (`/admin/crypto`).
 
 ### Checking the status
 
-Opening `/admin/crypto` shows the current encryption status. Internally
-it calls `GET /api/admin/crypto/status`, which returns the following.
-
-- `encryptionConfigured` — whether the server has a usable master key
-- `encryptedCount` — the number of already-encrypted sensitive values
-- `unencryptedCount` — the number of sensitive values still in plaintext
-- `entries` — the presence / encryption state of each sensitive key
+Opening `/admin/crypto` shows whether a master key is configured, how many
+sensitive values are encrypted, how many are still plaintext, and which key
+is in which state.
 
 ### Running re-encryption
 
-Running re-encryption from the screen calls
-`POST /api/admin/crypto/reencrypt`.
+Running re-encryption from that screen encrypts the values still stored in
+plaintext.
 
-- If the master key is unset, it fails with `503`
-  (`ENCRYPTION_NOT_CONFIGURED`). Set `CROWI_ENCRYPTION_KEY` first.
-- Already-encrypted rows are skipped (re-running is safe).
-- Only plaintext rows are rewritten into the `enc:v1:` format.
-- The result returns `rewritten` (the count rewritten),
-  `alreadyEncrypted` (already encrypted), and `missing` (values that do
-  not exist).
+- With no master key configured it fails; set `CROWI_ENCRYPTION_KEY` first.
+- Already-encrypted values are skipped, so running it repeatedly is safe.
+- Afterwards it reports how many values were rewritten, how many were already
+  encrypted, and how many did not exist.
 
 > **Tip**: Re-encryption is safe to run any number of times
 > (idempotent). Run it whenever you need to — for example after
@@ -145,19 +116,16 @@ Running re-encryption from the screen calls
 
 ## About key rotation
 
-In the current Crowi 2.0 alpha, `CROWI_ENCRYPTION_KEY` assumes a single
-fixed key. If you change the key to a different value, values encrypted
-before that can no longer be decrypted (GCM authentication-tag
-verification fails). If you need to change the key, prepare to re-enter
-the affected sensitive settings from the admin UI before the change.
-
-KMS-backed key providers (AWS / GCP) are planned for the future; an
-extension point is already provided as the `KeyProvider` interface in
-`crypto.ts`.
+The current implementation assumes a single fixed
+`CROWI_ENCRYPTION_KEY`. If you change the key to a different value,
+values encrypted before that can no longer be decrypted (GCM
+authentication-tag verification fails). If you need to change the key,
+prepare to re-enter the affected sensitive settings from the admin UI
+before the change.
 
 ## Next steps
 
 - [Configuration](./configuration) — environment variables in general
-- [Storage drivers](./storage) — configuring S3 credentials
-- [Mail / SMTP setup](./mail) — configuring the SMTP password
-- [Admin](./admin) — overview of the admin UI
+- [Storage](./storage) — configuring S3 credentials
+- [Mail delivery](./mail) — configuring the SMTP password
+- [Admin panel](./admin) — overview of the admin UI
