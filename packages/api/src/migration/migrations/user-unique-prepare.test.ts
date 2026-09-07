@@ -28,7 +28,21 @@ const runner = () => new MigrationRunner(crowi, { logger: { info: () => {}, warn
 
 const clean = async () => {
   const d = db();
-  for (const c of ['users', 'pages', 'revisions', 'comments', 'bookmarks', 'attachments', 'shares', 'watchers', 'activities', 'notifications', 'updateposts']) {
+  for (const c of [
+    'users',
+    'pages',
+    'revisions',
+    'comments',
+    'bookmarks',
+    'likes',
+    'seens',
+    'attachments',
+    'shares',
+    'watchers',
+    'activities',
+    'notifications',
+    'updateposts',
+  ]) {
     await d.collection(c).deleteMany({ migtest: true });
   }
 };
@@ -105,6 +119,23 @@ describe('migration/user-unique-prepare', () => {
       { migtest: true, page: oid(), user: dropId }, // non-conflicting → reassigned
     ]);
 
+    // feature-page-relations-collections D-6/AC-8 — likes/seens share the
+    // same {page,user} compound-unique shape as bookmarks: a collision
+    // (both users like/have-seen the same page) deletes the dropped row;
+    // a non-conflicting row is reassigned like any other scalar.
+    const likePageShared = oid();
+    const seenPageShared = oid();
+    await d.collection('likes').insertMany([
+      { migtest: true, page: likePageShared, user: keepId, createdAt: new Date() },
+      { migtest: true, page: likePageShared, user: dropId, createdAt: new Date() },
+      { migtest: true, page: oid(), user: dropId, createdAt: new Date() }, // non-conflicting → reassigned
+    ]);
+    await d.collection('seens').insertMany([
+      { migtest: true, page: seenPageShared, user: keepId, createdAt: new Date() },
+      { migtest: true, page: seenPageShared, user: dropId, createdAt: new Date() },
+      { migtest: true, page: oid(), user: dropId, createdAt: new Date() }, // non-conflicting → reassigned
+    ]);
+
     await runner().apply(userUniquePrepare);
 
     // Dropped user gone, survivor (oldest) kept.
@@ -143,6 +174,18 @@ describe('migration/user-unique-prepare', () => {
     expect(conflictRows).toHaveLength(1);
     expect((conflictRows[0].user as Types.ObjectId).toString()).toBe(keepId.toString());
     expect(await d.collection('bookmarks').countDocuments({ user: dropId, migtest: true })).toBe(0);
+
+    // Likes: conflicting drop row deleted, non-conflicting reassigned.
+    const likeConflictRows = await d.collection('likes').find({ page: likePageShared, migtest: true }).toArray();
+    expect(likeConflictRows).toHaveLength(1);
+    expect((likeConflictRows[0].user as Types.ObjectId).toString()).toBe(keepId.toString());
+    expect(await d.collection('likes').countDocuments({ user: dropId, migtest: true })).toBe(0);
+
+    // Seens: conflicting drop row deleted, non-conflicting reassigned.
+    const seenConflictRows = await d.collection('seens').find({ page: seenPageShared, migtest: true }).toArray();
+    expect(seenConflictRows).toHaveLength(1);
+    expect((seenConflictRows[0].user as Types.ObjectId).toString()).toBe(keepId.toString());
+    expect(await d.collection('seens').countDocuments({ user: dropId, migtest: true })).toBe(0);
   });
 
   it('dedups a living email collision (case-folded)', async () => {

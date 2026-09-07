@@ -5,9 +5,11 @@ import { Types } from 'mongoose';
 import ts from 'typescript';
 
 import type { BacklinkModel } from 'src/models/backlink';
+import type { LikeModel } from 'src/models/like';
 import type { PageDeletionRecordModel } from 'src/models/page-deletion-record';
 import type { PageHistoryEventModel } from 'src/models/page-history-event';
 import type { PageDocument, PageModel } from 'src/models/page';
+import type { SeenModel } from 'src/models/seen';
 import type { UserDocument } from 'src/models/user';
 import type { WatcherModel } from 'src/models/watcher';
 import { crowi, Fixture } from 'src/test/setup';
@@ -112,6 +114,8 @@ describe('service/page-history/deletion', () => {
   let PageHistoryEvent: PageHistoryEventModel;
   let Watcher: WatcherModel;
   let Backlink: BacklinkModel;
+  let Like: LikeModel;
+  let Seen: SeenModel;
   let user: UserDocument;
 
   beforeAll(async () => {
@@ -120,6 +124,8 @@ describe('service/page-history/deletion', () => {
     PageHistoryEvent = crowi.model('PageHistoryEvent');
     Watcher = crowi.model('Watcher');
     Backlink = crowi.model('Backlink');
+    Like = crowi.model('Like');
+    Seen = crowi.model('Seen');
     [user] = await Fixture.generate('User', [{ name: 'Deletion Tester', username: 'deletion-tester', email: 'deletion-tester@example.com' }]);
   });
 
@@ -281,9 +287,13 @@ describe('service/page-history/deletion', () => {
       await Watcher.upsertWatcher(otherUserId, 'Page', page._id, Watcher.STATUS_IGNORE);
       await Backlink.create({ page: page._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
       await Backlink.create({ page: new Types.ObjectId(), fromPage: page._id, fromRevision: new Types.ObjectId() }); // outbound
+      // feature-page-relations-collections D-6 — Like/Seen post-delete cleanup siblings.
+      await Like.add(page._id, user._id);
+      await Like.add(page._id, otherUserId);
+      await Seen.add(page._id, user._id);
     };
 
-    test("deletePageWithMode deletes the target page's WATCH/IGNORE and inbound/outbound Backlink rows as part of its post-delete best-effort cleanup, alongside existing revisions/history-events cleanup", async () => {
+    test("deletePageWithMode deletes the target page's WATCH/IGNORE, inbound/outbound Backlink, and Like/Seen rows as part of its post-delete best-effort cleanup, alongside existing revisions/history-events cleanup", async () => {
       const page = await Page.createPage('/deletion-record/relation-cleanup', 'body', user, {});
       await createHistoryEvent(page);
       await seedRelationFixtures(page);
@@ -298,7 +308,66 @@ describe('service/page-history/deletion', () => {
       expect(await Page.findById(page._id)).toBeNull();
       expect(await Watcher.countDocuments({ targetModel: 'Page', target: page._id })).toBe(0);
       expect(await Backlink.countDocuments({ $or: [{ page: page._id }, { fromPage: page._id }] })).toBe(0);
+      expect(await Like.countDocuments({ page: page._id })).toBe(0);
+      expect(await Seen.countDocuments({ page: page._id })).toBe(0);
       expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+    });
+
+    test('deletePageWithMode deletes the Page and still runs the other siblings without throwing when only the Like relation cleanup rejects, leaving the Like rows as orphans', async () => {
+      const page = await Page.createPage('/deletion-record/like-cleanup-reject', 'body', user, {});
+      await createHistoryEvent(page);
+      await seedRelationFixtures(page);
+
+      const likeSpy = jest.spyOn(Like, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_LIKE_CLEANUP_FAILURE'));
+
+      try {
+        await expect(
+          deletePageWithMode(crowi, {
+            pageId: page._id,
+            path: page.path,
+            actor: user._id,
+            mode: 'internal_cleanup',
+          }),
+        ).resolves.toBeUndefined();
+      } finally {
+        likeSpy.mockRestore();
+      }
+
+      expect(await Page.findById(page._id)).toBeNull();
+      // Every other sibling still ran despite the Like rejection.
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: page._id })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: page._id }, { fromPage: page._id }] })).toBe(0);
+      expect(await Seen.countDocuments({ page: page._id })).toBe(0);
+      // The rejected step leaves its rows as orphans (best-effort, D-6).
+      expect(await Like.countDocuments({ page: page._id })).toBe(2);
+    });
+
+    test('deletePageWithMode deletes the Page and still runs the other siblings without throwing when only the Seen relation cleanup rejects, leaving the Seen rows as orphans', async () => {
+      const page = await Page.createPage('/deletion-record/seen-cleanup-reject', 'body', user, {});
+      await createHistoryEvent(page);
+      await seedRelationFixtures(page);
+
+      const seenSpy = jest.spyOn(Seen, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_SEEN_CLEANUP_FAILURE'));
+
+      try {
+        await expect(
+          deletePageWithMode(crowi, {
+            pageId: page._id,
+            path: page.path,
+            actor: user._id,
+            mode: 'internal_cleanup',
+          }),
+        ).resolves.toBeUndefined();
+      } finally {
+        seenSpy.mockRestore();
+      }
+
+      expect(await Page.findById(page._id)).toBeNull();
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: page._id })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: page._id }, { fromPage: page._id }] })).toBe(0);
+      expect(await Like.countDocuments({ page: page._id })).toBe(0);
+      // The rejected step leaves its rows as orphans (best-effort, D-6).
+      expect(await Seen.countDocuments({ page: page._id })).toBe(1);
     });
 
     test('deletePageWithMode deletes the Page and still runs watchers, revisions, and history-events without throwing when only the backlinks relation cleanup rejects', async () => {
@@ -359,13 +428,15 @@ describe('service/page-history/deletion', () => {
       expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
     });
 
-    test('backlinks/watchers rejections never appear in PageCleanupIncompleteError.steps, even when revisions/history-events also fail', async () => {
+    test('backlinks/watchers/like/seen rejections never appear in PageCleanupIncompleteError.steps, even when revisions/history-events also fail', async () => {
       const page = await Page.createPage('/deletion-record/relation-and-history-reject', 'body', user, {});
       await createHistoryEvent(page);
       await seedRelationFixtures(page);
 
       const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
       const watcherSpy = jest.spyOn(Watcher, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_WATCHER_CLEANUP_FAILURE'));
+      const likeSpy = jest.spyOn(Like, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_LIKE_CLEANUP_FAILURE'));
+      const seenSpy = jest.spyOn(Seen, 'removeByPageId').mockRejectedValueOnce(new Error('MARKER_SEEN_CLEANUP_FAILURE'));
       const historyEventSpy = jest.spyOn(PageHistoryEvent, 'deleteMany').mockImplementationOnce(
         () =>
           ({
@@ -386,6 +457,8 @@ describe('service/page-history/deletion', () => {
       } finally {
         backlinkSpy.mockRestore();
         watcherSpy.mockRestore();
+        likeSpy.mockRestore();
+        seenSpy.mockRestore();
         historyEventSpy.mockRestore();
       }
 

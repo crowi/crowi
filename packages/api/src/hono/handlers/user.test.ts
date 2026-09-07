@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import request from 'supertest';
 
 import { Fixture, app, crowi } from 'src/test/setup';
@@ -97,6 +98,59 @@ describe('Routes /api/user (Hono)', () => {
       expect(res.body.commentsCount).toBe(0);
       expect(Array.isArray(res.body.recentPages)).toBe(true);
       expect(Array.isArray(res.body.recentBookmarks)).toBe(true);
+    });
+
+    // AC-4/D-2 — `isLiked` on `recentPages` / `recentBookmarks[].page` must
+    // reflect the REQUESTING VIEWER's own membership, never the profile
+    // owner's (a `targetUser`-scoped helper call would flip this).
+    it('AC-4: recentPages/recentBookmarks isLiked reflects the viewer, not the profile owner', async () => {
+      const Like = crowi.model('Like');
+      const notesPage = await Page().findOne({ path: `/user/${TARGET_USERNAME}/notes` });
+      await Like.add(notesPage._id, targetUser._id); // the OWNER likes their own page
+      try {
+        const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+        expect(res.status).toBe(200);
+        const recentPage = res.body.recentPages.find((p: { _id: string }) => p._id === notesPage._id.toString());
+        expect(recentPage).toBeDefined();
+        expect(recentPage.likerCount).toBe(1);
+        // The VIEWER (not the owner) is asking — they have not liked it.
+        expect(recentPage.isLiked).toBe(false);
+
+        const bookmarkEntry = res.body.recentBookmarks.find((b: { page: { _id: string } }) => b.page._id === notesPage._id.toString());
+        expect(bookmarkEntry?.page.isLiked).toBe(false);
+        expect(bookmarkEntry?.page.likerCount).toBe(1);
+      } finally {
+        await Like.removeByPageId(notesPage._id);
+      }
+    });
+
+    // AC-4/D-2 — each `recentBookmarks[i].page` must be resolved via the
+    // id-keyed Map, never a positional zip against the (differently
+    // ordered/sized) `recentPages` enrichment array. A same-page value
+    // used across BOTH arrays with distinguishable likerCounts is what
+    // makes an index-zip bug observable.
+    it('AC-4: each recentBookmarks[i] carries its OWN page (not zipped by array position with recentPages)', async () => {
+      const Like = crowi.model('Like');
+      const notesPage = await Page().findOne({ path: `/user/${TARGET_USERNAME}/notes` });
+      // A 2nd page owned by target, appearing in recentPages but NEVER
+      // bookmarked — recentPages has 2 entries, recentBookmarks has 1, so
+      // an index-based zip would misalign immediately.
+      const secondPage = await Page().createPage(`/user/${TARGET_USERNAME}/second`, 'second page', targetUser, {});
+      await Like.add(notesPage._id, targetUser._id);
+      try {
+        const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+        expect(res.status).toBe(200);
+
+        expect(res.body.recentBookmarks).toHaveLength(1);
+        expect(res.body.recentBookmarks[0].page._id).toBe(notesPage._id.toString());
+        expect(res.body.recentBookmarks[0].page.likerCount).toBe(1);
+
+        const recentSecond = res.body.recentPages.find((p: { _id: string }) => p._id === secondPage._id.toString());
+        expect(recentSecond?.likerCount).toBe(0);
+      } finally {
+        await Like.removeByPageId(notesPage._id);
+        await Page().deleteOne({ _id: secondPage._id });
+      }
     });
 
     it('returns 404 USER_NOT_FOUND for an unknown username', async () => {
@@ -244,21 +298,19 @@ describe('Routes /api/user (Hono)', () => {
       expect(typeof res.body.bookmarksCount).toBe('number');
     });
 
-    it('computes likesCount/commentsCount via Page.countDocuments({ liker }) / Comment.countDocuments({ creator }) — DB-side counts on the indexed fields, never an app-side scan', async () => {
-      const pageCountSpy = jest.spyOn(Page(), 'countDocuments');
+    it('computes likesCount via Like.countByUserId (D-6 existence-filtered aggregate) / commentsCount via Comment.countDocuments({ creator }) — DB-side counts, never an app-side scan', async () => {
+      const Like = crowi.model('Like');
+      const likeCountSpy = jest.spyOn(Like, 'countByUserId');
       const Comment = crowi.model('Comment');
       const commentCountSpy = jest.spyOn(Comment, 'countDocuments');
       try {
         const res = await request(app).get(`/api/user/${STATS_USERNAME}`).set('Authorization', `Bearer ${statsToken}`);
         expect(res.status).toBe(200);
 
-        const likerCall = (pageCountSpy.mock.calls as Array<[Record<string, unknown> | undefined]>).find(([filter]) => filter?.liker !== undefined);
-        expect(likerCall).toBeDefined();
-        expect(String((likerCall as [Record<string, unknown>])[0].liker)).toBe(String(statsUser._id));
-
+        expect(likeCountSpy).toHaveBeenCalledWith(statsUser._id);
         expect(commentCountSpy).toHaveBeenCalledWith({ creator: statsUser._id });
       } finally {
-        pageCountSpy.mockRestore();
+        likeCountSpy.mockRestore();
         commentCountSpy.mockRestore();
       }
     });
@@ -278,9 +330,10 @@ describe('Routes /api/user (Hono)', () => {
           grantedUsers: [statsUser._id],
           creator: statsUser._id,
           status: 'published',
-          liker: [statsUser._id],
         },
       ]);
+      const Like = crowi.model('Like');
+      await Like.add(restrictedPage._id, statsUser._id);
       await Fixture.generate('Comment', [{ page: restrictedPage._id, creator: statsUser._id, comment: 'stats comment on a page the viewer cannot read' }]);
 
       const stranger = await createTestUser({
@@ -297,6 +350,25 @@ describe('Routes /api/user (Hono)', () => {
       expect(res.status).toBe(200);
       expect(res.body.likesCount).toBe(likesBefore + 1);
       expect(res.body.commentsCount).toBe(commentsBefore + 1);
+    });
+
+    // AC-7/D-6 — a `likes` row surviving a failed post-delete Like cleanup
+    // (orphan: its Page no longer exists) must not inflate `likesCount`.
+    it('AC-7: an orphan Like row pointing at a non-existent Page is excluded from likesCount (D-6 existence filter)', async () => {
+      const before = await request(app).get(`/api/user/${STATS_USERNAME}`).set('Authorization', `Bearer ${statsToken}`);
+      expect(before.status).toBe(200);
+      const likesBefore = before.body.likesCount as number;
+
+      const Like = crowi.model('Like');
+      const orphanPageId = new Types.ObjectId();
+      await Like.collection.insertOne({ page: orphanPageId, user: statsUser._id, createdAt: new Date() });
+      try {
+        const res = await request(app).get(`/api/user/${STATS_USERNAME}`).set('Authorization', `Bearer ${statsToken}`);
+        expect(res.status).toBe(200);
+        expect(res.body.likesCount).toBe(likesBefore);
+      } finally {
+        await Like.deleteOne({ page: orphanPageId, user: statsUser._id });
+      }
     });
   });
 

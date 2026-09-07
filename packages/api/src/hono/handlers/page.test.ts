@@ -5,6 +5,7 @@ import { app, crowi, Fixture } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
 import { authHeaders, createTestUser, createPageViaApi, idempotencyKey } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
+import * as pageSearchIndex from 'src/util/page-search-index';
 import request from 'supertest';
 
 const cleanupPathPrefix = (prefix: string) => {
@@ -2311,12 +2312,16 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
 describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
   const PATH_PREFIX = '/hono-page-seen-test/';
   let Page;
+  let Seen;
   let accessToken: string;
   let otherAccessToken: string;
+  let userId: string;
   let otherUserId: string;
 
   beforeAll(async () => {
     Page = crowi.model('Page');
+    Seen = crowi.model('Seen');
+    await Seen.ensureUniqueIndex();
 
     const [owner, other] = await Promise.all([
       createTestUser({ name: 'SeenPage Test', username: 'seenPageTester', email: 'seen-page-tester@example.com' }),
@@ -2324,6 +2329,7 @@ describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
     ]);
     accessToken = owner.accessToken;
     otherAccessToken = other.accessToken;
+    userId = owner.user._id.toString();
     otherUserId = other.user._id.toString();
   });
 
@@ -2367,9 +2373,9 @@ describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
       expect(res.body.seenUsers[0]._id).toBe(otherUserId);
       expect(res.body.seenUsers[0].username).toBe('seenPageOther');
 
-      // Storage check: page.seenUsers actually contains the user id.
-      const pageDoc = await Page.findById(pageId);
-      expect(pageDoc.seenUsers.map((id: { toString: () => string }) => id.toString())).toContain(otherUserId);
+      // Storage check: the Seen relation collection (D-1), not a page-embedded array.
+      const rows = await Seen.findByPageId(new Types.ObjectId(pageId));
+      expect(rows.map((r) => r.user.toString())).toContain(otherUserId);
     });
 
     it('is idempotent: re-posting from the same user does not inflate seenUsers', async () => {
@@ -2391,9 +2397,9 @@ describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
       expect(second.body.seenUsers).toHaveLength(1);
       expect(second.body.seenUsers[0]._id).toBe(otherUserId);
 
-      const pageDoc = await Page.findById(pageId);
-      // addToSet must not duplicate the same id.
-      expect(pageDoc.seenUsers).toHaveLength(1);
+      // The upsert must not duplicate the same {page,user} identity.
+      const rows = await Seen.findByPageId(new Types.ObjectId(pageId));
+      expect(rows).toHaveLength(1);
     });
 
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
@@ -2411,9 +2417,47 @@ describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
       // The page must remain unmarked-by-other.
-      const pageDoc = await Page.findById(pageId);
-      const ids = pageDoc.seenUsers.map((id: { toString: () => string }) => id.toString());
-      expect(ids).not.toContain(otherUserId);
+      const rows = await Seen.findByPageId(new Types.ObjectId(pageId));
+      expect(rows.map((r) => r.user.toString())).not.toContain(otherUserId);
+    });
+
+    // AC-13 — the read-back this response is built from (`Seen.findByPageId`)
+    // must be primary-pinned; the sibling `GET /pages/:id/likers` read
+    // (presence.ts) is a SEPARATE request and must NOT be pinned (F-1).
+    it('AC-13: reads its own write back with readPreference primary, while GET /pages/:id/likers is not pinned', async () => {
+      const path = `${PATH_PREFIX}primary-pin`;
+      const headers = authHeaders(accessToken);
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# pin' });
+      const pageId = createRes.body.page._id;
+
+      const seenReadModes: unknown[] = [];
+      const boundFindByPageId = Seen.findByPageId.bind(Seen);
+      const seenSpy = jest.spyOn(Seen, 'findByPageId').mockImplementation((pid, options) => {
+        seenReadModes.push(options?.readPreference);
+        return boundFindByPageId(pid, options);
+      });
+
+      const Like = crowi.model('Like');
+      const likeReadModes: unknown[] = [];
+      const boundLikeFindByPageId = Like.findByPageId.bind(Like);
+      const likeSpy = jest.spyOn(Like, 'findByPageId').mockImplementation((pid) => {
+        likeReadModes.push(undefined);
+        return boundLikeFindByPageId(pid);
+      });
+
+      try {
+        const seenRes = await request(app).post('/api/pages/seen').set(headers).send({ page_id: pageId });
+        expect(seenRes.status).toBe(200);
+        expect(seenReadModes).toEqual(['primary']);
+
+        const likersRes = await request(app).get(`/api/pages/${pageId}/likers`).set(headers);
+        expect(likersRes.status).toBe(200);
+        expect(likeSpy).toHaveBeenCalledTimes(1);
+        expect(likeSpy.mock.calls[0]).toHaveLength(1); // called with only pageId — no options/readPreference argument
+      } finally {
+        seenSpy.mockRestore();
+        likeSpy.mockRestore();
+      }
     });
   });
 
@@ -2465,8 +2509,8 @@ describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
       expect(res.body.seenUsers[0]._id).toBe(otherUserId);
 
       // Storage assertion: the GET did not add the owner.
-      const pageDoc = await Page.findById(pageId);
-      expect(pageDoc.seenUsers).toHaveLength(1);
+      const rows = await Seen.findByPageId(new Types.ObjectId(pageId));
+      expect(rows).toHaveLength(1);
     });
 
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
@@ -2500,18 +2544,59 @@ describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
       expect(res.body.seenUsersCount).toBe(2);
       expect(res.body.seenUsers).toHaveLength(1);
     });
+
+    // AC-5 — `limit` selects the first N rows in Seen `_id` ascending order
+    // (D-1's deterministic default sort), NOT insertion/like order; the
+    // FULL count is unaffected by `limit`; and the final wire order of the
+    // selected users is whatever `User.findUsersByIds` populate returns
+    // (createdAt desc), independent of the Seen row order itself.
+    it('AC-5: limit selects the first N rows by Seen _id ascending, full count is unaffected by limit', async () => {
+      const path = `${PATH_PREFIX}limit-order`;
+      const ownerHeaders = authHeaders(accessToken);
+
+      const third = await createTestUser({ name: 'SeenPage Third', username: 'seenPageThird', email: 'seen-page-third@example.com' });
+
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# limit-order' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      // Insert 3 Seen rows directly, in a KNOWN _id order, independent of
+      // any particular wall-clock/POST ordering.
+      const pageObjectId = new Types.ObjectId(pageId);
+      const rows = [
+        await Seen.add(pageObjectId, new Types.ObjectId(otherUserId)),
+        await Seen.add(pageObjectId, third.user._id),
+        await Seen.add(pageObjectId, new Types.ObjectId(userId)),
+      ].map((r) => r.document);
+      const sortedByIdAsc = [...rows].sort((a, b) => a._id.toString().localeCompare(b._id.toString()));
+      const firstTwoUserIds = sortedByIdAsc.slice(0, 2).map((r) => r.user.toString());
+
+      const res = await request(app).get('/api/pages/seen-users').set(ownerHeaders).query({ page_id: pageId, limit: 2 });
+
+      expect(res.status).toBe(200);
+      // seenUsersCount reflects the FULL relation size, not the limited slice.
+      expect(res.body.seenUsersCount).toBe(3);
+      expect(res.body.seenUsers).toHaveLength(2);
+      const returnedIds = res.body.seenUsers.map((u: { _id: string }) => u._id);
+      expect(new Set(returnedIds)).toEqual(new Set(firstTwoUserIds));
+    });
   });
 });
 
 describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
   const PATH_PREFIX = '/hono-page-like-test/';
   let Page;
+  let Like;
+  let Activity;
   let accessToken: string;
   let otherAccessToken: string;
   let userId: string;
 
   beforeAll(async () => {
     Page = crowi.model('Page');
+    Like = crowi.model('Like');
+    Activity = crowi.model('Activity');
+    await Like.ensureUniqueIndex();
 
     const owner = await createTestUser({
       name: 'LikePage Test',
@@ -2558,11 +2643,10 @@ describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
       // The page should not have been mutated.
-      const pageDoc = await Page.findById(page._id);
-      expect(pageDoc.liker.map((id: { toString(): string }) => id.toString())).not.toContain(userId);
+      expect(await Like.countDocuments({ page: new Types.ObjectId(page._id), user: userId })).toBe(0);
     });
 
-    it('adds the current user to liker on first call and returns the page', async () => {
+    it('adds a Like row on first call and returns the page with isLiked:true / likerCount:1', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-once`, '# like');
 
       const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
@@ -2570,14 +2654,14 @@ describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
       expect(res.status).toBe(200);
       expect(res.body.page).toBeDefined();
       expect(res.body.page._id).toBe(page._id);
-      expect(res.body.page.liker).toContain(userId);
+      expect(res.body.page.isLiked).toBe(true);
       expect(res.body.page.likerCount).toBe(1);
+      expect(res.body.page.liker).toBeUndefined();
 
-      const pageDoc = await Page.findById(page._id);
-      expect(pageDoc.liker.map((id: { toString(): string }) => id.toString())).toContain(userId);
+      expect(await Like.countDocuments({ page: new Types.ObjectId(page._id), user: userId })).toBe(1);
     });
 
-    it('is idempotent: liking twice keeps the user in liker exactly once', async () => {
+    it('is idempotent: liking twice keeps the user liked exactly once', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-twice`, '# like');
 
       const first = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
@@ -2585,11 +2669,77 @@ describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
 
       const second = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
       expect(second.status).toBe(200);
-      expect(second.body.page.liker).toEqual([userId]);
+      expect(second.body.page.isLiked).toBe(true);
       expect(second.body.page.likerCount).toBe(1);
 
-      const pageDoc = await Page.findById(page._id);
-      expect(pageDoc.liker).toHaveLength(1);
+      expect(await Like.countDocuments({ page: new Types.ObjectId(page._id), user: userId })).toBe(1);
+    });
+
+    // AC-1 — Activity.createByPageLike is called exactly once per actual
+    // transition, never once per HTTP call (a retry against an already-
+    // liked page is a no-op transition and must not create a 2nd Activity).
+    it('AC-1: Activity.createByPageLike fires exactly once for a real transition, and not again on a retry', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}activity-once`, '# like');
+      const spy = jest.spyOn(Activity, 'createByPageLike');
+
+      try {
+        const first = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(first.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1);
+
+        const second = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(second.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1); // still 1 — the retry was not a transition
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(await Activity.countDocuments({ target: new Types.ObjectId(page._id), action: 'LIKE', user: userId })).toBe(1);
+    });
+
+    // AC-1 — D-1's Activity-before-creation re-confirmation: if `Like.remove`
+    // completes before the re-confirmation read, the like handler must NOT
+    // create a LIKE Activity (there is no Like row left to notify about).
+    it('AC-1 regression: no LIKE Activity is created when a concurrent unlike removes the row before the re-confirmation read', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}interleave-no-activity`, '# like');
+      const pageObjectId = new Types.ObjectId(page._id);
+
+      const originalAdd = Like.add.bind(Like);
+      const addSpy = jest.spyOn(Like, 'add').mockImplementationOnce(async (pid, uid) => {
+        const result = await originalAdd(pid, uid);
+        // Simulate an unlike that races in and completes BEFORE the like
+        // handler's own re-confirmation read.
+        await Like.remove(pid, uid);
+        return result;
+      });
+      const activitySpy = jest.spyOn(Activity, 'createByPageLike');
+
+      try {
+        const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(res.status).toBe(200);
+        expect(res.body.page.isLiked).toBe(false);
+        expect(activitySpy).not.toHaveBeenCalled();
+      } finally {
+        addSpy.mockRestore();
+        activitySpy.mockRestore();
+      }
+
+      expect(await Like.countDocuments({ page: pageObjectId, user: userId })).toBe(0);
+      expect(await Activity.countDocuments({ target: pageObjectId, action: 'LIKE', user: userId })).toBe(0);
+    });
+
+    // AC-9 — like/unlike never trigger a single-page reindex (current parity:
+    // the search `like_count` only refreshes on the next edit or rebuild).
+    it('AC-9: a real like transition does not call indexPageInSearch', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}no-reindex`, '# like');
+      const spy = jest.spyOn(pageSearchIndex, 'indexPageInSearchById');
+
+      const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(res.status).toBe(200);
+      // Assert BEFORE mockRestore — a post-restore assertion is a silent
+      // no-op (reference_jest_spy_assert_after_mockrestore).
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
     });
   });
 
@@ -2620,22 +2770,21 @@ describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
-    it('removes the current user from liker after a like', async () => {
+    it('removes the Like row after a like and returns isLiked:false / likerCount:0', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-after-like`, '# u');
 
       const likeRes = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
       expect(likeRes.status).toBe(200);
-      expect(likeRes.body.page.liker).toContain(userId);
+      expect(likeRes.body.page.isLiked).toBe(true);
 
       const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(page._id);
-      expect(res.body.page.liker).not.toContain(userId);
+      expect(res.body.page.isLiked).toBe(false);
       expect(res.body.page.likerCount).toBe(0);
 
-      const pageDoc = await Page.findById(page._id);
-      expect(pageDoc.liker.map((id: { toString(): string }) => id.toString())).not.toContain(userId);
+      expect(await Like.countDocuments({ page: new Types.ObjectId(page._id), user: userId })).toBe(0);
     });
 
     it('is idempotent: unliking a non-liked page returns the page unchanged', async () => {
@@ -2645,8 +2794,233 @@ describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(page._id);
-      expect(res.body.page.liker).toEqual([]);
+      expect(res.body.page.isLiked).toBe(false);
       expect(res.body.page.likerCount).toBe(0);
+    });
+
+    // AC-1 — Activity.removeByPageUnlike fires exactly once per real
+    // transition, never on a no-op unlike retry.
+    it('AC-1: Activity.removeByPageUnlike fires exactly once for a real transition, and not again on a retry', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-activity-once`, '# u');
+      await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      const spy = jest.spyOn(Activity, 'removeByPageUnlike');
+      try {
+        const first = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(first.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1);
+
+        const second = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(second.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('AC-9: a real unlike transition does not call indexPageInSearch', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-no-reindex`, '# u');
+      await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      const spy = jest.spyOn(pageSearchIndex, 'indexPageInSearchById');
+      const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(res.status).toBe(200);
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+  });
+
+  // AC-3 — viewer-scoped isLiked: getPage / like / unlike responses reflect
+  // the REQUESTING viewer's own membership, not the page author's.
+  describe('AC-3: viewer-scoped isLiked / likerCount', () => {
+    it('two different viewers see independent isLiked for the same page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}viewer-scoped`, '# v');
+      await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      const ownerView = await request(app).get('/api/pages').set(authHeaders(accessToken)).query({ page_id: page._id });
+      expect(ownerView.status).toBe(200);
+      expect(ownerView.body.page.isLiked).toBe(true);
+      expect(ownerView.body.page.likerCount).toBe(1);
+
+      const otherView = await request(app).get('/api/pages').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+      expect(otherView.status).toBe(200);
+      expect(otherView.body.page.isLiked).toBe(false);
+      expect(otherView.body.page.likerCount).toBe(1);
+    });
+
+    it('like directly returns isLiked:true and unlike directly returns isLiked:false, absent any other concurrent toggle', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}viewer-scoped-toggle`, '# v');
+
+      const likeRes = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(likeRes.body.page.isLiked).toBe(true);
+
+      const unlikeRes = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(unlikeRes.body.page.isLiked).toBe(false);
+    });
+  });
+
+  // AC-10 — the write-after-check delete/insert race guard (D-6): a like /
+  // seen write that lands after the Page has been hard-deleted must be
+  // detected and compensated, not silently served back as 200.
+  describe('AC-10: delete/insert race guard', () => {
+    it('like: when the Page is hard-deleted immediately after the write, the written Like row is removed and the request errors', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}race-like`, '# race');
+      const pageObjectId = new Types.ObjectId(page._id);
+
+      const originalCountDocuments = Page.countDocuments.bind(Page);
+      const spy = jest.spyOn(Page, 'countDocuments').mockImplementationOnce(() => {
+        // Simulate the Page having been hard-deleted between
+        // `loadGrantedPage` and this existence check.
+        return { exec: async () => 0, read: () => ({ exec: async () => 0 }) } as unknown as ReturnType<typeof originalCountDocuments>;
+      });
+
+      try {
+        const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(res.status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The compensating removal must have taken back the row this request wrote.
+      expect(await Like.countDocuments({ page: pageObjectId, user: userId })).toBe(0);
+    });
+
+    it('unlike: when the Page is hard-deleted immediately after the write, the request errors instead of returning the stale Page as 200', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}race-unlike`, '# race');
+      await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      const originalCountDocuments = Page.countDocuments.bind(Page);
+      const spy = jest.spyOn(Page, 'countDocuments').mockImplementationOnce(() => {
+        return { exec: async () => 0, read: () => ({ exec: async () => 0 }) } as unknown as ReturnType<typeof originalCountDocuments>;
+      });
+
+      try {
+        const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(res.status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    // AC-10 (row 1/2, seen half) — the same guard, but for seen: Seen.add's
+    // written row must be compensated via `Seen.removeByPageId` (D-1: no
+    // single-row remove is public for Seen, so the compensation is the
+    // page-wide cleanup static — safe here because the Page is already gone
+    // and every row for that pageId is an orphan regardless of whose it is).
+    it('seen: when the Page is hard-deleted immediately after the write, the written Seen row is removed and the request errors', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}race-seen`, '# race');
+      const pageObjectId = new Types.ObjectId(page._id);
+      const Seen = crowi.model('Seen');
+
+      const originalCountDocuments = Page.countDocuments.bind(Page);
+      const spy = jest.spyOn(Page, 'countDocuments').mockImplementationOnce(() => {
+        // Simulate the Page having been hard-deleted between
+        // `loadGrantedPage` and this existence check.
+        return { exec: async () => 0, read: () => ({ exec: async () => 0 }) } as unknown as ReturnType<typeof originalCountDocuments>;
+      });
+
+      try {
+        const res = await request(app).post('/api/pages/seen').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(res.status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The compensating removal must have taken back the row this request wrote.
+      expect(await Seen.countDocuments({ page: pageObjectId, user: userId })).toBe(0);
+    });
+
+    // AC-10 (row 2/2) — the guard must also fire when `Like.add` itself
+    // returns `{ document: null, inserted: false }` (D-1: a concurrent
+    // unlike beat the E11000 re-read). There is no row THIS request wrote,
+    // so no compensating `Like.remove` call is expected — but the post-write
+    // existence check must still fire and reject rather than serve the
+    // deleted Page back as 200.
+    it('like: when Like.add returns {document: null} and the Page is hard-deleted, the request still errors without a spurious Like.remove', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}race-like-null-doc`, '# race');
+      const pageObjectId = new Types.ObjectId(page._id);
+
+      const addSpy = jest.spyOn(Like, 'add').mockResolvedValueOnce({ document: null, inserted: false });
+      const removeSpy = jest.spyOn(Like, 'remove');
+
+      const originalCountDocuments = Page.countDocuments.bind(Page);
+      const countSpy = jest.spyOn(Page, 'countDocuments').mockImplementationOnce(() => {
+        return { exec: async () => 0, read: () => ({ exec: async () => 0 }) } as unknown as ReturnType<typeof originalCountDocuments>;
+      });
+
+      try {
+        const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(res.status).toBe(500);
+        // `document` was null — this request wrote nothing of its own, so
+        // there is nothing to compensate.
+        expect(removeSpy).not.toHaveBeenCalled();
+      } finally {
+        addSpy.mockRestore();
+        removeSpy.mockRestore();
+        countSpy.mockRestore();
+      }
+
+      expect(await Like.countDocuments({ page: pageObjectId, user: userId })).toBe(0);
+    });
+  });
+
+  // AC-13 (row 2/2) — `populatePageRelationData`'s membership/count bulk
+  // queries and the D-6 post-write existence check are both primary-pinned,
+  // and the existence check goes through the chainable `Page.countDocuments`
+  // rather than `Page.exists` (which Page overrides as a non-chainable
+  // async static — `.read()` would not exist on its return value).
+  describe('AC-13: populatePageRelationData bulk queries and the D-6 existence check are primary-pinned', () => {
+    it('getPage issues its 3 relation bulk queries (like/seen counts, viewer membership) with readPreference primary', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}ac13-bulk-pin`, '# pin');
+      const Seen = crowi.model('Seen');
+
+      const likeCountsSpy = jest.spyOn(Like, 'getCountsByPageIds');
+      const seenCountsSpy = jest.spyOn(Seen, 'getCountsByPageIds');
+      const likedSpy = jest.spyOn(Like, 'getLikedPageIdsByUser');
+
+      try {
+        const res = await request(app).get('/api/pages').set(authHeaders(accessToken)).query({ page_id: page._id });
+        expect(res.status).toBe(200);
+
+        // Assertions must run before `mockRestore()` below — restoring a
+        // spy also clears its recorded `mock.calls`.
+        expect(likeCountsSpy).toHaveBeenCalledWith([page._id], { readPreference: 'primary' });
+        expect(seenCountsSpy).toHaveBeenCalledWith([page._id], { readPreference: 'primary' });
+        expect(likedSpy).toHaveBeenCalledWith([page._id], expect.anything(), { readPreference: 'primary' });
+      } finally {
+        likeCountsSpy.mockRestore();
+        seenCountsSpy.mockRestore();
+        likedSpy.mockRestore();
+      }
+    });
+
+    it("the D-6 existence check reads via chainable Page.countDocuments(...).read('primary'), never Page.exists", async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}ac13-exists-pin`, '# pin');
+
+      const existsSpy = jest.spyOn(Page, 'exists');
+      const readModes: unknown[] = [];
+      const originalCountDocuments = Page.countDocuments.bind(Page);
+      const countDocumentsSpy = jest.spyOn(Page, 'countDocuments').mockImplementation((...args: Parameters<typeof originalCountDocuments>) => {
+        const query = originalCountDocuments(...args);
+        const originalRead = query.read.bind(query);
+        query.read = ((mode: Parameters<typeof query.read>[0]) => {
+          readModes.push(mode);
+          return originalRead(mode);
+        }) as typeof query.read;
+        return query;
+      });
+
+      try {
+        const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+        expect(res.status).toBe(200);
+
+        // Same ordering constraint as above — assert before mockRestore.
+        expect(existsSpy).not.toHaveBeenCalled();
+        expect(readModes).toContain('primary');
+      } finally {
+        existsSpy.mockRestore();
+        countDocumentsSpy.mockRestore();
+      }
     });
   });
 });
