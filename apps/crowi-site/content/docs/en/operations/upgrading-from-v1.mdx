@@ -91,11 +91,7 @@ Migrations are split into two layers:
 Each migration carries a `severity` that decides what an unapplied preflight
 migration does to boot:
 
-- **`blocking`** — an index-impacting / data-integrity migration (today only
-  `user-unique-prepare`). If it is unapplied, the api refuses to boot under the
-  default `block` policy, because booting against not-yet-prepared data risks
-  an `E11000` failure when the unique index builds. `migrate plan` /
-  `migrate list` tag it `[blocking]`.
+- **`blocking`** — an index-impacting / data-integrity migration (`user-unique-prepare` and `page-liker-seenusers-to-relations`). If it is unapplied, the api refuses to boot under the default `block` policy, because booting against not-yet-prepared data risks an `E11000` failure when the unique index builds. `migrate plan` / `migrate list` tag it `[blocking]`.
 - **`cosmetic`** — a body-display-only migration (such as `wikilink-format`).
   If it is unapplied the api **still boots** and only logs a warning, **even
   under the `block` policy**. Cosmetic migrations re-scan the live corpus, so a
@@ -126,16 +122,7 @@ crowi-admin migrate status
 > and can't be silenced from the code — so pipe with `pnpm -s migrate plan
 > --json | jq` (`-s` for silent) instead.
 
-> **Tip**: The `block` policy only ever applies to `blocking` migrations, so
-> you can safely keep the default `block` in production: `cosmetic` migrations
-> (the display-only ones) never refuse boot regardless of policy, and only the
-> data-integrity `blocking` migration does. If you ever need to boot with a
-> `blocking` migration still pending — a controlled, single-instance
-> investigation, for example — set `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`
-> to downgrade its boot refusal to a warning. (Earlier docs advised "always
-> keep `block`" to avoid serving a half-migrated database; with per-migration
-> severity that blanket rule no longer holds — cosmetic migrations were never
-> a data-integrity hazard.)
+> **Tip**: The `block` policy only ever applies to `blocking` migrations, so you can safely keep the default `block` in production: `cosmetic` migrations (the display-only ones) never refuse boot regardless of policy, and only data-integrity `blocking` migrations do. If you ever need to boot with a `blocking` migration still pending — a controlled, single-instance investigation, for example — set `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` to downgrade its boot refusal to a warning. (Earlier docs advised "always keep `block`" to avoid serving a half-migrated database; with per-migration severity that blanket rule no longer holds — cosmetic migrations were never a data-integrity hazard.)
 >
 > **Multi-instance note**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` (env var)
 > takes precedence over the `migration.preflightUnappliedPolicy` admin Config.
@@ -155,11 +142,9 @@ The migrations registered as of the v2 alpha are:
 | `relocate-reserved-api-paths` | preflight | cosmetic | Move v1 pages out of the reserved `/api` namespace |
 | `files-url-to-attachments` | preflight | cosmetic | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the `/api/attachments/<id>` form |
 | `wikilink-html-recover` | preflight | cosmetic | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
+| `page-liker-seenusers-to-relations` | preflight | **blocking** | Migrate `pages.liker` / `pages.seenUsers` into the `likes` / `seens` relation collections |
 
-(Severity applies only to `preflight` migrations — `boot` migrations are
-applied automatically and never probed, so they have no boot-block severity.
-`user-unique-prepare` is the only `blocking` migration; the rest are
-`cosmetic`, so an unapplied one warns but never refuses boot.)
+(Severity applies only to `preflight` migrations — `boot` migrations are applied automatically and never probed, so they have no boot-block severity. `user-unique-prepare` and `page-liker-seenusers-to-relations` are the two `blocking` migrations; the rest are `cosmetic`, so an unapplied one warns but never refuses boot.)
 
 The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
 automatically when the api starts, so they need no operator action. The
@@ -299,6 +284,56 @@ crowi-admin migrate apply --id user-unique-prepare
 
 > **Caution**: This migration **merges and deletes** users. Always review the
 > scope with `migrate plan` and take a MongoDB backup before applying.
+
+### Migrating Like / seen-by relations (page-liker-seenusers-to-relations)
+
+v1, and every 2.0-alpha up to and including alpha.17, stored Like and "seen by" membership directly on the `pages` document as `pages.liker` / `pages.seenUsers` ObjectId arrays. Later versions switched to the independent `likes` / `seens` collections and dropped both fields from the `Page` schema, but a schema change alone does not remove fields already persisted in MongoDB. The `page-liker-seenusers-to-relations` preflight migration is a one-time, **forward-only** copy of that legacy data into `likes` / `seens`, followed by removing the fields from `pages`.
+
+Unlike most other preflight migrations, this one **requires a maintenance window**. Two reasons:
+
+1. The `likes` / `seens` `{page,user}` unique index does not exist until this migration's first stage (`prepare-target-index`) explicitly builds it.
+2. Before the migration runs, `likes` / `seens` hold none of the existing Like / seen-by data, so starting the new api first makes every Like / seen-by count read as zero.
+
+Follow these steps **in order**:
+
+1. Confirm the target is v1 or any 2.0-alpha up to and including alpha.17.
+2. Enter maintenance mode: stop every old and new writer and background worker, and drain in-flight traffic at the load balancer / proxy.
+3. Take a MongoDB backup and confirm it is restorable.
+4. From the new image's admin CLI, run `crowi-admin migrate plan` and review `page-liker-seenusers-to-relations`'s detect counts along with every other pending `blocking` migration.
+5. Run `crowi-admin migrate apply --id page-liker-seenusers-to-relations`.
+6. Run `crowi-admin migrate plan` again. If any other `blocking` migration is still pending, apply it **by id**, one at a time, with `crowi-admin migrate apply --id <id>`, then re-run plan.
+7. Confirm via the `plan` output that the target id and every other `blocking` migration are no longer pending. Do not deploy until this is confirmed.
+8. Deploy the new binary and confirm boot completes, including the relation unique-index build.
+9. Smoke test liking / unliking a page and viewing it (seen-by) and confirm the counts look right.
+10. Resume traffic.
+
+```bash
+# Preview the target migration and every pending blocking migration (no writes)
+crowi-admin migrate plan
+
+# Apply just this migration
+crowi-admin migrate apply --id page-liker-seenusers-to-relations
+
+# Check for remaining pending blocking migrations, then apply each by id
+crowi-admin migrate plan
+crowi-admin migrate apply --id <remaining blocking migration id>
+```
+
+> **Caution**: Do NOT use a bare `crowi-admin migrate apply` (no `--id`) during this window. Without `--id`, `apply` applies every pending preflight migration, including `cosmetic` ones. In particular, `wikilink-format` rewrites page bodies and re-scans the live corpus, so it stays pending under normal operation — running it here would pull an unrelated, large batch of revision writes into a window meant only for this migration. Always target the specific id.
+
+#### Recovering from a failed apply
+
+When `migrate apply` fails, the error message itself carries enough detail to identify what to fix (counts plus up to 20 samples that name the affected page/user). Restoring the full backup is the last resort, not the first response.
+
+- **A duplicate report**: `likes` / `seens` has duplicate rows. For each listed `{page,user}`, delete duplicate rows down to one. If a row has a non-null `createdAt` (a live row the new binary wrote outside the maintenance window), keep that one; otherwise any one of them may be kept. Re-run the same `apply --id` afterward.
+- **A missing report**: the legacy fields on `pages` have not been unset yet, so the source data is intact. Resolve the underlying cause (e.g. a dropped connection) and re-run the same `apply --id` — copy and verify will re-run from scratch and converge.
+- **Any other error**: resolve the cause named in the message and re-run the same `apply --id`.
+
+In every case, re-running is safe as long as the legacy fields are still present — `isPending` stays `true` until they are gone.
+
+> **Note**: If you boot with this migration still pending via `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`, Like / seen-by counts from before the migration are not counted during that window, and any unlike a user performs during it is not reflected back onto the legacy arrays — a later `apply` can bring a Like back that the user had removed. Once `$unset` completes, do not roll back to the old binary; fix forward, or restore the full pre-migration backup if something is wrong.
+
+> **Note**: This migration excludes invalid elements and duplicates within one page when computing the real relation row count, so `likerCount` / `seenUsersCount` can be lower than a raw array-length count would have shown. For a non-array (scalar) stored value, only an invalid one is dropped by this correction — a **valid** ObjectId (already counted as a single Like today) is not excluded; it migrates as exactly one relation and is not part of this count correction.
 
 ### Rebuilding the search index
 
