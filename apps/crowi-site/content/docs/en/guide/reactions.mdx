@@ -30,8 +30,9 @@ You can add or remove a bookmark from the page view screen.
 
 A like is a **shared reaction** to a page.
 
-- A like is recorded in the page's `liker` list, and the page shows "how many
-  people liked it". Unlike a bookmark, the like state is visible to everyone.
+- A like is stored as a Like relation pairing the page with the user, and the
+  page shows "how many people liked it". Unlike a bookmark, the like state is
+  visible to everyone.
 - Liking an already-liked page does not double-count it (it is idempotent).
   You can also unlike.
 - Liking records an **activity**, and from it a **notification** is generated
