@@ -213,7 +213,7 @@ repo's `elasticsearch.Dockerfile` ([Search backend setup](./search-setup)).
 ## 5. env and crowi.config.json
 
 What every variable means, and which of them you have to set, is in the
-environment variable table in [Configuration](./configuration). Here we add
+table in [Environment variables](../reference/env). Here we add
 only what is specific to the all-in-one Lightsail setup.
 
 Put `CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` in the `.env` next to
@@ -435,7 +435,8 @@ note and [Migrating from v1](./upgrading-from-v1) each time.
 ## Next steps
 
 - [Deployment topologies](./deployment) — details on api / web routing and the same-origin setup
-- [Configuration](./configuration) — the full reference for env and `crowi.config.json`
+- [Environment variables](../reference/env) — names, defaults and meanings
+- [crowi.config.json](../reference/config-file) — fields and driver names
 - [Mail delivery](./mail) — configuring mail delivery including SES
 - [Upgrading](./upgrade) — version-by-version replacement steps
 - [Backup](./backup) — backing up and restoring data

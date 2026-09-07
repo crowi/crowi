@@ -1,0 +1,41 @@
+---
+title: crowi.config.json
+description: Fields and driver names of crowi.config.json
+---
+
+`crowi.config.json` sits at the root of the runner project and declares which plugins to load and which driver to activate. For how to write it and how names are resolved, see [Configuration](../operations/configuration).
+
+## Fields
+
+| Key | Type | Default | What it declares |
+| --- | --- | --- | --- |
+| `plugins` | `string[]` | `[]` | npm package names of the plugins to load at boot |
+| `storage.driver` | `string` | `"local"` | Storage driver used to keep attachments |
+| `search.driver` | `string` | `"mongo"` | Driver used for full-text search |
+| `mail.driver` | `string` | `"smtp"` | Driver used to send mail |
+
+The defaults above apply when the file is missing and when a key is omitted. Content that does not match the schema fails at boot.
+
+Three plugins load on every boot without appearing in `plugins`: `@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo` and `@crowi/plugin-mail-smtp`.
+
+## Driver names
+
+| Key | Driver name | Plugin that provides it |
+| --- | --- | --- |
+| `storage.driver` | `local` | `@crowi/plugin-storage-local` (default) |
+| `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
+| `storage.driver` | `gcs` | `@crowi/plugin-storage-gcs` |
+| `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (default) |
+| `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
+| `search.driver` | `opensearch` | `@crowi/plugin-search-opensearch` |
+| `mail.driver` | `smtp` | `@crowi/plugin-mail-smtp` (default) |
+| `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
+| `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
+
+Switching a driver name without adding the matching plugin to `plugins` logs a warning at boot. For the plugin list, see [First-party plugins](./plugins).
+
+## Related pages
+
+- [Configuration](../operations/configuration) — the configuration layers and how plugins are resolved
+- [First-party plugins](./plugins) — the plugins Crowi publishes
+- [Environment variables](./env) — what the api reads at boot

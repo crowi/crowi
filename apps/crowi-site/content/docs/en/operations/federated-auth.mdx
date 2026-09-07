@@ -9,7 +9,7 @@ Google is not special-cased. Everything protocol-shaped — OIDC discovery, stat
 
 ## Required environment variables
 
-The redirect URI for external sign-in is built from a **configured public URL, never from the request's `Host` header**. So Crowi needs to know the public origin of the web app — from `AUTH_PUBLIC_WEB_URL`, or from `CLIENT_URL`, which it falls back to — plus `AUTH_PUBLIC_API_URL` when the API answers on a different origin. Their rows are in the environment variable table in [Configuration](./configuration).
+The redirect URI for external sign-in is built from a **configured public URL, never from the request's `Host` header**. So Crowi needs to know the public origin of the web app — from `AUTH_PUBLIC_WEB_URL`, or from `CLIENT_URL`, which it falls back to — plus `AUTH_PUBLIC_API_URL` when the API answers on a different origin. Their rows are in [Environment variables](../reference/env).
 
 Both variables must be origin-only (no path, query, or fragment) — including one fails boot. `CLIENT_URL` only backs the fallback when it too is origin-only. **When no public web origin resolves, external sign-in is silently disabled**: boot succeeds, the provider list comes back empty, and `/api/auth/providers/<name>/start` returns 404. This is the first thing to check when no button appears.
 

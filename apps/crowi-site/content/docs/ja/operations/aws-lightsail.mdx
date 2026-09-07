@@ -204,7 +204,7 @@ api / web のイメージは公式の `crowi/crowi` (full) / `crowi/crowi-web` �
 ## 5. env と crowi.config.json
 
 どの変数が何を意味するか・どれを設定する必要があるかは
-[設定](./configuration) の環境変数表が一次情報です。ここでは Lightsail
+[環境変数](../reference/env) が一次情報です。ここでは Lightsail
 全のせ構成に固有の点だけ補足します。
 
 `CROWI_ENCRYPTION_KEY` と `WS_TOKEN_SECRET` は `compose.yml` と同じ場所の
@@ -419,7 +419,8 @@ docker compose up -d api web
 ## 次のステップ
 
 - [デプロイ構成](./deployment) — api / web のルーティングと同一オリジン構成の詳細
-- [設定](./configuration) — env と `crowi.config.json` の全リファレンス
+- [環境変数](../reference/env) — 変数名・既定値・意味の一覧
+- [crowi.config.json](../reference/config-file) — フィールドとドライバ名の一覧
 - [メール送信の設定](./mail) — SES を含むメール送信の設定
 - [バージョンアップ](./upgrade) — 版ごとの入れ替え手順
 - [バックアップ](./backup) — データのバックアップとリストア

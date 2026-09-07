@@ -21,12 +21,12 @@ Crowi の本番構成は **api (Hono) + web (Next.js) + MongoDB** の 3 つが�
 | 依存 | 必須か | 用途 |
 | --- | --- | --- |
 | MongoDB | 必須 | ページ・リビジョン・ユーザーなどの保存先 |
-| Redis | 単一インスタンスなら任意、**複数レプリカでは必須** | 共同編集・プレゼンス・通知の pub/sub、設定同期、レート制限 |
+| Redis | 単一インスタンスなら任意、**複数レプリカでは必須** | レプリカ間の連携 ([Redis のキーと ACL](../reference/redis-keys)) |
 | Elasticsearch / OpenSearch | 任意 | 全文検索。既定では MongoDB だけで検索できます ([検索バックエンドのセットアップ](./search-setup)) |
 | S3 / GCS | 任意 | 添付ファイルの保存先。既定はローカルディスク ([ストレージ設定](./storage)) |
 | SMTP / SES / Resend | 任意 | 招待メール・パスワード再設定メールの送信 ([メール送信の設定](./mail)) |
 
-いずれも [設定](./configuration) の環境変数と `crowi.config.json`、および管理画面から指定します。
+いずれも [環境変数](../reference/env) と [crowi.config.json](../reference/config-file)、および管理画面から指定します。
 
 ## 立ち上げたあとに読むもの
 

@@ -15,15 +15,7 @@ only core setting**, edited from the mail settings screen in the admin UI
 host / auth, the Resend API key, the AWS credentials for SES) are plugin
 settings**, edited under `/admin/plugins`.
 
-| `mail.driver` | Provided by | Delivery method |
-| ------------- | ----------- | --------------- |
-| `smtp` (default) | `@crowi/plugin-mail-smtp` (implicit default) | A generic SMTP server |
-| `ses` | `@crowi/plugin-mail-aws-ses` | AWS SES |
-| `resend` | `@crowi/plugin-mail-resend` | Resend |
-
-Because `@crowi/plugin-mail-smtp` is an implicit-default plugin, the
-`smtp` driver is available out of the box; to use SES or Resend, add the
-matching plugin to the runner project and set `mail.driver` accordingly.
+The driver names you can select and the plugin that provides each one are listed in [crowi.config.json](../reference/config-file). Because `@crowi/plugin-mail-smtp` is an implicit-default plugin, the `smtp` driver is available out of the box; to use SES or Resend, add the matching plugin to the runner project and set `mail.driver` accordingly.
 
 > **Note**: Mail configuration is not required. Until a sender address and
 > the active driver's connection details are both in place, operations
@@ -51,7 +43,7 @@ plugin pick up the new connection details straight away.
 
 > **Note**: The links inside invitation / activation / password-reset /
 > email-change messages have to be absolute URLs, so they do not work
-> unless `CLIENT_URL` is set. See [Configuration](./configuration).
+> unless `CLIENT_URL` is set. See its row in [Environment variables](../reference/env).
 
 ## Configuring mail in the admin UI
 
@@ -210,7 +202,7 @@ even while it is still within its lifetime.
 
 ## Next steps
 
-- [Configuration](./configuration) — environment variables in general
+- [Environment variables](../reference/env) — names, defaults and meanings
 - [Encrypting sensitive settings](./encryption) — encrypting SMTP passwords / SES keys
 - [Admin panel](./admin) — overview of the admin UI
 - [Notifications](../guide/notifications) — the user-facing notification feature

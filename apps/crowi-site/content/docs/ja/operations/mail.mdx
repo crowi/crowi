@@ -14,16 +14,7 @@ Crowi はパスワードリセットや招待などの通知メールを送信�
 SES の AWS 認証情報) は各プラグインの設定** で、`/admin/plugins` から
 編集します。
 
-| `mail.driver` | 提供プラグイン | 送信方式 |
-| ------------- | -------------- | -------- |
-| `smtp` (デフォルト) | `@crowi/plugin-mail-smtp` (暗黙のデフォルト) | 一般的な SMTP サーバ |
-| `ses` | `@crowi/plugin-mail-aws-ses` | AWS SES |
-| `resend` | `@crowi/plugin-mail-resend` | Resend |
-
-`@crowi/plugin-mail-smtp` は暗黙のデフォルトプラグインなので、`smtp`
-ドライバは設定なしで利用できます。SES や Resend を使う場合は、対応する
-プラグインを runner プロジェクトに追加し、`mail.driver` をそれに合わせて
-設定します。
+指定できるドライバ名と提供プラグインの対応は [crowi.config.json](../reference/config-file) にあります。`@crowi/plugin-mail-smtp` は暗黙のデフォルトプラグインなので、`smtp` ドライバは設定なしで利用できます。SES や Resend を使う場合は、対応するプラグインを runner プロジェクトに追加し、`mail.driver` をそれに合わせて設定します。
 
 > **Note**: メール設定は必須ではありません。送信元アドレスとアクティブな
 > ドライバの接続情報が揃うまで、メール送信を伴う操作はエラーになります。
@@ -49,8 +40,8 @@ SES の AWS 認証情報) は各プラグインの設定** で、`/admin/plugins
 
 > **Note**: メール本文中の招待 / アクティベーション / パスワードリセット /
 > メールアドレス変更のリンクは絶対 URL である必要があるため、`CLIENT_URL`
-> が設定されていないとリンクが機能しません。詳しくは [設定](./configuration)
-> を参照してください。
+> が設定されていないとリンクが機能しません。詳しくは [環境変数](../reference/env)
+> の `CLIENT_URL` の行を参照してください。
 
 ## 管理画面でのメール設定
 
@@ -199,7 +190,7 @@ Crowi が送るメールのうち、リンクを開いて操作を完了させ�
 
 ## 次のステップ
 
-- [設定](./configuration) — 環境変数全般
+- [環境変数](../reference/env) — 変数名・既定値・意味の一覧
 - [機密設定の暗号化](./encryption) — SMTP パスワード / SES キーの暗号化
 - [管理画面](./admin) — 管理画面の全体像
 - [通知](../guide/notifications) — ユーザー向けの通知機能

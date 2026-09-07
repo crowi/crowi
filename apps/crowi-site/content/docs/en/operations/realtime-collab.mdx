@@ -14,7 +14,7 @@ Realtime collaboration runs inside the api process. There is no separate process
 - MongoDB is the source of truth for page content; Redis only carries live routing. Stopping every replica loses no edits — they are restored from MongoDB.
 - The per-page simultaneous-editor cap (20 by default) is counted in Redis, so it stays correct across replicas. Anyone past the cap joins read-only.
 
-The related environment variables (`WS_TOKEN_SECRET`, `CROWI_MULTI_INSTANCE`, `COLLAB_MAX_EDITORS_PER_PAGE`, `NEXT_PUBLIC_COLLAB_URL`, `REDIS_URL`, `REDIS_KEY_PREFIX`) are in the environment variable table in [Configuration](./configuration).
+The related environment variables (`WS_TOKEN_SECRET`, `CROWI_MULTI_INSTANCE`, `COLLAB_MAX_EDITORS_PER_PAGE`, `NEXT_PUBLIC_COLLAB_URL`, `REDIS_URL`, `REDIS_KEY_PREFIX`) are listed in [Environment variables](../reference/env).
 
 ## A single instance (recommended)
 
@@ -35,15 +35,7 @@ services:
     image: mongo:8
 ```
 
-`REDIS_URL` is optional on a single replica, but leaving it out affects each feature differently.
-
-| Feature | Without `REDIS_URL` |
-| --- | --- |
-| Collaboration fan-out, presence, notifications, config sync | Cross-replica only, so a single replica loses nothing |
-| Simultaneous-editor cap | Stops being enforced (fails open rather than turning people away) |
-| Rate limiting | Keeps working in process memory (not shared across replicas) |
-| Recently viewed pages | Unavailable — there is no fallback |
-| Linking an external account | In-flight links live in the process, so restarting the api mid-link means starting that link again |
+`REDIS_URL` is optional on a single replica; what changes for each feature when you leave it out is listed in [Environment variables](../reference/env).
 
 ## Several replicas
 
@@ -54,7 +46,7 @@ services:
 Three extra requirements apply.
 
 1. **Point every replica's `REDIS_URL` at the same Redis** so collaborative updates travel between them.
-2. **Set `CROWI_MULTI_INSTANCE` and `WS_TOKEN_SECRET` on every replica**, as described in their rows in [Configuration](./configuration).
+2. **Set `CROWI_MULTI_INSTANCE` and `WS_TOKEN_SECRET` on every replica**, as described in their rows in [Environment variables](../reference/env).
 3. **Sticky sessions are not needed.** A client may connect to any replica.
 
 ```yaml
@@ -75,7 +67,7 @@ services:
 
 - **Redis goes down after boot.** Clients keep reconnecting. Editing still flows between people on the same replica, but not across replicas, and the editor cap fails open. Fan-out resumes by itself once Redis is back.
 - **Redis is unreachable at boot.** The api retries for a few seconds and then starts in a degraded, Redis-less mode. In that case cross-replica fan-out does **not** resume when Redis recovers — **restart the api**.
-- **Clients are disconnected right after connecting** and the editor stays on "could not connect". The signing key usually differs between replicas, so a token minted on one fails verification on another — check the `WS_TOKEN_SECRET` row in [Configuration](./configuration) and replace the replicas with the same value everywhere.
+- **Clients are disconnected right after connecting** and the editor stays on "could not connect". The signing key usually differs between replicas, so a token minted on one fails verification on another — check the `WS_TOKEN_SECRET` row in [Environment variables](../reference/env) and replace the replicas with the same value everywhere.
 - **The proxy strips `Upgrade`.** Connections to `/collab` fail with 400 or 426 — check the proxy configuration in [Deployment topologies](./deployment).
 - **A page being edited collaboratively is updated through another route** (the API, an AI tool, the CLI). Clients editing it are prompted to reload and continue from the saved content; unsaved local edits can be recovered from a local buffer. That prompt only reaches clients connected to the api process that handled the update, though. **With several replicas, an editor on another replica can keep editing stale content until someone reloads by hand.**
 - **A page being edited collaboratively is renamed, deleted or restored.** Saves from a session that started before the change are always rejected, whichever replica performed it — write safety holds across replicas. The reload prompt, again, stays within one replica, so an editor elsewhere may only notice when its save is rejected.
@@ -90,6 +82,6 @@ Edits are appended as deltas and periodically folded into the page itself. Appen
 ## Related pages
 
 - [Deployment topologies](./deployment) — reverse proxy and WebSocket pass-through
-- [Configuration](./configuration) — the environment variable reference
+- [Environment variables](../reference/env) — names, defaults and meanings
 - [Redis operations](./redis) — versions, connection counts, ACLs
 - [Realtime collaborative editing](../guide/realtime-editing) — what users see

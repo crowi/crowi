@@ -99,7 +99,7 @@ the admin UI (`/admin/plugins`) after boot.
 }
 ```
 
-See [Configuration](./configuration) for the field meanings and driver-name
+See [crowi.config.json](../reference/config-file) for the field meanings and driver-name
 mapping.
 
 </Step>
@@ -119,7 +119,7 @@ CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
 WS_TOKEN_SECRET=...
 ```
 
-See "Environment variables" in [Configuration](./configuration) for what each
+See [Environment variables](../reference/env) for what each
 one does.
 
 </Step>
@@ -225,14 +225,16 @@ Start the api and confirm `/api/app/info` returns 200, then start the web app.
 <Callout type="info">
   Multi-replica deployments treat `REDIS_URL`, `CROWI_MULTI_INSTANCE` and
   `WS_TOKEN_SECRET` differently. See the environment variable table in
-  [Configuration](./configuration) and
+  [Environment variables](../reference/env) and
   [Operating realtime collaboration](./realtime-collab).
 </Callout>
 
 ## Next steps
 
 - [Deployment topologies](./deployment) — reverse proxy and public origin
-- [Configuration](./configuration) — the full picture of environment variables and `crowi.config.json`
+- [Configuration](./configuration) — the configuration layers and how plugins are resolved
+- [Environment variables](../reference/env) — names, defaults and meanings
+- [crowi.config.json](../reference/config-file) — fields and driver names
 - [Encrypting sensitive settings](./encryption) — setting up `CROWI_ENCRYPTION_KEY`
 - [Storage](./storage) — switching `storage.driver`
 - [Search backend setup](./search-setup) — configuring Elasticsearch

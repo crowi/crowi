@@ -97,7 +97,7 @@ runner プロジェクトを作って本番デプロイする** 運用者向け�
 }
 ```
 
-フィールドの意味とドライバ名の対応は [設定](./configuration) を参照してください。
+フィールドの意味とドライバ名の対応は [crowi.config.json](../reference/config-file) を参照してください。
 
 </Step>
 
@@ -115,7 +115,7 @@ CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
 WS_TOKEN_SECRET=...
 ```
 
-各変数の意味は [設定](./configuration) の「環境変数」を参照してください。
+各変数の意味は [環境変数](../reference/env) を参照してください。
 
 </Step>
 
@@ -216,14 +216,16 @@ api を起動して `/api/app/info` が 200 を返すことを確認してから
 
 <Callout type="info">
   複数レプリカで運用する場合は、`REDIS_URL`・`CROWI_MULTI_INSTANCE`・
-  `WS_TOKEN_SECRET` の扱いが変わります。[設定](./configuration) の環境変数表と
+  `WS_TOKEN_SECRET` の扱いが変わります。[環境変数](../reference/env) と
   [リアルタイム共同編集の運用](./realtime-collab) を参照してください。
 </Callout>
 
 ## 次のステップ
 
 - [デプロイ構成](./deployment) — リバースプロキシと公開オリジン
-- [設定](./configuration) — 環境変数と `crowi.config.json` の全体像
+- [設定](./configuration) — 設定レイヤーとプラグインの解決方法
+- [環境変数](../reference/env) — 変数名・既定値・意味の一覧
+- [crowi.config.json](../reference/config-file) — フィールドとドライバ名の一覧
 - [機密設定の暗号化](./encryption) — `CROWI_ENCRYPTION_KEY` のセットアップ
 - [ストレージ設定](./storage) — `storage.driver` の切り替え
 - [検索バックエンドのセットアップ](./search-setup) — Elasticsearch の設定

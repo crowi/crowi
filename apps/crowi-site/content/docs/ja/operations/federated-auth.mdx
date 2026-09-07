@@ -9,7 +9,7 @@ Google は特別扱いされていません。プロトコル部分 (OIDC discov
 
 ## 前提となる環境変数
 
-外部サインインのリダイレクト URI は、**リクエストの `Host` ヘッダからではなく設定された公開 URL から組み立てられます**。したがって web の公開 origin を Crowi に教える必要があり、`AUTH_PUBLIC_WEB_URL` か、その既定値として使われる `CLIENT_URL` のどちらかを設定します。API が別 origin で応答する場合は `AUTH_PUBLIC_API_URL` も設定します。各変数の行は [設定](./configuration) の環境変数表にあります。
+外部サインインのリダイレクト URI は、**リクエストの `Host` ヘッダからではなく設定された公開 URL から組み立てられます**。したがって web の公開 origin を Crowi に教える必要があり、`AUTH_PUBLIC_WEB_URL` か、その既定値として使われる `CLIENT_URL` のどちらかを設定します。API が別 origin で応答する場合は `AUTH_PUBLIC_API_URL` も設定します。各変数の行は [環境変数](../reference/env) にあります。
 
 どちらの変数も origin のみ (パス・クエリ・フラグメントを含まない) である必要があり、含めるとブート時に失敗します。`CLIENT_URL` が既定値として使われるのも、それが origin のみのときだけです。**web の公開 origin がどこからも決まらない場合、外部サインインは静かに無効化されます** — ブートは成功し、プロバイダ一覧が空になり `/api/auth/providers/<name>/start` が 404 を返します。ボタンが出ないときはまずここを疑ってください。
 

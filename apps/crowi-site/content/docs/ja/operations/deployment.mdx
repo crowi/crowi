@@ -141,7 +141,7 @@ location / { proxy_pass http://web:3000; }
 ### アップロードの body size 上限
 
 添付アップロードの上限は既定 50MB です(`CROWI_UPLOAD_MAX_BYTES` で下げられる —
-[設定](./configuration) の環境変数表参照)。ただしこれは api プロセス内で判定される
+[環境変数](../reference/env) 参照)。ただしこれは api プロセス内で判定される
 値でしかありません。前段にリバースプロキシを置く場合、**プロキシ自身の body size 上限は
 crowi の上限より少し大きい値に設定する必要があります**(同じ値では不十分な理由は下記)。
 
@@ -294,4 +294,5 @@ dev では `CROWI_API_URL` も `NEXT_PUBLIC_*` も不要です。
 - [セルフホスティング (自前の runner プロジェクト)](./self-hosting) — 自前の runner プロジェクトから api + web イメージをビルド
 - [リアルタイム共同編集の運用](./realtime-collab) — WS 要件とマルチレプリカの注意点
 - [バージョンアップ](./upgrade) — 全レプリカを揃えて入れ替える手順と版ごとの注記
-- [設定](./configuration) — 環境変数の全リファレンス
+- [設定](./configuration) — 設定レイヤーとプラグインの解決方法
+- [環境変数](../reference/env) — 変数名・既定値・意味の一覧

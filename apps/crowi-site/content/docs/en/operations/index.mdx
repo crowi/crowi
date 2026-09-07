@@ -21,12 +21,12 @@ If you only want to try Crowi out, the compose setup in the [Quickstart](../guid
 | Dependency | Required? | Used for |
 | --- | --- | --- |
 | MongoDB | Required | Pages, revisions, users and everything else Crowi stores |
-| Redis | Optional on a single instance, **required for multiple replicas** | Pub/sub for collaboration, presence and notifications; config sync; rate limiting |
+| Redis | Optional on a single instance, **required for multiple replicas** | Coordination between replicas (see [Redis keys and ACL](../reference/redis-keys)) |
 | Elasticsearch / OpenSearch | Optional | Full-text search. By default MongoDB alone backs search ([Search backend setup](./search-setup)) |
 | S3 / GCS | Optional | Attachment storage. The default is the local disk ([Storage](./storage)) |
 | SMTP / SES / Resend | Optional | Invitation and password-reset mail ([Mail delivery](./mail)) |
 
-You point Crowi at all of these through the environment variables and `crowi.config.json` described in [Configuration](./configuration), plus the admin panel.
+You point Crowi at all of these through [Environment variables](../reference/env) and [crowi.config.json](../reference/config-file), plus the admin panel.
 
 ## After it is running
 

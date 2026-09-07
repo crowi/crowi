@@ -156,7 +156,7 @@ location / { proxy_pass http://web:3000; }
 
 The attachment upload limit defaults to 50 MB (lowerable via
 `CROWI_UPLOAD_MAX_BYTES` — see the environment variables table in
-[Configuration](./configuration)). That limit is only ever enforced inside the
+[Environment variables](../reference/env)). That limit is only ever enforced inside the
 api process, though. When you put a reverse proxy in front, **the proxy's own
 body size limit must be set a margin above crowi's limit**, not merely equal
 to it (see below for why).
@@ -318,4 +318,5 @@ No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
 - [Self-hosting (your own runner project)](./self-hosting) — build api + web images from your own runner project
 - [Operating realtime collaboration](./realtime-collab) — WS requirements and multi-replica notes
 - [Upgrading](./upgrade) — replacing every replica together, and version-specific notes
-- [Configuration](./configuration) — full environment variable reference
+- [Configuration](./configuration) — the configuration layers and how plugins are resolved
+- [Environment variables](../reference/env) — names, defaults and meanings
