@@ -59,15 +59,9 @@ scopes). `crowi logout` revokes and removes the tokens.
 ## Scopes
 
 The default scope is `pages:read pages:write`, which covers reading, writing,
-renaming, deleting, and watching pages plus `whoami`. Commands that use other
-features need extra scopes granted at login:
-
-| Command | Scope to add at login |
-| --- | --- |
-| `comment` (list / add) | `comments:read comments:write` |
-| `attach` (list / add / download) | `attachments:read attachments:write` |
-| `bookmark` (list / add / remove) | `bookmarks:read bookmarks:write` |
-| `watch` (get / set) | none — rides the default `pages:*` |
+renaming, deleting, and watching pages plus `whoami`. Commands that work with
+comments, attachments or bookmarks need their own scope granted at login; the
+command table in [crowi CLI](../reference/cli) lists which needs what.
 
 `--scope` **replaces** the default set, so include `pages:read pages:write` if
 you still want the page commands — or request the umbrella `read write`, which
@@ -145,23 +139,10 @@ prints a hint on stderr showing how to switch (suppressed by `--quiet`; the
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `login` / `logout` / `whoami` / `profiles` | auth & profile management |
-| `search <query>` | full-text search (prints `path — snippet` rows) |
-| `get <path-or-id>` (alias `cat`) | print a page's markdown body to stdout; `--json` for metadata |
-| `ls [path]` | list child pages under a path |
-| `create <path>` | create a page (body from `--message` / `--file` / `--stdin` / `$EDITOR`) |
-| `edit <path>` | edit interactively in `$EDITOR` (creates if missing; optimistic-lock save) |
-| `update <path>` | replace the body non-interactively (revision-locked) |
-| `mv <old> <new>` | move / rename a page (or folder) |
-| `rm <path>` | delete a page (trash by default; `--completely` to purge) |
-| `comment` / `attach` / `bookmark` / `watch` | comments / attachments / bookmarks / watch (need the scopes above) |
-| `open <path-or-id>` | open a page in the browser (local only) |
-| `completion <shell>` | print a shell-completion script |
-
-Arguments are validated against the matching API request schema before sending,
-so a bad path fails locally with a clear error rather than a round-trip.
+The subcommands, their own flags and the scope each needs are listed in
+[crowi CLI](../reference/cli). Arguments are validated against the matching
+API request schema before anything is sent, so a malformed path fails locally
+with a clear error instead of after a round trip.
 
 ### `edit` conflicts (409)
 
@@ -200,19 +181,9 @@ The policy is cached on the profile for ten minutes, so this is not a round trip
 
 ## Output formats & scripting
 
-`search` and `ls` accept `--format` and `--template` to shape output for piping:
-
-| Flag | Effect |
-| --- | --- |
-| `--json` (global) | dump the full raw response as JSON |
-| `--format human` | default human rendering |
-| `--format table` | aligned columns with a header row |
-| `--format template` | one templated line per record |
-| `--template '<tpl>'` | template mode; `{{field}}` placeholders per record |
-
-The template language is tiny: `{{path}}` is the record's `path`, dotted paths
-walk nested objects (`{{page.path}}`), missing fields render empty, and `\t` /
-`\n` in the template expand to a tab / newline.
+`search` and `ls` can shape their output with `--format` / `--template`, which
+makes them pipe well. The accepted values and the exit codes are listed in
+[crowi CLI](../reference/cli).
 
 ```bash
 # tab-separated path + score, one hit per line
@@ -222,19 +193,8 @@ crowi search "release notes" --template '{{path}}\t{{score}}'
 crowi search onboarding --template '{{path}}' | head -1 | crowi get - > onboarding.md
 ```
 
-Progress and warnings all go to stderr, so `--json` stdout stays clean for
-scripts. Exit codes:
-
-| Code | Meaning |
-| --- | --- |
-| `0` | success |
-| `1` | general error / network failure |
-| `2` | not signed in (`crowi login` required) |
-| `3` | insufficient scope (`403 INSUFFICIENT_SCOPE` → re-login with `--scope`) |
-| `4` | not found (`404`) |
-| `5` | edit conflict (`409` → `--force` to overwrite) |
-| `6` | invalid arguments (`400` / `422`) |
-| `7` | server unavailable / feature disabled (`503`) |
+Progress and warnings all go to stderr, so the stdout of `--json` stays clean
+for scripts.
 
 ## Shell completion
 
@@ -257,3 +217,4 @@ When the server's API differs from what this CLI expects, it prints a one-line n
 
 - [Account and security](./account-security) — issuing and revoking personal access tokens
 - [Using Crowi from AI tools (MCP)](./mcp) — the same token from an AI client
+- [crowi CLI](../reference/cli) — the command, flag and exit-code tables

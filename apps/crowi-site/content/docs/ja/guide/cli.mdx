@@ -59,14 +59,9 @@ crowi login --token <pat> https://wiki.example.com
 
 既定のスコープは `pages:read pages:write` です。これでページの
 読み取り / 書き込み / リネーム / 削除 / ウォッチ、および `whoami` をカバー
-します。それ以外の機能を使うコマンドは、ログイン時に追加スコープが必要です。
-
-| コマンド | ログイン時に追加するスコープ |
-| --- | --- |
-| `comment` (list / add) | `comments:read comments:write` |
-| `attach` (list / add / download) | `attachments:read attachments:write` |
-| `bookmark` (list / add / remove) | `bookmarks:read bookmarks:write` |
-| `watch` (get / set) | 不要 — 既定の `pages:*` に相乗り |
+します。コメント・添付・ブックマークを扱うコマンドは、ログイン時に
+それぞれのスコープを追加します。どのコマンドに何が必要かは
+[crowi CLI](../reference/cli) のコマンド表を参照してください。
 
 `--scope` は **既定を上書き** します。ページ系も使い続けるなら
 `pages:read pages:write` も含めて列挙するか、アンブレラ `read write` を要求
@@ -143,23 +138,10 @@ crowi search "release notes"   # --profile なしで almoha に対して実行�
 
 ## コマンド一覧
 
-| コマンド | 用途 |
-| --- | --- |
-| `login` / `logout` / `whoami` / `profiles` | 認証・プロファイル管理 |
-| `search <query>` | 全文検索 (`path — snippet` 行を表示) |
-| `get <path-or-id>` (別名 `cat`) | ページ本文 (markdown) を stdout へ。`--json` でメタ情報 |
-| `ls [path]` | path 配下の子ページ一覧 |
-| `create <path>` | ページ作成 (本文は `--message` / `--file` / `--stdin` / `$EDITOR`) |
-| `edit <path>` | `$EDITOR` で対話編集 (無ければ新規作成。楽観ロック保存) |
-| `update <path>` | 本文を非対話で置換 (リビジョンロック) |
-| `mv <old> <new>` | ページ (またはフォルダ) を移動 / リネーム |
-| `rm <path>` | ページ削除 (既定はゴミ箱。`--completely` で完全削除) |
-| `comment` / `attach` / `bookmark` / `watch` | コメント / 添付 / ブックマーク / ウォッチ (上表のスコープが必要) |
-| `open <path-or-id>` | ブラウザでページを開く (ローカルのみ) |
-| `completion <shell>` | シェル補完スクリプトを出力 |
-
-引数は送信前に対応する API リクエストスキーマで検証されるため、不正な path
-などは往復せずローカルで明確なエラーになります。
+サブコマンド・固有のフラグ・必要なスコープの一覧は
+[crowi CLI](../reference/cli) にあります。引数は送信前に対応する API
+リクエストスキーマで検証されるため、不正な path などは往復せずローカルで
+明確なエラーになります。
 
 ### `edit` の競合 (409)
 
@@ -199,19 +181,8 @@ upload rejected: video.mkv has type application/octet-stream, which this server 
 ## 出力フォーマットとスクリプティング
 
 `search` と `ls` は `--format` / `--template` で出力を整形でき、パイプ処理に
-向きます。
-
-| フラグ | 効果 |
-| --- | --- |
-| `--json` (グローバル) | 生のレスポンスを JSON で出力 |
-| `--format human` | 既定の人間向け表示 |
-| `--format table` | ヘッダ付きの整列カラム |
-| `--format template` | レコードごとに 1 行のテンプレート出力 |
-| `--template '<tpl>'` | テンプレートモード。`{{field}}` を各レコードで置換 |
-
-テンプレートは小さな言語です。`{{path}}` はレコードの `path` に、ドット区切り
-(`{{page.path}}`) はネストを辿り、欠落フィールドは空文字、テンプレート中の
-`\t` / `\n` はタブ / 改行に展開されます。
+向きます。指定できる値と終了コードの一覧は
+[crowi CLI](../reference/cli) にあります。
 
 ```bash
 # タブ区切りの path + score を 1 ヒット 1 行で
@@ -221,19 +192,8 @@ crowi search "release notes" --template '{{path}}\t{{score}}'
 crowi search onboarding --template '{{path}}' | head -1 | crowi get - > onboarding.md
 ```
 
-進捗・警告はすべて stderr に出るため、`--json` の stdout はスクリプト用に
-クリーンなままです。終了コードの一覧は次のとおりです。
-
-| コード | 意味 |
-| --- | --- |
-| `0` | 成功 |
-| `1` | 一般エラー / 通信失敗 |
-| `2` | 未サインイン (`crowi login` が必要) |
-| `3` | スコープ不足 (`403 INSUFFICIENT_SCOPE` → `--scope` を足して再ログイン) |
-| `4` | 対象が存在しない (`404`) |
-| `5` | 編集競合 (`409` → `--force` で上書き) |
-| `6` | 引数不正 (`400` / `422`) |
-| `7` | サーバ利用不可 / 機能無効 (`503`) |
+進捗・警告はすべて stderr に出るため、`--json` の標準出力はスクリプト用に
+クリーンなままです。
 
 ## シェル補完
 
@@ -256,3 +216,4 @@ Crowi は self-hosted なので、`crowi` と接続先サーバのバージョ�
 
 - [アカウントとセキュリティ](./account-security) — 個人アクセストークンの発行と失効
 - [AI ツールから使う (MCP)](./mcp) — 同じトークンを AI クライアントから使う
+- [crowi CLI](../reference/cli) — コマンド・フラグ・終了コードの一覧

@@ -1,0 +1,85 @@
+---
+title: crowi CLI
+description: Commands, flags and exit codes of the crowi command
+---
+
+`crowi` is the end-user CLI that drives the wiki over HTTP as you. For installing it and signing in, see [CLI (command line)](../guide/cli).
+
+## Global flags
+
+Accepted by every command, before or after the command name.
+
+| Flag | What it does |
+| --- | --- |
+| `-p, --profile <alias>` | Select a stored profile by alias |
+| `--url <baseUrl>` | Target a server directly, with no stored profile |
+| `--token <accessToken>` | Pass a token directly (a personal access token, for instance) |
+| `--json` | Emit the raw response as JSON instead of human output |
+| `-q, --quiet` | Suppress progress output on stderr |
+| `--help` / `--version` | Print the help and the version |
+
+## Commands
+
+The scope names are the ones in the catalog on [HTTP API](./api). The default login scope is `pages:read pages:write`; anything else is added with `crowi login --scope`.
+
+| Command | What it does | Own flags | Scope needed |
+| --- | --- | --- | --- |
+| `login [url]` | Sign in to a server and store the credentials in a profile | `--device` / `--token <pat>` / `--scope <scopes>` | — |
+| `logout` | Revoke and delete the stored tokens | — | — |
+| `whoami` | Show the signed-in user and the granted scopes | — | — |
+| `profiles` | List the stored profiles (no network) | — | — |
+| `profiles use <alias>` | Switch which profile is used by default (no network) | — | — |
+| `completion <shell>` | Print a shell completion script | — | — |
+| `open <path-or-id>` | Open a page in the browser | `--print` | — |
+| `search <query>` | Run a full-text search | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `get <path-or-id>` (alias `cat`) | Write a page body to stdout | `--revision <id>` | `pages:read` |
+| `ls [path]` | List the child pages under a path | `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `create <path>` | Create a page | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` | `pages:write` |
+| `edit <path>` | Edit interactively in your editor | `--editor <bin>` / `--force` | `pages:write` |
+| `update <path>` | Replace the body non-interactively | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` | `pages:write` |
+| `mv <old> <new>` | Move or rename a page | `--no-redirect` / `--recursive` | `pages:write` |
+| `rm <path>` | Delete a page | `--completely` / `--force` | `pages:write` |
+| `watch status <path-or-id>` | Show whether you watch a page | — | `pages:read` |
+| `watch subscribe <path-or-id>` | Start watching a page | — | `pages:write` |
+| `watch unsubscribe <path-or-id>` | Stop watching a page | — | `pages:write` |
+| `comment list <path-or-id>` | List the comments on a page | — | `comments:read` |
+| `comment add <path-or-id>` | Post a comment | `-m, --message <text>` / `-f, --file <path>` | `comments:write` |
+| `attach list <path-or-id>` | List the attachments (each line starts with its id) | — | `attachments:read` |
+| `attach add <path-or-id> <file>` | Upload an attachment | — | `attachments:write` |
+| `attach download <id>` | Fetch an attachment | `-o, --output <file>` | `attachments:read` |
+| `bookmark list` | List your bookmarks | `--limit <n>` / `--offset <n>` | `bookmarks:read` |
+| `bookmark add <path-or-id>` | Add a bookmark | — | `bookmarks:write` |
+| `bookmark remove <path-or-id>` | Remove a bookmark | — | `bookmarks:write` |
+
+## Output formats
+
+`search` and `ls` shape their output with `--format` / `--template`.
+
+| Value | Output |
+| --- | --- |
+| `--format human` | The default human-readable rendering |
+| `--format table` | Aligned columns with a header |
+| `--format json` | The same JSON as the global `--json` |
+| `--format template` | One templated line per record |
+| `--template '<tpl>'` | Template mode, substituting `{{field}}` per record (implies `--format template`) |
+
+`{{field}}` walks nesting with dots (`{{page.path}}`) and renders a missing field as an empty string. A `\t` / `\n` in the template expands to a tab and a newline. Progress and warnings all go to stderr, so the stdout of `--json` stays clean for scripts.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | General error / transport failure |
+| `2` | Not signed in (`crowi login` needed) |
+| `3` | Insufficient scope (re-login adding `--scope`) |
+| `4` | Target does not exist |
+| `5` | Edit conflict (`--force` overwrites) |
+| `6` | Invalid argument |
+| `7` | Server unavailable / feature disabled |
+
+## Related pages
+
+- [CLI (command line)](../guide/cli) — installing, signing in and working with profiles
+- [HTTP API](./api) — the scope catalog and where the API reference lives
+- [Account and security](../guide/account-security) — issuing personal access tokens

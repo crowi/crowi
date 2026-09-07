@@ -13,12 +13,7 @@ The endpoint is `/api/mcp` on the same address you open the wiki with, for examp
 
 MCP authenticates with a **personal access token**. Issue one following [Account and security](./account-security).
 
-There are two scopes to choose from.
-
-| Scope | What it allows |
-| --- | --- |
-| `pages:read` | Search, read, history, backlinks, page listings |
-| `pages:write` | Create, update, rename, delete, restore |
+There are two scopes to choose from. `pages:read` allows search, reading, history, backlinks and page listings; `pages:write` allows creating, updating, renaming, deleting and restoring (the full catalog is on [HTTP API](../reference/api)).
 
 <Callout type="info">
   **Start read-only (`pages:read` alone).** A token acts as you and can never reach a page you cannot see, but a write scope leaves room for the AI to follow instructions embedded in a page it read and go on to delete or rename something. When you do need writes, issue a separate short-lived token for that job.
@@ -39,29 +34,7 @@ Once connected, the client sees the `crowi_*` tools and the AI can call them on 
 
 ## Available tools
 
-Reading (`pages:read`):
-
-| Tool | Purpose |
-| --- | --- |
-| `crowi_search_pages` | Full-text search |
-| `crowi_get_page` | Read a page body by path or id |
-| `crowi_list_pages` | List pages under a path or by user |
-| `crowi_list_child_pages` | List child pages (walking the tree) |
-| `crowi_get_page_history` | List a page's revisions |
-| `crowi_get_revision` | Read the body of one revision |
-| `crowi_get_backlinks` | List pages linking to this one |
-| `crowi_autocomplete_pages` | Suggest page paths |
-
-Writing (`pages:write`):
-
-| Tool | Purpose |
-| --- | --- |
-| `crowi_create_page` | Create a page |
-| `crowi_update_page` | Update a page |
-| `crowi_rename_page` | Rename or move a page |
-| `crowi_delete_page` | Move to trash (or delete permanently) |
-| `crowi_revert_page` | Restore a page from the trash |
-| `crowi_revert_to_revision` | Roll a page back to an earlier revision (added as a new revision) |
+The tools, and the scope each one needs, are listed on [HTTP API](../reference/api). The reading tools work under `pages:read` and the writing tools under `pages:write`.
 
 `crowi_update_page` takes the revision the client read along with the update. If someone else saved the page in the meantime the call fails as a conflict, and the AI re-reads the page and tries again.
 
@@ -76,3 +49,4 @@ Writing (`pages:write`):
 - [Account and security](./account-security) — managing and revoking tokens
 - [CLI (command line)](./cli) — using the same token from the command line
 - [Search](./search) — how search works on the wiki side
+- [HTTP API](../reference/api) — the scope and MCP tool tables
