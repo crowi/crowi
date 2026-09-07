@@ -1,0 +1,78 @@
+---
+title: Using Crowi from AI tools (MCP)
+description: Search and edit the wiki from Claude Code and other MCP clients
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Crowi ships with an **MCP (Model Context Protocol) server** built in. Any MCP-capable AI client — Claude Desktop, Claude Code, Codex CLI and others — can search, read, create and update wiki pages through it. There is nothing extra to install.
+
+The endpoint is `/api/mcp` on the same address you open the wiki with, for example `https://wiki.example.com/api/mcp`.
+
+## 1. Create a token
+
+MCP authenticates with a **personal access token**. Issue one following [Account and security](./account-security).
+
+There are two scopes to choose from.
+
+| Scope | What it allows |
+| --- | --- |
+| `pages:read` | Search, read, history, backlinks, page listings |
+| `pages:write` | Create, update, rename, delete, restore |
+
+<Callout type="info">
+  **Start read-only (`pages:read` alone).** A token acts as you and can never reach a page you cannot see, but a write scope leaves room for the AI to follow instructions embedded in a page it read and go on to delete or rename something. When you do need writes, issue a separate short-lived token for that job.
+</Callout>
+
+Admin scopes cannot be attached to a token, so nothing in the admin panel is reachable over MCP.
+
+## 2. Connect a client
+
+The same settings screen shows ready-made connection commands for Claude Code and Codex CLI. Written out by hand it looks like this:
+
+```sh
+claude mcp add --transport http crowi https://wiki.example.com/api/mcp \
+  --header "Authorization: Bearer crowi_pat_<your token>"
+```
+
+Once connected, the client sees the `crowi_*` tools and the AI can call them on your behalf.
+
+## Available tools
+
+Reading (`pages:read`):
+
+| Tool | Purpose |
+| --- | --- |
+| `crowi_search_pages` | Full-text search |
+| `crowi_get_page` | Read a page body by path or id |
+| `crowi_list_pages` | List pages under a path or by user |
+| `crowi_list_child_pages` | List child pages (walking the tree) |
+| `crowi_get_page_history` | List a page's revisions |
+| `crowi_get_revision` | Read the body of one revision |
+| `crowi_get_backlinks` | List pages linking to this one |
+| `crowi_autocomplete_pages` | Suggest page paths |
+
+Writing (`pages:write`):
+
+| Tool | Purpose |
+| --- | --- |
+| `crowi_create_page` | Create a page |
+| `crowi_update_page` | Update a page |
+| `crowi_rename_page` | Rename or move a page |
+| `crowi_delete_page` | Move to trash (or delete permanently) |
+| `crowi_revert_page` | Restore a page from the trash |
+| `crowi_revert_to_revision` | Roll a page back to an earlier revision (added as a new revision) |
+
+`crowi_update_page` takes the revision the client read along with the update. If someone else saved the page in the meantime the call fails as a conflict, and the AI re-reads the page and tries again.
+
+## Things to keep in mind
+
+- **The token is your own permissions.** A page you cannot see is invisible over MCP too — and conversely, a write-scoped token can edit anything you can edit.
+- **Page bodies are treated as data.** Anyone can write a wiki page, so a body may contain text that reads like an instruction to the AI. Crowi returns page content wrapped in an unguessable delimiter with a note saying it is data and not instructions. Whether a client honours that is ultimately up to the client, so on a wiki with outside contributors, use a read-only token.
+- **Calls are rate limited.** A per-user budget stops a runaway agent from hammering the wiki.
+
+## Related pages
+
+- [Account and security](./account-security) — managing and revoking tokens
+- [CLI (command line)](./cli) — using the same token from the command line
+- [Search](./search) — how search works on the wiki side
