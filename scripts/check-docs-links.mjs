@@ -33,7 +33,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const DOCS_DIR = join('apps', 'crowi-site', 'content', 'docs')
+export const DOCS_DIR = join('apps', 'crowi-site', 'content', 'docs')
 const PAGE_EXT = /\.mdx?$/
 const LINK_RE = /\]\(([^)]*)\)/g
 // An opening fence is 3+ backticks or tildes; the closing fence must use the
@@ -64,13 +64,15 @@ function isFileRelative(href) {
 }
 
 /**
- * Collect the file-relative markdown links of one page, ignoring fenced code.
+ * The prose lines of one page: every line that is not a fence marker and not
+ * inside a fenced block. Shared with check-docs-vocabulary.mjs so both guards
+ * agree on what counts as prose.
  * @param {string} source
- * @returns {{href: string, line: number}[]}
+ * @returns {{text: string, line: number}[]}
  */
-export function extractRelativeLinks(source) {
-  /** @type {{href: string, line: number}[]} */
-  const links = []
+export function proseLines(source) {
+  /** @type {{text: string, line: number}[]} */
+  const lines = []
   /** @type {string | null} */
   let openFence = null
 
@@ -89,11 +91,27 @@ export function extractRelativeLinks(source) {
     }
     if (openFence !== null) return
 
+    lines.push({ text, line: index + 1 })
+  })
+
+  return lines
+}
+
+/**
+ * Collect the file-relative markdown links of one page, ignoring fenced code.
+ * @param {string} source
+ * @returns {{href: string, line: number}[]}
+ */
+export function extractRelativeLinks(source) {
+  /** @type {{href: string, line: number}[]} */
+  const links = []
+
+  for (const { text, line } of proseLines(source)) {
     for (const match of text.matchAll(LINK_RE)) {
       const href = normalizeHref(match[1])
-      if (isFileRelative(href)) links.push({ href, line: index + 1 })
+      if (isFileRelative(href)) links.push({ href, line })
     }
-  })
+  }
 
   return links
 }

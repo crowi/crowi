@@ -4,9 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 
-import { collectDocsFiles, extractRelativeLinks, findBrokenLinks, resolveLink } from './check-docs-links.mjs'
-
-const DOCS_DIR = join('apps', 'crowi-site', 'content', 'docs')
+import { collectDocsFiles, DOCS_DIR, extractRelativeLinks, findBrokenLinks, resolveLink } from './check-docs-links.mjs'
 
 describe('check-docs-links', () => {
   describe('extractRelativeLinks', () => {
@@ -74,6 +72,7 @@ describe('check-docs-links', () => {
       writeFileSync(join(localeRoot, 'index.mdx'), '')
       writeFileSync(join(localeRoot, 'operations', 'storage.mdx'), '')
       writeFileSync(join(localeRoot, 'operations', 'encryption.mdx'), '')
+      writeFileSync(join(localeRoot, 'operations', 'index.mdx'), '')
       writeFileSync(join(localeRoot, 'guide', 'markdown.mdx'), '')
       writeFileSync(join(localeRoot, 'develop', 'index.mdx'), '')
       pages = new Set(collectDocsFiles(root))
@@ -87,6 +86,31 @@ describe('check-docs-links', () => {
       assert.deepEqual(resolveLink(page, './encryption', localeRoot, pages), { ok: true })
       assert.deepEqual(resolveLink(page, '../guide/markdown', localeRoot, pages), { ok: true })
       assert.deepEqual(resolveLink(page, '../develop', localeRoot, pages), { ok: true })
+    })
+
+    // `operations/index.mdx` is a real folder index: it owns the folder URL
+    // while its siblings live inside the same directory. Both directions have
+    // to resolve, and the folder-URL form is the only one that may be linked.
+    it('resolves a link from a folder index to a sibling in the same folder', () => {
+      const folderIndex = join(localeRoot, 'operations', 'index.mdx')
+
+      assert.deepEqual(resolveLink(folderIndex, './encryption', localeRoot, pages), { ok: true })
+      assert.deepEqual(resolveLink(folderIndex, '../guide/markdown', localeRoot, pages), { ok: true })
+    })
+
+    it('resolves a link to a folder index through its folder URL, from either depth', () => {
+      const sibling = join(localeRoot, 'operations', 'encryption.mdx')
+      const otherFolder = join(localeRoot, 'guide', 'markdown.mdx')
+
+      assert.deepEqual(resolveLink(sibling, '../operations', localeRoot, pages), { ok: true })
+      assert.deepEqual(resolveLink(otherFolder, '../operations', localeRoot, pages), { ok: true })
+    })
+
+    it('rejects linking a folder index by its file name', () => {
+      const result = resolveLink(page, './index', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /folder URL/)
     })
 
     it('ignores the fragment when resolving', () => {

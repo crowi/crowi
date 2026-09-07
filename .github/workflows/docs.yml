@@ -6,9 +6,10 @@ name: Docs
 # The Cloudflare Pages deploy does not cover it either: a static export emits an
 # unresolvable relative link as a plain anchor and still builds green.
 #
-# This workflow is the missing gate. It is deliberately tiny — the checker
-# imports nothing outside the node standard library, so there is no install
-# step and nothing to cache.
+# This workflow is the missing gate for both docs guards — the structural
+# link check and the editorial vocabulary check. It is deliberately tiny: the
+# checkers import nothing outside the node standard library, so there is no
+# install step and nothing to cache.
 on:
   push:
     branches: [main, dev, dev2-2]
@@ -16,13 +17,16 @@ on:
       - 'apps/crowi-site/content/docs/**'
       - 'scripts/check-docs-links.mjs'
       - 'scripts/check-docs-links.test.mjs'
+      - 'scripts/check-docs-vocabulary.mjs'
+      - 'scripts/check-docs-vocabulary.test.mjs'
+      - 'scripts/docs-vocabulary-allow.json'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [main, dev, dev2-2]
     paths: *docs-paths
 
 jobs:
-  links:
+  checks:
     runs-on: ubuntu-latest
 
     steps:
@@ -39,5 +43,12 @@ jobs:
       - name: Check docs relative links
         run: node scripts/check-docs-links.mjs
 
-      - name: Test the link checker
-        run: node --test scripts/check-docs-links.test.mjs
+      # guide/, operations/ and reference/ are written for people who use or
+      # run Crowi; naming an internal here is an editorial regression the
+      # build cannot see. Canonical terminology is checked on every page,
+      # develop/ included — one concept has one name across the whole docs.
+      - name: Check docs vocabulary
+        run: node scripts/check-docs-vocabulary.mjs
+
+      - name: Test the docs checkers
+        run: node --test scripts/check-docs-links.test.mjs scripts/check-docs-vocabulary.test.mjs
