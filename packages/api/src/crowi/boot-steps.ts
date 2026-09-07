@@ -86,6 +86,19 @@ export const ALL_BOOT_STEPS: BootStep[] = [
     },
   },
   {
+    name: 'relationUniqueIndexes',
+    layer: 'config',
+    // Only reachable once every blocking preflight migration has been
+    // confirmed clean by `bootMigrations` above — building the `Like` /
+    // `Seen` unique index against not-yet-migrated data would race
+    // concurrent writers into duplicate `{page,user}` rows.
+    after: ['models', 'bootMigrations'],
+    debugLabel: 'ensureRelationUniqueIndexes',
+    run: async (crowi) => {
+      await crowi.ensureRelationUniqueIndexes();
+    },
+  },
+  {
     name: 'seedOAuthClients',
     layer: 'config',
     // Idempotent upsert ($setOnInsert) — runs after setupModels so the
@@ -135,14 +148,15 @@ export const ALL_BOOT_STEPS: BootStep[] = [
 
 /**
  * Boot steps `initForCli()` (`@crowi/admin-cli`'s lightweight init) omits:
- * Redis / mailer / search / LRU / the boot-time migration framework — the
- * migration belongs to the long-running server so it runs the DB-mutating
- * migration exactly once; the CLI shouldn't mutate Mongo as a side effect
- * of starting up. Named here as a single set so "what does the CLI skip"
- * is readable in one place instead of re-derived from which six steps
- * `initForCli()` happens to call.
+ * Redis / mailer / search / LRU / the boot-time migration framework / the
+ * relation unique-index build — the migration (and the index build that
+ * depends on it being clean) belongs to the long-running server so it
+ * runs the DB-mutating work exactly once; the CLI shouldn't mutate Mongo as
+ * a side effect of starting up. Named here as a single set so "what does
+ * the CLI skip" is readable in one place instead of re-derived from which
+ * steps `initForCli()` happens to call.
  */
-export const CLI_SKIP_STEPS: ReadonlySet<string> = new Set(['redis', 'bootMigrations', 'seedOAuthClients', 'mailer', 'lru']);
+export const CLI_SKIP_STEPS: ReadonlySet<string> = new Set(['redis', 'bootMigrations', 'relationUniqueIndexes', 'seedOAuthClients', 'mailer', 'lru']);
 
 /**
  * Topologically sort `steps` by their `after` edges. Mirrors
@@ -158,9 +172,9 @@ export const CLI_SKIP_STEPS: ReadonlySet<string> = new Set(['redis', 'bootMigrat
  * `alreadyLoaded`, which only ever describes names outside the input set.
  * Here a skipped name IS declared in `steps`; it is simply never visited
  * into the output. This is what lets `initForCli()` omit `redis` /
- * `bootMigrations` / `seedOAuthClients` / `mailer` / `lru` without the
- * steps that (harmlessly, for the other boot path) reference them via
- * `after` failing to resolve.
+ * `bootMigrations` / `relationUniqueIndexes` / `seedOAuthClients` / `mailer`
+ * / `lru` without the steps that (harmlessly, for the other boot path)
+ * reference them via `after` failing to resolve.
  *
  * @throws on a duplicate step name.
  * @throws on an `after` entry that resolves to neither a declared step nor
