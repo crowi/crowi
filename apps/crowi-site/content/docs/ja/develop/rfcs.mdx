@@ -3,95 +3,41 @@ title: RFC インデックス
 description: Crowi 2.0 の設計提案 (RFC) の一覧
 ---
 
-Crowi 2.0 の大きな設計判断は **RFC (Request for Comments)** として
-リポジトリの `docs/rfcs/` に文書化されています。このページは、現時点で
-存在する RFC の一覧と概要をまとめたものです。
+Crowi 2.0 の大きな設計判断は **RFC (Request for Comments)** として文書化されています。本文はリポジトリの `docs/rfcs/` にあり、下の表の番号から GitHub 上で直接読めます。
 
-> **Note**: Crowi v2 は alpha 開発中で、RFC の内容は実装の進行に合わせて
-> 改訂されることがあります (各 RFC の「round」表記はその文書が何回目の
-> 改訂かを示します) が、下記の提案の多くはすでにコードベースへ取り込み
-> 済みです。「状態」欄は文書ではなく実装の進捗を示します。
+このページは索引だけを持ちます。要約と実装状況は RFC 自身が持つため、ここでは繰り返しません。
 
 ## RFC 一覧
 
-| 番号 | タイトル | ターゲット | 状態 |
-| ---- | -------- | ---------- | ---- |
-| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | プラグインアーキテクチャ | Crowi 2.0 | 実装済み |
-| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | Crowi 2.0 | Phase 1–6 実装済み / Phase 7 以降は継続中 |
-| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | Crowi 2.0 | 実装済み |
-| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | Crowi 2.0 | 実装済み |
-| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | ページプレゼンスとヘッダー UI | Crowi 2.0 | 実装済み |
-| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API: Express + ts-rest → Hono | Crowi 2.0 | 実装済み (2026-05-22) |
-
-## RFC-0001: プラグインアーキテクチャ
-
-ファイルストレージ・外部検索・認証プロバイダ・通知シンクという 4 つの
-互いに独立した関心事を、コアから切り出して独立配布可能なプラグインに
-する提案です。コアは、プラグインを 1 つも入れなくても動く「バッテリー
-同梱」のデフォルトを持ちます。運用者は CLI でプラグインを追加し、管理
-UI から設定します。Crowi 2.0 のプラグインモデルの土台です。
-
-→ 利用者向けの解説は [プラグインアーキテクチャ](./plugins-overview)。
-
-## RFC-0002: レンダラプラグインアーキテクチャ
-
-RFC-0001 のプラグインモデルに「レンダリング」という 5 つ目の関心事を
-追加する提案です。Markdown のパース・AST 変換・埋め込み処理・HTML 描画
-がプラグインの拡張ポイントになります。SSR ファースト、編集中は外部 API
-を叩かない、新しい記法を基本的に増やさない、という 3 つの設計上の約束が
-特徴です。Phase 1–6 が実装済みで、Phase 7 以降が進行中です。
-
-→ 利用者向けの解説は [レンダラプラグイン](../operations/renderers)。
-
-## RFC-0003: リアルタイム共同編集
-
-Crowi 2.0 にリアルタイム共同編集を追加する提案です。同期エンジンに Yjs、
-WebSocket バックエンドに Hocuspocus を使います。複数ユーザーが同じ
-ページを同時編集でき、変更は CRDT セマンティクスで決定的に収束します。
-正規の Markdown ソースは、明示的な保存時に `Revision` ドキュメントへ
-書き出されます。
-
-→ 利用者向けの解説は [リアルタイム共同編集](../guide/realtime-editing)、
-運用者向けは [リアルタイム共同編集の運用](../operations/realtime-collab)。
-
-## RFC-0004: エディタ UX の強化
-
-RFC-0003 の最小限の CodeMirror 6 エディタの上に、4 つの編集生産性機能を
-追加する提案です。`@user` メンションと `[[Page` wikilink のオートコン
-プリート、URL / 画像のペースト処理、ドラッグ&ドロップアップロード、
-そして下書きページの管理ビュー (`/me/creating-pages`) です。Crowi 2.0
-で実装済みです。
-
-## RFC-0005: ページプレゼンスとヘッダー UI
-
-ページ閲覧画面に 2 つの関連変更を加える提案です。1 つはタイトル上の
-**ライブプレゼンス行** — 今そのページを見ているユーザーをリアルタイムに
-表示し、編集中のユーザーをバッジで区別します。もう 1 つは
-**メタチップ行の再構成** — いいね・閲覧・コメント・バックリンクを統一
-されたクリック可能なチップに変え、「今いる人」と「過去に見た人」の
-シグナルを分離します。プレゼンスの WebSocket は RFC-0003 の `/collab` と
-同じ api プロセスに同居 attach され、専用インフラを増やしません。
-
-→ 利用者向けの解説は [ページの基本操作](../guide/pages)。
-
-## RFC-0006: HTTP API — Express + ts-rest → Hono
-
-`/api/*` HTTP レイヤーのフレームワークを Express + ts-rest から
-Hono + `@hono/zod-openapi` へ置き換える提案です。`packages/api-contract/
-src/schemas/` 配下の Zod スキーマはほぼそのまま移行し、ts-rest の
-contract は `createRoute` のルート定義として書き直されます。api アプリ
-は `/api/docs` で Scalar API リファレンスを公開します。レガシーの
-`/api/*` Express マウントもあわせて廃止されます。2026-05-22 に実装
-完了しました。
-
-→ 移行後のアーキテクチャは [アーキテクチャ](./architecture) を参照。
+| 番号 | タイトル | 関連ドキュメント |
+| ---- | -------- | ---------------- |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | プラグインアーキテクチャ | [プラグインアーキテクチャ](./plugins-overview) |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | [レンダラパイプライン](./renderer-pipeline) / [レンダラプラグイン](../operations/renderers) |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | [リアルタイム共同編集](../guide/realtime-editing) / [リアルタイム共同編集の運用](../operations/realtime-collab) |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | ページプレゼンスとヘッダー UI | [ページの作成と編集](../guide/pages) |
+| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API フレームワークの移行 — ts-rest から Hono へ | [アーキテクチャ](./architecture) |
+| [RFC-0008](https://github.com/crowi/crowi/blob/main/docs/rfcs/0008-migration-framework.md) | 移行フレームワーク | [v1 からの移行](../operations/upgrading-from-v1) |
+| [RFC-0009](https://github.com/crowi/crowi/blob/main/docs/rfcs/0009-revision-storage-compaction.md) | リビジョンストレージの圧縮 | |
+| [RFC-0010](https://github.com/crowi/crowi/blob/main/docs/rfcs/0010-oauth-and-api-access.md) | OAuth 2.0 の基盤とスコープ付き API アクセス | [アカウントとセキュリティ](../guide/account-security) |
+| [RFC-0011](https://github.com/crowi/crowi/blob/main/docs/rfcs/0011-crowi-mcp.md) | Crowi MCP サーバー (Streamable HTTP による組み込みのリモート MCP) | [AI ツールから使う (MCP)](../guide/mcp) |
+| [RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md) | Crowi CLI (`@crowi/cli`) — 利用者向けのコマンドラインクライアント | [CLI (コマンドライン)](../guide/cli) |
+| [RFC-0013](https://github.com/crowi/crowi/blob/main/docs/rfcs/0013-slack-plugin.md) | Slack プラグイン (統合) と Hono 上のプラグイン HTTP ルート | [Slack 連携](../operations/slack) |
+| [RFC-0014](https://github.com/crowi/crowi/blob/main/docs/rfcs/0014-auth-provider-plugins.md) | 認証プロバイダプラグイン (ベンダプラグインによる外部アカウントでのサインイン) | [外部アカウントでのサインイン](../operations/federated-auth) |
+| [RFC-0015](https://github.com/crowi/crowi/blob/main/docs/rfcs/0015-image-display-attributes.md) | 画像の表示属性とエディタのアフォーダンス | [Markdown 記法](../guide/markdown) |
+| [RFC-0016](https://github.com/crowi/crowi/blob/main/docs/rfcs/0016-ios-native-app.md) | Crowi のネイティブ Apple アプリ (マルチワークスペース対応、iPhone / iPad が v1、macOS も見据える) | |
+| [RFC-0017](https://github.com/crowi/crowi/blob/main/docs/rfcs/0017-collab-invalidate-on-rename-delete.md) | リネームと削除時のライブ共同編集エディタの無効化 | |
+| [RFC-0018](https://github.com/crowi/crowi/blob/main/docs/rfcs/0018-quoted-page-comments.md) | リビジョンを意識した引用付きページコメント | |
+| [RFC-0019](https://github.com/crowi/crowi/blob/main/docs/rfcs/0019-totp-two-factor-auth.md) | TOTP による二要素認証 | |
+| [RFC-0020](https://github.com/crowi/crowi/blob/main/docs/rfcs/0020-html-artifact-pages.md) | HTML アーティファクトページ | |
+| [RFC-0021](https://github.com/crowi/crowi/blob/main/docs/rfcs/0021-page-metadata-change-history.md) | 本文以外の変更のページ履歴 | |
+| [RFC-0022](https://github.com/crowi/crowi/blob/main/docs/rfcs/0022-mcp-oauth-connector.md) | 外部 MCP コネクタのための OAuth 連携 | |
+| [RFC-0023](https://github.com/crowi/crowi/blob/main/docs/rfcs/0023-client-agnostic-rendered-ast.md) | クライアント非依存の renderedAst (web / iOS / 将来のクライアント向けの型付きレンダリング AST) | |
+| [RFC-0024](https://github.com/crowi/crowi/blob/main/docs/rfcs/0024-workspace-branding.md) | マルチワークスペースの識別のためのワークスペースブランディング | |
 
 ## RFC を読むには
 
-RFC 本文はリポジトリの `docs/rfcs/` 配下にあります。上の表のリンクから
-GitHub 上で直接読めます。各 RFC は冒頭にステータス・ターゲットリリース・
-依存する RFC を記したメタデータブロックを持ち、続いて Summary / Goals /
-Non-goals / 詳細設計、という構成になっています。
+各 RFC は冒頭にステータス・ターゲットリリース・依存する RFC を記したメタデータブロックを持ち、続いて Summary / Goals / Non-goals / 詳細設計という構成になっています。実装がどこまで進んでいるかは、この索引ではなく各 RFC のメタデータブロックが正です。
 
 ## 関連ページ
 
