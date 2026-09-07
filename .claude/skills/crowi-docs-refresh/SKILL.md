@@ -126,6 +126,11 @@ pnpm --filter @crowi/site build    # Fumadocs は壊れた mdx でビルドが�
 # 出力するので、ビルドでは検知できない)。リポジトリルートの pnpm lint と pre-push、
 # それに docs.yml (ci.yml が docs だけの push を skip するため) からも走る。
 pnpm --filter @crowi/site check:links
+# 2 種類の禁止語を見る。(1) 内部識別子 (RFC 番号・spec id・リポジトリのパス・
+# 関数名・CSS トークン・モデルのフィールド名) — guide/ operations/ reference/ のみ。
+# (2) canonical 用語の揺れ — develop/ と locale 直下の index も含む全ページ。
+# 正当な出現は scripts/docs-vocabulary-allow.json に {path, pattern, why} を足す。
+node scripts/check-docs-vocabulary.mjs
 pnpm --filter @crowi/site lint && pnpm --filter @crowi/site type-check
 ```
 
@@ -154,6 +159,15 @@ printf '{ "lastDocsSyncSha": "%s", "at": "%s" }\n' "$(git rev-parse HEAD)" \
 - **ja / en の片翼更新をしない**。
 - 見つけた stale は **fix or drop** — 退避先は存在しない(全 skill 共通)。
 - **push しない**。site の deploy は push に紐づくので、公開タイミングはユーザーが握る。
+- `guide/` `operations/` `reference/` に **RFC 番号・spec id (`feature-*`)・ファイルパス・関数名・ミドルウェア名・CSS トークン・モデルのフィールド名を書かない**。書けるのは `develop/` のみ(検知は Step 4 の禁止語 lint)。
+- **経緯を書かない**。「以前は」「旧バージョンでは」「この変更は意図的な整理です」は削る。例外は `operations/upgrading-from-v1` の v1 との差分説明。
+- **未リリースの機能・「進行中」「予定」を書かない**。予定は LP と GitHub Releases に任せる。
+- **alpha 注意書きをページごとに書かない**(グローバルバナーが担う)。
+- Callout は Fumadocs `<Callout>` に統一し **1 ページ 3 個まで**。6 行を超える注記は節に昇格する。
+- **手順ページの本文が 6,000 字を超えたら分割を検討する**。
+- **リンク文言はリンク先ページのタイトルと一致させる**。概念の呼び名はページタイトルに揃える(プラグインの導入と設定 / 機密設定の暗号化 / ストレージ設定 / 検索バックエンドのセットアップ / メール送信の設定 / 個人アクセストークン / runner プロジェクト / リビジョン)。**この統一は `develop/` にも効く** — 内部識別子と違って呼び名の揺れに例外フォルダは無い(現在 lint が見ているのは ja の裸のラテン `revision` と `notification sink` の 2 語)。
+- **RFC 索引 (`develop/rfcs`) は repo `docs/rfcs/` の全ファイルを載せる。** `guide/` と `operations/` からは RFC へ直リンクしない(RFC は設計文書であって利用者・運用者向けではない)。`develop/` 内からの直リンクは許可する — 読者がコントリビュータで、RFC 本文そのものが目的地だから。
+- **索引に RFC の実装状況を書かない。** 23 本の進捗を docs 側で維持すると必ず陳腐化する。状態は各 RFC 自身のメタデータブロックが持つ。
 
 ## エッジケース
 

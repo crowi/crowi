@@ -73,7 +73,9 @@ Docs は読者別の 3 タブ (Fumadocs の root フォルダ) に分かれて�
 
 1. 読者に対応するフォルダに `<slug>.mdx` を作る。**ja / en の両方**を揃えると言語スイッチャーが自然に動作する。
 2. 同じフォルダの `meta.json` の `pages` にスラッグを追加する。未登録のページはサイドバーに出ない。タブ内のグループ見出しは `"---名前---"` のセパレータで書く。
-3. ページを移動・改名したら `public/_redirects` に 301 を足し、リンク元の相対リンクを張り替える。
-4. `pnpm --filter @crowi/site check:links` で相対リンクが解決するか確認する (リポジトリルートの `pnpm lint` からも走る)。
+3. フォルダの入口ページは `index.mdx` として置く (URL はフォルダ自身 `/docs/operations`)。`meta.json` にも `"index"` として登録し、他のページからは `../operations` のようにフォルダの URL でリンクする — `./index` は URL として存在しないのでリンクチェッカが弾く。
+4. ページを移動・改名したら `public/_redirects` に 301 を足し、リンク元の相対リンクを張り替える。
+5. `pnpm --filter @crowi/site check:links` で相対リンクが解決するか確認する (リポジトリルートの `pnpm lint` からも走る)。
+6. `node scripts/check-docs-vocabulary.mjs` で、`guide/` `operations/` `reference/` に RFC 番号・spec id・リポジトリのパス・内部の識別子が入っていないか確認する (同じく `pnpm lint` から走る)。正当な出現は `scripts/docs-vocabulary-allow.json` に `{path, pattern, why}` で登録する。
 
 読者と文書タイプによる置き場所の決め方・書いてよい内容の規約は [crowi-docs-refresh skill](../../.claude/skills/crowi-docs-refresh/SKILL.md) にある。
