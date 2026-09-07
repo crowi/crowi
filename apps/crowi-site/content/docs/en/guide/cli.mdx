@@ -1,15 +1,12 @@
 ---
 title: CLI (command line)
-description: Use the end-user CLI `@crowi/cli` (`crowi`) to search, read, create, and edit your wiki from the terminal (RFC-0012)
+description: Search, read, create and edit your wiki from the terminal with `@crowi/cli`
 ---
 
 `@crowi/cli` is the **end-user command-line tool** for Crowi. It ships via
 `npm i -g @crowi/cli` and is invoked as `crowi`. It talks to your wiki over HTTP
 only (it never touches the database) and uses OAuth to act **as you** — search,
 read, create, and edit pages from the terminal.
-
-See [RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md)
-for the design background.
 
 <Callout title="Not the same as the operator admin-cli">
   `@crowi/cli` (`crowi`) is for end users acting with their own permissions over
@@ -52,8 +49,9 @@ crowi login --device https://wiki.example.com
 crowi login --token <pat> https://wiki.example.com
 ```
 
-Issue a PAT from the web UI under **Settings → Password / API tokens / MCP**,
-choosing its scopes and expiry.
+Issue a personal access token under **Settings → Password / API tokens /
+Linked accounts**, choosing its scopes and expiry ([Account and
+security](./account-security)).
 
 Check your session with `crowi whoami` (shows the signed-in user and active
 scopes). `crowi logout` revokes and removes the tokens.
@@ -81,9 +79,8 @@ crowi login https://wiki.example.com --scope "read write"   # everything issuabl
 ```
 
 `--scope` is validated against the server's issuable catalog before any request
-leaves your machine, so a typo or a reserved `admin:*` scope (never issuable to
-PAT / OAuth tokens) fails fast. No CLI command requires `admin:*` (the admin API
-is web-session-only in v1).
+leaves your machine, so a typo — or an admin scope, which is never issuable to a
+token — fails fast. No CLI command needs an admin scope.
 
 ### Running a command without the scope it needs
 
@@ -250,23 +247,13 @@ crowi completion zsh > "${fpath[1]}/_crowi"
 crowi completion fish > ~/.config/fish/completions/crowi.fish
 ```
 
-## Server compatibility (version skew & capabilities)
+## Version skew against the server
 
-Crowi is self-hosted, so the `crowi` binary and the server can be on different
-versions. The CLI reads the public `GET /api/app/info` signal
-(`version` / `apiVersion` / `capabilities`) and caches it on the profile for a
-few minutes.
+Crowi is self-hosted, so `crowi` and the server it talks to can be on different versions. The CLI never refuses a command over that.
 
-The policy is **warn-only — the CLI never refuses a command over a version or
-capability mismatch**:
+When the server's API differs from what this CLI expects, it prints a one-line note and carries on; a feature the server does not have (`search` with no search backend configured, say) reports "not available on this server".
 
-- Requests are validated against the bundled request contracts (the "v2 floor")
-  before sending, but responses are parsed leniently, so extra or missing fields
-  from a newer / older server do not break a command.
-- If the server's API surface differs from the one this CLI targets, a one-line
-  skew note is printed to stderr and the command continues.
-- A command whose feature the server does not advertise (e.g. `search` with no
-  search backend configured) prints a clear "not available on this server"
-  message instead of a raw error.
-- An older server that predates capability reporting is treated as the always-on
-  baseline with skew warnings suppressed, so it keeps working silently.
+## Related pages
+
+- [Account and security](./account-security) — issuing and revoking personal access tokens
+- [Using Crowi from AI tools (MCP)](./mcp) — the same token from an AI client

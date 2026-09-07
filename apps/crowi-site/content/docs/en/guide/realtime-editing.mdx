@@ -8,16 +8,14 @@ operates in realtime collaborative mode. Like Google Docs, you can see
 other people's cursors and selections, and edits propagate to other
 participants within a few hundred milliseconds.
 
-For deployment instructions, see [Operating realtime collaborative
-editing](../operations/realtime-collab).
+For deployment instructions, see [Operating realtime
+collaboration](../operations/realtime-collab).
 
 ## Live updates while viewing a page
 
 When someone saves a page you are **reading**, its body is swapped to
-the latest revision automatically, without a reload
-([RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md)
-read-side soft-refresh). You do not need the editor open — simply
-viewing the page keeps you on the latest content.
+the latest revision automatically, without a reload. You do not need the
+editor open — simply viewing the page keeps you on the latest content.
 
 - The swap happens with **no full reload and no spinner**, and your
   scroll position is preserved (corrected when the height changes).
@@ -33,8 +31,8 @@ viewing the page keeps you on the latest content.
   even newer version".
 - Both REST saves and collaborative saves (checkpoints) trigger it
   equally.
-- It also reaches viewers connected to a different instance in a
-  multi-instance deployment (`REDIS_URL` configured).
+- It also reaches readers connected to a different server, when Crowi runs
+  on several.
 - It also catches up automatically, without a reload, after the tab
   was backgrounded or after a network disconnect: both returning to a
   backgrounded tab and the presence connection re-establishing after a
@@ -74,8 +72,8 @@ channel, but the target is the comment list rather than the body.
   changed" notification is delivered; the client then re-fetches the
   comment list from the permission-checked API. A private page's comment
   text never leaks to a viewer's WebSocket.
-- It also reaches viewers connected to a different instance in a
-  multi-instance deployment (`REDIS_URL` configured).
+- It also reaches readers connected to a different server, when Crowi runs
+  on several.
 
 ### When it does not happen (limits)
 
@@ -93,9 +91,9 @@ what creates a new revision.
 
 - While you type, your text is shared live with other editors, but
   it is *not yet committed as a revision*. It exists only as a
-  transient Yjs state on the server.
+  transient state on the server.
 - The moment you click **Save** (bottom-right), a checkpoint is taken
-  and the current body is persisted as a new `Revision`.
+  and the current body is persisted as a new revision.
 - There is **no autosave**. Save explicitly when you reach a meaningful
   checkpoint.
 - The `Ctrl + S` / `Cmd + S` keyboard shortcut is intentionally not
@@ -106,36 +104,30 @@ what creates a new revision.
 > history. The cleaner your save cadence, the easier it is to scan
 > the revision list later.
 
-## Contributors
+## Who is credited on a save
 
-Every saved revision records two kinds of editor information:
+Every saved revision records two kinds of editor:
 
-- **`savedBy`**: the user who clicked the Save button.
-- **`contributors`**: users who were **present in the same edit
-  session** (visible via Yjs awareness) at the time of the save.
+- **who saved it**: the person who pressed Save.
+- **who was there**: everyone who had the same page open in the editor at
+  that moment.
 
-"Present" means the page was open in their browser with awareness
-broadcasting — they do not have to have typed anything. This is how
-Crowi attributes joint editing sessions: anyone who joined the
-collaborative session is credited on the resulting revision.
+"There" means the page was open in their browser — they do not have to have
+typed anything. It is how Crowi records who a page was written with.
 
-This tracking is **best-effort, scoped to the api process that handled
-the save**. On a single-instance deployment that's effectively
-everyone who was present; on a multi-instance deployment, only the
-awareness participants visible to the replica that processed the save
-are recorded — participants connected to a different replica may not
-be aggregated in.
+The record is best-effort. When Crowi runs on several servers, only the
+people visible to the server that handled the save are recorded; someone
+connected to another server may be missed.
 
-In the **revision history list**, savedBy and contributors are
-combined like this:
+In the **revision history**, the two are combined like this:
 
 ```
 Alice (with Bob, Carol)  · 5 minutes ago
 ```
 
-Read this as "Alice saved the revision, while Bob and Carol were
-in the editing session with her." When there are no other
-contributors (solo editing), only `Alice` is shown.
+Read this as "Alice saved the revision, while Bob and Carol were in the
+editing session with her." With nobody else around (solo editing), only
+`Alice` is shown.
 
 ## 20-editor cap per page
 
@@ -158,8 +150,8 @@ guide).
 What happens when your network drops:
 
 - An **"Offline"** toast appears at the top of the page.
-- Local edits in the editor are **preserved** while offline — Yjs
-  keeps accumulating deltas locally.
+- Local edits in the editor are **preserved** while offline — they keep
+  accumulating on your machine.
 - When the connection comes back, a **"Reconnected"** toast appears,
   your buffered deltas are sent to the server, and you receive any
   delta you missed from peers.
@@ -180,9 +172,9 @@ modified externally. Please reload."**
 
 - Clicking OK reloads the page and pulls in the latest server-side
   state.
-- This dialog only appears when the server's `Page.yjsState` was
-  reset or invalidated by an external action and your edit session
-  cannot continue. It does not appear during normal use.
+- This dialog only appears when an external action reset the page on the
+  server and your edit session cannot continue. It does not appear during
+  normal use.
 - Trying to keep editing after dismissing the dialog will most
   likely fail to save. Reload the page.
 
@@ -201,5 +193,4 @@ The `(with …)` segment is the contributor list. It gives a glance at
 who else participated in each editing session, even if they did not
 trigger the save themselves.
 
-Revision diff and rollback work the same way as in earlier Crowi
-versions.
+For diffs and rolling back, see [Revisions and rollback](./revisions).

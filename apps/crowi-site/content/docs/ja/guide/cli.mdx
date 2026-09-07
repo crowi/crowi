@@ -1,16 +1,12 @@
 ---
 title: CLI (コマンドライン)
-description: エンドユーザー向け CLI `@crowi/cli` (`crowi`) で、ターミナルから wiki を検索 / 読み取り / 作成 / 編集する (RFC-0012)
+description: "`@crowi/cli` でターミナルから wiki を検索・読み取り・作成・編集する"
 ---
 
 `@crowi/cli` は、ターミナルから Crowi を操作するための **エンドユーザー向け
 コマンドラインツール** です。`npm i -g @crowi/cli` で配布され、`crowi` という
 名前で使えます。HTTP のみで wiki を叩き (DB には触れません)、OAuth で
 **あなた自身として** ページの検索 / 読み取り / 作成 / 編集を行います。
-
-設計の背景は
-[RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md)
-を参照してください。
 
 <Callout title="運用者向けの admin-cli とは別物です">
   `@crowi/cli` (`crowi`) はエンドユーザーが自分の権限で HTTP 経由に使う
@@ -49,12 +45,12 @@ crowi login https://wiki.example.com
 # 2. デバイス認可グラント (headless / SSH 用。ブラウザ非検出時は自動選択)
 crowi login --device https://wiki.example.com
 
-# 3. 事前発行した Personal Access Token (PAT) を直接保存 (OAuth 往復なし)
+# 3. 事前に発行した個人アクセストークンを直接保存 (OAuth 往復なし)
 crowi login --token <pat> https://wiki.example.com
 ```
 
-PAT は web UI の **設定 → パスワード/APIトークン/MCP** から、スコープと有効期限を
-指定して発行します。
+個人アクセストークンは **設定 → パスワード/APIトークン/アカウント連携** から、
+スコープと有効期限を指定して発行します ([アカウントとセキュリティ](./account-security))。
 
 ログイン状態は `crowi whoami` で確認できます (サインイン中のユーザーと
 有効なスコープを表示)。`crowi logout` でトークンを失効・削除します。
@@ -82,9 +78,8 @@ crowi login https://wiki.example.com --scope "read write"   # 発行可能な全
 ```
 
 `--scope` はリクエスト送信前に **サーバの発行可能カタログと照合** されるため、
-タイプミスや予約済みの `admin:*` (PAT・OAuth トークンには発行不可) は即座に
-弾かれます。`admin:*` を要求する CLI コマンドはありません (管理 API は v1 では
-web セッション専用)。
+タイプミスや、そもそも発行できない管理者向けスコープは即座に弾かれます。
+管理者向けスコープを必要とする CLI コマンドはありません。
 
 ### スコープが足りないコマンドを実行したとき
 
@@ -251,23 +246,13 @@ crowi completion zsh > "${fpath[1]}/_crowi"
 crowi completion fish > ~/.config/fish/completions/crowi.fish
 ```
 
-## サーバ互換性 (バージョンスキュー / 能力検出)
+## サーバとのバージョン差
 
-Crowi は self-hosted のため、`crowi` バイナリと接続先サーバのバージョンが
-異なり得ます。CLI は公開シグナル `GET /api/app/info`
-(`version` / `apiVersion` / `capabilities`) を読み、プロファイルに数分間
-キャッシュします。
+Crowi は self-hosted なので、`crowi` と接続先サーバのバージョンがずれることがあります。CLI がそれを理由にコマンドを拒否することはありません。
 
-ポリシーは **warn-only** で、バージョン / 能力の不一致を理由に CLI が
-コマンドを拒否することはありません。
+サーバの API が CLI の想定と違う場合は 1 行の注意を出したうえで実行を続け、そのサーバが持たない機能 (検索バックエンド未設定時の `search` など) は「このサーバでは利用できません」と表示します。
 
-- リクエストはバンドルされたリクエスト契約 (v2 floor) で送信前に検証されますが、
-  レスポンスは寛容にパースされるため、新旧サーバの余分な / 欠けたフィールドで
-  コマンドが壊れません。
-- サーバの API サーフェスが CLI の対象と異なる場合、1 行のスキュー注意を
-  stderr に出してコマンドは続行します。
-- サーバが広告していない機能 (例: 検索バックエンド未設定時の `search`) は、
-  生エラーではなく「このサーバでは利用できません」という明確なメッセージを
-  出します。
-- 能力レポート以前の古いサーバ (`version` / `capabilities` 無し) は常時 ON の
-  baseline として扱われ、スキュー警告は抑制されて静かに動き続けます。
+## 関連ページ
+
+- [アカウントとセキュリティ](./account-security) — 個人アクセストークンの発行と失効
+- [AI ツールから使う (MCP)](./mcp) — 同じトークンを AI クライアントから使う

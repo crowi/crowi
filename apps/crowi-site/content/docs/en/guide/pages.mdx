@@ -111,25 +111,21 @@ In Crowi 2.x, a newly created page starts in the **draft** state — a
 "not-yet-published, still-being-written" page.
 
 - Creating a page from "New page" (or similar) immediately materialises
-  the page as a draft. A draft has a real `pageId`, so you can
-  upload [attachments](./attachments) to it while still writing.
+  the page as a draft. A draft is a real page, so you can upload
+  [Attachments](./attachments) to it while still writing.
 - A draft is **only visible to its creator**. It is excluded from page
   lists, search results, and backlinks for everyone else, and realtime
   collaborative-editing connections from non-creators are rejected.
-- Drafts hide their social affordances. The page view has no like /
-  watch / bookmark / link-share / comments / presence row, and a small
-  info notice tells the author "this page is not yet published; edit and
-  save it to publish." Edit and the dotmenu (history / rename / delete)
-  still work.
+- A draft **hides everything that involves other people**. There is no
+  like, watch, bookmark or share-link button and no live presence row,
+  and in place of the comment section you get a notice that the page is
+  still a draft together with an edit button. Publishing brings the
+  normal view back.
 - Pressing **Save** in the editor flips the page from draft to
   **published**, making it visible to everyone who has the right to view
   it.
 - This transition is **one-way**. Once a page is published it cannot be
   returned to the draft state.
-
-> **Note**: Crowi 1.x had an implicit "create a hidden page when you
-> start editing" behaviour; in v2 the draft state plays that role
-> instead. See [RFC-0004](../develop/rfcs) for details.
 
 ### Conflicts on the same path
 
@@ -160,9 +156,9 @@ Crowi 2.0 this editor supports **realtime collaborative editing**, so
 multiple users can edit the same page at once. See
 [Realtime collaborative editing](./realtime-editing) for details.
 
-When you save, the body at that moment is persisted as a new `Revision`
-(history entry). The page itself always points at the latest revision, and
-past revisions can be followed from [Revisions and rollback](./revisions).
+When you save, the body at that moment is kept as a new revision. The page
+itself always shows the latest revision, and past revisions can be followed
+from [Revisions and rollback](./revisions).
 
 ## The page header
 
@@ -188,7 +184,7 @@ page open** appear in real time.
   someone leaves, their avatar disappears.
 - A user who is **also editing** gets a small `✏️` badge in the corner of
   their avatar. This indicates that they have the
-  [realtime collaborative editing](./realtime-editing) editor open.
+  [Realtime collaborative editing](./realtime-editing) editor open.
 - Up to 5 avatars are shown; beyond that they collapse into `[+N]`.
   Clicking `[+N]` opens a popover with the viewer list (your own entry is
   labelled "(you)"). The list shows up to 20 viewers; beyond that it shows
@@ -292,24 +288,6 @@ following:
 > the relevant section on long pages. After scrolling, focus moves to the
 > target heading, so keyboard users can continue reading from there.
 
-### Where did the v1.x "seen users" avatar row go?
-
-In Crowi 1.x, a row of overlapping avatars for "users who viewed this
-page" sat below the page title. **In Crowi 2.0 this avatar row has been
-removed.**
-
-Its role has been replaced by the **"Seen" chip + modal** in the meta chip
-row. Clicking the Seen chip opens a modal with the list of users who have
-opened this page.
-
-This is a deliberate simplification. The new **live presence** display —
-the row above the title on wide viewports, the card below the chips on
-mobile — became the primary "who is around" signal, so "who has viewed
-this in the past" is consolidated into a compact chip, avoiding two
-confusingly similar avatar rows.
-
-See [RFC-0005](../develop/rfcs) for the design details.
-
 ## Taking a page out as markdown
 
 The "**⋯**" menu at the top right of a page hands you its body as markdown.
@@ -389,11 +367,6 @@ three options.
 | Anyone with the link | `2` | Restricted to people with the link. A signed-in user who opens the page's ID URL (`/<page id>`) is automatically registered as an editor of that page the first time they open it. |
 | Just me | `4` | Only the creator can access it. |
 
-> **Note**: The codebase still contains a definition for the
-> `Specified users only` grant (internal value `3`), but it is not enabled
-> as an option in the current UI. The actual choices are Public, Anyone with
-> the link, and Just me.
-
 Grants behave as follows.
 
 - For pages whose grant is not Public, a grant check runs for viewing,
@@ -408,9 +381,8 @@ Grants behave as follows.
   banner near the top of the screen — "Share this link to invite an
   editor" — with the share URL and a copy button.
 - If a user without access rights directly specifies the page ID of a
-  **Just me** or **Specified users** page, the page is treated as "not
-  found" to hide its very existence (a design that does not leak whether
-  the user has permission).
+  **Just me** page, the page is treated as "not found" to hide its very
+  existence (a design that does not leak whether the user has permission).
 - A portal page (ending with `/`) is always Public.
 
 The grant can be changed while editing a page. Switching from Public to a
@@ -421,19 +393,15 @@ restricted grant registers the acting user as a granted user.
 Pages whose grant is not Public are tagged with two complementary
 visual cues, so the sharing posture is obvious at a glance:
 
-- A thin **accent strip** (4px) sits just below the screen header.
-  Restricted (link-only) pages get a dark-purple tint; Just-me /
-  Specified pages get a dark-cool-gray tint. Public pages show no
-  strip.
+- A thin **accent strip** sits just below the screen header. **Anyone with
+  the link** pages get a dark-purple tint; **Just me** pages get a dark
+  grey one. Public pages show no strip.
 - Next to the page title, a small **grant chip** displays the icon and
-  label — 🔗 "Link only" for Restricted, 🔒 "Just me" / "Specified"
-  for Owner / Specified. The chip's border and text colour pick up the
-  same accent.
+  label — 🔗 "Link only" for **Anyone with the link**, 🔒 "Just me" for
+  **Just me**. The chip's border and text colour pick up the same accent.
 
-The two cues use the same `--page-grant-accent` token, so the strip
-and chip always agree on tint. Public pages intentionally have no
-signal — a wiki page being publicly readable inside the team is the
-default state and does not need decoration.
+The strip and the chip always agree on tint. Public pages have no signal —
+being readable across the team is the default state.
 
 ## Related pages
 
