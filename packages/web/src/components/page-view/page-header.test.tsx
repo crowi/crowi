@@ -57,6 +57,7 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
     updatedAt: '2026-05-10T00:00:00.000Z',
     likerCount: 0,
     seenUsersCount: 0,
+    isLiked: false,
     ...overrides,
   } as PageWithRevision;
 }
@@ -171,6 +172,21 @@ describe('PageHeader — expanded state', () => {
     // The expanded like button is a text button (variant outline, size sm).
     const likeButton = screen.getByRole('button', { name: 'いいねを追加' });
     expect(likeButton.textContent).toContain('いいね');
+  });
+
+  // AC-11/D-2 — the header passes `page.isLiked` straight through to
+  // `LikeButton` (which itself drives `useToggleLike`), never a
+  // client-recomputed membership from a liker id array.
+  it('drives the like button from page.isLiked (false: "add" state)', () => {
+    renderHeader(<PageHeader page={makePage({ isLiked: false })} sticky showActions />);
+    const likeButton = screen.getByRole('button', { name: 'いいねを追加' });
+    expect(likeButton.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('drives the like button from page.isLiked (true: "liked" state)', () => {
+    renderHeader(<PageHeader page={makePage({ isLiked: true })} sticky showActions />);
+    const likeButton = screen.getByRole('button', { name: 'いいねを取り消す' });
+    expect(likeButton.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('renders no placeholder and no compact bar when sticky is disabled', () => {

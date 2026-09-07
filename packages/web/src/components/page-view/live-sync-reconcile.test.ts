@@ -20,13 +20,13 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
     latestRevision: 'rev-1',
     creator: null,
     lastUpdateUser: { _id: 'u1', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
-    liker: [],
     commentCount: 0,
     extended: undefined,
     createdAt: '2026-05-01T00:00:00.000Z',
     updatedAt: '2026-05-01T00:00:00.000Z',
     likerCount: 0,
     seenUsersCount: 0,
+    isLiked: false,
     redirectTo: null,
     ...overrides,
   } as PageWithRevision;
@@ -113,6 +113,20 @@ describe('pageLevelFieldsChanged / mergePageLevelFields (grant-only change, revi
     expect(merged.revision).toBe(current.revision);
     expect(merged.updatedAt).toBe(current.updatedAt);
     expect(merged.lastUpdateUser).toBe(current.lastUpdateUser);
+  });
+
+  // AC-11/D-2 — isLiked/likerCount/seenUsersCount are page-level merged
+  // fields (not derived from a `liker` id array, which no longer exists).
+  it('merges isLiked/likerCount/seenUsersCount as page-level fields', () => {
+    const current = makePage({ isLiked: false, likerCount: 1, seenUsersCount: 0 });
+    const fetched = makePage({ isLiked: true, likerCount: 2, seenUsersCount: 1 });
+
+    expect(pageLevelFieldsChanged(current, fetched)).toBe(true);
+    const merged = mergePageLevelFields(current, fetched);
+    expect(merged.isLiked).toBe(true);
+    expect(merged.likerCount).toBe(2);
+    expect(merged.seenUsersCount).toBe(1);
+    expect('liker' in merged).toBe(false);
   });
 });
 
