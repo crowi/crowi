@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 
-import { collectDocsFiles, DOCS_DIR, extractRelativeLinks, findBrokenLinks, resolveLink } from './check-docs-links.mjs'
+import { collectDocsFiles, DOCS_DIR, extractJsxHrefs, extractRelativeLinks, findBrokenLinks, resolveJsxHref, resolveLink } from './check-docs-links.mjs'
 
 describe('check-docs-links', () => {
   describe('extractRelativeLinks', () => {
@@ -55,6 +55,91 @@ describe('check-docs-links', () => {
       const source = ['~~~md', '[sample](./not-a-page)', '```', '[still-code](./nope)', '~~~', '[real](./mail)'].join('\n')
 
       assert.deepEqual(extractRelativeLinks(source), [{ href: './mail', line: 6 }])
+    })
+  })
+
+  describe('extractJsxHrefs', () => {
+    it('collects the href attribute of a JSX element with its line number', () => {
+      const source = ['<Cards>', '  <Card title="a" href="/ja/docs/guide/quickstart" />', "  <Card title='b' href='/ja/docs/operations' />", '</Cards>'].join('\n')
+
+      assert.deepEqual(extractJsxHrefs(source), [
+        { href: '/ja/docs/guide/quickstart', line: 2 },
+        { href: '/ja/docs/operations', line: 3 },
+      ])
+    })
+
+    it('ignores an href inside a fenced code block', () => {
+      // A page that documents the card markup shows the attribute in a fence.
+      // Checking it would flag a sample that is not a link on the rendered page.
+      const source = ['<Card href="/ja/docs/guide/quickstart" />', '```mdx', '<Card href="/ja/docs/does-not-exist" />', '```'].join('\n')
+
+      assert.deepEqual(extractJsxHrefs(source), [{ href: '/ja/docs/guide/quickstart', line: 1 }])
+    })
+
+    it('leaves markdown links alone — those are the relative-link checker\u2019s job', () => {
+      assert.deepEqual(extractJsxHrefs('[storage](./storage)'), [])
+    })
+  })
+
+  describe('resolveJsxHref', () => {
+    const root = mkdtempSync(join(tmpdir(), 'crowi-docs-jsx-'))
+    const docsRoot = join(root, DOCS_DIR)
+    const localeRoot = join(docsRoot, 'ja')
+    /** @type {Set<string>} */
+    let pages
+
+    before(() => {
+      for (const locale of ['ja', 'en']) {
+        mkdirSync(join(docsRoot, locale, 'operations'), { recursive: true })
+        mkdirSync(join(docsRoot, locale, 'guide'), { recursive: true })
+        writeFileSync(join(docsRoot, locale, 'index.mdx'), '')
+        writeFileSync(join(docsRoot, locale, 'operations', 'index.mdx'), '')
+        writeFileSync(join(docsRoot, locale, 'guide', 'quickstart.mdx'), '')
+      }
+      pages = new Set(collectDocsFiles(root))
+    })
+
+    after(() => {
+      rmSync(root, { recursive: true, force: true })
+    })
+
+    it('resolves a locale-absolute href to a page', () => {
+      assert.deepEqual(resolveJsxHref('/ja/docs/guide/quickstart', localeRoot, pages), { ok: true })
+    })
+
+    // The card that opens a whole tab points at the folder, which index.mdx owns.
+    it('resolves a folder href to the index page that owns the folder URL', () => {
+      assert.deepEqual(resolveJsxHref('/ja/docs/operations', localeRoot, pages), { ok: true })
+      assert.deepEqual(resolveJsxHref('/ja/docs', localeRoot, pages), { ok: true })
+    })
+
+    // The failure this check exists for: `Card` hands its href straight to the
+    // link component, so it never passes through the relative-link resolver
+    // that would have added the locale. A locale-less href 404s in production.
+    it('rejects an href that dropped the locale segment', () => {
+      const result = resolveJsxHref('/docs/guide/quickstart', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /\/ja\/docs/)
+    })
+
+    it('rejects an href that points into another locale', () => {
+      const result = resolveJsxHref('/en/docs/guide/quickstart', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /\/ja\/docs/)
+    })
+
+    it('rejects an href whose page does not exist', () => {
+      const result = resolveJsxHref('/ja/docs/reference/env', localeRoot, pages)
+
+      assert.equal(result.ok, false)
+      assert.match(result.reason, /no such page/)
+    })
+
+    it('skips an external destination', () => {
+      assert.deepEqual(resolveJsxHref('https://github.com/crowi/crowi', localeRoot, pages), { ok: true })
+      assert.deepEqual(resolveJsxHref('mailto:hi@example.com', localeRoot, pages), { ok: true })
     })
   })
 

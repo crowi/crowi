@@ -26,7 +26,15 @@
 // paths (docs pages use those for wiki-content examples like `/foo bar`), and
 // same-page anchors. Fragments are stripped before resolving, so
 // `./redis#acl` only checks that `redis.mdx` exists — not the heading.
-// JSX attributes are not scanned, so `<Card href="…">` is not covered.
+//
+// The `href` attribute of a JSX element (`<Card href="…">`) is checked too, but
+// under the opposite rule: it must be root-absolute *and* carry the locale.
+// `Card` hands its href straight to the link component, so it never passes
+// through the relative-link resolver that the MDX `a` renderer installs — a
+// locale-less `/docs/guide/quickstart` renders as a 404 while a build and a
+// relative-link scan both stay green. Markdown destinations keep their
+// root-absolute exemption: a docs page legitimately writes `/foo bar` as a
+// sample wiki path, and only JSX carries hrefs the site itself has to resolve.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
@@ -36,6 +44,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const DOCS_DIR = join('apps', 'crowi-site', 'content', 'docs')
 const PAGE_EXT = /\.mdx?$/
 const LINK_RE = /\]\(([^)]*)\)/g
+const JSX_HREF_RE = /\bhref=(?:"([^"]*)"|'([^']*)')/g
 // An opening fence is 3+ backticks or tildes; the closing fence must use the
 // same character and be at least as long (CommonMark). Tracking the marker
 // instead of toggling a boolean keeps a nested example fence — ```` wrapping
@@ -61,6 +70,24 @@ function normalizeHref(raw) {
  */
 function isFileRelative(href) {
   return /^\.\.?\//.test(href)
+}
+
+/**
+ * @param {string} href
+ * @returns {boolean}
+ */
+function isExternal(href) {
+  return /^(?:https?:\/\/|mailto:|tel:)/.test(href)
+}
+
+/**
+ * The part of a destination that names a page: the fragment and the query
+ * string are the browser's business, and a heading id is not checked.
+ * @param {string} href
+ * @returns {string}
+ */
+function pagePath(href) {
+  return href.split('#')[0].split('?')[0]
 }
 
 /**
@@ -117,6 +144,25 @@ export function extractRelativeLinks(source) {
 }
 
 /**
+ * Collect the `href` attribute of every JSX element on a page, ignoring fenced
+ * code so a page that documents the card markup is not checked as if it linked.
+ * @param {string} source
+ * @returns {{href: string, line: number}[]}
+ */
+export function extractJsxHrefs(source) {
+  /** @type {{href: string, line: number}[]} */
+  const hrefs = []
+
+  for (const { text, line } of proseLines(source)) {
+    for (const match of text.matchAll(JSX_HREF_RE)) {
+      hrefs.push({ href: match[1] ?? match[2], line })
+    }
+  }
+
+  return hrefs
+}
+
+/**
  * @param {string} fromFile absolute path of the page holding the link
  * @param {string} href a file-relative link destination
  * @param {string} localeRoot absolute path of content/docs/<locale>
@@ -124,7 +170,7 @@ export function extractRelativeLinks(source) {
  * @returns {{ok: true} | {ok: false, reason: string}}
  */
 export function resolveLink(fromFile, href, localeRoot, pages) {
-  const path = href.split('#')[0].split('?')[0]
+  const path = pagePath(href)
   if (path === '' || path === './') return { ok: true }
 
   if (PAGE_EXT.test(path)) {
@@ -144,6 +190,35 @@ export function resolveLink(fromFile, href, localeRoot, pages) {
   if (candidates.some((candidate) => pages.has(candidate))) return { ok: true }
 
   return { ok: false, reason: `no such page (looked for ${candidates.map((c) => relative(ROOT, c)).join(' / ')})` }
+}
+
+/**
+ * Resolve a JSX `href`. The destination has to be the site URL of a page in the
+ * same locale as the page holding it, spelled in full — `/ja/docs/guide/…`.
+ * Once the `/{locale}/docs` prefix is off, the remainder is the same kind of
+ * destination {@link resolveLink} already resolves, relative to the locale root.
+ * The page holding the href is therefore irrelevant, unlike a markdown
+ * destination, which resolves against the directory it sits in.
+ * @param {string} href the attribute value
+ * @param {string} localeRoot absolute path of content/docs/<locale>
+ * @param {Set<string>} pages every page path that exists, exactly as on disk
+ * @returns {{ok: true} | {ok: false, reason: string}}
+ */
+export function resolveJsxHref(href, localeRoot, pages) {
+  if (isExternal(href)) return { ok: true }
+
+  const locale = basename(localeRoot)
+  const prefix = `/${locale}/docs`
+  const path = pagePath(href)
+  if (path !== prefix && !path.startsWith(`${prefix}/`)) {
+    return { ok: false, reason: `a JSX href must be the full site URL — start it with ${prefix}` }
+  }
+
+  // The tab root (`/ja/docs`) is `.` rather than `./`, which resolveLink
+  // shortcuts as "same page" without looking anything up.
+  const rest = path.slice(prefix.length).replace(/^\//, '')
+
+  return resolveLink(join(localeRoot, 'index.mdx'), rest === '' ? '.' : `./${rest}`, localeRoot, pages)
 }
 
 /**
@@ -176,11 +251,22 @@ export function findBrokenLinks(files, root = ROOT) {
     const locale = relative(docsRoot, file).split(sep)[0]
     const localeRoot = join(docsRoot, locale)
 
-    for (const { href, line } of extractRelativeLinks(readFileSync(file, 'utf8'))) {
-      checked += 1
-      const result = resolveLink(file, href, localeRoot, pages)
-      if (!result.ok) violations.push({ file: relative(root, file), line, href, reason: result.reason })
+    const source = readFileSync(file, 'utf8')
+
+    /**
+     * @param {{href: string, line: number}[]} hrefs
+     * @param {(href: string) => {ok: true} | {ok: false, reason: string}} resolveHref
+     */
+    const scan = (hrefs, resolveHref) => {
+      for (const { href, line } of hrefs) {
+        checked += 1
+        const result = resolveHref(href)
+        if (!result.ok) violations.push({ file: relative(root, file), line, href, reason: result.reason })
+      }
     }
+
+    scan(extractRelativeLinks(source), (href) => resolveLink(file, href, localeRoot, pages))
+    scan(extractJsxHrefs(source), (href) => resolveJsxHref(href, localeRoot, pages))
   }
 
   return { violations, checked }
@@ -196,12 +282,13 @@ function main() {
 
   const { violations, checked } = findBrokenLinks(files)
   if (violations.length === 0) {
-    console.log(`docs link check: ${checked} relative link(s) across ${files.length} page(s) resolve.`)
+    console.log(`docs link check: ${checked} in-site link(s) across ${files.length} page(s) resolve.`)
     return
   }
 
-  console.error(`docs link check failed: ${violations.length} relative link(s) do not resolve.`)
-  console.error('Links are resolved against the source directory of the page holding them (./sibling, ../folder/page).')
+  console.error(`docs link check failed: ${violations.length} in-site link(s) do not resolve.`)
+  console.error('A markdown destination is resolved against the source directory of the page holding it (./sibling, ../folder/page).')
+  console.error('A JSX href is the full site URL instead, locale included (/ja/docs/guide/quickstart).')
   for (const violation of violations) {
     console.error(`  ${violation.file}:${violation.line}  ${violation.href}  ->  ${violation.reason}`)
   }
