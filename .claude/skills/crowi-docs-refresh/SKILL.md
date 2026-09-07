@@ -82,10 +82,13 @@ stale 成果物を掃除する(codex-runs の invocation 跨ぎ再利用に注�
   その出力を下敷きにする。
 - **en は Codex terra に draft させ、ja は Claude が書く**(en の翻訳ではなく
   既存 ja docs の文体で書き直す)。書き上がったら逆モデルで事実照合。
-- **置き場所は 2 段階で決める**。まず読者(利用者 → `guide/`、管理者・運用者 → `operations/`、開発者・コントリビュータ → `develop/`)、次に文書タイプ(導入 / 手順 / 参照 / 解説)。1 ページには 1 タイプだけを書く。新ページより既存ページへの追記を優先。
-- 3 つのフォルダは Fumadocs の root フォルダ(= サイドバーのタブ)。ページを足したら該当 `meta.json` の `pages` に登録する(未登録ページはサイドバーに出ない)。タブ内のグループはセパレータ(`"---名前---"`)で分ける。
-- 一覧表(環境変数・設定キー・CLI オプション)は 1 か所にだけ置き、他のページはそこへリンクする。手順ページには「なぜ・いつ使うか」だけを書く。
-- 利用者・運用者向けページ(`guide/` `operations/`)に RFC 番号・spec id(`feature-*`)・ファイルパス・関数名・ミドルウェア名・CSS トークン・モデルのフィールド名を書かない。書けるのは `develop/` のみ。
+- **置き場所は 2 段階で決める**。まず読者(利用者 → `guide/`、管理者・運用者 → `operations/`、開発者・コントリビュータ → `develop/`、全員 → `reference/`)、次に文書タイプ(導入 / 手順 / 参照 / 解説)。1 ページには 1 タイプだけを書く。新ページより既存ページへの追記を優先。
+- 4 つのフォルダは Fumadocs の root フォルダ(= サイドバーのタブ)。ページを足したら該当 `meta.json` の `pages` に登録する(未登録ページはサイドバーに出ない)。タブ内のグループはセパレータ(`"---名前---"`)で分ける。
+- **新しい環境変数・設定キー・CLI オプションは `reference/` の該当表に行を足すのが第一**。`reference/` は参照タイプだけを置く場所で、表と 1 行の説明だけを書く。手順ページには「なぜ・いつ使うか」だけを書き、表は `reference/` の該当ページへリンクする(表を 2 か所に置かない)。
+- `reference/` にも SDK の識別子(`register*` / `CrowiPlugin` / `PluginContext` / `configSchema` / `adminPlacement` / `StateCell` / `modelAccess` など)は書かない。これらは `develop/plugin-api` に置く。
+- 版固有の移行手順は `operations/upgrade` の該当バージョン節に書く。トポロジや設定の説明ページには書かない。
+- 利用者・運用者向けページ(`guide/` `operations/` `reference/`)に RFC 番号・spec id(`feature-*`)・ファイルパス・関数名・ミドルウェア名・CSS トークン・モデルのフィールド名を書かない。書けるのは `develop/` のみ。
+- 概念の呼び名は `reference/glossary` に登録した語を使い、リンク文言はリンク先ページの `title` に揃える。呼び名を増やす・変えるときは `scripts/docs-glossary.json` を先に直す(用語 lint はこのファイルからルールを起こす)。
 - 経緯を書かない(「以前は」「旧バージョンでは」)。例外は `operations/upgrading-from-v1` の v1 との差分説明。
 - ページを移動・改名したら `public/_redirects` に 301 を足し、リンク元の相対リンクを張り替える(検知は Step 4 の `check:links`)。
 - **ja / en を同時に書く**。片方だけの commit を作らない。
@@ -122,15 +125,24 @@ git diff --name-only HEAD -- apps/crowi-site/content \
   | sed -e 's|/docs/ja/|/docs/*/|' -e 's|/docs/en/|/docs/*/|' \
   | sort | uniq -c | awk '$1 == 1 {print "PARITY MISS:", $2}'
 pnpm --filter @crowi/site build    # Fumadocs は壊れた mdx でビルドが落ちる(壊れたリンクは落ちない)
-# ページ間の相対リンクが解決するか(静的エクスポートは壊れたリンクを素のアンカーとして
-# 出力するので、ビルドでは検知できない)。リポジトリルートの pnpm lint と pre-push、
+# ページ間の相対リンクと、JSX の href 属性 (`<Card href="/ja/docs/...">`) が
+# 解決するか(静的エクスポートは壊れたリンクを素のアンカーとして出力するので、
+# ビルドでは検知できない)。JSX の href は locale 込みの絶対パスでなければ
+# 落ちる — Card は href をそのままリンクコンポーネントへ渡すため、相対パスや
+# locale 落ちのパスは 404 になる。リポジトリルートの pnpm lint と pre-push、
 # それに docs.yml (ci.yml が docs だけの push を skip するため) からも走る。
 pnpm --filter @crowi/site check:links
 # 2 種類の禁止語を見る。(1) 内部識別子 (RFC 番号・spec id・リポジトリのパス・
 # 関数名・CSS トークン・モデルのフィールド名) — guide/ operations/ reference/ のみ。
 # (2) canonical 用語の揺れ — develop/ と locale 直下の index も含む全ページ。
+# (2) のルールは scripts/docs-glossary.json から起こされる。呼び名を増やす・
+# 変えるときはこのファイルを先に直す(canonical 語が reference/glossary.mdx に
+# 現れることは pnpm test:scripts のテストが assert する)。
 # 正当な出現は scripts/docs-vocabulary-allow.json に {path, pattern, why} を足す。
 node scripts/check-docs-vocabulary.mjs
+# チェッカ自身のテスト。Card の href 検証 (locale 落ち / 別 locale / 存在しない
+# ページ) と、用語集とデータの乖離を見る。
+pnpm test:scripts
 pnpm --filter @crowi/site lint && pnpm --filter @crowi/site type-check
 ```
 
@@ -160,12 +172,14 @@ printf '{ "lastDocsSyncSha": "%s", "at": "%s" }\n' "$(git rev-parse HEAD)" \
 - 見つけた stale は **fix or drop** — 退避先は存在しない(全 skill 共通)。
 - **push しない**。site の deploy は push に紐づくので、公開タイミングはユーザーが握る。
 - `guide/` `operations/` `reference/` に **RFC 番号・spec id (`feature-*`)・ファイルパス・関数名・ミドルウェア名・CSS トークン・モデルのフィールド名を書かない**。書けるのは `develop/` のみ(検知は Step 4 の禁止語 lint)。
+- `reference/` は **参照タイプだけ**。表と 1 行の説明で構成し、手順と理由は元の手順・解説ページに残す。SDK の識別子は `reference/` にも書かず `develop/plugin-api` に置く。
+- **同じ一覧表を 2 か所に置かない**。実体は `reference/` の 1 ページに置き、手順ページは該当ページへのリンクだけを持つ。
 - **経緯を書かない**。「以前は」「旧バージョンでは」「この変更は意図的な整理です」は削る。例外は `operations/upgrading-from-v1` の v1 との差分説明。
 - **未リリースの機能・「進行中」「予定」を書かない**。予定は LP と GitHub Releases に任せる。
 - **alpha 注意書きをページごとに書かない**(グローバルバナーが担う)。
 - Callout は Fumadocs `<Callout>` に統一し **1 ページ 3 個まで**。6 行を超える注記は節に昇格する。
 - **手順ページの本文が 6,000 字を超えたら分割を検討する**。
-- **リンク文言はリンク先ページのタイトルと一致させる**。概念の呼び名はページタイトルに揃える(プラグインの導入と設定 / 機密設定の暗号化 / ストレージ設定 / 検索バックエンドのセットアップ / メール送信の設定 / 個人アクセストークン / runner プロジェクト / リビジョン)。**この統一は `develop/` にも効く** — 内部識別子と違って呼び名の揺れに例外フォルダは無い(現在 lint が見ているのは ja の裸のラテン `revision` と `notification sink` の 2 語)。
+- **リンク文言はリンク先ページのタイトルと一致させる**。概念の呼び名は `reference/glossary` に登録した語を使う。**この統一は `develop/` にも効く** — 内部識別子と違って呼び名の揺れに例外フォルダは無い。lint のルールは `scripts/docs-glossary.json` から起こされるので、呼び名を増やす・変えるときはそのファイルと `reference/glossary` の両方を直す(片方だけだと `pnpm test:scripts` が落ちる)。
 - **RFC 索引 (`develop/rfcs`) は repo `docs/rfcs/` の全ファイルを載せる。** `guide/` と `operations/` からは RFC へ直リンクしない(RFC は設計文書であって利用者・運用者向けではない)。`develop/` 内からの直リンクは許可する — 読者がコントリビュータで、RFC 本文そのものが目的地だから。
 - **索引に RFC の実装状況を書かない。** 23 本の進捗を docs 側で維持すると必ず陳腐化する。状態は各 RFC 自身のメタデータブロックが持つ。
 
