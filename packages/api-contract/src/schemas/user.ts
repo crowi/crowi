@@ -84,10 +84,14 @@ export const UserPageResponseSchema = z.object({
   createdPagesCount: z.number(),
   bookmarksCount: z.number(),
   // feature-profile-stats-and-page-total — the target user's OWN actions:
-  // pages they liked (`Page.liker` contains their id) and comments they
-  // wrote (`Comment.creator` is their id). NOT activity their own pages
-  // received from others, and not re-filtered by the viewer's grants —
-  // see the spec's "プロフィール統計の主語と API 契約" section.
+  // pages they liked and comments they wrote (`Comment.creator` is their
+  // id). NOT activity their own pages received from others, and not
+  // re-filtered by the viewer's grants — see the spec's "プロフィール統計の
+  // 主語と API 契約" section. feature-page-relations-collections D-6:
+  // `likesCount` is the count of `likes` relation rows whose Page still
+  // exists (an existence-filtered aggregate, not a raw row count) — a
+  // best-effort post-delete cleanup failure can leave an orphaned `likes`
+  // row, and that row must not inflate this number.
   likesCount: z.number(),
   commentsCount: z.number(),
   // Optionally include recent items for initial display

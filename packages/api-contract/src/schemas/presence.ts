@@ -186,14 +186,17 @@ export const PresenceServerMessageSchema = z.discriminatedUnion('type', [
 export type PresenceServerMessage = z.infer<typeof PresenceServerMessageSchema>;
 
 /**
- * RFC-0005 Phase 3 — `GET /api/pages/:id/likers`.
+ * RFC-0005 Phase 3 / feature-page-relations-collections D-1/D-3 —
+ * `GET /api/pages/:id/likers`.
  *
- * A single entry in the "liked by" list. Sourced from the page's
- * `liker` ObjectId array (the authoritative set of who liked the
- * page); the per-user `likedAt` is a best-effort enrichment from the
- * `ACTION_LIKE` Activity record and is `null` when no Activity row
- * exists (e.g. likes recorded before activity logging, or a stale
- * Activity row that was pruned).
+ * A single entry in the "liked by" list. Sourced from the `likes`
+ * relation collection (the authoritative `{page,user}` set — not a
+ * page-embedded array); `likedAt` is the row's own `createdAt` for a
+ * live like. Only a migrated row with a `null` `createdAt` falls back to
+ * a best-effort join against its `ACTION_LIKE` Activity record, and even
+ * then only when a matching Activity exists — otherwise `likedAt` stays
+ * `null` (e.g. a migrated like with no corresponding Activity row, or
+ * one pruned by retention).
  */
 export const LikerSchema = z.object({
   id: z.string(),
@@ -208,9 +211,14 @@ export type Liker = z.infer<typeof LikerSchema>;
  * Response body of `GET /api/pages/:id/likers`.
  *
  *   - `users`      — the liker list, newest-liked first when `likedAt`
- *                    is known (entries without a timestamp sort last).
- *   - `totalCount` — the full size of `page.liker`, independent of the
- *                    `limit` cap so the chip count stays accurate.
+ *                    is known (entries without a timestamp sort last,
+ *                    tied/unknown entries break ties by user id).
+ *   - `totalCount` — the full row count of the page's `likes` relation,
+ *                    independent of the `limit` cap so the chip count
+ *                    stays accurate. `limit`, when given, is applied
+ *                    server-side only after sorting and after excluding
+ *                    users who can no longer be populated (deleted /
+ *                    non-active) — omit for the full list.
  */
 export const LikersResponseSchema = z.object({
   users: z.array(LikerSchema),
