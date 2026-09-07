@@ -76,7 +76,7 @@ services:
       - "443:443"
 ```
 
-The web container deliberately has no host port. The browser only ever sees the proxy's single origin, which routes `/api`, `/files` and the realtime WebSockets to the api.
+The web container deliberately has no host port. The browser only ever sees the proxy's single origin, which routes `/api`, `/files` and the realtime WebSockets to the api. The default port allocation is listed in [Ports and URLs](../reference/ports).
 
 </Step>
 
@@ -100,7 +100,7 @@ WS_TOKEN_SECRET=...
 PASSWORD_SEED=...
 ```
 
-The environment variable table in [Configuration](./configuration) explains each one. Without `CROWI_ENCRYPTION_KEY`, the credentials you enter in the admin panel are stored in plaintext ([Encrypting sensitive settings](./encryption)).
+[Environment variables](../reference/env) explains each one. Without `CROWI_ENCRYPTION_KEY`, the credentials you enter in the admin panel are stored in plaintext ([Encrypting sensitive settings](./encryption)).
 
 </Step>
 

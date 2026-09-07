@@ -49,23 +49,11 @@ generates a 32-byte AES-256 key; paste the output into `.env` ([Encrypting sensi
 
 ### Ports
 
-| App | Port | What it is |
-| --- | ---- | ---------- |
-| dev proxy | `4304` | **The entrypoint** — same-origin proxy in front of api, web and the WebSocket namespaces |
-| `@crowi/api` | `4301` | The Hono API server (bare) |
-| `@crowi/web` | `4302` | The Next.js frontend (bare — no realtime WS) |
-| `@crowi/site` | `4303` | The crowi.wiki landing page and docs (optional) |
+The allocation is listed in [Ports and URLs](../reference/ports). Each working tree gets its own block of four ports, so several trees can run at once without clashing.
 
 ### The development middleware
 
-`docker compose up -d` with no profile starts only the middleware Crowi depends on; the apps themselves run on the host under `pnpm dev`.
-
-| Service | Image | Host port |
-| ------- | ----- | --------- |
-| `mongodb` | `mongo:8` | `27017` |
-| `redis` | `redis:8.8.0` | `6379` |
-| `elasticsearch` | Custom image (9.4.0 + `analysis-kuromoji`) | `9200` |
-| `mailpit` | `axllent/mailpit:latest` | `1025` (SMTP) / `8025` (web UI) |
+`docker compose up -d` with no profile starts only the middleware Crowi depends on; the apps themselves run on the host under `pnpm dev`. The host ports it publishes are listed in [Ports and URLs](../reference/ports).
 
 The Elasticsearch image is a custom build with the Japanese morphological analyser `analysis-kuromoji` bundled ([Search backend setup](../operations/search-setup)). Mailpit is an inbox for reading the mail Crowi sends.
 
@@ -105,3 +93,4 @@ pnpm lint         # lint (errors=0 required)
 - [Architecture](./architecture) — the monorepo layout and how api and web relate
 - [Contributing](./contributing) — branches, commits and review
 - [Developing plugins](./plugins-developing) — write your own plugin
+- [Ports and URLs](../reference/ports) — the development and production ports

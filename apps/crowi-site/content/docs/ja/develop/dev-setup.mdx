@@ -49,23 +49,11 @@ pnpm --filter @crowi/api crypto:gen-key
 
 ### ポート
 
-| アプリ | ポート | 内容 |
-| ------ | ------ | ---- |
-| dev proxy | `4304` | **正式な入口** — api + web + WebSocket namespace を前段する同一オリジン proxy |
-| `@crowi/api` | `4301` | Hono API サーバ (素) |
-| `@crowi/web` | `4302` | Next.js フロントエンド (素 — リアルタイム WS 不通) |
-| `@crowi/site` | `4303` | crowi.wiki の LP + ドキュメント (任意) |
+割り当ての一覧は [ポートと URL](../reference/ports) にあります。作業ツリーごとに 4 ポートの区画が割り当たるため、複数の作業ツリーを同時に動かしても衝突しません。
 
 ### 開発用ミドルウェア
 
-`docker compose up -d` (プロファイル指定なし) が起動するのは依存ミドルウェアだけです。アプリ本体はホスト側の `pnpm dev` で動かします。
-
-| サービス | イメージ | ホスト側ポート |
-| -------- | -------- | -------------- |
-| `mongodb` | `mongo:8` | `27017` |
-| `redis` | `redis:8.8.0` | `6379` |
-| `elasticsearch` | カスタムイメージ (9.4.0 + `analysis-kuromoji`) | `9200` |
-| `mailpit` | `axllent/mailpit:latest` | `1025` (SMTP) / `8025` (Web UI) |
+`docker compose up -d` (プロファイル指定なし) が起動するのは依存ミドルウェアだけです。アプリ本体はホスト側の `pnpm dev` で動かします。公開されるホスト側ポートは [ポートと URL](../reference/ports) にあります。
 
 Elasticsearch イメージは日本語形態素解析プラグイン `analysis-kuromoji` を同梱したカスタムビルドです ([検索バックエンドのセットアップ](../operations/search-setup))。Mailpit は送信されたメールをブラウザで確認するための受信箱です。
 
@@ -105,3 +93,4 @@ pnpm lint         # Lint (errors=0 が必須)
 - [アーキテクチャ](./architecture) — モノレポの構成と api / web の関係
 - [コントリビュート](./contributing) — ブランチ・コミット・レビューの進め方
 - [プラグイン開発](./plugins-developing) — 自分のプラグインを書く
+- [ポートと URL](../reference/ports) — 開発と本番のポート一覧

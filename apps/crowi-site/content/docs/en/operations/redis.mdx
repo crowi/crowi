@@ -5,7 +5,7 @@ description: Supported versions, connection counts, ACLs, and replacing the endp
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Crowi uses Redis to coordinate between replicas. It is optional on a single replica and **required with several**. Which features use it, and how each degrades without it, is in [Operating realtime collaboration](./realtime-collab).
+Crowi uses Redis to coordinate between replicas. It is optional on a single replica and **required with several**. Which features use it and under which keys is in [Redis keys and ACL](../reference/redis-keys); how each one degrades without it is in [Environment variables](../reference/env).
 
 Crowi does not bundle a Redis server; it connects over the network to one you provide. If you choose a managed service (ElastiCache, MemoryDB, Upstash and so on), selecting it and complying with its terms is your organisation's responsibility.
 
@@ -45,36 +45,22 @@ Page content never lives in Redis, so a cold start loses no pages. What is lost 
 
 - **Transport and credentials**: keep TLS (`rediss://`) and certificate verification at their defaults. Disable verification only in a controlled development environment or a private-CA scenario. Keep credentials in environment variables or a secret manager, never in settings screens or logs.
 - **Network**: make Redis reachable only from Crowi and your internal infrastructure; never expose it unauthenticated to a public network.
-- **Key separation**: every key and channel is created under a per-instance namespace `crowi:<slug>:…` (defaulting to the hostname in `CLIENT_URL`, overridable with `REDIS_KEY_PREFIX` — see [Configuration](./configuration)). Every replica of one instance must resolve to the same value, and a different instance sharing that Redis must use a different one. **The database number in the URL (`/1`) is not a substitute**: pub/sub is not scoped to a database, so two instances differing only by database number still cross-talk on every channel.
+- **Key separation**: every key and channel is created under a per-instance namespace `crowi:<slug>:…` (defaulting to the hostname in `CLIENT_URL`, overridable with `REDIS_KEY_PREFIX` — see [Environment variables](../reference/env)). Every replica of one instance must resolve to the same value, and a different instance sharing that Redis must use a different one. **The database number in the URL (`/1`) is not a substitute**: pub/sub is not scoped to a database, so two instances differing only by database number still cross-talk on every channel.
 - **Failure semantics**: the editor cap and rate limiting are not authorization boundaries and fail open when Redis is unreachable. JWT and WebSocket-token authentication do not depend on Redis, so a Redis outage never bypasses authentication.
 
 ### Permissions a restricted ACL needs
 
-When you create a restricted ACL user, all of the following must be allowed. Without them, saves in collaborative editing start failing with permission errors rather than degrading cleanly. Every key and channel sits under `crowi:<slug>:`, so grant against the slug that actually resolves.
+A restricted ACL user has to be allowed every command Crowi uses; without them, saves in collaborative editing start failing with permission errors rather than degrading cleanly. The keys, the channels and the commands each one needs are listed in [Redis keys and ACL](../reference/redis-keys).
 
-| Purpose | Commands | Keys / channels |
-| --- | --- | --- |
-| Collaboration fan-out | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:<slug>:collab:<documentName>` — one channel per document |
-| Editor cap counter | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:<slug>:collab:editors:<pageId>` |
-| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:presence:viewers:<pageId>`, `crowi:<slug>:presence:editing:<pageId>`, `crowi:<slug>:presence:feed` |
-| Notifications | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:<slug>:notifications:user:<userId>` |
-| Config sync | `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:config` |
-| Rate limiting | `INCR`, `PEXPIRE` | `crowi:<slug>:ratelimit:<name>:<userId>:<window>` |
-| Recently viewed pages | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` | `crowi:<slug>:lru:<namespace>` |
-| Account linking | `GET`, `SET`, `EVAL`, `TIME` | `crowi:<slug>:link-completion-*:<hash>` — `<hash>` is a hash; no plaintext appears |
-| Boot connection | Connection establishment only | None |
+- Grant against the `<slug>` that actually resolves.
+- **The save lock needs the commands inside the script too.** Redis applies ACL checks to commands called from a Lua script, so an ACL that allows only `EVAL` makes every collaborative save fail.
+- ACLs are scoped to a **user**, not to a listener, so "restrict only the TLS port" is not a workable design: disable or password-protect the `default` user on every listener and make Crowi use scoped credentials.
 
-Two sources of commands are easy to miss.
-
-- **What the client libraries send on connect**: a `CLIENT SETINFO` per connection and an `INFO` ready check. Denying them does not necessarily break the connection outright, but allow them explicitly.
-- **The lock behind collaborative saves**: every save takes a cross-instance lock through a Lua script. Redis applies ACL checks to commands called *inside* a script too, so besides `EVAL` / `EVALSHA` the user needs `SELECT`, `EXISTS`, `SET`, `GET` and `DEL` on `crowi:<slug>:collab:<documentName>:lock`. **An ACL missing those makes every collaborative save fail in production wherever Redis is enabled** — edits stay in memory, never persist, and the error log fills up until the ACL is fixed.
-
-<Callout type="info">
-  ACLs are scoped to a **user**, not to a listener, so "restrict only the TLS port" is not a workable design: disable or password-protect the `default` user on every listener and make Crowi use scoped credentials. The table above was derived by reading the source, not verified by an automated permission-denial test, so re-check it after upgrading the client libraries.
-</Callout>
+That list was derived by reading the source, not verified by an automated permission-denial test, so treat the permission error above as the symptom of a command it misses.
 
 ## Related pages
 
-- [Operating realtime collaboration](./realtime-collab) — what each feature does without Redis
-- [Configuration](./configuration) — `REDIS_URL` and `REDIS_KEY_PREFIX`
+- [Operating realtime collaboration](./realtime-collab) — collaboration topology and running several replicas
+- [Environment variables](../reference/env) — `REDIS_URL` and `REDIS_KEY_PREFIX`, and what each feature does without Redis
 - [Upgrading](./upgrade) — replacing every replica together
+- [Redis keys and ACL](../reference/redis-keys) — keys, channels and the commands they need

@@ -14,7 +14,7 @@ recovery.
 | MongoDB | All documents — pages, revisions, users, comments, config | **Required** |
 | Attachment storage | The actual uploaded files | **Required** |
 | Elasticsearch | The full-text search index | Not needed (rebuildable) |
-| Redis | Ephemeral state: collab/presence/notifications pub/sub, editor-cap counter, Config sync, rate-limit windows, LRU | Not needed (assumed volatile) |
+| Redis | Ephemeral state used to coordinate replicas (listed in [Redis keys and ACL](../reference/redis-keys)) | Not needed (assumed volatile) |
 
 The key point: **MongoDB and the attachment storage are the two things
 essential for recovery**, while Elasticsearch and Redis do not need to be

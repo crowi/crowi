@@ -1,0 +1,30 @@
+---
+title: Redis のキーと ACL
+description: Crowi が使う Redis のキー・チャンネルと、必要なコマンド権限
+---
+
+Crowi が作るキーとチャンネルはすべてインスタンス単位の名前空間 `crowi:<slug>:` の下にあります。`<slug>` は `REDIS_KEY_PREFIX`、未設定なら `CLIENT_URL` のホスト名から解決されます ([環境変数](./env))。運用の手順は [Redis の運用](../operations/redis) を参照してください。
+
+## キーとチャンネル
+
+| 用途 | 必要なコマンド | キー / チャンネル |
+| --- | --- | --- |
+| 共同編集の伝搬 | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:<slug>:collab:<documentName>` — ドキュメントごとに 1 チャンネル |
+| 共同編集の保存ロック | `EVAL`, `EVALSHA` (+ スクリプト内部の `SELECT`, `EXISTS`, `SET`, `GET`, `DEL`) | `crowi:<slug>:collab:<documentName>:lock` |
+| 編集者上限カウンタ | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:<slug>:collab:editors:<pageId>` |
+| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:presence:viewers:<pageId>`, `crowi:<slug>:presence:editing:<pageId>`, `crowi:<slug>:presence:feed` |
+| 通知 | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:<slug>:notifications:user:<userId>` |
+| 設定同期 | `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:config` |
+| レート制限 | `INCR`, `PEXPIRE` | `crowi:<slug>:ratelimit:<name>:<userId>:<window>` |
+| 最近見たページ | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` | `crowi:<slug>:lru:<namespace>` |
+| アカウント連携 (確認コード) | `GET`, `SET`, `EVAL`, `TIME` | `crowi:<slug>:link-completion-state:<hash>`, `crowi:<slug>:link-completion-record:<hash>`, `crowi:<slug>:link-completion-consumed:<hash>` |
+| 外部サインインの受け渡し | `GET`, `SET`, `EVAL` | `crowi:<slug>:federated-handoff:<hash>`, `crowi:<slug>:federated-handoff-consumed:<hash>` |
+| 接続の確立 | `CLIENT SETINFO`, `INFO` | なし — クライアントライブラリが接続ごとに送る |
+
+`<hash>` はハッシュ値で、確認コードや state の平文は Redis に現れません。
+
+## 関連ページ
+
+- [Redis の運用](../operations/redis) — 対応バージョン・接続数・制限付き ACL に必要な権限・エンドポイントの入れ替え
+- [環境変数](./env) — `REDIS_URL` と `REDIS_KEY_PREFIX`、省略したときの機能ごとの挙動
+- [リアルタイム共同編集の運用](../operations/realtime-collab) — 共同編集のトポロジと複数レプリカ構成

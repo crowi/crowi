@@ -5,7 +5,7 @@ description: 対応バージョン・接続数の見積もり・ACL・エンド�
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Crowi は Redis をレプリカ間の連携に使います。単一レプリカでは任意、**複数レプリカでは必須**です。どの機能が Redis を使い、無いときにどう縮退するかは [リアルタイム共同編集の運用](./realtime-collab) にまとめてあります。
+Crowi は Redis をレプリカ間の連携に使います。単一レプリカでは任意、**複数レプリカでは必須**です。どの機能がどのキーで Redis を使うかは [Redis のキーと ACL](../reference/redis-keys)、無いときにどう縮退するかは [環境変数](../reference/env) にまとめてあります。
 
 Crowi は Redis サーバを同梱しません。運用者が用意したインスタンスにネットワーク越しで接続します。マネージドサービス (ElastiCache・MemoryDB・Upstash など) を選ぶ場合、その選定と利用条件の遵守は運用組織の責任です。
 
@@ -45,36 +45,22 @@ api インスタンスあたりの接続数は、そのインスタンスの状�
 
 - **通信と認証情報**: TLS (`rediss://`) と証明書検証の既定を維持してください。検証の無効化は、明示的に制御された開発環境や private CA の場合に限ります。認証情報は環境変数かシークレットマネージャに置き、設定画面やログには書かないでください。
 - **ネットワーク**: Redis は Crowi と内部インフラからのみ到達できるようにし、認証なしで公開ネットワークへ晒さないでください。
-- **キーの分離**: すべてのキーとチャンネルは、インスタンス単位の名前空間 `crowi:<slug>:…` の下に作られます (既定は `CLIENT_URL` のホスト名、`REDIS_KEY_PREFIX` で上書き可能 — [設定](./configuration))。同じインスタンスの全レプリカは同じ値に解決される必要があり、同じ Redis を共有する別インスタンスは異なる値にしてください。**URL のデータベース番号 (`/1` など) は代わりになりません** — pub/sub は DB にスコープされないため、DB 番号だけが違う 2 インスタンスは全チャンネルで cross-talk します。
+- **キーの分離**: すべてのキーとチャンネルは、インスタンス単位の名前空間 `crowi:<slug>:…` の下に作られます (既定は `CLIENT_URL` のホスト名、`REDIS_KEY_PREFIX` で上書き可能 — [環境変数](../reference/env))。同じインスタンスの全レプリカは同じ値に解決される必要があり、同じ Redis を共有する別インスタンスは異なる値にしてください。**URL のデータベース番号 (`/1` など) は代わりになりません** — pub/sub は DB にスコープされないため、DB 番号だけが違う 2 インスタンスは全チャンネルで cross-talk します。
 - **障害時の挙動**: 編集者上限とレート制限は認可の境界ではなく、Redis に到達できないときは fail-open (通す側) に倒れます。JWT や WebSocket トークンの認証は Redis に依存しないため、Redis 障害が認証をバイパスすることはありません。
 
 ### ACL を絞る場合に必要な権限
 
-制限付きの ACL ユーザーを作る場合、次をすべて許可しないと、「未対応機能」としてきれいに失敗するのではなく、共同編集の保存などが permission エラーで失敗し始めます。キーとチャンネルはすべて `crowi:<slug>:` 配下なので、権限は実際に解決された slug を対象に付与してください。
+制限付きの ACL ユーザーを作る場合、Crowi が使うコマンドをすべて許可しないと、「未対応機能」としてきれいに失敗するのではなく、共同編集の保存などが permission エラーで失敗し始めます。キーとチャンネルの一覧と必要なコマンドは [Redis のキーと ACL](../reference/redis-keys) にあります。
 
-| 用途 | コマンド | キー / チャンネル |
-| --- | --- | --- |
-| 共同編集の伝搬 | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:<slug>:collab:<documentName>` — ドキュメントごとに 1 チャンネル |
-| 編集者上限カウンタ | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:<slug>:collab:editors:<pageId>` |
-| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:presence:viewers:<pageId>`, `crowi:<slug>:presence:editing:<pageId>`, `crowi:<slug>:presence:feed` |
-| 通知 | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:<slug>:notifications:user:<userId>` |
-| 設定同期 | `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:config` |
-| レート制限 | `INCR`, `PEXPIRE` | `crowi:<slug>:ratelimit:<name>:<userId>:<window>` |
-| 最近見たページ | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` | `crowi:<slug>:lru:<namespace>` |
-| アカウント連携 | `GET`, `SET`, `EVAL`, `TIME` | `crowi:<slug>:link-completion-*:<hash>` — `<hash>` はハッシュ値で、平文は現れません |
-| 起動時の接続 | 接続確立のみ | なし |
+- 権限は実際に解決された `<slug>` を対象に付与します。
+- **保存ロックはスクリプト内部のコマンドまで許可が必要です。** Redis の ACL は Lua スクリプトから呼ばれるコマンドにも権限を要求するため、`EVAL` だけを許可した ACL は共同編集の保存を毎回失敗させます。
+- ACL は **ユーザー** にスコープされ、listener には紐づきません。「TLS ポートだけ制限する」という設計は成立しないため、全 listener で `default` ユーザーを無効化またはパスワード保護し、Crowi には常にスコープ済みの認証情報を使わせてください。
 
-見落としやすい発行元が 2 つあります。
-
-- **クライアントライブラリが接続時に送るコマンド**: 接続ごとの `CLIENT SETINFO` と、ready check の `INFO` です。拒否しても即座に壊れるとは限りませんが、明示的に許可しておいてください。
-- **共同編集の保存が使うロック**: 保存のたびに Lua スクリプトでクロスインスタンスのロックを取得します。Redis の ACL は Lua スクリプト内部から呼ばれるコマンドにも権限を要求するため、`EVAL` / `EVALSHA` に加えて、スクリプト内部の `SELECT` / `EXISTS` / `SET` / `GET` / `DEL` を `crowi:<slug>:collab:<documentName>:lock` に対して許可する必要があります。**これを欠いた ACL は、Redis が有効な本番環境で共同編集の保存を毎回失敗させます** — 編集はメモリ上に留まったまま永続化されず、ACL を直すまでエラーログが出続けます。
-
-<Callout type="info">
-  ACL は **ユーザー** にスコープされ、listener には紐づきません。「TLS ポートだけ制限する」という設計は成立しないため、制限付き運用では全 listener で `default` ユーザーを無効化またはパスワード保護し、Crowi には常にスコープ済みの認証情報を使わせてください。上の権限表はソースを精査して書き起こしたもので、制限付き ACL ユーザーに対する自動テストで検証されたものではありません。ライブラリを更新したときは再確認してください。
-</Callout>
+一覧はソースを精査して書き起こしたもので、制限付き ACL ユーザーに対する自動テストで検証されたものではありません。許可漏れは上記の permission エラーとして現れます。
 
 ## 関連ページ
 
-- [リアルタイム共同編集の運用](./realtime-collab) — Redis が無いときの機能ごとの挙動
-- [設定](./configuration) — `REDIS_URL` と `REDIS_KEY_PREFIX`
+- [リアルタイム共同編集の運用](./realtime-collab) — 共同編集のトポロジと複数レプリカ構成
+- [環境変数](../reference/env) — `REDIS_URL` と `REDIS_KEY_PREFIX`、省略したときの機能ごとの挙動
 - [バージョンアップ](./upgrade) — 全レプリカを揃えて入れ替える手順
+- [Redis のキーと ACL](../reference/redis-keys) — キー・チャンネルと必要なコマンド

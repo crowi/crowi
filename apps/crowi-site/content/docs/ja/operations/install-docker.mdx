@@ -76,7 +76,7 @@ services:
       - "443:443"
 ```
 
-web コンテナにホストポートを与えていないのは意図的です。ブラウザに見せるのはプロキシの 1 オリジンだけで、`/api`・`/files` とリアルタイムの WebSocket はそこから api へ振り分けます。
+web コンテナにホストポートを与えていないのは意図的です。ブラウザに見せるのはプロキシの 1 オリジンだけで、`/api`・`/files` とリアルタイムの WebSocket はそこから api へ振り分けます。 既定のポート割り当ては [ポートと URL](../reference/ports) にあります。
 
 </Step>
 
@@ -100,7 +100,7 @@ WS_TOKEN_SECRET=...
 PASSWORD_SEED=...
 ```
 
-各変数の意味と既定値は [設定](./configuration) の環境変数表を参照してください。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
+各変数の意味と既定値は [環境変数](../reference/env) を参照してください。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
 
 </Step>
 
