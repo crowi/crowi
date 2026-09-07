@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-api",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "Type-only contract for Crowi 2.0 plugins. See docs/rfcs/0001-plugin-architecture.md.",
   "repository": {
     "type": "git",
