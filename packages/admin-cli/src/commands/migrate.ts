@@ -180,7 +180,7 @@ export function registerMigrate(program: Command): void {
           console.log(`        ${e.detail ? `Detected: ${e.detail.summary}` : 'Detected: details unavailable (no detect stage; isPending = true)'}`);
         });
         console.log('');
-        console.log('Run `crowi-admin migrate apply` to execute preflight migrations.');
+        console.log('Apply each pending migration listed above individually: `crowi-admin migrate apply --id <id>`.');
       });
     });
 
