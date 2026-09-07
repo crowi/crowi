@@ -14,8 +14,15 @@
 // wherever it sits: a developer reading `develop/` and a user reading `guide/`
 // have to be able to talk to each other. These rules are per-locale, since the
 // canonical name is a Japanese word on a `ja/` page and an English one on an
-// `en/` page, and they are deliberately narrow — only concepts whose drift has
-// actually been observed, not the whole glossary, which would misfire.
+// `en/` page.
+//
+// The terminology rules come from two places. A handful are written out below,
+// because the shape of the drift needed a hand-tuned expression. The rest are
+// generated from `docs-glossary.json`, which is the data behind the
+// `reference/glossary` page: one rule per concept and locale, matching the
+// spellings that concept must not be called. Editing the vocabulary therefore
+// means editing that file, and a test asserts every canonical name it declares
+// really appears on the glossary page, so the data and the page cannot drift.
 //
 // Only prose is scanned: fenced code blocks are skipped through the same
 // `proseLines` helper the link checker uses, because a shell transcript or a
@@ -36,6 +43,10 @@ import { collectDocsFiles, DOCS_DIR, proseLines } from './check-docs-links.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ALLOW_FILE = join(ROOT, 'scripts', 'docs-vocabulary-allow.json')
+const GLOSSARY_FILE = join(ROOT, 'scripts', 'docs-glossary.json')
+// Every locale the docs are written in. A terminology rule is per-locale, so
+// the glossary declares one entry per concept and locale.
+export const LOCALES = ['ja', 'en']
 // The folders whose reader cannot resolve an internal name. `develop/` is
 // deliberately absent: it is the folder that may name internals.
 const READER_FOLDERS = new Set(['guide', 'operations', 'reference'])
@@ -125,7 +136,7 @@ const LIBRARY_NAMES = ['Hocuspocus', 'Mongoose', 'Yjs']
  * `revision` and `deleted` are ordinary words in an English sentence and only
  * become a leak when the page presents them as the field the API returns.
  */
-export const RULES = [
+const STATIC_RULES = [
   {
     id: 'rfc-number',
     folders: READER_FOLDERS,
@@ -212,6 +223,20 @@ export const RULES = [
     message: '履歴の単位の呼び名は「リビジョン」— ラテン語綴りを混ぜない',
   },
   {
+    id: 'ja-revision-model',
+    locale: 'ja',
+    folders: READER_FOLDERS,
+    strip: 'code-and-links',
+    // The capitalised sibling of `ja-revision`, and the gap both other rules
+    // left: `internal-symbol` only sees `Revision` in backticks, `ja-revision`
+    // only the lowercase word, so a bare capitalised model name in a Japanese
+    // sentence passed each of them. Reader-facing folders only — `develop/`
+    // names the model on purpose, and the `strip` keeps the backticked form to
+    // `internal-symbol` so one occurrence is never reported twice.
+    pattern: /(?<![\w?=/#.-])Revisions?(?![\w-])/g,
+    message: '履歴の単位の呼び名は「リビジョン」— モデル名を読者向けページに書かない',
+  },
+  {
     id: 'notification-sink',
     // Not locale-scoped, unlike `ja-revision`: "revision" is a word English
     // prose owns, but "notification sink" is nobody's canonical name, so the
@@ -223,6 +248,75 @@ export const RULES = [
     message: 'the concept is a notifier plugin (通知プラグイン) — "notification sink" is a second name for it',
   },
 ]
+
+/**
+ * @typedef {object} GlossaryLocaleEntry
+ * @property {string} canonical the one name this locale calls the concept, a
+ *   literal, which has to appear on that locale's reference/glossary page
+ * @property {string[]} variants regex sources for the spellings it must not be
+ *   called; empty when there is nothing to guard yet, or when a hand-written
+ *   rule already covers the concept
+ */
+
+/**
+ * @typedef {{concept: string, ja: GlossaryLocaleEntry, en: GlossaryLocaleEntry}} GlossaryEntry
+ */
+
+/**
+ * @param {string} [file]
+ * @returns {GlossaryEntry[]}
+ */
+export function loadGlossary(file = GLOSSARY_FILE) {
+  /** @type {{concepts: GlossaryEntry[]}} */
+  const parsed = JSON.parse(readFileSync(file, 'utf8'))
+  return parsed.concepts
+}
+
+/**
+ * The rule id a concept's variants are reported under. Stable across an edit
+ * to the variant list, so an allow-list entry naming it keeps working.
+ * @param {string} concept
+ * @param {string} locale
+ * @returns {string}
+ */
+export function glossaryRuleId(concept, locale) {
+  return `glossary-${concept}-${locale}`
+}
+
+/**
+ * Turn the glossary into one rule per concept and locale. Same shape as the
+ * hand-written terminology rules: locale-scoped, every folder, and `strip` so a
+ * code span or a link destination that happens to spell a variant is not prose.
+ * @param {GlossaryEntry[]} glossary
+ * @returns {Rule[]}
+ */
+export function glossaryRules(glossary) {
+  /** @type {Rule[]} */
+  const rules = []
+
+  for (const entry of glossary) {
+    for (const locale of LOCALES) {
+      const { canonical, variants } = entry[locale]
+      if (variants.length === 0) continue
+
+      rules.push({
+        id: glossaryRuleId(entry.concept, locale),
+        locale,
+        strip: 'code-and-links',
+        pattern: new RegExp(variants.join('|'), 'g'),
+        message:
+          locale === 'ja'
+            ? `この概念の呼び名は「${canonical}」— 用語集 (reference/glossary) の語に揃える`
+            : `this concept is called “${canonical}” — use the name the glossary (reference/glossary) registers`,
+      })
+    }
+  }
+
+  return rules
+}
+
+/** @type {Rule[]} */
+export const RULES = [...STATIC_RULES, ...glossaryRules(loadGlossary())]
 
 /**
  * @typedef {{path: string, pattern: string, why: string}} AllowEntry

@@ -20,6 +20,7 @@ on:
       - 'scripts/check-docs-vocabulary.mjs'
       - 'scripts/check-docs-vocabulary.test.mjs'
       - 'scripts/docs-vocabulary-allow.json'
+      - 'scripts/docs-glossary.json'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [main, dev, dev2-2]
@@ -40,13 +41,14 @@ jobs:
 
       # Runs on Linux, so a destination whose case differs from the file on
       # disk fails here even when the author's macOS checkout accepted it.
-      - name: Check docs relative links
+      - name: Check docs in-site links
         run: node scripts/check-docs-links.mjs
 
       # guide/, operations/ and reference/ are written for people who use or
       # run Crowi; naming an internal here is an editorial regression the
       # build cannot see. Canonical terminology is checked on every page,
-      # develop/ included — one concept has one name across the whole docs.
+      # develop/ included — one concept has one name across the whole docs,
+      # and the vocabulary itself comes from scripts/docs-glossary.json.
       - name: Check docs vocabulary
         run: node scripts/check-docs-vocabulary.mjs
 

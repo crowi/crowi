@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { after, before, describe, it } from 'node:test'
+import { fileURLToPath } from 'node:url'
 
-import { findLeaks, findVocabularyLeaks, isScannedPage, loadAllowList, pageScope, RULES } from './check-docs-vocabulary.mjs'
+import { findLeaks, findVocabularyLeaks, glossaryRuleId, isScannedPage, loadAllowList, loadGlossary, LOCALES, pageScope, RULES } from './check-docs-vocabulary.mjs'
 import { collectDocsFiles, DOCS_DIR } from './check-docs-links.mjs'
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 // Violations report a repo-relative path with forward slashes, whatever the
 // platform separator is.
@@ -163,6 +166,117 @@ describe('check-docs-vocabulary', () => {
     it('does not touch English prose, which owns the word', () => {
       assert.deepEqual(findLeaks('the page keeps every revision it ever had', EN_GUIDE), [])
       assert.deepEqual(findLeaks('older revisions stay in the history', EN_DEVELOP), [])
+    })
+  })
+
+  describe('the glossary-driven rules', () => {
+    it('registers every concept the documentation had two names for', () => {
+      // Spelled out here on purpose: the rest of this block iterates the
+      // glossary file, so a concept dropped from it would take its own
+      // coverage with it and leave a name unguarded with every test green.
+      // The list is fixed here on purpose: a concept the docs start calling
+      // two things belongs on the glossary page and in this list, together.
+      assert.deepEqual(loadGlossary().map((entry) => entry.concept).sort(), [
+        'account-settings-tabs',
+        'mail-delivery',
+        'notifier-plugin',
+        'personal-access-token',
+        'plugin-admin-page',
+        'revision',
+        'runner-project',
+        'search-backend-setup',
+        'sensitive-config-encryption',
+        'storage-settings',
+      ])
+    })
+
+    it('builds one rule per concept and locale that has a variant to guard', () => {
+      const ids = new Set(RULES.map((rule) => rule.id))
+
+      for (const entry of loadGlossary()) {
+        for (const locale of LOCALES) {
+          const id = glossaryRuleId(entry.concept, locale)
+          assert.equal(ids.has(id), entry[locale].variants.length > 0, `${id} should ${entry[locale].variants.length > 0 ? '' : 'not '}exist`)
+        }
+      }
+    })
+
+    it('defines every canonical name on the reference glossary page of its locale', () => {
+      for (const locale of LOCALES) {
+        const page = readFileSync(join(ROOT, DOCS_DIR, locale, 'reference', 'glossary.mdx'), 'utf8')
+
+        for (const entry of loadGlossary()) {
+          assert.ok(page.includes(entry[locale].canonical), `${locale}/reference/glossary.mdx does not define ${entry[locale].canonical}`)
+        }
+      }
+    })
+
+    it('never flags a canonical name with its own concept rules', () => {
+      for (const locale of LOCALES) {
+        for (const entry of loadGlossary()) {
+          assert.deepEqual(findLeaks(entry[locale].canonical, { locale, folder: 'reference' }), [], `${locale} ${entry.concept}`)
+        }
+      }
+    })
+
+    it('flags a link labelled with a name the page it opens does not have', () => {
+      assert.equal(findLeaks('詳しくは [プラグインの管理](../operations/plugins) を参照してください。', JA_GUIDE)[0].rule, glossaryRuleId('plugin-admin-page', 'ja'))
+      assert.equal(findLeaks('see [Managing plugins](../operations/plugins) for the form', EN_GUIDE)[0].rule, glossaryRuleId('plugin-admin-page', 'en'))
+    })
+
+    it('leaves a sentence that merely contains those words alone', () => {
+      assert.deepEqual(findLeaks('プラグインの管理方法は [プラグインの導入と設定](../operations/plugins) にあります。', JA_GUIDE), [])
+    })
+
+    it('flags a second name for a term wherever it sits, develop/ included', () => {
+      assert.equal(findLeaks('パーソナルアクセストークンを発行します。', JA_DEVELOP)[0].rule, glossaryRuleId('personal-access-token', 'ja'))
+      assert.equal(findLeaks('runner パッケージに依存を足します。', JA_GUIDE)[0].rule, glossaryRuleId('runner-project', 'ja'))
+      assert.equal(findLeaks('add it to the runner package', EN_DEVELOP)[0].rule, glossaryRuleId('runner-project', 'en'))
+    })
+
+    it('scopes a rule to the locale whose word it is', () => {
+      assert.deepEqual(findLeaks('パーソナルアクセストークンを発行します。', EN_GUIDE), [])
+      assert.deepEqual(findLeaks('add it to the runner package', JA_GUIDE), [])
+    })
+
+    it('accepts the settings tab label as the UI spells it', () => {
+      assert.deepEqual(findLeaks('**設定 → パスワード/APIトークン/アカウント連携** から発行します。', JA_GUIDE), [])
+      assert.deepEqual(
+        findLeaks('設定 → パスワード / APIトークン / MCP から発行します。', JA_GUIDE).map((leak) => leak.rule),
+        [glossaryRuleId('account-settings-tabs', 'ja')],
+      )
+    })
+
+    it('leaves a variant inside fenced code alone', () => {
+      const source = ['prose', '```bash', 'pnpm --filter @crowi/runner-app add @crowi/plugin-slack # runner パッケージ', '```', 'prose'].join('\n')
+
+      assert.deepEqual(findLeaks(source, JA_GUIDE), [])
+    })
+  })
+
+  describe('the ja-revision-model rule', () => {
+    // Two review rounds of Phase 1 shipped this shape: `internal-symbol` only
+    // sees the backticked form and `ja-revision` only the lowercase one, so a
+    // bare capitalised model name in a Japanese sentence passed both.
+    it('flags the capitalised model name on a reader-facing Japanese page', () => {
+      assert.equal(findLeaks('保存すると Revision が 1 件増えます。', JA_GUIDE)[0].rule, 'ja-revision-model')
+      assert.equal(findLeaks('Revision ドキュメントに残ります。', { locale: 'ja', folder: 'reference' })[0].rule, 'ja-revision-model')
+    })
+
+    it('leaves develop/ alone, where the model is the subject', () => {
+      assert.deepEqual(findLeaks('モデルには Page / Revision / User / Comment があります。', JA_DEVELOP), [])
+    })
+
+    it('does not double-report the backticked form internal-symbol already owns', () => {
+      assert.deepEqual(
+        findLeaks('ページの `Revision` を参照します。', JA_GUIDE).map((leak) => leak.rule),
+        ['internal-symbol'],
+      )
+    })
+
+    it('does not touch English prose', () => {
+      assert.deepEqual(findLeaks('the Revision model keeps the body', EN_DEVELOP), [])
+      assert.deepEqual(findLeaks('the Revision model keeps the body', EN_GUIDE), [])
     })
   })
 
