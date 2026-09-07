@@ -8,10 +8,9 @@ This page explains how to build your own Crowi plugin using
 [Plugin architecture](./plugins-overview), and for the design background see
 [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md).
 
-> **Caution**: Crowi v2 is under active alpha development, and
-> `@crowi/plugin-api` is currently at version `0.x`. The API stability
-> guarantee (working across every v2 minor) takes effect once it
-> reaches `2.x`. The contract may change during the alpha period.
+> **Caution**: `@crowi/plugin-api` is currently at version `0.x`. The API
+> stability guarantee — working across every v2 minor — takes effect once it
+> reaches `2.x`; until then the contract may change.
 
 ## What a plugin really is
 
@@ -200,9 +199,9 @@ what the plugin contributes.
 | `registerStorage` | A file storage driver |
 | `registerSearch` | A full-text search backend |
 | `registerAuth` | An authentication provider |
-| `registerNotifier` | A notification sink |
+| `registerNotifier` | A notifier plugin |
 | `registerRenderer` | Markdown renderer extensions |
-| `registerRoutes` | The plugin's own HTTP endpoints — **currently a no-op stub**: RFC-0006 removed the old ts-rest route surface, and plugin HTTP contribution will be redesigned on Hono in a follow-up RFC. A `registerRoutes` callback is accepted but not mounted today. |
+| `registerRoutes` | The plugin's own HTTP endpoints. Registered routes are mounted at `/api/plugins/<plugin>/<path>`, and each one picks its authentication with `auth: 'user' | 'admin' | 'public'` (`public` is for webhooks that authenticate themselves, such as Slack's request signing). |
 | `registerHooks` | Event subscription (internal-only in v2.0; not yet a stable extension point) |
 
 You can also declare lifecycle hooks:
@@ -377,6 +376,6 @@ runtime use, but a good sample of how the contract is used).
 ## Related pages
 
 - How plugins work → [Plugin architecture](./plugins-overview)
-- Installing and configuring plugins → [Managing plugins](../operations/plugins)
+- Installing the plugin you built → [Installing and configuring plugins](../operations/plugins)
 - The list of renderer plugins → [Renderer plugins](../operations/renderers)
 - The list of design proposals → [RFC index](./rfcs)

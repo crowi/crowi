@@ -9,10 +9,9 @@ description: "@crowi/plugin-api を使って独自プラグインを作る"
 [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)
 を参照してください。
 
-> **注意**: Crowi v2 は alpha 開発中であり、`@crowi/plugin-api` の
-> バージョンは現時点で `0.x` です。`2.x` に到達して以降の API 安定保証
-> (v2 系のすべてのマイナーで動作) はその時点から有効になります。alpha
-> 期間中は契約が変わる可能性があります。
+> **注意**: `@crowi/plugin-api` のバージョンは現時点で `0.x` です。API の
+> 安定保証 (v2 系のすべてのマイナーで動作) が有効になるのは `2.x` に到達して
+> からで、それまでは契約が変わる可能性があります。
 
 ## プラグインの正体
 
@@ -201,9 +200,9 @@ repository/HTTP 層分離まで持ち越しています。`User` への `modelAc
 | `registerStorage` | ファイルストレージドライバ |
 | `registerSearch` | 全文検索バックエンド |
 | `registerAuth` | 認証プロバイダ |
-| `registerNotifier` | 通知シンク |
+| `registerNotifier` | 通知プラグイン |
 | `registerRenderer` | Markdown レンダラ拡張 |
-| `registerRoutes` | プラグイン独自の HTTP エンドポイント — **現在は no-op スタブ**: RFC-0006 で旧 ts-rest ルート基盤が撤去され、プラグインの HTTP 提供は後続 RFC で Hono ベースに再設計予定。`registerRoutes` コールバックは受け付けますが、現状はマウントされません。 |
+| `registerRoutes` | プラグイン独自の HTTP エンドポイント。登録したルートは `/api/plugins/<プラグイン名>/<パス>` にマウントされ、`auth: 'user' | 'admin' | 'public'` で認証の要否を選べます (`public` は Slack の署名検証のように、自前で認証する webhook 向け)。 |
 | `registerHooks` | イベント購読 (v2.0 では内部利用のみ、まだ安定拡張ポイントではない) |
 
 ライフサイクルフックも宣言できます。
@@ -371,6 +370,6 @@ I/O)、`packages/plugin-renderer-katex` (unified プラグイン + ノード変�
 ## 関連ページ
 
 - プラグインの仕組み → [プラグインアーキテクチャ](./plugins-overview)
-- プラグインの導入と設定 → [プラグインの導入と設定](../operations/plugins)
+- 作ったプラグインを運用環境に入れる → [プラグインの導入と設定](../operations/plugins)
 - レンダラプラグインの一覧 → [レンダラプラグイン](../operations/renderers)
 - 設計提案の一覧 → [RFC インデックス](./rfcs)
