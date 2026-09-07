@@ -30,6 +30,6 @@ describe('plugin default export', () => {
   // feature-plugin-capability-scoping: declares exactly the models it
   // reads (read-only) via ctx.model() in registerSearch — see index.ts.
   it('declares modelAccess for the models it reads via ctx.model()', () => {
-    expect(plugin.modelAccess).toEqual(['Page', 'Bookmark', 'User']);
+    expect(plugin.modelAccess).toEqual(['Page', 'Bookmark', 'User', 'Like']);
   });
 });
