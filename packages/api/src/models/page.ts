@@ -216,8 +216,6 @@ export interface PageDocument extends Document {
   grantedUsers: Types.ObjectId[];
   creator: Types.ObjectId;
   lastUpdateUser: Types.ObjectId;
-  liker: Types.ObjectId[];
-  seenUsers: Types.ObjectId[];
   commentCount: number;
   extended: Record<string, any>;
   createdAt: Date;
@@ -283,8 +281,6 @@ export interface PageDocument extends Document {
 
   // dynamic fields
   latestRevision?: Types.ObjectId;
-  likerCount?: number;
-  seenUsersCount?: number;
 
   isPublished(): boolean;
   isDeleted(): boolean;
@@ -296,15 +292,10 @@ export interface PageDocument extends Document {
   isGrantedFor(user: any): boolean;
   isLatestRevision(): boolean;
   isUpdatable(previousRevision): boolean;
-  isLiked(user: any): boolean;
   isRedirectOriginPage(): boolean;
   isUnlinkable(user: any): boolean;
   isWIP(): boolean;
-  like(user: any): any;
-  unlike(user: any): any;
   unlink(user: any): any;
-  isSeenUser(user: any): any;
-  seen(user: any): any;
   getSlackChannel(): any;
   updateSlackChannel(slackChannel: string): any;
   updateExtended(extended: Record<string, any>): any;
@@ -820,8 +811,6 @@ export default (crowi: Crowi) => {
       // lastUpdateUser: this schema is from 1.5.x (by deletion feature), and null is default.
       // the last update user on the screen is by revesion.author for B.C.
       lastUpdateUser: { type: Schema.Types.ObjectId, ref: 'User', index: true },
-      liker: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
-      seenUsers: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
       commentCount: { type: Number, default: 0 },
       extended: {
         type: String,
@@ -973,62 +962,12 @@ export default (crowi: Crowi) => {
     return true;
   };
 
-  pageSchema.methods.isLiked = function (userData) {
-    return this.liker.some(function (likedUser) {
-      return likedUser == userData._id.toString();
-    });
-  };
-
   pageSchema.methods.isRedirectOriginPage = function () {
     return this.redirectTo !== null;
   };
 
   pageSchema.methods.isUnlinkable = function (userData) {
     return this.isRedirectOriginPage() && this.isGrantedFor(userData);
-  };
-
-  pageSchema.methods.like = async function (userData) {
-    const Activity = crowi.model('Activity');
-
-    const added = (this.liker as any as Types.Array<UserDocument>).addToSet(userData._id);
-    if (added.length > 0) {
-      const data = await this.save();
-
-      debug('liker updated!', added);
-
-      try {
-        const activityLog = await Activity.createByPageLike(data, userData);
-        debug('Activity created', activityLog);
-      } catch (err) {
-        debug('Activity err', err);
-      }
-
-      return data;
-    } else {
-      debug('liker not updated');
-    }
-  };
-
-  pageSchema.methods.unlike = async function (userData) {
-    const Activity = crowi.model('Activity');
-
-    const liker = this.liker as any as Types.Array<UserDocument>;
-    const beforeCount = liker.length;
-    liker.pull(userData._id);
-    if (liker.length != beforeCount) {
-      const data = await this.save();
-
-      try {
-        await Activity.removeByPageUnlike(data, userData);
-        debug('Activity removed');
-      } catch (err) {
-        debug('Activity remove err', err);
-      }
-
-      return data;
-    } else {
-      debug('liker not updated');
-    }
   };
 
   // Unlink: Remove redirect origin page
@@ -1046,35 +985,6 @@ export default (crowi: Crowi) => {
     } else {
       throw new Error('Page is not unlinkable');
     }
-  };
-
-  pageSchema.methods.isSeenUser = function (userData) {
-    const seenUsers = this.seenUsers as any as UserDocument[];
-
-    return seenUsers.some(function (seenUser) {
-      return seenUser.equals(userData._id);
-    });
-  };
-
-  pageSchema.methods.seen = async function (userData) {
-    const seenUsers = this.seenUsers as any as Types.Array<UserDocument>;
-
-    if (this.isSeenUser(userData)) {
-      debug('seenUsers not updated');
-      return this;
-    }
-
-    if (!userData || !userData._id) {
-      throw new Error('User data is not valid');
-    }
-
-    const added = seenUsers.addToSet(userData);
-
-    await this.save();
-
-    debug('seenUsers updated!', added);
-
-    return this;
   };
 
   pageSchema.methods.getSlackChannel = function () {
@@ -1114,8 +1024,6 @@ export default (crowi: Crowi) => {
     if (revisionId) {
       pageData.revision = revisionId;
     }
-    pageData.likerCount = pageData.liker.length || 0;
-    pageData.seenUsersCount = pageData.seenUsers.length || 0;
 
     return pageData.populate([
       { path: 'lastUpdateUser', model: 'User' },
@@ -1765,7 +1673,7 @@ export default (crowi: Crowi) => {
 
     const [rawPages, total] = await Promise.all([
       Page.find(match)
-        .select('path redirectTo status grant grantedUsers creator lastUpdateUser liker commentCount createdAt updatedAt')
+        .select('path redirectTo status grant grantedUsers creator lastUpdateUser commentCount createdAt updatedAt')
         .sort({ path: 1, _id: 1 })
         .skip(offset)
         .limit(limit)
