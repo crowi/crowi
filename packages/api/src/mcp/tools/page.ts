@@ -199,7 +199,8 @@ export const pageTools: ToolDescriptor[] = [
   },
   {
     name: 'crowi_list_child_pages',
-    description: 'List the immediate child segments directly under a portal `path` (sidebar/tree navigation). Use `/` to list the top-level segments.',
+    description:
+      'List the child segments under a portal `path` (sidebar/tree navigation). Use `/` to list the top-level segments. `depth` (1-2, default 1) widens the result to that many levels, returned as one flat list where each row carries its own full path.',
     method: 'GET',
     path: '/pages/children',
     schema: ListPageChildrenRequestSchema.shape,

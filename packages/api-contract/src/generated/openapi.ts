@@ -7606,11 +7606,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List immediate child segments under a portal path (sidebar tree) */
+        /** List child segments under a portal path, up to `depth` levels (sidebar tree) */
         get: {
             parameters: {
                 query: {
                     path: string;
+                    depth?: number;
                 };
                 header?: never;
                 path?: never;
@@ -7618,7 +7619,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description First-level child segments (alphabetical) under the path */
+                /** @description Child segments under the path, depth-first with siblings alphabetical, spanning `depth` levels (default 1). Flat — a row's own `path` places it in the tree. */
                 200: {
                     headers: {
                         [name: string]: unknown;

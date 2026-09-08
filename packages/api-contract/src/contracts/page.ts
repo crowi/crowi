@@ -169,13 +169,14 @@ export const listPageChildrenRoute = createRoute({
   path: '/pages/children',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'List immediate child segments under a portal path (sidebar tree)',
+  summary: 'List child segments under a portal path, up to `depth` levels (sidebar tree)',
   request: {
     query: ListPageChildrenRequestSchema,
   },
   responses: {
     200: {
-      description: 'First-level child segments (alphabetical) under the path',
+      description:
+        "Child segments under the path, depth-first with siblings alphabetical, spanning `depth` levels (default 1). Flat — a row's own `path` places it in the tree.",
       content: { 'application/json': { schema: ListPageChildrenResponseSchema } },
     },
     401: {

@@ -643,10 +643,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       // --------------------------------------------------------------
       .openapi(listPageChildrenRoute, async (c) => {
         const user = c.get('user');
-        const { path } = c.req.valid('query');
-        debug('listPageChildren called with:', { path, userId: user._id });
+        const { path, depth } = c.req.valid('query');
+        debug('listPageChildren called with:', { path, depth, userId: user._id });
         try {
-          const children = await Page.findChildSegments(path, user);
+          const children = await Page.findChildSegments(path, user, depth);
           return c.json({ children }, 200);
         } catch (err) {
           // Mirror listPages: a scan error collapses to an empty tree

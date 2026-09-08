@@ -4662,3 +4662,45 @@ describe('Routes /api/pages/link-access (Hono claimPageLinkAccessRoute — grant
     });
   });
 });
+
+describe('Routes /api/pages/children (Hono listPageChildren — depth)', () => {
+  const PATH_PREFIX = '/hono-page-children-depth-test/';
+  const MONTH = `${PATH_PREFIX}2026/08`;
+  let accessToken: string;
+
+  beforeAll(async () => {
+    ({ accessToken } = await createTestUser({
+      name: 'ChildrenDepth Test',
+      username: 'childrenDepthTester',
+      email: 'children-depth-tester@example.com',
+    }));
+    await createPageViaApi(accessToken, `${MONTH}/03/spec`, '# spec');
+    await createPageViaApi(accessToken, `${MONTH}/07/report`, '# report');
+  });
+
+  afterAll(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+  });
+
+  const childPaths = (body: { children: Array<{ path: string }> }) => body.children.map((child) => child.path);
+
+  it('returns immediate children only when depth is omitted', async () => {
+    const res = await request(app).get('/api/pages/children').set(authHeaders(accessToken)).query({ path: MONTH });
+    expect(res.status).toBe(200);
+    expect(childPaths(res.body)).toEqual([`${MONTH}/03/`, `${MONTH}/07/`]);
+  });
+
+  // `depth` crosses the wire as a string, so the contract coerces it; a
+  // regression here would either 400 or silently fall back to depth 1.
+  it('returns two levels, depth-first, when depth=2', async () => {
+    const res = await request(app).get('/api/pages/children').set(authHeaders(accessToken)).query({ path: MONTH, depth: 2 });
+    expect(res.status).toBe(200);
+    expect(childPaths(res.body)).toEqual([`${MONTH}/03/`, `${MONTH}/03/spec/`, `${MONTH}/07/`, `${MONTH}/07/report/`]);
+  });
+
+  it('rejects a depth beyond what the sidebar asks for', async () => {
+    const res = await request(app).get('/api/pages/children').set(authHeaders(accessToken)).query({ path: MONTH, depth: 5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+});
