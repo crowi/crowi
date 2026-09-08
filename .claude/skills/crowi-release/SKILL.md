@@ -3,7 +3,8 @@ name: crowi-release
 description: |
   リリースの指揮 skill。pre-flight(changeset / 未統合 worktree / CI 状態 / Version PR)→
   Go/No-Go 材料の提示 →(ユーザー承認後の)Version PR merge → タグ後の成果物検証
-  (npm / Docker / GitHub Release)。merge / tag / publish は常にユーザー承認後。検証は read-only。
+  (npm / Docker / GitHub Release / team wiki の記録)。merge / tag / publish は常にユーザー承認後。
+  検証は成果物に対して read-only(wiki の記録だけは欠けていれば書く)。
   キーワード: release, リリース, alpha, タグ, publish, Version PR, 成果物検証, Go/No-Go
 ---
 
@@ -26,6 +27,7 @@ Trusted Publisher 等はそちら)。この skill はエージェント手順に
 | Docker image(crowi/crowi full+slim, crowi/crowi-web, multi-arch) | CI(`docker.yml`: Release 完了の workflow_run 連鎖) | tag 規則は `scripts/release-tags.mjs` |
 | Discord 告知 | CI(`docker.yml` 内・real release で自動) | 手動再ビルド時は `announce` input |
 | **成果物の検証** | **この skill(verify モード)** | npm / Docker / GH Release |
+| **team wiki の記録**(詳細ページ + index の 1 行) | **この skill(verify モード)** | CI は書かない — portal `/crowi/release/` の運用契約 |
 | ES image | 別 workflow(`docker-elasticsearch.yml`) | 必要時のみ確認 |
 
 > tag push は GITHUB_TOKEN の anti-recursion で docker.yml を**起動しない**。連鎖は
@@ -71,7 +73,7 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
 **ここで必ず止まる。** merge はユーザーの明示指示があった場合のみ
 `gh pr merge <N> --squash`(以降は CI が publish → tag → image → 告知まで自動)。
 
-## モード 2: verify(タグ後・read-only)
+## モード 2: verify(タグ後 — 成果物は read-only、wiki の記録だけ書く)
 
 対象 tag(既定 = `git describe --tags --abbrev=0 --match 'v*'` on latest main)について:
 
@@ -93,13 +95,38 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
    docker run --rm crowi/crowi:<ver> node --version   # 最低限
    ```
 4. **GitHub Release**: `gh release view <tag>` — 集約ノートが生成されているか。
-5. 結果を表で報告。**失敗があっても修正・再 publish はしない**(報告 + 対応案の提示まで。
+5. **wiki の記録**: team wiki の portal(`/crowi/release/`)が冒頭で「リリースを切るたびに
+   **変更点の詳細ページを 1 枚**書き、この表に**一行要約**を足す」と定めている。CI はこれを
+   やらないので、**verify がこの 2 つを確認する**(欠けていれば書く。詳細ページと index
+   追記は必ず対になる — 片方だけでは portal から辿れない、または表に載らない):
+
+   ```bash
+   crowi -p crowi-team-wiki get /crowi/release/<YYYY>/<MM>/<DD>/alpha-<N>   # 詳細ページ
+   crowi -p crowi-team-wiki get /crowi/release/ | grep 'alpha-<N>'          # index の行
+   ```
+
+   日付はタグの作成日(`git log -1 --format=%ci <tag>`)を**ローカル時刻で**使う。UTC で
+   採ると日付が 1 日ずれることがある。書式は既存ページに合わせる(詳細ページは「前の
+   リリースからの変更点」+ 立場ごとの対応要否の表から始める。index は 1 行要約)。
+
+   書くときは CLAUDE.md の wiki 書き込み規約に従う — **本文はファイルに書き、`crowi ...
+   --file` で渡し、`crowi get | diff` で一致を確認する**(末尾改行 1 行だけの差は一致と
+   みなす)。index への追記は取得 → プログラムで 1 行挿入 → 元との diff が「追加 1 行のみ」
+   を確認 → 書き戻し、の順で行い、本文を手で組み直さない。
+
+   この項目がある理由: alpha.17 で index への追記が漏れた。npm / Docker / GitHub Release
+   だけを見る verify は、成果物が全部揃っていても記録の欠落を検出できない。
+6. 結果を表で報告。**失敗があっても修正・再 publish はしない**(報告 + 対応案の提示まで。
    image の再ビルドは `docker.yml` の workflow_dispatch — 実行は人間の判断)。
+   ただし **wiki の記録だけは verify が書いてよい**(read-only の例外)。成果物ではなく
+   記録なので、再 publish のような不可逆な操作を伴わないため。
 
 ## 鉄則
 
 - **merge / tag / push / publish はすべてユーザーの明示承認後**(pre-flight は提示で止まる)
-- verify は read-only(docker pull/run はローカルのみ・`--rm` 付き)
+- verify は**成果物に対して** read-only(docker pull/run はローカルのみ・`--rm` 付き)。
+  例外は wiki の記録(手順 5)だけ — 成果物ではなく記録で、不可逆な操作を伴わないため
+  verify が書いてよい
 - 失敗成果物の修正・再 publish を自動でしない
 - レビュー的な指摘が出たら fix or drop(退避先は存在しない — 全 skill 共通方針)
 - **prod build スモーク(`/crowi-qa main --prod-build`)は既定で実行**。省略するのは
