@@ -1105,6 +1105,18 @@ describe('Page', () => {
         expect(segments.some((seg) => seg.segment === 'draft')).toBe(false);
       });
 
+      // `isCreatableName` forbids `//`, so these rows can only come from legacy
+      // data — but a fabricated row is worse than a missing one: a stored
+      // `/s/2026/08//ghost` must not surface as a node at `/s/2026/08/ghost/`,
+      // a path where nothing is saved. The empty segment can sit at any depth
+      // below the queried prefix, not just directly under it.
+      test('a path with an empty segment contributes no node at any depth', async () => {
+        await Fixture.generate('Page', [publish('/s/2026/08/07/report'), publish('/s/2026/08//ghost'), publish('/s/2026/09//')]);
+
+        const segments = await Page.findChildSegments('/s/2026', author, 2);
+        expect(segments.map((seg) => seg.path)).toEqual(['/s/2026/08/', '/s/2026/08/07/']);
+      });
+
       test('deepening does not add a query — the scan already covered the subtree', async () => {
         await Fixture.generate('Page', [publish('/s/2026/08/03/spec'), publish('/s/2026/08/07/report')]);
         const pageFindSpy = jest.spyOn(Page, 'find');

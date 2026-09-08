@@ -202,6 +202,13 @@ describe('dateMonthPath', () => {
     expect(dateMonthPath('/log/2026/08/07/12')).toBe('/log/2026/08/');
   });
 
+  it('skips a lone numeric segment and finds the real date run behind it', () => {
+    // A numerically-named space/notebook is not a date hierarchy on its own —
+    // it takes two adjacent numeric segments to make a year and a month.
+    expect(dateMonthPath('/123/project/2026/08/07/note')).toBe('/123/project/2026/08/');
+    expect(dateMonthPath('/2026/notes/2027/05/01/x')).toBe('/2026/notes/2027/05/');
+  });
+
   it('is identical for a path and its trailing-slash twin', () => {
     for (const p of ['/almoha/specs/2026/08/07/AIレポート', '/almoha/specs/2026/08', '/almoha/specs/2026', '/crowi/rfc/0002-renderer']) {
       expect(dateMonthPath(p)).toBe(dateMonthPath(`${p}/`));

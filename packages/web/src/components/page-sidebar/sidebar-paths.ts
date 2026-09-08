@@ -199,7 +199,10 @@ export function resolveSidebarSelfLink(
  *   /s/2026/08/07/AIレポート    → '/s/2026/08/'
  *   /crowi/rfc/0002-renderer   → null   (not all-digit — not a date run)
  *
- * Anchoring on the FIRST run matters: a numerically-named page under a day
+ * The anchor is the first ADJACENT PAIR of numeric segments, which is where
+ * the first run of length two or more begins. Both halves matter: a lone
+ * numeric segment ahead of the real hierarchy (`/123/project/2026/08/07/x`)
+ * must not end the search, and a numerically-named page under a day
  * (`/log/2026/08/07/12`) must not shift the month to `08/07/`.
  *
  * A path and its trailing-slash twin always agree (the empty trailing
@@ -207,11 +210,8 @@ export function resolveSidebarSelfLink(
  */
 export function dateMonthPath(path: string): string | null {
   const segs = path.split('/').filter(Boolean);
-  const runStart = segs.findIndex(isNumericSegment);
-  // The run must hold a month as well as a year, and the month must not be
-  // the path's own tail-less remainder — `findIndex` already guarantees
-  // `runStart >= 0` here.
-  if (runStart === -1 || !isNumericSegment(segs[runStart + 1] ?? '')) return null;
+  const runStart = segs.findIndex((seg, index) => isNumericSegment(seg) && isNumericSegment(segs[index + 1] ?? ''));
+  if (runStart === -1) return null;
   return `/${segs.slice(0, runStart + 2).join('/')}/`;
 }
 

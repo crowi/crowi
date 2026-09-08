@@ -1815,10 +1815,14 @@ export default (crowi: Crowi) => {
       // querying `/crowi/`) — it is the parent, not a child.
       if (doc.path === prefix) continue;
       const rest = doc.path.slice(prefix.length);
-      // A leading slash here means a malformed `//` in the stored path;
-      // `filter(Boolean)` would silently promote the segment after it to
-      // this level, so skip the doc as the pre-`depth` code did.
-      if (rest.startsWith('/')) continue;
+      // An empty segment anywhere in the remainder means a malformed `//` in
+      // the stored path (`isCreatableName` forbids creating one, so this is
+      // legacy data only). `filter(Boolean)` would erase it and hand back a
+      // node at a canonical path where nothing is saved — `/x/a//b` read as
+      // a page at `/x/a/b` — so drop the doc instead of inventing a link to
+      // it. The pre-`depth` code could not fabricate a path this way; it
+      // merely counted such a doc as an anonymous descendant.
+      if (rest.startsWith('/') || rest.includes('//')) continue;
       const restSegments = rest.split('/').filter(Boolean);
       if (restSegments.length === 0) continue;
       // `rest` keeps its trailing slash (unlike `restSegments`), which is
