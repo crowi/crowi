@@ -25,6 +25,8 @@
 
 import type { PageChildSegment } from '@crowi/api-contract';
 
+import { isNumericSegment } from '@/lib/page-path';
+
 // `/space/group/` — the directory depth at which the inline tree roots.
 export const ROOT_DEPTH = 2;
 
@@ -175,4 +177,59 @@ export function resolveSidebarSelfLink(
     // content page itself (no trailing slash), not its portal listing.
     isCurrent: !path.endsWith('/'),
   };
+}
+
+/**
+ * The `YYYY/MM/` portal whose whole month the sidebar expands, or `null`
+ * when `path` is not inside a date hierarchy deep enough to have one.
+ *
+ * Crowi's flow-note idiom puts one or two pages under each `YYYY/MM/DD/`,
+ * so the plain ancestry tree shows a column of bare day numbers and only
+ * ever opens the day you are on. Expanding the whole month instead turns
+ * that column into a readable month log — the day rows keep their place,
+ * but every day shows what is actually in it.
+ *
+ * A "date hierarchy" is the same notion the list view and default-title
+ * rules use: a run of consecutive all-digit segments (`isNumericSegment`).
+ * The month is the run's SECOND segment, so:
+ *
+ *   /s/2026                    → null   (a year has no month to expand yet)
+ *   /s/2026/08                 → '/s/2026/08/'
+ *   /s/2026/08/07/             → '/s/2026/08/'
+ *   /s/2026/08/07/AIレポート    → '/s/2026/08/'
+ *   /crowi/rfc/0002-renderer   → null   (not all-digit — not a date run)
+ *
+ * The anchor is the first ADJACENT PAIR of numeric segments, which is where
+ * the first run of length two or more begins. Both halves matter: a lone
+ * numeric segment ahead of the real hierarchy (`/123/project/2026/08/07/x`)
+ * must not end the search, and a numerically-named page under a day
+ * (`/log/2026/08/07/12`) must not shift the month to `08/07/`.
+ *
+ * A path and its trailing-slash twin always agree (the empty trailing
+ * segment is filtered out), preserving `pageSidebarLayout`'s invariant.
+ */
+export function dateMonthPath(path: string): string | null {
+  const segs = path.split('/').filter(Boolean);
+  const runStart = segs.findIndex((seg, index) => isNumericSegment(seg) && isNumericSegment(segs[index + 1] ?? ''));
+  if (runStart === -1) return null;
+  return `/${segs.slice(0, runStart + 2).join('/')}/`;
+}
+
+/**
+ * The rows of a `depth > 1` children fetch that are DIRECT children of
+ * `parentPath`.
+ *
+ * A deep fetch returns one flat array spanning several levels (each row
+ * carries its own full portal `path`), so the tree rebuilds the nesting by
+ * matching each row's parent. Kept pure — the sidebar's month expansion is
+ * otherwise only reachable through the network.
+ */
+export function deepChildRowsOf(rows: PageChildSegment[], parentPath: string): PageChildSegment[] {
+  return rows.filter((row) => {
+    if (!row.path.startsWith(parentPath)) return false;
+    // `path` is always trailing-slashed, so a direct child's remainder is
+    // exactly one segment plus that slash.
+    const rest = row.path.slice(parentPath.length);
+    return rest.length > 0 && rest.indexOf('/') === rest.length - 1;
+  });
 }

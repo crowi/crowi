@@ -27251,7 +27251,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "List immediate child segments under a portal path (sidebar tree)",
+        "summary": "List child segments under a portal path, up to `depth` levels (sidebar tree)",
         "parameters": [
           {
             "schema": {
@@ -27260,11 +27260,21 @@
             "required": true,
             "name": "path",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2
+            },
+            "required": false,
+            "name": "depth",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "First-level child segments (alphabetical) under the path",
+            "description": "Child segments under the path, depth-first with siblings alphabetical, spanning `depth` levels (default 1). Flat — a row's own `path` places it in the tree.",
             "content": {
               "application/json": {
                 "schema": {

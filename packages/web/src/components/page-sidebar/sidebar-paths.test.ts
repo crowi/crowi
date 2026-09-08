@@ -1,6 +1,6 @@
 import type { PageChildSegment } from '@crowi/api-contract';
 import { describe, expect, it } from 'vitest';
-import { pageSidebarLayout, resolveSidebarSelfLink } from './sidebar-paths';
+import { dateMonthPath, deepChildRowsOf, pageSidebarLayout, resolveSidebarSelfLink } from './sidebar-paths';
 
 describe('pageSidebarLayout', () => {
   // The defining invariant of the unified tree (feature-update-pages-list-ux
@@ -175,5 +175,69 @@ describe('resolveSidebarSelfLink', () => {
   it('returns null at the (un-rendered) root where there is no current node', () => {
     const rootLayout = pageSidebarLayout('/');
     expect(resolveSidebarSelfLink(rootLayout, [[]], '/')).toBeNull();
+  });
+});
+
+describe('dateMonthPath', () => {
+  it('returns the month portal for a path inside a date hierarchy', () => {
+    expect(dateMonthPath('/almoha/specs/2026/08/07/AIレポート実験基盤')).toBe('/almoha/specs/2026/08/');
+    expect(dateMonthPath('/almoha/specs/2026/08/07/')).toBe('/almoha/specs/2026/08/');
+    expect(dateMonthPath('/almoha/specs/2026/08')).toBe('/almoha/specs/2026/08/');
+    expect(dateMonthPath('/user/alice/diary/2026/05/23')).toBe('/user/alice/diary/2026/05/');
+  });
+
+  it('returns null at the year level — there is no month to expand yet', () => {
+    expect(dateMonthPath('/almoha/specs/2026')).toBeNull();
+    expect(dateMonthPath('/almoha/specs/2026/')).toBeNull();
+  });
+
+  it('returns null for a path with no date run', () => {
+    expect(dateMonthPath('/crowi/rfc/0002-renderer')).toBeNull();
+    expect(dateMonthPath('/crowi/project/hoge/xxx/yyy')).toBeNull();
+    expect(dateMonthPath('/')).toBeNull();
+  });
+
+  it('anchors on the FIRST numeric run, so a deeper numeric page cannot move the month', () => {
+    // `12` here is a page under the day, not a second date hierarchy.
+    expect(dateMonthPath('/log/2026/08/07/12')).toBe('/log/2026/08/');
+  });
+
+  it('skips a lone numeric segment and finds the real date run behind it', () => {
+    // A numerically-named space/notebook is not a date hierarchy on its own —
+    // it takes two adjacent numeric segments to make a year and a month.
+    expect(dateMonthPath('/123/project/2026/08/07/note')).toBe('/123/project/2026/08/');
+    expect(dateMonthPath('/2026/notes/2027/05/01/x')).toBe('/2026/notes/2027/05/');
+  });
+
+  it('is identical for a path and its trailing-slash twin', () => {
+    for (const p of ['/almoha/specs/2026/08/07/AIレポート', '/almoha/specs/2026/08', '/almoha/specs/2026', '/crowi/rfc/0002-renderer']) {
+      expect(dateMonthPath(p)).toBe(dateMonthPath(`${p}/`));
+    }
+  });
+});
+
+describe('deepChildRowsOf', () => {
+  const row = (path: string): PageChildSegment => ({
+    segment: path.replace(/\/$/, '').split('/').pop() as string,
+    path,
+    isPage: true,
+    hasPortal: false,
+    count: 0,
+  });
+
+  // A depth=2 fetch of `/s/2026/08/`: the day directories AND the pages under them.
+  const rows = [row('/s/2026/08/03/'), row('/s/2026/08/03/仕様メモ/'), row('/s/2026/08/07/'), row('/s/2026/08/07/AIレポート/'), row('/s/2026/08/09/')];
+
+  it('returns only the direct children of the given parent', () => {
+    expect(deepChildRowsOf(rows, '/s/2026/08/03/').map((r) => r.segment)).toEqual(['仕様メモ']);
+    expect(deepChildRowsOf(rows, '/s/2026/08/07/').map((r) => r.segment)).toEqual(['AIレポート']);
+  });
+
+  it('returns an empty list for a day with no pages', () => {
+    expect(deepChildRowsOf(rows, '/s/2026/08/09/')).toEqual([]);
+  });
+
+  it('does not treat grandchildren as children of the fetch root', () => {
+    expect(deepChildRowsOf(rows, '/s/2026/08/').map((r) => r.segment)).toEqual(['03', '07', '09']);
   });
 });

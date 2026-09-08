@@ -1039,6 +1039,97 @@ describe('Page', () => {
       expect(bigPageCalls).toBe(smallPageCalls);
       expect(bigUserCalls).toBe(smallUserCalls);
     });
+
+    // `depth` powers the sidebar's month expansion: one fetch of
+    // `/<notebook>/YYYY/MM/` returns the day directories AND the pages
+    // inside them, so the tree can open every day at once instead of
+    // issuing a request per day.
+    describe('depth', () => {
+      const publish = (path) => ({
+        path,
+        grant: Page.GRANT_PUBLIC,
+        creator: author,
+        status: 'published',
+        updatedAt: new Date('2026-08-07T00:00:00Z'),
+        lastUpdateUser: author,
+      });
+
+      test('depth defaults to 1 — only first-level segments, exactly as before', async () => {
+        await Fixture.generate('Page', [publish('/s/2026/08/03/spec'), publish('/s/2026/08/07/report')]);
+
+        const segments = await Page.findChildSegments('/s/2026/08', author);
+        expect(segments.map((seg) => seg.path)).toEqual(['/s/2026/08/03/', '/s/2026/08/07/']);
+      });
+
+      test('depth 2 adds the second level, each row carrying its own full path', async () => {
+        await Fixture.generate('Page', [publish('/s/2026/08/03/spec'), publish('/s/2026/08/07/report'), publish('/s/2026/08/09')]);
+
+        const segments = await Page.findChildSegments('/s/2026/08', author, 2);
+        expect(segments.map((seg) => seg.path)).toEqual(['/s/2026/08/03/', '/s/2026/08/03/spec/', '/s/2026/08/07/', '/s/2026/08/07/report/', '/s/2026/08/09/']);
+        const report = segments.find((seg) => seg.segment === 'report');
+        expect(report?.isPage).toBe(true);
+        expect(report?.count).toBe(0);
+        expect(report?.lastUpdatedAt).toBe('2026-08-07T00:00:00.000Z');
+        expect(report?.updater?.username).toBe(author.username);
+      });
+
+      test('a deep row reports its own descendant count and portal flag', async () => {
+        await Fixture.generate('Page', [publish('/s/2026/08/07/report'), publish('/s/2026/08/07/report/'), publish('/s/2026/08/07/report/admin')]);
+
+        const segments = await Page.findChildSegments('/s/2026/08', author, 2);
+        const report = segments.find((seg) => seg.segment === 'report');
+        expect(report?.isPage).toBe(true);
+        expect(report?.hasPortal).toBe(true);
+        expect(report?.count).toBe(1);
+        // The grandchild is beyond `depth` — it counts, but it is not a row.
+        expect(segments.some((seg) => seg.segment === 'admin')).toBe(false);
+      });
+
+      test('deep rows honour visibility the same way first-level ones do', async () => {
+        await Fixture.generate('Page', [
+          publish('/s/2026/08/07/public'),
+          { path: '/s/2026/08/07/secret', grant: Page.GRANT_OWNER, creator: other, status: 'published', updatedAt: new Date(), lastUpdateUser: other },
+        ]);
+
+        const segments = await Page.findChildSegments('/s/2026/08', author, 2);
+        expect(segments.map((seg) => seg.segment)).toEqual(['07', 'public']);
+      });
+
+      test('a draft-only portal stays a phantom at depth 2, just as at depth 1', async () => {
+        await Fixture.generate('Page', [
+          publish('/s/2026/08/07/report'),
+          { path: '/s/2026/08/07/draft/', grant: Page.GRANT_PUBLIC, creator: author, status: 'draft', updatedAt: new Date(), lastUpdateUser: author },
+        ]);
+
+        const segments = await Page.findChildSegments('/s/2026/08', author, 2);
+        expect(segments.some((seg) => seg.segment === 'draft')).toBe(false);
+      });
+
+      // `isCreatableName` forbids `//`, so these rows can only come from legacy
+      // data — but a fabricated row is worse than a missing one: a stored
+      // `/s/2026/08//ghost` must not surface as a node at `/s/2026/08/ghost/`,
+      // a path where nothing is saved. The empty segment can sit at any depth
+      // below the queried prefix, not just directly under it.
+      test('a path with an empty segment contributes no node at any depth', async () => {
+        await Fixture.generate('Page', [publish('/s/2026/08/07/report'), publish('/s/2026/08//ghost'), publish('/s/2026/09//')]);
+
+        const segments = await Page.findChildSegments('/s/2026', author, 2);
+        expect(segments.map((seg) => seg.path)).toEqual(['/s/2026/08/', '/s/2026/08/07/']);
+      });
+
+      test('deepening does not add a query — the scan already covered the subtree', async () => {
+        await Fixture.generate('Page', [publish('/s/2026/08/03/spec'), publish('/s/2026/08/07/report')]);
+        const pageFindSpy = jest.spyOn(Page, 'find');
+        const userFindSpy = jest.spyOn(User, 'find');
+
+        await Page.findChildSegments('/s/2026/08', author, 2);
+
+        expect(pageFindSpy.mock.calls.length).toBe(1);
+        expect(userFindSpy.mock.calls.length).toBe(1);
+        pageFindSpy.mockRestore();
+        userFindSpy.mockRestore();
+      });
+    });
   });
 
   // RFC-0004 Phase 2: draft page status + draft visibility filtering.

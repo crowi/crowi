@@ -70,7 +70,14 @@ export function pageDirname(path: string): string {
   return idx <= 0 ? '/' : `${trimmed.slice(0, idx)}/`;
 }
 
-function isNumericSegment(segment: string): boolean {
+/**
+ * An all-digit path segment — the atom of Crowi's date-hierarchy idiom
+ * (`/日報/2026/05/23`). Exported so the page sidebar's month detection
+ * (`dateMonthPath`) shares this notion of "a date segment" with the
+ * display-name / default-title rules below, instead of matching its own
+ * `YYYY`/`MM` shapes and disagreeing with them at the edges.
+ */
+export function isNumericSegment(segment: string): boolean {
   return segment.length > 0 && /^\d+$/.test(segment);
 }
 

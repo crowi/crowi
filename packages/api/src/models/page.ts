@@ -392,6 +392,7 @@ export interface PageModel extends Model<PageDocument> {
   findChildSegments(
     path,
     userData,
+    depth?: number,
   ): Promise<
     Array<{
       segment: string;
@@ -1723,8 +1724,19 @@ export default (crowi: Crowi) => {
    * `lastUpdateUser` can be legitimately null (pre-existing rows from
    * before the field existed, or a hard-deleted user id the lookup can't
    * resolve), which surfaces as `updater: null` rather than throwing.
+   *
+   * `depth` (default 1) widens the result to that many levels below
+   * `path`, returned as ONE flat depth-first list — each row carries its
+   * own full `path`, so a caller rebuilds the nesting from that. The scan
+   * above already reads the whole subtree regardless of `depth`, so going
+   * deeper costs no extra query; only the grouping changes. This is what
+   * lets the sidebar open every day of a `YYYY/MM/` at once instead of
+   * issuing a request per day. Every per-node field keeps its depth-1
+   * meaning at every level: `count` is that node's own descendant count
+   * (which may reach past `depth`), and `isPage`/`hasPortal` describe the
+   * docs saved at that node.
    */
-  pageSchema.statics.findChildSegments = async function (path, userData) {
+  pageSchema.statics.findChildSegments = async function (path, userData, depth = 1) {
     const prefix = addTrailingSlash(path);
     // Escape regex metacharacters so a path like `/foo(bar)/` is matched
     // literally, not as a pattern.
@@ -1751,11 +1763,13 @@ export default (crowi: Crowi) => {
       hasPortal: boolean;
       count: number;
       // The segment's own leaf page metadata (set at most once — there is
-      // exactly one doc with `slashIdx === -1` per segment).
+      // exactly one doc with no deeper remainder per segment).
       selfMeta: SegmentMeta | null;
       // The most-recently-updated metadata among the portal doc and
       // descendants seen so far.
       maxOtherMeta: SegmentMeta | null;
+      // Nodes one level below this one, present only within `depth`.
+      children: SegmentEntry[];
     };
 
     // Keeps `entry.maxOtherMeta` as the doc with the greatest `updatedAt`
@@ -1771,46 +1785,93 @@ export default (crowi: Crowi) => {
       }
     };
 
+    const roots: SegmentEntry[] = [];
+    // Keyed by the node's own portal path, so a node is created once no
+    // matter how many docs mention it.
     const map = new Map<string, SegmentEntry>();
+    const nodeAt = (segments: string[]): SegmentEntry => {
+      const nodePath = `${prefix}${segments.join('/')}/`;
+      let entry = map.get(nodePath);
+      if (!entry) {
+        entry = {
+          segment: segments[segments.length - 1],
+          path: nodePath,
+          isPage: false,
+          hasPortal: false,
+          count: 0,
+          selfMeta: null,
+          maxOtherMeta: null,
+          children: [],
+        };
+        map.set(nodePath, entry);
+        if (segments.length === 1) roots.push(entry);
+        else nodeAt(segments.slice(0, -1)).children.push(entry);
+      }
+      return entry;
+    };
+
     for (const doc of docs) {
       // Skip the portal page for `path` itself (e.g. `/crowi/` when
       // querying `/crowi/`) — it is the parent, not a child.
       if (doc.path === prefix) continue;
       const rest = doc.path.slice(prefix.length);
-      const slashIdx = rest.indexOf('/');
-      const segment = slashIdx === -1 ? rest : rest.slice(0, slashIdx);
-      if (!segment) continue;
-      let entry = map.get(segment);
-      if (!entry) {
-        entry = { segment, path: `${prefix}${segment}/`, isPage: false, hasPortal: false, count: 0, selfMeta: null, maxOtherMeta: null };
-        map.set(segment, entry);
-      }
+      // An empty segment anywhere in the remainder means a malformed `//` in
+      // the stored path (`isCreatableName` forbids creating one, so this is
+      // legacy data only). `filter(Boolean)` would erase it and hand back a
+      // node at a canonical path where nothing is saved — `/x/a//b` read as
+      // a page at `/x/a/b` — so drop the doc instead of inventing a link to
+      // it. The pre-`depth` code could not fabricate a path this way; it
+      // merely counted such a doc as an anonymous descendant.
+      if (rest.startsWith('/') || rest.includes('//')) continue;
+      const restSegments = rest.split('/').filter(Boolean);
+      if (restSegments.length === 0) continue;
+      // `rest` keeps its trailing slash (unlike `restSegments`), which is
+      // the only thing separating a portal doc from the page at the same
+      // node — `/x/a/` vs `/x/a`.
+      const isPortalDoc = rest.endsWith('/');
       const meta: SegmentMeta = { updatedAt: doc.updatedAt, lastUpdateUser: doc.lastUpdateUser ?? null };
-      if (slashIdx === -1) {
-        // doc.path === `${prefix}${segment}` — the segment is a real page.
-        entry.isPage = true;
-        entry.selfMeta = meta;
-      } else if (rest === `${segment}/`) {
-        // doc.path === `${prefix}${segment}/` — a portal page. Only a
-        // *published* portal earns the sidebar portal marker; a draft
-        // portal (creator-visible via the status filter above) is not yet
-        // a real portal, so it must not flag the node.
-        entry.hasPortal = doc.status !== STATUS_DRAFT;
-        considerOtherMeta(entry, meta);
-      } else {
-        // A deeper descendant (`${prefix}${segment}/...`).
-        entry.count += 1;
-        considerOtherMeta(entry, meta);
+      // One doc contributes to every ancestor node within `depth`: to the
+      // node it *is* (page or portal), and to each shallower one as a
+      // descendant. At depth 1 this reduces to the original three-way split.
+      for (let level = 1; level <= Math.min(depth, restSegments.length); level++) {
+        const entry = nodeAt(restSegments.slice(0, level));
+        if (level < restSegments.length) {
+          // A deeper descendant of this node.
+          entry.count += 1;
+          considerOtherMeta(entry, meta);
+        } else if (isPortalDoc) {
+          // Only a *published* portal earns the sidebar portal marker; a
+          // draft portal (creator-visible via the status filter above) is
+          // not yet a real portal, so it must not flag the node.
+          entry.hasPortal = doc.status !== STATUS_DRAFT;
+          considerOtherMeta(entry, meta);
+        } else {
+          entry.isPage = true;
+          entry.selfMeta = meta;
+        }
       }
     }
 
-    const representatives = Array.from(map.values())
-      // Drop phantom nodes that exist only because of a draft portal
-      // (no real page, no published portal, no descendants) so a draft
-      // portal never surfaces in the sidebar.
-      .filter((e) => e.isPage || e.hasPortal || e.count > 0)
-      .sort((a, b) => a.segment.localeCompare(b.segment))
-      .map((e) => ({ entry: e, meta: e.isPage ? e.selfMeta : e.maxOtherMeta }));
+    // Depth-first, siblings alphabetical — so a node is always immediately
+    // followed by its own subtree and a `depth: 1` result keeps exactly the
+    // order it had before `depth` existed. A dropped phantom can never
+    // orphan children: having any would give it `count > 0` and keep it.
+    const ordered: SegmentEntry[] = [];
+    const collect = (entries: SegmentEntry[]): void => {
+      const visible = entries
+        // Drop phantom nodes that exist only because of a draft portal
+        // (no real page, no published portal, no descendants) so a draft
+        // portal never surfaces in the sidebar.
+        .filter((e) => e.isPage || e.hasPortal || e.count > 0)
+        .sort((a, b) => a.segment.localeCompare(b.segment));
+      for (const entry of visible) {
+        ordered.push(entry);
+        collect(entry.children);
+      }
+    };
+    collect(roots);
+
+    const representatives = ordered.map((e) => ({ entry: e, meta: e.isPage ? e.selfMeta : e.maxOtherMeta }));
 
     // Resolve `updater` with the single batched lookup described in the
     // doc comment above, over the distinct representative ids only.
