@@ -95,7 +95,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
   // Does this content page have descendants (`/path/...`)? If so it can be
   // turned into a portal that indexes them. Querying the portal-path children
-  // shares the sidebar's cache key (deduped — no extra request), so this is
+  // shares the sidebar's depth-1 cache key (deduped — no extra request except
+  // at a `YYYY/MM` node, which the sidebar fetches two deep), so this is
   // effectively free. Disabled until the page resolves and isn't deleted.
   const childrenPath = path.endsWith('/') ? path : `${path}/`;
   const { data: childrenData } = usePageChildren(childrenPath, { enabled: !!page && !isDeleted });

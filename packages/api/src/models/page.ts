@@ -1738,12 +1738,9 @@ export default (crowi: Crowi) => {
    */
   pageSchema.statics.findChildSegments = async function (path, userData, depth = 1) {
     const prefix = addTrailingSlash(path);
-    // Escape regex metacharacters so a path like `/foo(bar)/` is matched
-    // literally, not as a pattern.
-    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const query = {
       redirectTo: null,
-      path: new RegExp(`^${escaped}`),
+      path: new RegExp(`^${escapeRegExp(prefix)}`),
       $and: [{ $or: visiblePageGrantOr(userData._id) }, { $or: visiblePageStatusOr(userData._id) }],
     };
     // Raw `lastUpdateUser` id only — resolving it to a `PageUser` happens
@@ -1824,7 +1821,6 @@ export default (crowi: Crowi) => {
       // merely counted such a doc as an anonymous descendant.
       if (rest.startsWith('/') || rest.includes('//')) continue;
       const restSegments = rest.split('/').filter(Boolean);
-      if (restSegments.length === 0) continue;
       // `rest` keeps its trailing slash (unlike `restSegments`), which is
       // the only thing separating a portal doc from the page at the same
       // node — `/x/a/` vs `/x/a`.

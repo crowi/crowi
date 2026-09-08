@@ -33,11 +33,8 @@ export function SidebarTree({ path }: { path: string }) {
   const layout = useMemo(() => pageSidebarLayout(path), [path]);
   // The month level is fetched two deep (days AND their pages) in the one
   // request that would have fetched the days alone.
-  const monthIndex = useMemo(() => {
-    const monthPath = dateMonthPath(path);
-    return monthPath ? layout.levelPaths.indexOf(monthPath) : -1;
-  }, [path, layout.levelPaths]);
-  const depths = useMemo(() => layout.levelPaths.map((_, index) => (index === monthIndex ? 2 : 1)), [layout.levelPaths, monthIndex]);
+  const monthIndex = layout.levelPaths.indexOf(dateMonthPath(path) ?? '');
+  const depths = layout.levelPaths.map((_, index) => (index === monthIndex ? 2 : 1));
   const results = usePageChildrenLevels(layout.levelPaths, depths);
   // Positionally aligned with layout.levelPaths.
   const levels = results.map((r) => r.data?.children ?? []);

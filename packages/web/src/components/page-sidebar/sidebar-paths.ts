@@ -25,7 +25,7 @@
 
 import type { PageChildSegment } from '@crowi/api-contract';
 
-import { isNumericSegment } from '@/lib/page-path';
+import { isNumericSegment, pageDirname } from '@/lib/page-path';
 
 // `/space/group/` — the directory depth at which the inline tree roots.
 export const ROOT_DEPTH = 2;
@@ -225,11 +225,5 @@ export function dateMonthPath(path: string): string | null {
  * otherwise only reachable through the network.
  */
 export function deepChildRowsOf(rows: PageChildSegment[], parentPath: string): PageChildSegment[] {
-  return rows.filter((row) => {
-    if (!row.path.startsWith(parentPath)) return false;
-    // `path` is always trailing-slashed, so a direct child's remainder is
-    // exactly one segment plus that slash.
-    const rest = row.path.slice(parentPath.length);
-    return rest.length > 0 && rest.indexOf('/') === rest.length - 1;
-  });
+  return rows.filter((row) => pageDirname(row.path) === parentPath);
 }

@@ -40,13 +40,12 @@ async function fetchPageChildren(path: string, depth: number): Promise<ListPageC
  * `dateMonthPath`); the level below it is still fetched at depth 1, which
  * is what keeps the active branch's rendering unchanged.
  */
-export function usePageChildrenLevels(paths: string[], depths: number[] = [], options: { enabled?: boolean } = {}) {
+export function usePageChildrenLevels(paths: string[], depths: number[]) {
   return useQueries({
     queries: paths.map((path, index) => {
       const depth = depths[index] ?? 1;
       return {
         queryKey: pageChildrenKeys.detail(path, depth),
-        enabled: options.enabled ?? true,
         queryFn: () => fetchPageChildren(path, depth),
       };
     }),
@@ -54,10 +53,12 @@ export function usePageChildrenLevels(paths: string[], depths: number[] = [], op
 }
 
 /**
- * Children of a single portal path. Shares its cache key with the sidebar's
- * `usePageChildrenLevels`, so a content-page view asking "do I have
- * descendants?" reuses the (already in-flight) sidebar fetch for the same
- * path rather than issuing a second request.
+ * Children of a single portal path, one level deep. Shares its cache key
+ * with the sidebar's depth-1 levels, so a content-page view asking "do I
+ * have descendants?" reuses the (already in-flight) sidebar fetch for the
+ * same path rather than issuing a second request — except for a content
+ * page sitting at a `YYYY/MM` node, which the sidebar fetches two deep
+ * under a different key.
  */
 export function usePageChildren(path: string, options: { enabled?: boolean } = {}) {
   return useQuery({
