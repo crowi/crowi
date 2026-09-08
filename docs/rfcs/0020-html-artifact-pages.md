@@ -216,8 +216,6 @@ The glyph is `layout-freeform`. What separates an artifact from a Markdown page,
 
 Glyphs shaped like documents — a book, a scroll — were passed over because every page is a document, so they distinguish nothing. Glyphs describing the mechanism, such as circuitry for "scripts run here", do distinguish, but on a wiki they can be read as describing the page's *subject* rather than its kind; the neighbouring compass, link and lock have no such ambiguity, because each of them names what the page is rather than how it works.
 
-`layout-freeform` was added in lucide 1.27, and the codebase is on 0.x. **Phase 4 therefore depends on the lucide major upgrade**, or must ship an interim glyph and swap it afterwards. This is a scheduling constraint rather than a design one, but it should not be discovered during implementation.
-
 ### Delivery: embedding
 
 The page shell embeds the artifact with `sandbox="allow-scripts"` and nothing else. Three omissions are deliberate:
