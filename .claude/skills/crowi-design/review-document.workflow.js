@@ -201,7 +201,15 @@ const FINALIZE_RESULT = {
 const writeInstructions = isRfc
   ? `Write an RFC in English to docs/rfcs/00NN-${SLUG}.md. First read the two most recent ` +
     `docs/rfcs/00*.md to match house style (status header, summary, motivation, design, security, ` +
-    `alternatives considered, phased plan) and to pick the next free NN. Do NOT commit.`
+    `alternatives considered, phased plan) and to pick the next free NN. ` +
+    // RFCs are read on the wiki, which renders mermaid. The diagram rules live in the
+    // spec contract; the RFC path has to be pointed at them explicitly because it does
+    // not otherwise read that file.
+    `Then read the "図 (mermaid)" section of ${SPEC_CONTRACT} and apply it: a diagram is optional, ` +
+    `but where the design has ordering across actors or cardinality across entities, carry that shape ` +
+    `in a mermaid block and use the prose right below it for what the diagram cannot say (why the order ` +
+    `is load-bearing, what breaks otherwise). Never restate the diagram in that prose, and do not name ` +
+    `identifiers the design deletes unless their removal is the point of the diagram. Do NOT commit.`
   : `Write a spec in Japanese to .feature-state/specs/feature-${SLUG}.md. Read ${SPEC_CONTRACT} and ` +
     `follow implementation-ready spec contract v2 EXACTLY. Set frontmatter spec_contract: 2, ` +
     `status: draft, implementation_ready: false, scope: ${SCOPE}, and grounded_at to the current ` +
@@ -241,7 +249,12 @@ const lenses = isRfc
           `phasing sanity, clarity for an external contributor, over-scope (does it re-implement ` +
           `something that already exists? find it with file:line), and any brainstorming-context leaks ` +
           `("素案" / "the user" / "with the user" / placeholder "(you)" author) that make it read as a ` +
-          `transcript of the design chat rather than a standalone document.`,
+          `transcript of the design chat rather than a standalone document. ` +
+          // Two ways a diagram becomes a liability rather than an aid; both are quality
+          // problems this lens already owns (duplicate sources of truth, and prose that
+          // stops being true once the change lands).
+          `For any mermaid block: does the prose below it merely restate the picture (two places to keep ` +
+          `in sync instead of one), and does it name an identifier this design deletes without saying so?`,
       },
     ]
   : [
