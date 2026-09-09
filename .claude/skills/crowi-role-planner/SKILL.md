@@ -25,6 +25,7 @@ description: crowi の planner ロールでセッションを起動/再起動し
 
 - **Workflow の同一引数キャッシュ**: 同一 `{scriptPath, args}` はセッション内でキャッシュされる。reviewOnly の再実行は `_round`/`_note` フィールドで必ずキャッシュを割る。
 - **codex-runs の stale 成果物**: crowi-design のレビューは `.reviews/codex-runs/<slug>/review_*` を invocation 跨ぎで再利用する(恒久修正まで)。**reviewOnly を再実行する前に該当 slug の `review_*` を `_stale*/` へ mv して退避**する。stale の兆候 = 指摘が前ラウンドと一字一句同一・改訂で消えた内容の行番号を引く。
+- **Workflow を起動する前に shell の cwd を repo root へ戻す**: Bash tool の cwd は呼び出し間で持続し、subagent もそれを継承する。`cd .reviews/...` の直後に Workflow を起動すると、相対の `briefPath` も出力先 `.feature-state/specs/` も解決できず、writer が「brief が存在しない」で即死する(実際に 1 ラウンド落とした)。**mv / ls を `cd` で書かず絶対パスかサブシェルで済ませる**のが根本対処。
 - **Workflow の args は script に JSON 文字列で届く**: 閉じ括弧欠け等の JSON 破損は `parseArgs` の fallback で空 `{}` になり `FAILED (got: {})` で即死する。args は送信前に構造を確認。
 - **収束規律**: 小 spec は指摘ゼロを追わない(性質が「設計の穴」→「文言精度」に移ったら畳む)。large は「大 RFC 収束ルール」(approach 合意済みなら残りを gate/OQ 化して Draft 確定)。
 - **wiki publish の手順**: CLAUDE.md の二段階手順(Write→Read→そのまま渡す・応答長の照合)を厳守。ローカル dev が落ちていると MCP(`http://localhost:4301/mcp`)が繋がらない — 必要なら `pnpm dev:api` を一時起動し、終わったら止める。
