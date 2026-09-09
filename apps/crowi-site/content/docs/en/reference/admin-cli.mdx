@@ -1,0 +1,89 @@
+---
+title: crowi-admin
+description: Subcommands, options and exit codes of crowi-admin
+---
+
+`crowi-admin` is the operator CLI that talks straight to MongoDB to run maintenance work. Run it inside the server (ssh / kubectl exec), from the runner project directory that has `@crowi/api` installed. For what to run and when, see the how-to pages.
+
+## Subcommands
+
+| Command | What it does | How-to |
+| --- | --- | --- |
+| `migrate list` | List every registered data migration with its version range and layer | [Migrating from v1](../operations/upgrading-from-v1) |
+| `migrate plan` | Preview unapplied migrations (the preflight layer by default) | [Migrating from v1](../operations/upgrading-from-v1) |
+| `migrate apply` | Apply unapplied migrations (the preflight layer by default) | [Migrating from v1](../operations/upgrading-from-v1) |
+| `migrate status` | Show recent applications and the pending count | [Migrating from v1](../operations/upgrading-from-v1) |
+| `rebuild renderer` | Regenerate the cached rendered HTML of pages | [Admin panel](../operations/admin) |
+| `rebuild rendered-ast` | Re-render what current revisions have stored, using the running renderer | [Admin panel](../operations/admin) |
+| `rebuild search` | Rebuild the index from scratch with the active search driver | [Search backend setup](../operations/search-setup) |
+| `rebuild backlink` | Rebuild the backlink index across all pages | [Admin panel](../operations/admin) |
+| `rebuild storage copy` | Copy every stored object to another storage driver | [Storage](../operations/storage) |
+| `rebuild attachment-display-derivatives` | Generate, repair and reclaim display copies of attached images | [Storage](../operations/storage) |
+| `replace url` | Replace a URL / host string across every page body | [Migrating from v1](../operations/upgrading-from-v1) |
+| `watcher backfill` | Backfill watch rows for pages created before auto-watch (idempotent) | [Notifications](../guide/notifications) |
+| `page-history repair` | Repair the internal state of page metadata history | [Admin panel](../operations/admin) |
+
+## Options
+
+| Command | Option | Default | What it does |
+| --- | --- | --- | --- |
+| `migrate list` | `--json` | off | Emit machine-readable JSON |
+| `migrate plan` | `--all-layers` | off | Include the boot layer as well as preflight |
+| `migrate plan` | `--json` | off | Emit machine-readable JSON |
+| `migrate apply` | `--all-layers` | off | Include the boot layer as well as preflight |
+| `migrate apply` | `--dry-run` | off | Detect only; nothing is recorded |
+| `migrate apply` | `--id <id>` | — | Apply only the migration with this id |
+| `migrate apply` | `--continue-on-error` | off | Keep going after a failure (aborts by default) |
+| `migrate status` | `--json` | off | Emit machine-readable JSON |
+| `rebuild renderer` | `--only-stale` | off | Only re-render pages whose cache is stale |
+| `rebuild renderer` | `--dry-run` | off | Report the targets without writing |
+| `rebuild rendered-ast` | `--dry-run` | off | Count eligible revisions without writing |
+| `rebuild rendered-ast` | `--concurrency <n>` | `4` | Parallel workers for the re-render fan-out |
+| `rebuild search` | `--dry-run` | off | Report the targets without writing |
+| `rebuild backlink` | `--dry-run` | off | Report the targets without writing |
+| `rebuild storage copy` | `--from <name>` | (required) | Source driver name |
+| `rebuild storage copy` | `--to <name>` | (required) | Destination driver name |
+| `rebuild storage copy` | `--dry-run` | off | List candidate keys without copying |
+| `rebuild attachment-display-derivatives` | `--dry-run` | off | Report the counts and the breakdown, writing to neither the database nor storage |
+| `rebuild attachment-display-derivatives` | `--concurrency <n>` | `2` | Parallel workers for staging and generation |
+| `rebuild attachment-display-derivatives` | `--force` | off | Re-evaluate attachments already generated on the current recipe |
+| `rebuild attachment-display-derivatives` | `--repair-missing` | off | Only regenerate copies recorded as generated whose stored object is gone |
+| `rebuild attachment-display-derivatives` | `--only-missing` | off | Only target attachments with no display copy recorded |
+| `rebuild attachment-display-derivatives` | `--only-stale` | off | Only target attachments whose recorded recipe version is not current |
+| `rebuild attachment-display-derivatives` | `--page-id <id>` | — | Only target attachments on this page |
+| `rebuild attachment-display-derivatives` | `--since <iso>` | — | Only target attachments created at or after this ISO 8601 timestamp |
+| `rebuild attachment-display-derivatives` | `--until <iso>` | — | Only target attachments created at or before this ISO 8601 timestamp |
+| `rebuild attachment-display-derivatives` | `--gc` | off | Report display copies nothing references any more (local driver only) |
+| `rebuild attachment-display-derivatives` | `--gc-grace-hours <n>` | `24` | Exclude `--gc` candidates newer than this many hours |
+| `rebuild attachment-display-derivatives` | `--confirm` | off | Actually delete the `--gc` candidates (report-only by default) |
+| `replace url` | `--from <s>` | (required) | String to replace. Give a full origin with a scheme, e.g. `https://old.example` |
+| `replace url` | `--to <s>` | (required) | Replacement string |
+| `replace url` | `--dry-run` | off | Report the targets without writing |
+| `replace url` | `--include-trash` | off | Include trashed and deprecated pages (published only by default) |
+| `replace url` | `--user <email>` | the oldest admin | User credited as the author of the new revisions |
+| `replace url` | `--yes` | off | Skip the confirmation prompt |
+| `replace url` | `--force` | off | Proceed even when `--from` carries no scheme |
+| `watcher backfill` | `--dry-run` | off | Report how many watch rows would be created without writing |
+| `page-history repair` | `--outbox` | on (the default scan) | Drain history entries left behind |
+| `page-history repair` | `--scan` | off | Assign sequence numbers to revisions that have none |
+| `page-history repair` | `--transitions` | off | Settle or report move operations that never finished |
+| `page-history repair` | `--batch-size <n>` | `200` | Cap on how many pages are loaded per round-trip |
+| `page-history repair` | `--resume-after <pageId>` | — | Per-page resume point |
+| `page-history repair` | `--resume-after-operation <operationId>` | — | Per-operation resume point for `--transitions` |
+
+The only global options are `--help` and `--version`. The connection is resolved from environment variables (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`).
+
+## Exit codes
+
+| Code | Meaning | Commands that return it |
+| --- | --- | --- |
+| `0` | Success, including a completed dry run | all |
+| `1` | Fatal error (init failure, an invalid option value, an exception before work started) | all |
+| `2` | Partial — the run completed but at least one item failed (re-run recommended) | `rebuild storage copy` / `rebuild attachment-display-derivatives` / `replace url` / `page-history repair` |
+| `130` | Interrupted (Ctrl-C), after cleaning up and printing the progress summary | `rebuild attachment-display-derivatives` |
+
+## Related pages
+
+- [Migrating from v1](../operations/upgrading-from-v1) — the data migration procedure
+- [Storage](../operations/storage) — switching drivers and moving files
+- [Environment variables](./env) — the connection variables `crowi-admin` reads

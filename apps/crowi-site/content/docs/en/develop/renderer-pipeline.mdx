@@ -1,0 +1,58 @@
+---
+title: The renderer pipeline
+description: How Markdown becomes HTML, and where renderer plugins hook in
+---
+
+Page bodies are turned into HTML (and a stored AST) by a server-side Markdown pipeline. A renderer plugin adds a stage to that pipeline; enabling and configuring them is covered in [Renderer plugins](../operations/renderers).
+
+## Three commitments
+
+- **SSR first.** Every renderer plugin produces HTML on the server. Client-side rendering of plugin content causes layout shift and is not allowed.
+- **No external calls while editing.** A plugin that fetches external data reserves space with a placeholder while the author types, and fetches only at explicit moments such as saving the page.
+- **Do not grow the syntax.** Plugins extend behaviour, not grammar.
+
+The core pipeline (TOC, wikilinks, mentions, code blocks) registers **before** any plugin. Plugins append on top of it.
+
+## Extension points
+
+| Registration | What it does |
+| --- | --- |
+| Code-block renderer | Renders a fenced block selected by its language, such as ` ```plantuml ` |
+| Embed tag | Renders an embed written as `@[name](url)` |
+| remark / rehype plugins | Inserts a transform at any stage of the pipeline |
+
+The embed tag `card` is reserved by the core and cannot be overridden by a third-party plugin. Emoji shortcodes and link cards are core features rather than plugins: they are always on and never appear in `crowi.config.json`.
+
+## Caching
+
+Rendered output from embeds and code-block plugins is cached, stale-while-revalidate: a cached result is returned immediately while a re-render runs in the background. Only an entry well past its stale window waits for a fresh render.
+
+Failures are cached too, with a retry interval per cause (about 5 minutes for a transient upstream failure, about an hour for a permanent one, a minute for an authorization failure, and whatever `Retry-After` says — capped at 24 hours — for rate limiting). On a transient failure the last successful output stays on screen for up to 24 hours, so a flaky upstream does not instantly replace a working diagram or card with an error.
+
+Policy and access changes are the exception: a URL newly blocked by the SSRF guard, or an authorization failure, takes effect on the next re-render with no grace.
+
+A plugin with admission control (currently Mermaid) does not route through the failure cache when a child process times out or crashes, or when concurrency is exceeded. It stores an "unrendered" marker instead and retries automatically the next time the page is viewed — infrastructure trouble must not harden into a verdict about the input.
+
+## Sanitising SVG
+
+A renderer that produces or relays SVG uses `sanitizeSvg` (and `extractSvgDimensions` for reading its size) from the SDK — the same implementation the first-party PlantUML and Mermaid renderers use, stripping `script`, event handlers, `javascript:` URLs and the like. Do not write your own sanitiser; the SDK package is the only dependency you need to add.
+
+## How Mermaid is isolated
+
+Mermaid renders inside a `fork()`ed child process, not a browser, with a strict configuration that loads no external resources. The resulting SVG is sanitised and embedded as a base64 `data:` URL in an `<img>`. Directives that override diagram configuration, and syntax that references external resources, are rejected at input time against the whole source. The child process also carries a deny-by-default boundary that removes or blocks `fetch`, `XMLHttpRequest`, `node:net` and other network APIs, so nothing can reach out even before sanitisation.
+
+Concurrency is capped at four renders per process, and two per user within one process.
+
+## The link-card fetch guard
+
+Fetching OGP metadata for `@[card](url)` runs behind an SSRF guard. A host whose DNS resolution lands on a private, loopback, link-local, unique-local or metadata address is refused, and the same check applies whether the address arrived as an IP literal, through DNS, or via a redirect (redirects are not followed automatically: up to three hops are walked by hand, re-validating each). Any scheme other than `http(s)` is refused outright, the fetch times out after five seconds, and only the first 512KB of the response is read.
+
+## Design documents
+
+- [RFC-0002 Renderer plugin architecture](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
+
+## Related pages
+
+- [Renderer plugins](../operations/renderers) — enabling and configuring them
+- [Developing plugins](./plugins-developing) — writing a plugin
+- [Markdown syntax](../guide/markdown) — the notation authors write

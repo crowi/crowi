@@ -14,7 +14,7 @@ recovery.
 | MongoDB | All documents — pages, revisions, users, comments, config | **Required** |
 | Attachment storage | The actual uploaded files | **Required** |
 | Elasticsearch | The full-text search index | Not needed (rebuildable) |
-| Redis | Ephemeral state: collab/presence/notifications pub/sub, editor-cap counter, Config sync, rate-limit windows, LRU | Not needed (assumed volatile) |
+| Redis | Ephemeral state used to coordinate replicas (listed in [Redis keys and ACL](../reference/redis-keys)) | Not needed (assumed volatile) |
 
 The key point: **MongoDB and the attachment storage are the two things
 essential for recovery**, while Elasticsearch and Redis do not need to be
@@ -72,33 +72,22 @@ driver.
 | Local (`plugin-storage-local`) | The server filesystem | Copy / archive the whole storage directory |
 | S3 (`plugin-storage-aws-s3`) | An S3 bucket | S3 versioning / cross-region replication / `aws s3 sync` |
 
-For storage driver configuration, see [Storage settings](./storage).
+For storage driver configuration, see [Storage](./storage).
 
 > **Important**: Take the MongoDB and attachment backups **as close to the
 > same point in time as possible**. If the timing diverges significantly,
 > you can get inconsistencies — attachment metadata in MongoDB without the
 > actual file (or vice versa).
 
-> **Note**: When backing up to S3 from an AWS Lightsail VPS, the
-> `AmazonLightsailInstanceRole` attached to the instance by default belongs
-> to the **Lightsail service's account** and cannot touch your own AWS
-> account's S3. The EC2-style behavior where permissions are granted
-> automatically via an instance profile is unavailable, so place an
-> **explicit IAM user's access key created in your own account** in
-> `~/.aws/credentials` and run `aws s3 sync` etc. For the end-to-end
-> operations procedure on Lightsail, see
-> [Running on AWS Lightsail](./aws-lightsail).
+> **Note**: When backing up to S3 from AWS Lightsail, the role attached to
+> the instance by default cannot touch your own account's S3. Preparing the
+> credentials it needs is covered in [Running on AWS
+> Lightsail](./aws-lightsail).
 
 ### Migrating files between drivers
 
-Separate from backup purposes, file migration when switching storage
-drivers is done with the `crowi-admin` CLI.
-
-```bash
-crowi-admin rebuild storage copy --from local --to s3
-# To see the target keys before actually copying
-crowi-admin rebuild storage copy --from local --to s3 --dry-run
-```
+Moving files when you switch storage drivers is a separate job from backing
+up; the steps are in [Storage](./storage).
 
 ## Elasticsearch — no backup needed
 
@@ -113,43 +102,21 @@ crowi-admin rebuild search
 ```
 
 For search backend configuration, see
-[Setting up the search backend](./search-setup).
+[Search backend setup](./search-setup).
 
 ## Redis — no backup needed
 
-Redis backs 8 consumers, but they don't all serve the same purpose: the
-realtime collaborative editor's cross-instance pub/sub, presence
-fan-out, notification invalidation, and Config change pub/sub exist
-purely to coordinate across replicas (no-ops on a single instance). The
-editor-cap counter, rate limiting, and LRU (recently-viewed pages) also
-do useful work on a single instance — see the "Single-instance
-deployment" section of
-[Operating realtime collaborative editing](./realtime-collab) for how
-each one degrades when `REDIS_URL` is unset. None of it is **data that
-matters if it is lost** — page content always lives in MongoDB, never
-Redis.
+Redis only ever holds state used to coordinate between replicas; page content
+always lives in MongoDB. Nothing it holds **matters if it is lost**, so it needs
+no persistent backup.
 
-- Losing Redis pauses cross-instance fan-out for collab, presence, and
-  notifications — each api replica keeps serving its own locally
-  connected clients in the meantime — and clears any in-progress
-  rate-limit windows and the LRU (recently-viewed pages) store. Open
-  realtime connections do **not** need to reconnect: ioredis retries
-  automatically and pub/sub resumes on its own once Redis is back (see
-  the "Failure modes" section of
-  [Operating realtime collaborative editing](./realtime-collab)). Page
-  content and login sessions (JWT, stateless) are unaffected throughout.
-- The source of truth for realtime collaborative editing is
-  `Page.yjsState` in MongoDB; Redis is only for live routing.
-- Account linking's link-completion store (the confirmation state/code
-  a callback issues while an account link is in progress) is likewise
-  ephemeral by design — the state/record/consumed keys carry a 300s or
-  5-minute TTL regardless of a Redis loss. Losing it mid-flow turns a
-  pending confirmation into a 404 the user resolves by starting the
-  link again; the confirmed `UserIdentity` row it was working toward
-  lives only in MongoDB and is never at risk.
-
-Therefore no persistent backup of Redis is needed. For details see
-[Operating realtime collaborative editing](./realtime-collab).
+Losing Redis temporarily stops collaboration, presence and notifications from
+travelling between replicas, and clears the in-flight rate-limit windows and the
+recently-viewed lists. Open realtime connections do not need to reconnect, and
+fan-out resumes on its own once Redis is back. Page content and login sessions
+are unaffected throughout. How each feature degrades is in [Operating realtime
+collaboration](./realtime-collab); replacing the Redis instance itself is in
+[Redis operations](./redis).
 
 ## Recovery procedure summary
 

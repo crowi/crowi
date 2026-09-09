@@ -8,13 +8,11 @@ a **core pipeline that conforms to CommonMark + GFM (GitHub Flavored
 Markdown)**, combined with a few Crowi-specific extensions and additional
 installable **renderer plugins**.
 
-See [RFC-0002: Renderer plugin architecture](../reference/rfcs) for the design
-philosophy of the renderer.
-
 ## Basic Markdown
 
 Standard CommonMark / GFM syntax — headings, lists, emphasis, links, tables,
-code blocks, and so on — works as-is.
+code blocks, and so on — works as-is. To look up a syntax on its own, see the
+cheat sheet in [Markdown syntax](../reference/markdown).
 
 ```markdown
 # Heading 1
@@ -35,10 +33,9 @@ code blocks, and so on — works as-is.
 - A **table of contents (TOC)** is generated automatically from headings,
   and each heading gets a stable anchor ID. Duplicate heading texts are
   numbered automatically, and CJK headings can be used as anchors too.
-- Each heading shows a small **anchor copy button** on hover. The
-  default icon is `Link2`; once clicked it briefly switches to a
-  `Check`, confirming the section URL has been copied to the
-  clipboard.
+- Each heading shows a small **anchor copy button** on hover. Clicking it
+  copies that section's URL to the clipboard and briefly turns into a
+  checkmark to confirm.
 - Inline `` `code` `` renders as a **GitHub-style muted pill** —
   monospaced text on a muted background with rounded corners.
 - Long unbreakable tokens (commit SHAs, raw URLs) wrap inside
@@ -68,8 +65,8 @@ You can write inter-page links with the `[[...]]` syntax.
 | `[[/dev/setup#macos]]` | `/dev/setup#macos` | `/dev/setup#macos` |
 
 Absolute paths starting with `/` become regular links. Targets that do not
-start with `/`, and external URLs such as `http(s)://`, are currently shown
-dimmed as a "broken wiki link" (a `wikilink-broken` class is applied).
+start with `/`, and external URLs such as `http(s)://`, are shown dimmed as a
+"broken wiki link".
 
 ### Ordinary links to a page whose path has a space
 
@@ -145,7 +142,7 @@ Writing `@[card](url)` fetches the target page's OGP meta tags (`og:title` /
 `og:description` / `og:image` / `og:site_name`) and renders a link-preview
 card. This is a Crowi core feature that requires no installation and is
 always on (see "Markdown features built into core" in
-[Renderer plugins](../plugins/renderers) for details).
+[Renderer plugins](../operations/renderers) for details).
 
 ```markdown
 @[card](https://example.com/some-article)
@@ -172,7 +169,7 @@ always on (see "Markdown features built into core" in
   you save. This placeholder is deliberately the same visual contract as the
   unified fallback card above.
 - The image is a direct link to the source site (no proxying or caching).
-  See [Renderer plugins](../plugins/renderers) for SSRF safeguard details.
+  See [Renderer plugins](../operations/renderers) for SSRF safeguard details.
 
 ### Inline URL expansion
 
@@ -192,8 +189,7 @@ with syntax highlighting applied at save time.
 ### Image display attributes `{width= height= align= float=}`
 
 You can follow an image `![alt](url)` with a Pandoc-style attribute block to
-set its width, height, alignment, and text-wrap float
-([RFC-0015](https://github.com/crowi/crowi/blob/main/docs/rfcs/0015-image-display-attributes.md)).
+set its width, height, alignment, and text-wrap float.
 
 ```markdown
 ![Screenshot](screenshot.png){width=60%}
@@ -278,8 +274,8 @@ When a document **opens** with a `---`-delimited block, its contents are lifted 
 
 ```markdown
 ---
-id: feature-foo
-status: approved
+title: Meeting notes template
+status: draft
 ---
 
 # The body starts here
@@ -294,7 +290,7 @@ status: approved
 ## Extensions via renderer plugins
 
 The following syntax only works when the corresponding **renderer plugin** is
-enabled. See [Managing plugins](../plugins/managing) for how to manage
+enabled. See [Installing and configuring plugins](../operations/plugins) for how to manage
 plugins.
 
 ### Math — `@crowi/plugin-renderer-katex`
@@ -333,7 +329,7 @@ B --> A: reply
 ````
 
 - Rendering requires a PlantUML server. The server URL is configured from
-  the admin screen at `/admin/plugins` (see [Renderer plugins](../plugins/renderers)
+  the admin screen at `/admin/plugins` (see [Renderer plugins](../operations/renderers)
   for the operational steps).
 - Rendered results are cached so that a transient PlantUML server outage does
   not flood it with requests.
@@ -362,7 +358,7 @@ flowchart LR
   corresponding line into view on the other side.
 - Diagram source is limited to 20KB. A diagram with a syntax error shows a
   fixed error placeholder. For the other limits and the security design,
-  see the Mermaid section of [Renderer plugins](../plugins/renderers).
+  see the Mermaid section of [Renderer plugins](../operations/renderers).
 - ` ```mermaid ` fences saved before the plugin was enabled keep rendering
   as plain code blocks until the page is re-saved.
 
@@ -381,13 +377,9 @@ migrated data from Crowi 1.x.
 It corrects the writing habit — common in the v1 era — of putting no space
 right after the `#` in an ATX heading.
 
-> **Note**: "Single newline → `<br>`" was originally provided by this plugin,
-> but it has since been promoted to the default behaviour of the Crowi 2.x
-> core pipeline. You no longer need this plugin just for line breaks.
-
 ## Related pages
 
 - [Pages](./pages) — page basics
-- [Managing plugins](../plugins/managing) — enabling renderer plugins
-- [Renderer plugins](../plugins/renderers) — configuring renderer plugins
-- [RFCs and architecture](../reference/rfcs) — RFC-0002 renderer design
+- [Installing and configuring plugins](../operations/plugins) — enabling renderer plugins
+- [Renderer plugins](../operations/renderers) — configuring renderer plugins
+- [Markdown syntax](../reference/markdown) — the syntax cheat sheet

@@ -1,0 +1,167 @@
+---
+title: Contributing
+description: A guide to the development flow and conventions for contributing to Crowi 2.0
+---
+
+This page collects the development flow and conventions for making
+changes to the Crowi 2.0 codebase. Set up your development environment
+via [Set up a development environment](./dev-setup) first.
+
+## Development commands
+
+Scripts are defined in the repo root and per-package `package.json`.
+`pnpm <script>` automatically filters packages via Turborepo.
+
+| Command | Purpose |
+| ------- | ------- |
+| `pnpm dev` | Start api + web + plugins concurrently |
+| `pnpm dev:api` / `pnpm dev:web` | Start just one side |
+| `pnpm test` | Tests for all packages (api uses Jest + supertest; CI runs against a `services.mongo` container, local dev falls back to `mongodb-memory-server`) |
+| `pnpm type-check` | Type-check (api + web + site) |
+| `pnpm lint` | Lint. **errors=0 is required** (warnings tolerated) |
+| `pnpm format` | Formatting via Biome |
+| `pnpm build` | Build all packages |
+
+To run just one package, filter with
+`pnpm --filter @crowi/api <script>`.
+
+> **Tip**: After editing the API contracts
+> (`packages/api-contract`), regenerate the dts with
+> `pnpm --filter @crowi/api-contract build`. The turbo pipeline runs
+> `^build` automatically for `dev` / `build` / `test`, but standalone
+> scripts may need it manually.
+
+## Lint and Format
+
+Crowi uses **Biome** as the formatter and **ESLint** as the linter.
+
+- Lint runs via `pnpm lint` and **zero errors** are required. Warnings
+  are tolerated, but errors are blocked by the pre-push hook.
+- Formatting is handled by Biome. The pre-commit hook runs it
+  automatically on staged files, so manual runs are usually
+  unnecessary. Use `pnpm format` only when bypassing the hooks.
+- If you spot an existing `any`, do not sweep unrelated code to fix it.
+  Keep the diff scoped to what you are touching. Avoid adding new `any`.
+
+## lefthook hooks
+
+Git hooks are managed by `lefthook` and set up automatically during
+`pnpm install`.
+
+| Hook | Action |
+| ---- | ------ |
+| pre-commit | Applies Biome formatting to staged files |
+| pre-push | Runs `pnpm lint` (errors=0 required) and `pnpm build`; also runs `pnpm check:openapi` when `packages/api-contract/**` has changed |
+
+## Commit messages
+
+Commit messages follow the **Conventional Commits** format.
+
+```
+feat(api): add page export endpoint
+fix(web): correct notification bell badge count
+refactor(merge): deduplicate ws token signer
+chore(config): bump dev ports
+docs(site): document attachment thumbnails
+```
+
+- Use types like `feat` / `fix` / `refactor` / `chore` / `docs`, and
+  scopes like `api` / `web` / `api-contract`.
+- When the intent of a change is not obvious, add a multi-paragraph body
+  explaining why you made it.
+
+## Changesets
+
+Release-note accumulation uses `@changesets/cli`. During v2 development,
+run `pnpm changeset add` to accumulate each change as `.changeset/*.md`,
+so release notes are generated automatically at a future release.
+
+- Create one changeset per "unit of user value" — feature additions, bug
+  fixes, and breaking changes.
+- Changes that are only internal refactors, code cleanup, lint fixes,
+  formatting, or test additions — or documentation-only changes — do not
+  need a changeset. The test is "is it meaningful in the next
+  changelog?".
+- For the bump level, choose `patch` for a bug fix, `minor` for a new
+  feature, and `major` for a breaking change.
+
+```bash
+pnpm changeset add        # interactively pick package + bump level + summary
+pnpm changeset status     # list accumulated, unpublished changesets
+```
+
+## TypeScript guidelines
+
+- Do not add new `any`. When touching code that has `any`, replace it
+  incrementally with a proper type where appropriate.
+- Do not sweep unrelated code in a single change — keep the diff
+  focused.
+- Prefer `Pick<>` / `Omit<>` over re-typing fields.
+- For Mongoose document types, import `XxxDocument` from `models/xxx.ts`.
+
+## Checking things locally
+
+Some verification is not part of `pnpm test` and has to be brought up by hand.
+
+### Collaboration across two replicas
+
+Run two real replicas from the bundled compose setup. Two things need preparing: drop the api's fixed host port (replicas would collide on it) and put a shared `WS_TOKEN_SECRET` in `.env` so every replica reads the same one.
+
+```bash
+# 1. A scaling override: no host port, and a multi-replica declaration
+cat > compose.scale.yml <<'YAML'
+services:
+  api:
+    ports: !override []
+    environment:
+      CROWI_MULTI_INSTANCE: "2"
+YAML
+
+# 2. Start the api with two replicas
+docker compose -f docker-compose.yml -f compose.scale.yml --profile app up -d --scale api=2
+
+# 3. Confirm both are up
+docker compose ps api
+```
+
+Open the same page in two browser windows and check that each side sees the other's edits, and that stopping one replica lets the client reconnect and keep editing. The expected behaviour and the known limitations are in [Operating realtime collaboration](../operations/realtime-collab).
+
+### The GCS storage driver against an emulator
+
+The GCS driver's tests use an opt-in emulator service that normal CI does not start.
+
+```bash
+docker compose --profile gcs-test up -d crowi-test-gcs
+STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
+docker compose --profile gcs-test stop crowi-test-gcs
+```
+
+The emulator covers upload/download round trips, object-name mapping, idempotent deletes, missing objects, and copying from local storage to GCS. **It only accepts anonymous requests, so it reproduces neither credential resolution nor IAM permissions nor signed URLs.** Checking those needs a real GCS bucket.
+
+### The Slack integration through a tunnel
+
+Slack cannot reach `localhost`, so expose Crowi through a tunnel such as ngrok or cloudflared. To point the generated manifest's request URL at the tunnel, set `SLACK_MANIFEST_REQUEST_URL` to that public origin (for example `https://abc123.ngrok.app`). Without it, `CLIENT_URL` is used.
+
+## Adding new endpoints
+
+The legacy Express + ts-rest stack was fully retired by RFC-0006
+(landed 2026-05-22). New endpoints are added by:
+
+- Adding a Zod schema and a `createRoute` definition in
+  `packages/api-contract/src/` (`@hono/zod-openapi`).
+- Implementing the handler under `packages/api/src/hono/handlers/`
+  (admin endpoints under `hono/handlers/admin/`).
+- Wiring the handler into the Hono app in `hono/app.ts`, and adding
+  any required middleware under `hono/middleware/`.
+- On the web side, consume the endpoint through the `apiClientV2`
+  typed Hono RPC client (`createClient`, typed as `CrowiApiClient`)
+  generated from the contracts.
+
+The current phase status of the wider Crowi 2.0 work is reflected in the
+[release notes](https://github.com/crowi/crowi/releases).
+
+## Related pages
+
+- Setting up the development environment → [Set up a development environment](./dev-setup)
+- The overall architecture → [Architecture](./architecture)
+- The list of design proposals → [RFC index](./rfcs)

@@ -12,18 +12,15 @@ long as it has not been permanently deleted.
 
 When you delete a page, Crowi does the following:
 
-- Changes the page's status to `deleted`
-- Renames the page to a path under `/trash/` (e.g. `/foo/bar` → `/trash/foo/bar`)
+- Moves the page to a path under `/trash/` (e.g. `/foo/bar` → `/trash/foo/bar`)
 - Creates a redirect page at the original path pointing to the trashed page
-- Deactivates any external share (Share) for that page
 
 As a result, a deleted page no longer appears in the normal page list and
-is shown together in the trash list instead. The body and revision
-history are kept as-is.
+is shown together in the trash list instead. The body and its revisions
+are kept as-is.
 
-> **Note**: Because deletion is implemented as a path rename, pages that
-> Crowi considers an "undeletable path" (such as system-reserved paths)
-> cannot be deleted.
+> **Note**: Pages Crowi considers an "undeletable path" — system-reserved
+> paths, for instance — cannot be deleted.
 
 ## Browsing the trash
 
@@ -70,11 +67,8 @@ page is deleted all together:
 > including history and attachments, is lost. Make sure the page is truly
 > no longer needed before running it.
 
-Permanent deletion is processed as a request to `DELETE /api/pages`
-with `completely: true` attached.
-
 ## Related pages
 
-- [Working with pages](./pages) — creating and deleting pages
-- [Revisions](./revisions) — revisions and rollback
+- [Pages](./pages) — creating and deleting pages
+- [Revisions and rollback](./revisions) — revisions and rollback
 - [Attachments](./attachments) — how attachments are handled on permanent deletion

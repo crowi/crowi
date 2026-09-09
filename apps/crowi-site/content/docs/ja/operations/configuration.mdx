@@ -17,12 +17,12 @@ Crowi 2.0 の設定は、大きく 3 つのレイヤーに分かれています�
 
 ## 環境変数
 
-API は起動時に、カレントワーキングディレクトリの `.env` を `dotenv` で
-読み込みます。開発時のそのディレクトリは **リポジトリルート** です
+API は起動時に、起動した作業ディレクトリの `.env` を読み込みます。
+開発時のそのディレクトリは **リポジトリルート** です
 (`pnpm dev` の api スクリプトが明示的に読み込みます)。本番では
-**ランナープロジェクトのディレクトリ** (api が起動する `process.cwd()`) に
-なるか、もしくはファイルの代わりに compose / オーケストレータから変数を
-注入します。`.env.example` をコピーして編集してください。
+**runner プロジェクトのディレクトリ** になるか、もしくはファイルの代わりに
+compose / オーケストレータから変数を注入します。`.env.example` をコピーして
+編集してください。
 
 ```bash
 cp .env.example .env
@@ -39,10 +39,8 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 パスになってしまう旨の warning が同じレポートに含まれます)。
 
 `WS_TOKEN_SECRET` は例外的に、**`NODE_ENV` の値によって重大度が変わる**
-唯一の変数です — 値が設定されているものの 32 文字未満のとき、
-`NODE_ENV=production`(未設定時のデフォルトも production 扱い)では
-起動が失敗し、それ以外(`development` / `test` など)では上記と同じ
-1 箇所の warning レポートに含まれます。詳細は下表を参照してください。
+唯一の変数です。要件は [環境変数](../reference/env) の該当行を参照して
+ください。
 
 `CROWI_` / `WS_TOKEN_` / `JWT_` / `COLLAB_` / `REDIS` / `MONGO` /
 `MIGRATION_` のいずれかの既知プレフィックスを持つものの、既知の変数名の
@@ -53,39 +51,23 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 を許容するヒューリスティックです)。`PATH` / `CI` / `GITHUB_*` / `npm_*`
 など上記プレフィックスを持たない一般的な OS/CI 環境変数は対象外です。
 
-### 主要な環境変数
+### 変数の一覧
 
-| 変数名 | 必須 | 用途 |
-| ------ | ---- | ---- |
-| `MONGO_URI` | いいえ (デフォルト `mongodb://localhost/crowi`) | MongoDB の接続文字列。本番では通常明示的に設定する |
-| `PORT` | いいえ (デフォルト `4301`) | API サーバの待ち受けポート |
-| `NODE_ENV` | いいえ | `development` / `production` / `test` |
-| `REDIS_URL` | 条件付き | リアルタイム共同編集の pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate limiting・LRU のための連携用途。シングルインスタンスでは省略可、**マルチインスタンス構成では必須**。TLS には `rediss://` を使用 |
-| `PASSWORD_SEED` | はい | レガシーパスワードハッシュのシード (フォールバック検証で使用) |
-| `CLIENT_URL` | 未設定でも起動する (警告のみ) が、本番では実質必須 | Web のオリジン。**api 側**に設定する。CORS の許可オリジン、および送信メール内のリンク生成に使われる。未設定でも api は起動するが、送信メール内のリンクが相対パスになり機能しなくなる。開発環境では localhost が自動許可される |
-| `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config を AES-256-GCM で暗号化する 32 バイトのマスターキー (base64)。未設定時は平文保存にフォールバック。詳細は [機密設定の暗号化](./encryption) |
-| `JWT_ACCESS_TOKEN_TTL_SECONDS` | いいえ (デフォルト `3600` = 1 時間) | api が JWT アクセストークンを発行するときの TTL |
-| `OAUTH_REFRESH_REUSE_GRACE_MS` | いいえ (デフォルト `60000` = 60 秒) | OAuth のリフレッシュトークンで**ローテーション再利用検知を抑止する猶予時間**。同じトークンで同時に複数の refresh が走ると、負けた側は「勝った側が直前に失効させたトークン」を提示することになり、盗まれたトークンの再生と見分けがつきません。失効からこの時間内なら競合とみなし、チェーン全体の失効を行いません。**上限 5 分**(超える値は丸められます)。`0` は猶予なし = 従来どおり無条件に失効させる、という意味です |
-| `JWT_REFRESH_TOKEN_TTL_SECONDS` | いいえ (デフォルト `2592000` = 30 日) | api が JWT リフレッシュトークンを発行するときの TTL |
-| `CROWI_UPLOAD_MAX_BYTES` | いいえ (デフォルト `52428800` = 50MB) | 添付アップロード (paste / drag&drop / 直接添付、共通) の上限バイト数。**この値がそのままメモリ予算になる** — `parseBody()` がリクエストボディ全体をメモリに載せるため、消費量はおおむね「同時アップロード数 × この値」になる (正確には 1 リクエストあたり最大でこの値 + multipart のフレーミング分 64KiB)。そのため下げる方向にのみ設定でき、**50MB を超える値を与えても 50MB に丸められる** (boot 時に警告)。非数値・0 以下・未設定は既定 (50MB) にフォールバック。前段にリバースプロキシがある場合は、プロキシ側の body size 上限をこの値より少し大きい値にする必要がある(完全に同じ値では multipart のフレーミング分だけ不足する)— [デプロイ構成](./deployment) の「アップロードの body size 上限」参照 |
-| `SECRET_TOKEN` | いいえ | セッション関連のシークレット |
-
-### リアルタイム共同編集まわりの変数
-
-リアルタイム共同編集 (RFC-0003) で使う変数です。詳細は
-[リアルタイム共同編集の運用](./realtime-collab) を参照してください。
-
-| 変数名 | 必須 | 用途 |
-| ------ | ---- | ---- |
-| `WS_TOKEN_SECRET` | マルチで必須 | WebSocket 接続認証に使う短命 JWT (wsToken) の HMAC 署名鍵 (presence・通知・メールトークンとも共用)。マルチインスタンスでは全レプリカで**同じ値**にする。未設定時はプロセスごとにランダム生成され、警告ログが出る。**設定する場合は 32 文字以上必須** — 32 文字未満だと `NODE_ENV=production` (デフォルト) では起動失敗、それ以外は警告 (既知のプレースホルダ値は対象外)。`openssl rand -base64 32` で生成 |
-| `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | 1 ページあたりの同時編集者上限。超過したクライアントは read-only で接続する |
-| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが接続する WebSocket URL。**実行時**(`window.__ENV`)に読まれる。未指定時の解決順: `NEXT_PUBLIC_API_URL` → `window.location`(dev では `:4304` 同一オリジン proxy)。api/web が **別ホスト** のとき、または Vercel(edge が WS を proxy できない)で設定 |
-| `NEXT_PUBLIC_API_URL` | いいえ(クロスオリジン時のみ) | ブラウザから見た api の絶対オリジン。**実行時**(`window.__ENV`、再ビルド不要)に読まれる。推奨の同一オリジン + リバースプロキシ構成では **未設定**(ブラウザは相対 `/api` を使う)。クロスオリジン構成でのみ設定 — [デプロイ構成](./deployment) 参照 |
-| `CROWI_API_URL` | いいえ | Next **サーバ** が `rewrites()` proxy に使う api URL。`output: 'standalone'` では build 時に焼かれるため、`pnpm dev` / Vercel edge でのみ有効。self-host 本番は前段リバースプロキシを使う |
+変数名・既定値・意味の一覧は [環境変数](../reference/env) にあります。共同編集で使う変数の使い分けは [リアルタイム共同編集の運用](./realtime-collab)、構成ごとの `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_COLLAB_URL` の選び方は [デプロイ構成](./deployment) を参照してください。
 
 > **Tip**: `WS_TOKEN_SECRET` と `CROWI_ENCRYPTION_KEY` はどちらも
 > `openssl rand -base64 32` で生成できます。`CROWI_ENCRYPTION_KEY` は
 > `pnpm --filter @crowi/api crypto:gen-key` でも生成できます。
+
+### MCP エンドポイント
+
+AI クライアント向けの MCP エンドポイント `/api/mcp` は常に有効で、フィーチャーフラグはありません。運用者が気にする点は 3 つです。
+
+- **認証は個人アクセストークンのみです。** web のセッションや OAuth アクセストークンでは接続できません。利用者側の手順は [AI ツールから使う (MCP)](../guide/mcp) を参照してください。
+- **前段のプロキシは `/api/*` を api へ転送するだけで足ります。** MCP クライアントは wiki と同じ origin の `/api/mcp` に接続します。追加で公開するポートやプロセスはありません。
+- **`REDIS_URL` を設定するとレート制限の予算がレプリカ間で共有されます。** 未設定の場合は各レプリカがメモリ内で予算を持つため、レプリカ数だけ実効の上限が上がります。
+
+サーバーはステートレス (リクエストごとに新しいセッション) なので、複数レプリカ構成でも sticky session は不要です。
 
 ### Docker での環境変数
 
@@ -99,23 +81,23 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 > **Tip**: Web アプリ (`@crowi/web`) はプラグイン依存ゼロの **独立した
 > デプロイ対象** です。api とは HTTP で通信し、どこにでもデプロイできます
 > (Vercel・コンテナ・api と同居など)。一方 api は長寿命の Node サーバ
-> (Mongoose・Redis・組み込みの Hocuspocus WebSocket エンジン・実行時の
-> プラグインロード) であり、**Node ランタイムが必須** です — Node ホスト
-> または Node コンテナ (ECS / EKS / Fly / Render / Cloud Run / Cloudflare
-> Containers)。Cloudflare Workers のような edge/isolate 系のサーバレス
-> 基盤では動作しません。
+> (データベースへの持続的な接続・レプリカ間の pub/sub・常駐する WebSocket
+> サーバ・起動時のプラグイン読み込み) であり、**Node ランタイムが必須**
+> です — Node ホストまたは Node コンテナ (ECS / EKS / Fly / Render /
+> Cloud Run / Cloudflare Containers)。Cloudflare Workers のような
+> edge/isolate 系のサーバレス基盤では動作しません。
 
 ### レンダラ plugin アセットと CSP (Content-Security-Policy)
 
 KaTeX のような一部のレンダラ plugin は、CSS / font などの静的アセットを
 自身の public route (`/api/plugins/<plugin-name>/...`) から配信します。
-Web はどの plugin が有効かを app-info の `rendererStylesheets` manifest
-から取得し、api origin に対する `<link rel="stylesheet">` として読み込み
-ます — plugin 名や CSS の存在を Web 側が事前に知る必要はありません。
+Web はどのレンダラ plugin が有効かを api に問い合わせ、そのスタイルシートを
+api origin に対する `<link rel="stylesheet">` として読み込みます —
+plugin 名や CSS の存在を Web 側が事前に知る必要はありません。
 
 Web と api が **同一オリジン** (推奨のリバースプロキシ構成、上記参照) の
 deployment では追加の設定は不要です。既存の CORS policy (`CLIENT_URL` を
-許可オリジンとする、上表参照) は CSS / font のクロスオリジンレスポンスにも
+許可オリジンとする) は CSS / font のクロスオリジンレスポンスにも
 そのまま適用されるため、CORS 側の追加設定も不要です。
 
 Web と api を **別オリジン** で運用し、かつ operator が
@@ -135,11 +117,9 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 
 ## crowi.config.json
 
-`crowi.config.json` は **ランナープロジェクトのルート** に置く JSON
-ファイルです (モノレポでは、リファレンスのランナープロジェクトは
-`apps/crowi-runner` なので、その設定は
-`apps/crowi-runner/crowi.config.json` にあります)。**どのプラグインを
-読み込み、どのドライバを有効にするか** を宣言します。プラグインごとの
+`crowi.config.json` は **runner プロジェクトのルート** に置く JSON
+ファイルです。**どのプラグインを読み込み、どのドライバを有効にするか** を
+宣言します。プラグインごとの
 設定値 (S3 のバケット名、OAuth クライアント ID、メール / ストレージの
 認証情報など) はここには書かず、MongoDB の `Config` コレクションに保存し、
 管理画面から編集します。
@@ -161,26 +141,17 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 }
 ```
 
-### フィールド一覧
+### フィールドとドライバ名
 
-| キー | 型 | デフォルト | 内容 |
-| ---- | -- | ---------- | ---- |
-| `plugins` | `string[]` | `[]` | 起動時に読み込むプラグインの npm パッケージ名。暗黙のデフォルト (`@crowi/plugin-storage-local` / `@crowi/plugin-search-mongo` / `@crowi/plugin-mail-smtp`) に追加される形で読み込まれる |
-| `storage.driver` | `string` | `"local"` | ファイルアップローダが使うストレージドライバ名。詳細は [ストレージドライバ](./storage) |
-| `search.driver` | `string` | `"mongo"` | 検索サービスが使うドライバ名。詳細は [検索のセットアップ](./search-setup) |
-| `mail.driver` | `string` | `"smtp"` | メール送信サービスが使うドライバ名。`@crowi/plugin-mail-*` プラグインを入れ替えて `"resend"` / `"ses"` に切り替えられる |
-
-ファイルが存在しない場合や項目が省略された場合は、上記のデフォルト値が
-適用されます。スキーマに合わない内容を書くと、起動時に明示的なエラーで
-失敗します。
+キーの一覧・既定値と、指定できるドライバ名の一覧は [crowi.config.json](../reference/config-file) にあります。ファイルが存在しない場合や項目を省略した場合は既定値が使われ、スキーマに合わない内容は起動時に明示的なエラーで失敗します。
 
 ### プラグインの解決方法
 
 `@crowi/api` は **プラグインを同梱しません**。SDK (`@crowi/plugin-api`) と
-コアのみを出荷し、ドライバは同梱しません。プラグインはランナープロジェクトが
-所有します。`plugins` に挙げた名前は、起動時にランナープロジェクトの
-`node_modules/` から (`createRequire(projectDir)` で) 解決されます。
-プラグインを追加するには、ランナーの `package.json` に依存として宣言した
+コアのみを出荷し、ドライバは同梱しません。プラグインは runner プロジェクトが
+所有します。`plugins` に挙げた名前は、起動時に runner プロジェクト自身の
+`node_modules/` から解決されます。
+プラグインを追加するには、runner プロジェクトの `package.json` に依存として宣言した
 うえで `crowi.config.json:plugins` に名前を追加します。api パッケージ自体を
 再ビルドする必要はありません。
 
@@ -190,9 +161,10 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 インストールは **ローカルストレージ + MongoDB 検索 + SMTP メール** が
 そのまま動きます — 必須のインフラは MongoDB だけです。
 
-ランナープロジェクトは `package.json` の `"start": "crowi-api"` スクリプト
-(`@crowi/api` が提供する `crowi-api` bin) で起動します。`process.cwd()` が
-`projectDir` になるよう、プロジェクトディレクトリから実行します。
+runner プロジェクトは `package.json` の `"start": "crowi-api"` スクリプト
+(`@crowi/api` が提供する `crowi-api` bin) で起動します。プラグインを
+そのプロジェクトの `node_modules/` から解決させるため、プロジェクト
+ディレクトリ自身から実行します。
 
 プラグインが他のプラグインを `requires` で宣言している場合、その依存先も
 **自動で (transitive に) 解決・ロード** されます。そのため、依存先を
@@ -203,28 +175,15 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 を明示列挙する必要はありません (重複ロードを避ける)。AWS 一式を使う通し
 手順は [AWS Lightsail で動かす](./aws-lightsail) を参照してください。
 
-プラグインの追加・有効化の詳しい手順は [プラグインの管理](../plugins/managing)、
-プラグインの種類は [プラグインの概要](../plugins/overview) を参照して
+プラグインの追加・有効化の詳しい手順は [プラグインの導入と設定](./plugins)、
+プラグインの種類は [プラグインアーキテクチャ](../develop/plugins-overview) を参照して
 ください。
 
-### ドライバ名とプラグインの対応
-
-`storage.driver` / `search.driver` に指定できるドライバ名は、読み込んだ
-プラグインが登録したものです。代表的な対応は次のとおりです。
-
-| 設定 | ドライバ名 | 提供プラグイン |
-| ---- | ---------- | -------------- |
-| `storage.driver` | `local` | `@crowi/plugin-storage-local` (デフォルト) |
-| `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
-| `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (デフォルト) |
-| `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
-| `mail.driver` | `smtp` | `@crowi/plugin-mail-smtp` (デフォルト) |
-| `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
-| `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
+### ドライバを選ばないプラグイン
 
 レンダラ系プラグイン (`@crowi/plugin-renderer-katex` / `-plantuml` /
-`-crowi-legacy`) は `plugins` に追加するだけで有効になり、`storage` /
-`search` のようなドライバ選択は不要です。絵文字ショートコードと
+`-mermaid` / `-crowi-legacy`) は `plugins` に追加するだけで有効になり、
+`storage` / `search` のようなドライバ選択は不要です。絵文字ショートコードと
 リンクカード (`@[card](url)`) はプラグインではなく Crowi コアの機能で、
 `plugins` への追加なしに常時有効です(リンクカードの外部取得は管理画面
 「セキュリティ」の `linkCardEnabled` トグルで無効化できます)。
@@ -236,6 +195,8 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 ## 次のステップ
 
 - [機密設定の暗号化](./encryption) — `CROWI_ENCRYPTION_KEY` の詳細
-- [ストレージドライバ](./storage) — `storage.driver` の切り替え手順
-- [検索のセットアップ](./search-setup) — Elasticsearch の設定
-- [プラグインの管理](../plugins/managing) — プラグインの追加・有効化
+- [ストレージ設定](./storage) — `storage.driver` の切り替え手順
+- [検索バックエンドのセットアップ](./search-setup) — Elasticsearch の設定
+- [プラグインの導入と設定](./plugins) — プラグインの追加・有効化
+- [環境変数](../reference/env) — 変数名・既定値・意味の一覧
+- [crowi.config.json](../reference/config-file) — フィールドとドライバ名の一覧

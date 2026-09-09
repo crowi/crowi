@@ -1,0 +1,62 @@
+---
+title: Quickstart
+description: Bring Crowi up with Docker and write your first page
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This page takes you from nothing to a running Crowi with an admin account and a first page. It takes about five minutes and needs only Docker, Docker Compose and git.
+
+<Callout type="info">
+  What you build here is an evaluation setup. When you are ready to run a server for your team, pick an installation path from [Choose an installation path](../operations).
+</Callout>
+
+## 1. Start it
+
+Clone the repository, create the environment file, and bring the whole stack up.
+
+```bash
+git clone https://github.com/crowi/crowi.git
+cd crowi
+cp .env.example .env
+docker compose --profile app up -d --build
+```
+
+`--profile app` starts Crowi itself (api and web) behind a reverse proxy, together with MongoDB, Redis, Elasticsearch and Mailpit for inspecting mail. The first run builds the images, so it takes a few minutes.
+
+Once it is up, open **http://localhost:4302** in your browser. That is the one entrypoint: the WebSockets behind realtime collaboration and notifications only connect through the front proxy, so do not open the other ports directly.
+
+## 2. Create the admin account
+
+The first visit shows the installer. The user you create there becomes the **first administrator**. Fill in the site name, username, email address and password, and continue.
+
+<Callout type="warn">
+  If a database write fails part-way through the installer, the installer does not reopen. The recovery steps are under "When setup fails" in [Run the official images](../operations/install-docker).
+</Callout>
+
+## 3. Write your first page
+
+Create a page from "New" in the header. Paths are `/`-separated hierarchies: writing `/dev/api/setup` creates the hierarchy on the spot — there are no folders to create first.
+
+The body is Markdown. Besides tables, checklists and code blocks, `[[Page name]]` links to another page. [Markdown syntax](./markdown) lists everything you can write.
+
+Saving creates the first revision. You can diff a page against an earlier version and restore any of them ([Revisions and rollback](./revisions)).
+
+## 4. Invite your team
+
+Enter email addresses under "Users" in the admin panel (`/admin`) and Crowi sends invitations. Each invited person follows the link in the mail and picks their own username and password.
+
+Sending mail needs a configured sender. For local checking you can point it at the Mailpit that `--profile app` started: in the plugin settings in the admin panel, set the SMTP host to `mailpit` and the port to `1025` with no authentication, and everything Crowi sends lands in the Mailpit inbox at http://localhost:8025. To send real mail, see [Mail delivery](../operations/mail).
+
+## 5. Make a landing page
+
+A path that ends in `/` (for example `/dev/`) is a **portal page**: it shows its own body together with the list of pages below it. One portal per team or project gives that area an entrance.
+
+The root `/` is a portal too. A short overview there is the first thing everyone who joins will read.
+
+## Next steps
+
+- [Pages](./pages) — paths, visibility and portals
+- [Markdown syntax](./markdown) — every supported notation
+- [Search](./search) — finding pages
+- [Choose an installation path](../operations) — running a server for your team

@@ -1,0 +1,46 @@
+---
+title: RFC インデックス
+description: Crowi 2.0 の設計提案 (RFC) の一覧
+---
+
+Crowi 2.0 の大きな設計判断は **RFC (Request for Comments)** として文書化されています。本文はリポジトリの `docs/rfcs/` にあり、下の表の番号から GitHub 上で直接読めます。
+
+このページは索引だけを持ちます。要約と実装状況は RFC 自身が持つため、ここでは繰り返しません。
+
+## RFC 一覧
+
+| 番号 | タイトル | 関連ドキュメント |
+| ---- | -------- | ---------------- |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | プラグインアーキテクチャ | [プラグインアーキテクチャ](./plugins-overview) |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | [レンダラパイプライン](./renderer-pipeline) / [レンダラプラグイン](../operations/renderers) |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | [リアルタイム共同編集](../guide/realtime-editing) / [リアルタイム共同編集の運用](../operations/realtime-collab) |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | ページプレゼンスとヘッダー UI | [ページの作成と編集](../guide/pages) |
+| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API フレームワークの移行 — ts-rest から Hono へ | [アーキテクチャ](./architecture) |
+| [RFC-0008](https://github.com/crowi/crowi/blob/main/docs/rfcs/0008-migration-framework.md) | 移行フレームワーク | [v1 からの移行](../operations/upgrading-from-v1) |
+| [RFC-0009](https://github.com/crowi/crowi/blob/main/docs/rfcs/0009-revision-storage-compaction.md) | リビジョンストレージの圧縮 | |
+| [RFC-0010](https://github.com/crowi/crowi/blob/main/docs/rfcs/0010-oauth-and-api-access.md) | OAuth 2.0 の基盤とスコープ付き API アクセス | [アカウントとセキュリティ](../guide/account-security) |
+| [RFC-0011](https://github.com/crowi/crowi/blob/main/docs/rfcs/0011-crowi-mcp.md) | Crowi MCP サーバー (Streamable HTTP による組み込みのリモート MCP) | [AI ツールから使う (MCP)](../guide/mcp) |
+| [RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md) | Crowi CLI (`@crowi/cli`) — 利用者向けのコマンドラインクライアント | [CLI (コマンドライン)](../guide/cli) |
+| [RFC-0013](https://github.com/crowi/crowi/blob/main/docs/rfcs/0013-slack-plugin.md) | Slack プラグイン (統合) と Hono 上のプラグイン HTTP ルート | [Slack 連携](../operations/slack) |
+| [RFC-0014](https://github.com/crowi/crowi/blob/main/docs/rfcs/0014-auth-provider-plugins.md) | 認証プロバイダプラグイン (ベンダプラグインによる外部アカウントでのサインイン) | [外部アカウントでのサインイン](../operations/federated-auth) |
+| [RFC-0015](https://github.com/crowi/crowi/blob/main/docs/rfcs/0015-image-display-attributes.md) | 画像の表示属性とエディタのアフォーダンス | [Markdown 記法](../guide/markdown) |
+| [RFC-0016](https://github.com/crowi/crowi/blob/main/docs/rfcs/0016-ios-native-app.md) | Crowi のネイティブ Apple アプリ (マルチワークスペース対応、iPhone / iPad が v1、macOS も見据える) | |
+| [RFC-0017](https://github.com/crowi/crowi/blob/main/docs/rfcs/0017-collab-invalidate-on-rename-delete.md) | リネームと削除時のライブ共同編集エディタの無効化 | |
+| [RFC-0018](https://github.com/crowi/crowi/blob/main/docs/rfcs/0018-quoted-page-comments.md) | リビジョンを意識した引用付きページコメント | |
+| [RFC-0019](https://github.com/crowi/crowi/blob/main/docs/rfcs/0019-totp-two-factor-auth.md) | TOTP による二要素認証 | |
+| [RFC-0020](https://github.com/crowi/crowi/blob/main/docs/rfcs/0020-html-artifact-pages.md) | HTML アーティファクトページ | |
+| [RFC-0021](https://github.com/crowi/crowi/blob/main/docs/rfcs/0021-page-metadata-change-history.md) | 本文以外の変更のページ履歴 | |
+| [RFC-0022](https://github.com/crowi/crowi/blob/main/docs/rfcs/0022-mcp-oauth-connector.md) | 外部 MCP コネクタのための OAuth 連携 | |
+| [RFC-0023](https://github.com/crowi/crowi/blob/main/docs/rfcs/0023-client-agnostic-rendered-ast.md) | クライアント非依存の renderedAst (web / iOS / 将来のクライアント向けの型付きレンダリング AST) | |
+| [RFC-0024](https://github.com/crowi/crowi/blob/main/docs/rfcs/0024-workspace-branding.md) | マルチワークスペースの識別のためのワークスペースブランディング | |
+
+## RFC を読むには
+
+各 RFC は冒頭にステータス・ターゲットリリース・依存する RFC を記したメタデータブロックを持ち、続いて Summary / Goals / Non-goals / 詳細設計という構成になっています。実装がどこまで進んでいるかは、この索引ではなく各 RFC のメタデータブロックが正です。
+
+## 関連ページ
+
+- アーキテクチャ全体像 → [アーキテクチャ](./architecture)
+- プラグインの仕組み → [プラグインアーキテクチャ](./plugins-overview)
+- 開発に参加する → [コントリビュート](./contributing)

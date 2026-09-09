@@ -54,7 +54,7 @@
     "test:flake": "node scripts/test-flake-report.mjs",
     "test:flake-taxonomy": "node scripts/test-flake-taxonomy.mjs",
     "test:server": "turbo run test:server",
-    "lint": "node scripts/check-kebab-filenames.mjs && turbo run lint",
+    "lint": "node scripts/check-kebab-filenames.mjs && node scripts/check-docs-links.mjs && node scripts/check-docs-vocabulary.mjs && turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "type-check": "turbo run type-check",
     "format": "biome format --write .",

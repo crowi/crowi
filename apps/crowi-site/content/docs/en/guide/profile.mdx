@@ -53,15 +53,11 @@ You can change your display name, email address, and display language.
 
 If your account is **linked to an external provider** such as Google, the
 **email address cannot be changed**. The field in the settings screen is
-disabled and says why. A linked account can sign in from outside Crowi, so
-if a stolen API token or OAuth grant could swap the address, the
-confirmation link would go to the attacker along with it — handing away the
-account's recovery channel.
+disabled and says why (see [Account and security](./account-security)).
 
 The lock depends only on **whether any identity is linked at all**. The
 address the provider knows and the address on the Crowi account do not have
-to match: linking never overwrites the account's email, so the two are
-allowed to differ.
+to match.
 
 Submitting a different address on such an account **rejects the whole
 request: the name and language you changed in the same save are not stored
@@ -99,74 +95,13 @@ your display name.
 
 Accepted formats are PNG, JPEG, GIF, WebP, SVG, BMP, AVIF, APNG and ICO, up to **5MB per file**. Uploading from a browser will essentially never hit that ceiling — the crop dialog downscales the image before it is sent. The cap matters for routes that skip the crop, such as the CLI, curl, or MCP. When one of those declares no `Content-Type`, the type is **inferred from the filename extension**, so omitting the declaration is not by itself grounds for rejection.
 
-### Password
+### Sign-in settings
 
-You can change your login password. For an account that does not have a
-password set yet, the current-password field is not shown and you simply
-set a new one.
-
-Changing your password **signs out every other session on the account**.
-If you suspect someone else has taken over a session, changing your
-password is itself the way to evict them.
-
-- The tab you made the change in stays signed in (a fresh token pair is
-  issued along with the change). Other browsers, other devices, and other
-  tabs are sent back to the login screen on their next request.
-- **Personal access tokens (PATs) and OAuth-connected apps are not
-  affected.** They are separate credentials, revoked individually from
-  their own screens.
-- Any password-reset emails already sent stop working at the same moment.
-- A pending email-address change, if there is one, is cancelled as well
-  (request it again if you still want it).
-
-If you have forgotten your password, the password-reset link on the login
-screen mails you a reset link. A reset link is valid for **1 hour** and
-**works exactly once** (reopening the same link no longer shows the reset
-form). Completing a reset also signs out every other session, just as
-changing the password does.
-
-A reset link is additionally **bound to the address it was sent to**. If
-the account's email address changes after the link was mailed — whether
-you confirmed the change yourself or an administrator edited it — the old
-link stops working, and you request a fresh one from the new address.
-
-The same holds when an **administrator** resets your password from the
-admin screen: every login session on the account is signed out, and any
-reset link still in flight is invalidated.
-
-### API tokens
-
-You can issue and manage **personal access tokens (PATs)** for using the
-Crowi API from outside.
-
-- You can hold **several tokens at once**. Each one gets its own name,
-  scopes (the operations it may perform), and expiry (30 days / 90 days /
-  365 days / never).
-- The plaintext token (`crowi_pat_…`) is shown **once, at creation time**.
-  The server stores only a hash, so it can never be shown again — copy it
-  before dismissing the dialog.
-- The list shows each token's scopes, expiry, and last-used time, so you
-  can spot unused tokens and revoke them individually. Revoking one does
-  not affect the others.
-- Admin-only scopes (`admin:*`) cannot be granted to a PAT.
-
-> **Warning**: A PAT is a secret as strong as your password. If you
-> suspect one has leaked, revoke that token and issue a new one.
-> **Changing your password does not revoke your PATs** (and, conversely,
-> revoking a PAT does not affect your login sessions).
-
-### Authorized apps (OAuth sessions)
-
-You can list and revoke sessions for external apps you've authorized via OAuth — a CLI tool, a mobile app, and so on. Each row here represents one active refresh token. **Your web login session is never shown in this list** — it is a separate credential and cannot be reviewed or revoked from here.
-
-Each row shows the client name, scopes, when it was authorized, when it was last refreshed, and when it expires. **"Last refreshed" is when that refresh token was last rotated, not the last time the API was used** — Crowi does not track a per-call access timestamp, so the list can only report token issuance/rotation, not API activity.
-
-Revoking a row stops only **future refreshes reachable from that row**. **An already-issued access token stays usable until it expires (up to 1 hour by default)** — access tokens are stateless signed tokens with no storage that a revoke operation could act on.
-
-- Right after an ordinary token refresh, the same app may briefly show as two rows. This is a transient in-progress state that converges back to one row the next time you reload the page.
-- If the same refresh token was refreshed from two places at nearly the same time, though, two rows can persist. Revoking one does not affect the other in that case — **revoke both rows once you notice them**.
+Changing your password, personal access tokens, authorized apps and linked
+accounts are all covered in [Account and security](./account-security).
 
 ## Related pages
 
-- [Working with pages](./pages) — a user page is also just a page
+- [Account and security](./account-security) — password, tokens and linked accounts
+- [Pages](./pages) — a user page is also just a page
 - [Realtime collaborative editing](./realtime-editing) — recording users who were present during editing

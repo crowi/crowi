@@ -1,0 +1,70 @@
+---
+title: Upgrading
+description: How to move Crowi to a new version, and the extra work some versions need
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## The basic procedure
+
+1. Read the [release notes](https://github.com/crowi/crowi/releases) for every version between yours and the target, and note any extra work.
+2. Take a [Backup](./backup).
+3. Stop all replicas together (below).
+4. Point the image tags at the new version and start all replicas.
+5. Check that `GET /api/app/info` returns 200.
+6. Run whatever applies from "Version-specific notes" below.
+
+## Replace every replica together
+
+<Callout type="warn">
+  **Do not roll api replicas one at a time.** In some Crowi releases, an old and a new replica in the same pool produce different results depending on which generation served the request. Stop every api replica, deploy the new version to all of them, and start them together. Standing up a second fleet on the new version and cutting traffic over at once (blue/green) works too.
+</Callout>
+
+A single-replica deployment — including development — satisfies this automatically: the two generations can never coexist.
+
+## Version-specific notes
+
+### The release that added account linking
+
+A new replica issues a state cookie per external-account linking flow. An old replica does not know that name: it reads the fixed sign-in state cookie instead, and deletes it before validating. In a mixed fleet, a callback that lands on an old replica breaks not only the linking attempt in progress but **any ordinary sign-in happening at the same time**. Nothing bridges the two generations, so replace them together as described above.
+
+### The release that added in-flight page moves
+
+Renaming a page, moving it to the trash and restoring it now pass through an "in flight" state. An old replica does not know that state: it treats the page as an ordinary one and can start a second move on top of the first. Neither move then completes, and the page is stranded mid-move — which, to a reader, looks like the page disappeared.
+
+If you did mix the generations, you can recover once every replica runs the new version.
+
+```bash
+crowi-admin page-history repair --transitions
+```
+
+### The release that dropped `v2` from the API path
+
+The api's public HTTP prefix became `/api` instead of `/api/v2`. That is a rename of the boundary, not a staged version rollout: there is no redirect or alias for the old prefix, so in a mixed fleet roughly half of the requests 404 whichever prefix they use.
+
+Before sending traffic, do not trust the deployment tool's "done" signal alone — check **each replica individually** (through a load balancer you only sample one replica per request):
+
+- `GET /api/openapi.json` returns **200** on every replica.
+- `GET /api/v2/openapi.json` returns **404** on every replica.
+
+A replica that fails either check has not switched yet. On rollback, run the same checks the other way round (`/api/openapi.json` 404, `/api/v2/openapi.json` 200), and roll every replica back together: a mixed fleet has the same problem as a partial upgrade.
+
+### A release that bumps the renderer version
+
+Rendered page output is stored on the revision and reused only when the renderer version that produced it matches the running one exactly. After a bump, older pages are re-rendered on every read and the result is not stored. Rebuild the stored output once, **immediately after** deploying.
+
+```bash
+crowi-admin rebuild rendered-ast
+```
+
+The command is idempotent. Confirm every replica runs the new version, then run it once more: when nothing is left to rebuild, the backfill is done. (While an old replica survives, it keeps writing revisions in the old format.)
+
+### Moving Redis to a different endpoint
+
+Stopping and starting works the same way, but you have to clear the coordination state on the old instance before switching. See [Redis operations](./redis) for the procedure.
+
+## Next steps
+
+- [Backup](./backup) — what to capture before you start
+- [Deployment topologies](./deployment) — reverse proxy and public origin
+- [Migrating from v1](./upgrading-from-v1) — migrating from Crowi 1.x

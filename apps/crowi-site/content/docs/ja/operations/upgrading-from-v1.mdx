@@ -3,11 +3,6 @@ title: v1 からの移行
 description: Crowi v1 から v2 (Reignite) へのアップグレードと、データ互換性の現状
 ---
 
-> **Caution**: Crowi 2.0 — コードネーム *Reignite* — は現在 **alpha 開発中**
-> です。安定版の v2 はまだリリースされておらず、**本番環境の v1 から
-> v2 へ移行することは現時点では非推奨**です。検証目的でのみ利用して
-> ください。最新の進捗は[リリースノート](https://github.com/crowi/crowi/releases)を参照してください。
-
 このページは、Crowi v1 から v2 へ移行する際のデータ互換性の考え方と、
 現状で利用できる移行パスを説明します。
 
@@ -35,7 +30,7 @@ UI とアプリケーション層は作り直されていますが、**データ
 > **Note**: v2 では機密 Config (OAuth secret、SMTP パスワードなど) を
 > AES-256-GCM で暗号化する仕組みが入りました。v1 由来の平文の設定行は
 > そのまま読み込めますが、暗号化を有効にした場合は管理画面の crypto
-> 機能で再暗号化できます。詳細は [機密情報の暗号化](./encryption) を
+> 機能で再暗号化できます。詳細は [機密設定の暗号化](./encryption) を
 > 参照してください。
 
 ## 移行パスの現状
@@ -51,15 +46,23 @@ UI とアプリケーション層は作り直されていますが、**データ
 このため、現時点では **本番データでの移行は行わず**、v1 データのコピーを
 使った検証環境での試用にとどめることを強くおすすめします。
 
+## 機密設定の入れ直し
+
+v1 のコア設定にあったストレージ・メールの認証情報 (`crowi:upload:aws:*` /
+`crowi:mail:aws:*` / `crowi:mail:smtpPassword` など) は v2 にはありません。
+対応する **プラグインを有効化して値を入力し直してください**。入力した値は
+プラグインの名前空間に保存され、[機密設定の暗号化](./encryption) の設定が
+あれば自動で暗号化されます。旧データの自動移行やフォールバック参照は
+行いません。
+
 ## 移行フレームワーク (crowi-admin migrate)
 
-v1 → v2 のデータ移行は RFC-0008 の移行フレームワークで実行され、
-`crowi-admin migrate plan | apply | status | list` という名前空間として
-提供されます。`crowi-admin` は MongoDB に直接接続するため、`@crowi/api` が
-インストールされたランナープロジェクトのディレクトリから実行します。
+v1 → v2 のデータ移行は `crowi-admin migrate plan | apply | status | list`
+で実行します。`crowi-admin` は MongoDB に直接接続するため、`@crowi/api` が
+インストールされた runner プロジェクトのディレクトリから実行します。
 モノレポでは `pnpm migrate` ラッパーが同じ CLI を実行します。
 
-**公式 Docker イメージ**では `crowi-admin` がランナープロジェクトのツリー
+**公式 Docker イメージ**では `crowi-admin` が runner プロジェクトのツリー
 (`/app` がルート) に同梱されているため、コンテナ内で実行します。
 
 ```bash
@@ -116,7 +119,13 @@ crowi-admin migrate status
 > ときは `pnpm -s migrate plan --json | jq` のように `-s` (silent) を
 > 付けてください。
 
-> **Tip**: `block` ポリシーが効くのは `blocking` の移行だけです。そのため本番ではデフォルトの `block` のままで問題ありません。`cosmetic` の移行 (表示のみに関わるもの) はポリシーに関係なく起動を拒否せず、起動を拒否するのはデータ整合性に関わる `blocking` の移行だけだからです。いずれかの `blocking` の移行が未適用のまま起動したい場合 (たとえば単一インスタンスでの調査用) は、`MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定すると、その起動拒否を警告に格下げできます。(以前のドキュメントは「中途半端に移行されたデータベースがリクエストを処理しないよう、常に `block` のままに」と案内していましたが、移行ごとの severity の導入により、この一律のルールは当てはまらなくなりました。cosmetic 移行はそもそもデータ整合性のリスクではありません。)
+> **Tip**: `block` ポリシーが効くのは `blocking` の移行だけです。そのため
+> 本番ではデフォルトの `block` のままで問題ありません。`cosmetic` の移行
+> (表示のみに関わるもの) はポリシーに関係なく起動を拒否せず、起動を拒否
+> するのはデータ整合性に関わる `blocking` の移行だけだからです。いずれかの
+> `blocking` の移行が未適用のまま起動したい場合 (たとえば単一インスタンスでの調査用)
+> は、`MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定すると、その起動拒否
+> を警告に格下げできます。
 >
 > **マルチインスタンスの注意**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY`
 > (環境変数) は、管理画面の Config (`migration.preflightUnappliedPolicy`)
@@ -125,11 +134,11 @@ crowi-admin migrate status
 > 可能性があります。クラスタ全体で一致させるため、環境変数を **全レプリカに
 > 一貫して** 設定してください (例: Kubernetes の ConfigMap を全 Pod に注入)。
 
-v2 alpha 時点で登録されている移行は以下のとおりです。
+登録されている移行は以下のとおりです。
 
 | ID | レイヤー | severity | 内容 |
 | ---- | ---- | ---- | ---- |
-| `page-status-default` | boot | — | `page.status` のバックフィル (RFC-0004) |
+| `page-status-default` | boot | — | `page.status` のバックフィル |
 | `revisions-schema-unify` | boot | — | リビジョンスキーマの統一 (`type:snapshot` のバックフィル) |
 | `wikilink-format` | preflight | cosmetic | wikilink 記法の変換 |
 | `user-unique-prepare` | preflight | **blocking** | ユーザーの重複排除 (一意インデックスの準備) |
@@ -164,31 +173,29 @@ crowi-admin migrate apply --id wikilink-format
 
 この移行は **コード領域を除外** します — フェンスコードブロックやインライン
 コードの中にある `</…>` や wikilink ふうの文字列は誤検知せず、そのまま残します。
-また **`apply` はページの `updatedAt` / `lastUpdateUser` を保全** します（移行に
-よる書き換えは保守オペレーションでありユーザー編集ではないため、これらを bump
-せず、ページ一覧の並び順や「最終更新者」は変わりません）。
+また **適用してもページの最終更新日時と最終更新者は変わりません**（移行に
+よる書き換えは保守オペレーションでありユーザー編集ではないため、ページ一覧の
+並び順や「最終更新者」はそのままです）。
 
 > **Tip**: v1 由来の wikilink 記法は、`@crowi/plugin-renderer-crowi-legacy`
 > プラグインによってレンダリング時にも解釈できます。データ自体を変換
 > したくない場合はこのプラグインを有効化するという選択肢もあります。
-> プラグインについては [プラグイン概要](../plugins/overview) を参照して
+> プラグインについては [プラグインアーキテクチャ](../develop/plugins-overview) を参照して
 > ください。
 
 ### 誤変換された HTML 終了タグの復旧 (wikilink-html-recover)
 
-旧バージョンの `wikilink-format` 移行には、見出しなどで使われる
+`wikilink-format` 移行を古い Crowi で実行した環境では、見出しなどで使われる
 **非推奨の HTML 終了タグ** (`</font>` `</center>` `</marquee>` `</blink>`
-`</applet>`) を v1 の山括弧 wikilink と誤認し、`[[/font]]` のような wikilink
-記法へ書き換えてしまう不具合がありました。これらのタグが
-`KNOWN_HTML_ELEMENTS` に登録されていなかったためで、現在は登録済みなので
-**新たな誤変換は発生しません**。一方、既に `[[/font]]` のように化けた本文は
-`wikilink-format` が再実行されないため自動では直りません。
+`</applet>`) が `[[/font]]` のような wikilink 記法に化けていることがあります。
+現在の `wikilink-format` はこれらを書き換えませんが、既に化けた本文は移行が
+再実行されないため自動では直りません。
 
 `wikilink-html-recover` preflight 移行は、化けた `[[/<x>]]` を `</x>` へ
-逆変換しますが、対象は**この 5 つの非推奨タグ**
-(`font` / `center` / `marquee` / `blink` / `applet`) **だけ**です。これらは
-`KNOWN_HTML_ELEMENTS` に欠けていた唯一の名前であり、誤変換が生み出しえた
-終了タグはこれらに限られるためです。それ以外の単一セグメント wikilink は、
+逆変換します。対象は**この 5 つの非推奨タグ**
+(`font` / `center` / `marquee` / `blink` / `applet`) **だけ**で、誤変換が
+生み出しえた終了タグがこれらに限られるためです。それ以外の単一セグメント
+wikilink は、
 たとえ名前が標準 HTML 要素であっても (`[[/section]]` `[[/div]]` `[[/br]]` など)
 **温存**されます — これらは常に既知だったため `wikilink-format` が書き換えて
 おらず、**本来の wikilink** だからです。複数セグメント (`[[/foo/bar]]`)・
@@ -322,7 +329,7 @@ crowi-admin migrate apply --id <残りの blocking migration の ID>
 
 > **Note**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` でこの移行を pending のまま起動した場合、その窓の間は移行前の Like / 閲覧済みが数えられません。また、その窓で利用者が unlike した Like は legacy 配列側に反映されないため、後で `apply` すると legacy 配列由来の Like が復活することがあります。`$unset` が完了したら旧 binary へは戻さず、問題があれば fix-forward するか、移行前のバックアップ全体へ復元してください。
 
-> **Note**: この移行は、無効な要素と Page 内の重複要素を除外して実在する relation 行数へ揃えるため、`liker` / `seenUsers` の raw 配列長をそのまま数えていた場合と比べて `likerCount` / `seenUsersCount` が減ることがあります。非配列 (スカラ) で保存された値については、無効な値だけが除外されます — **有効な** ObjectId (現在も 1 件の Like として数えられている状態) は除外されず、1 relation として移行され、この件数是正には含まれません。
+> **Note**: この移行は、無効な要素と Page 内の重複要素を除外して実在する relation 行数へ揃えるため、以前の配列の長さをそのまま数えていた場合と比べて `likerCount` / `seenUsersCount` が減ることがあります。非配列 (スカラ) で保存された値については、無効な値だけが除外されます — **有効な** ObjectId (現在も 1 件の Like として数えられている状態) は除外されず、1 relation として移行され、この件数是正には含まれません。
 
 ### 検索インデックスの再構築
 
@@ -372,20 +379,11 @@ crowi-admin replace url --from https://old.example --to https://new.example
 ```
 
 この置換は **エンドユーザーから見えない静かな書き換え** として行われます。
-ページごとに新しいリビジョンを積みますが、`updatedAt` / 最終更新者 / 公開範囲
-(grant) は変更せず、ウォッチャーへの通知や自動ウォッチも行いません。一覧の
+ページごとに新しいリビジョンを積みますが、最終更新日時 / 最終更新者 / 公開範囲
+は変更せず、ウォッチャーへの通知や自動ウォッチも行いません。一覧の
 並びや通知が動かないので、ドメイン移行のクリーンアップに適しています。
 
-主なオプション:
-
-| オプション | 説明 |
-| ---- | ---- |
-| `--from <s>` / `--to <s>` | (必須) 置換元 / 置換先の文字列。安全のため `https://old.example` のように **スキーム付きの完全なオリジン** を指定する |
-| `--dry-run` | 書き込まずに対象だけレポートする |
-| `--include-trash` | ゴミ箱 / 非推奨ページも対象に含める (既定: 公開ページのみ) |
-| `--user <email>` | 新リビジョンの作成者として記録するユーザー (既定: 最古の管理者) |
-| `--yes` | 確認プロンプトをスキップする (TTY が無い環境では、これが無いと書き込みを拒否) |
-| `--force` | `--from` にスキームが無い (裸のホスト) 場合でも実行する |
+オプションの一覧は [crowi-admin](../reference/admin-cli) にあります。`--yes` が無く TTY も無い環境では書き込みを拒否します。
 
 > **Caution**: `--from` に `old.example` のような **スキームの無い裸のホスト**
 > を渡すと、`old.example.com` のような「接頭辞が一致するより長いホスト」まで
@@ -408,7 +406,7 @@ v1 はページ本文の添付ファイル / 画像を **v1 のファイル URL*
 `![shot.png](https://wiki.example/files/<id>)` の絶対形)。Crowi 2.0 は添付を
 専用のストリームエンドポイント `/api/attachments/<id>` で配信し、レガシーの
 `/files/<id>` 互換ルートは削除されたため、**v1 形式の URL は 404 =
-画像が壊れます**。id は v1 / v2 で同一の 24-hex `Attachment._id` なので、必要なのは
+画像が壊れます**。id は v1 / v2 で同一の 24-hex の添付 ID なので、必要なのは
 **URL の書き換えだけ** (id の振り直しは不要) です。
 
 `files-url-to-attachments` preflight 移行は、公開ページ (+ レガシーの `null`
@@ -474,11 +472,8 @@ crowi-admin migrate apply --id files-url-to-attachments
 ## まとめ
 
 - v2 のデータ形状は v1 と互換で、既存の Wiki データは持ち越せます。
-- ただし v2 は alpha 開発中で、移行パスは整備途上です。**本番移行は
-  現時点では非推奨**です。
 - `crowi-admin migrate` フレームワーク (`plan` / `apply` と preflight-block
   の起動ガード) と、`rebuild search` / `rebuild storage copy`、ドメイン変更後の
   本文 URL 置換 `replace url` が提供されています。適用前にいずれもプレビュー
   (`migrate plan` / `--dry-run`) してください。
-- 安定版リリースに向け、移行手順は今後ドキュメント化されます。最新
-  状況は[リリースノート](https://github.com/crowi/crowi/releases)と Crowi のリリース告知を参照してください。
+- 移行の各コマンドの詳細と既知の注意点は[リリースノート](https://github.com/crowi/crowi/releases)にも記載されます。

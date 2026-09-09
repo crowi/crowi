@@ -1,0 +1,59 @@
+---
+title: Markdown syntax
+description: A cheat sheet of the syntax Crowi understands
+---
+
+A cheat sheet of what you can write in a Crowi page body. Each syntax is explained with examples in [Markdown syntax](../guide/markdown).
+
+## Standard syntax
+
+CommonMark and GitHub Flavored Markdown work as they are.
+
+| Syntax | Meaning |
+| --- | --- |
+| `# Heading` through `###### Heading` | A heading. A table of contents and an anchor id are added automatically |
+| `- item` / `1. item` | Bullet and numbered lists |
+| `**bold**` / `*italic*` / `` `code` `` | Emphasis and inline code |
+| `[label](/path)` | A link |
+| `![alt](url)` | An image |
+| `> quote` | A block quote |
+| `\| col \| col \|` | A table |
+| ` ```lang ` | A code block with a language, syntax-highlighted on save |
+
+## Crowi core extensions
+
+Always available, with no plugin.
+
+| Syntax | Meaning |
+| --- | --- |
+| `[[/dev/setup]]` | A wiki link to an absolute path |
+| `[[/dev/setup\|Setup guide]]` | A wiki link with its own label |
+| `[[/dev/setup#macos]]` | A wiki link carrying a heading anchor |
+| `[label](/survey/AI%20draft)` | A link to a path containing a space (the recommended escape) |
+| `[label](/survey/AI+draft)` | The same, reading `+` as a space |
+| `[label](</foo bar>)` | The same, writing the space inside angle brackets |
+| `@username` | A mention. Becomes a link to the user page and notifies that person |
+| `:smile:` | An emoji shortcode, replaced with the Unicode emoji |
+| `@[card](url)` | A link card, rendered from the target's OGP tags |
+| `@[tag](url)` | An embed tag. Becomes an embed when a renderer plugin claims `tag` |
+| A bare URL in a paragraph | Expands into a rich embed when an expansion rule is registered |
+| `![alt](url){width=60% height= align= float=}` | Image display attributes: width, height, alignment, float |
+| `> [!NOTE]` | A typed callout. `NOTE` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION` |
+| A `---` block at the top of a page | Frontmatter, rendered above the body as a `key: value` table |
+
+## Syntax added by renderer plugins
+
+These work only with the matching plugin enabled. For how to enable one, see [Renderer plugins](../operations/renderers).
+
+| Syntax | Meaning | Plugin |
+| --- | --- | --- |
+| `$a^2 + b^2 = c^2$` / `$$...$$` | LaTeX maths, inline and display | `@crowi/plugin-renderer-katex` |
+| ` ```plantuml ` | A PlantUML diagram | `@crowi/plugin-renderer-plantuml` |
+| ` ```mermaid ` | A Mermaid diagram | `@crowi/plugin-renderer-mermaid` |
+| `##Heading` (no space after `#`) | Reads the v1 writing habit as a heading | `@crowi/plugin-renderer-crowi-legacy` |
+
+## Related pages
+
+- [Markdown syntax](../guide/markdown) — each syntax explained, with examples
+- [Renderer plugins](../operations/renderers) — enabling and configuring renderer plugins
+- [First-party plugins](./plugins) — the plugins Crowi publishes

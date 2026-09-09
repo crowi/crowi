@@ -1,5 +1,5 @@
 ---
-title: Self-hosting (custom runner project)
+title: Self-hosting (your own runner project)
 description: Build an api image from your own runner project and wire up the web frontend for a production deployment
 ---
 
@@ -17,9 +17,8 @@ cases:
 - You want to keep the image's dependencies minimal and own the build pipeline
   in-house.
 
-If the official images (built from the monorepo's bundled `apps/crowi-runner` /
-`apps/crowi-runner-slim`) are enough, the "Building the official Docker images"
-section of [Installation](./installation) covers that. This page goes one step
+If the published full / slim images are enough, [Run the official
+images](./install-docker) covers everything you need. This page goes one step
 further: **building a runner project from scratch**.
 
 <Callout type="info">
@@ -31,33 +30,10 @@ further: **building a runner project from scratch**.
 
 ## The big picture
 
-With the recommended single-domain + reverse-proxy setup, requests are routed
-like this:
-
-```
-                         ┌──────────────────────────────┐
-  browser ──HTTPS──▶ reverse proxy (nginx / Caddy / ...)
-                         │  /            → web  :3000     │
-                         │  /api/*       → api  :3000     │
-                         │  /collab/*    → api  :3000 (WS) │
-                         └──────────────────────────────┘
-                                   │            │
-                              ┌────▼───┐   ┌────▼───┐
-                              │  web   │   │  api   │──▶ MongoDB / Redis / ...
-                              └────────┘   └────────┘
-```
-
-`web` and `api` are separate containers, both listening on container port `3000`.
-`/collab/*` is a WebSocket endpoint, so enable **Upgrade-header passthrough** on
-the proxy.
-
-Also remember to raise the front proxy's own body size limit to a margin
-above crowi's upload limit (`CROWI_UPLOAD_MAX_BYTES`, default 50 MB) — not
-merely equal to it, since multipart framing makes the request body somewhat
-larger than the file inside it. **nginx's `client_max_body_size` defaults to
-1 MB** — leave it unset and the proxy returns 413 well before crowi's own
-limit ever applies. See "Upload body size limit" in
-[Deployment topologies](./deployment) for the exact config line.
+`web` and `api` are separate containers, both listening on container port `3000`. The browser only ever
+sees the single origin of the reverse proxy in front, which routes `/api`, `/files` and the realtime
+WebSockets to the api. The proxy configuration (Caddy / nginx), the WebSocket `Upgrade` pass-through and
+the upload body-size limit are all in [Deployment topologies](./deployment). **Read it before going live.**
 
 ## Build the runner project
 
@@ -80,11 +56,11 @@ PlantUML/KaTeX renderers.
     "start": "crowi-api"
   },
   "dependencies": {
-    "@crowi/api": "2.0.0-alpha.0",
-    "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.0",
-    "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0"
+    "@crowi/api": "2.0.0-alpha.17",
+    "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.17",
+    "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.17",
+    "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.17",
+    "@crowi/plugin-renderer-katex": "2.0.0-alpha.17"
   }
 }
 ```
@@ -123,7 +99,7 @@ the admin UI (`/admin/plugins`) after boot.
 }
 ```
 
-See [Configuration](./configuration) for the field meanings and driver-name
+See [crowi.config.json](../reference/config-file) for the field meanings and driver-name
 mapping.
 
 </Step>
@@ -140,18 +116,11 @@ Provide the environment variables the api reads at boot. At minimum set
 MONGO_URI=mongodb://mongodb:27017/crowi
 REDIS_URL=redis://redis:6379          # required for multi-replica deployments
 CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
-WS_TOKEN_SECRET=...                    # identical across all api replicas
+WS_TOKEN_SECRET=...
 ```
 
-See "Environment variables" in [Configuration](./configuration) for what each
+See [Environment variables](../reference/env) for what each
 one does.
-
-<Callout type="warn">
-  Leaving `WS_TOKEN_SECRET` unset generates a random secret per process. That is
-  acceptable for single-instance testing, but with **multiple replicas it must be
-  the same value on every replica** — otherwise realtime-collab WebSocket auth
-  fails on one side.
-</Callout>
 
 </Step>
 
@@ -159,8 +128,8 @@ one does.
 
 ### Verify locally
 
-Install dependencies and start with the **project directory as cwd** (`process.cwd()`
-must be the `projectDir`).
+Install dependencies and start with the **runner project directory as the working
+directory**.
 
 ```bash
 pnpm install   # or npm install
@@ -177,7 +146,7 @@ removing plugins **does not require rebuilding the api**.
 ## Build the api Docker image
 
 Containerize the runner project as-is. Like the official image, set `WORKDIR` to
-the runner project root (= `projectDir`) and run `node_modules/@crowi/api/dist/app.js`.
+the runner project root and run `node_modules/@crowi/api/dist/app.js`.
 
 ```dockerfile title="Dockerfile"
 FROM node:24-bookworm-slim
@@ -209,19 +178,19 @@ image** — pass them via container env or `env_file` at deploy time.
 
 ## Wire up the web frontend
 
-The web app builds from `packages/web/Dockerfile`. The built `crowi/crowi-web`
-image is a **render-only** Next.js server that bakes **no** absolute API URL:
+Use the published `crowi/crowi-web` image as-is. It is a **render-only**
+Next.js server that bakes **no** absolute API URL:
 the browser hits relative `/api` / `/files` paths on its own origin and
 derives WebSocket URLs from `window.location`. So one image works against any
 api host — but it needs a **front reverse proxy** to route those paths to the
 api.
 
 <Callout type="warn">
-  Do **not** expose the web server directly and rely on it to proxy `/api`. With
-  `output: 'standalone'` the Next `rewrites()` proxy target is **baked at build**
-  (not read from `CROWI_API_URL` at runtime), so a directly-exposed web server
-  proxies to its build-time default and cannot reach your api. Put a reverse
-  proxy in front instead.
+  Do **not** expose the web server directly and rely on it to proxy `/api`. The
+  proxy built into web **bakes its target at build time** (it does not read
+  `CROWI_API_URL` at runtime), so a directly-exposed web server proxies to its
+  build-time default and cannot reach your api. Put a reverse proxy in front
+  instead.
 </Callout>
 
 The recommended topology is **single-origin + a reverse proxy** in front of both
@@ -243,7 +212,7 @@ Bring up MongoDB (and Redis / Elasticsearch if used) and make them reachable.
 <Step>
 ### Apply migrations
 If you have a v1 upgrade or preflight migrations, apply them before starting the
-api. See [Upgrading from v1](./upgrading-from-v1).
+api. See [Migrating from v1](./upgrading-from-v1).
 </Step>
 
 <Step>
@@ -254,68 +223,21 @@ Start the api and confirm `/api/app/info` returns 200, then start the web app.
 </Steps>
 
 <Callout type="info">
-  For multi-replica deployments, `REDIS_URL` (collab/presence/notifications
-  pub/sub, editor-cap counter, Config sync, rate limiting, LRU) is
-  **required**, and `WS_TOKEN_SECRET` must be identical across all api replicas.
-  See [Realtime collaboration](./realtime-collab).
+  Multi-replica deployments treat `REDIS_URL`, `CROWI_MULTI_INSTANCE` and
+  `WS_TOKEN_SECRET` differently. See the environment variable table in
+  [Environment variables](../reference/env) and
+  [Operating realtime collaboration](./realtime-collab).
 </Callout>
-
-## `/api` prefix cutover
-
-Starting from the release that removes the `v2` path segment, the api's
-public HTTP prefix is `/api` instead of `/api/v2`. This is a listener-
-boundary rename, not a versioned rollout: the api does **not** serve a
-runtime alias or redirect for the old prefix. Once a given api replica is
-running the new version, every request to `/api/v2/*` against that replica
-is a plain 404 — and symmetrically, a replica still running the previous
-version does not understand unprefixed `/api/*` requests from an
-already-upgraded web / CLI / MCP client. The two listener generations
-cannot interpret each other's prefix, so this upgrade cannot be rolled out
-gradually.
-
-### Coordinated drain/restart — no one-at-a-time rolling restart
-
-<Callout type="warn">
-  **Do not roll this release out one replica at a time.** A normal rolling
-  restart — replacing api replicas one by one behind a load balancer with no
-  sticky sessions (see [Realtime collaboration](./realtime-collab)) — puts
-  old-prefix and new-prefix replicas in the same pool at the same time.
-  Whichever prefix a given request happens to use, roughly half the fleet
-  will 404 it. Instead, stop **every** api replica together, deploy the new
-  version to all of them, and restart them together — or stand up a fresh
-  fleet on the new version and cut traffic over to it all at once
-  (blue/green). Single-instance deployments, including local dev, are not
-  affected: with only one replica, old-prefix / new-prefix mixing cannot
-  happen.
-</Callout>
-
-### Preflight check
-
-Before opening the gate to real traffic, confirm every replica has actually
-switched — don't rely on the deploy tool's "finished" signal alone. Hit each
-replica **individually** (not through the load balancer, which would only
-ever sample one replica per request):
-
-- `GET /api/openapi.json` must return **200** on every replica.
-- `GET /api/v2/openapi.json` must return **404** on every replica.
-
-If any replica fails either check, it is still on the old prefix (or was
-never restarted) — do not route production traffic to the fleet yet.
-
-### Rollback
-
-Rolling back runs the same check in reverse. Before sending traffic back to
-a rolled-back replica, confirm it returns **404** for `/api/openapi.json`
-and **200** for `/api/v2/openapi.json`. As with the upgrade direction, roll
-back every replica together — a fleet with a mix of rolled-back and
-not-yet-rolled-back replicas has the same split-prefix problem as a partial
-upgrade.
 
 ## Next steps
 
-- [Configuration](./configuration) — the full picture of env vars and `crowi.config.json`
-- [Encryption](./encryption) — setting up `CROWI_ENCRYPTION_KEY`
-- [Storage drivers](./storage) — switching `storage.driver`
-- [Search setup](./search-setup) — configuring Elasticsearch
-- [Managing plugins](../plugins/managing) — adding and enabling plugins
-- [Upgrading from v1](./upgrading-from-v1) — migrating from an existing Crowi
+- [Deployment topologies](./deployment) — reverse proxy and public origin
+- [Configuration](./configuration) — the configuration layers and how plugins are resolved
+- [Environment variables](../reference/env) — names, defaults and meanings
+- [crowi.config.json](../reference/config-file) — fields and driver names
+- [Encrypting sensitive settings](./encryption) — setting up `CROWI_ENCRYPTION_KEY`
+- [Storage](./storage) — switching `storage.driver`
+- [Search backend setup](./search-setup) — configuring Elasticsearch
+- [Installing and configuring plugins](./plugins) — adding and enabling plugins
+- [Upgrading](./upgrade) — version-by-version replacement steps
+- [Migrating from v1](./upgrading-from-v1) — migrating from an existing Crowi

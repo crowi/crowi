@@ -1,0 +1,127 @@
+---
+title: Plugin architecture
+description: How Crowi 2.0 plugins work and the design rationale (RFC-0001 / RFC-0002)
+---
+
+Crowi 2.0 adopts an architecture that pulls concerns inherently
+independent of the core — file storage, full-text search, rendering,
+authentication, and notification — out into independently distributable
+**plugins**. For the design background, see
+[RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)
+(Plugin Architecture) and
+[RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
+(Renderer Plugin Architecture).
+
+## Design principles
+
+Crowi's plugin model rests on a few principles:
+
+- **Batteries included**: A fresh Crowi install works as a complete Wiki
+  without adding a single plugin. Local file storage, MongoDB-based
+  search, email + password auth, and in-app notifications are on by
+  default.
+- **Distributed as npm packages**: Plugins are ordinary npm packages, not
+  a bespoke format. There is no global plugin registry and no
+  curl-piped installer.
+- **Plugin-free api**: `@crowi/api` ships only the SDK
+  (`@crowi/plugin-api`) and core — it bundles no drivers. The plugins
+  live in a separate **runner project** (see below), so adding or
+  removing a plugin is just a change to that project's dependencies and
+  config; the api image never needs to be rebuilt.
+- **Stable API across v2.x**: A plugin written against
+  `@crowi/plugin-api@2.x` keeps working through every v2 minor.
+
+> **Tip**: Plugin execution is not sandboxed. Plugins run with the same
+> Node permissions as the server. Only install packages from publishers
+> you trust.
+
+## Plugin types
+
+Crowi plugins fall roughly into the following types by the extension
+point they contribute to. One plugin may implement several extension
+points.
+
+- **Storage / search / mail** — each selects a "driver" via `storage.driver`,
+  `search.driver` or `mail.driver` in `crowi.config.json`. You can install
+  several driver plugins and switch between them with configuration.
+- **Renderer** — adds body syntax. There is no driver to select.
+- **Auth** — adds signing in with an external account.
+- **Notifier / integration** — adds notification destinations and HTTP routes
+  such as inbound webhooks.
+- **Base (config-only)** — shares credentials with downstream plugins.
+
+The extension-point types are listed in [Plugin SDK](./plugin-api), and the
+published plugins with their driver names in
+[First-party plugins](../reference/plugins).
+
+### Implicit-default plugins
+
+Three drivers are loaded on **every** boot, even when not listed in
+`crowi.config.json`, so a stock install needs no plugin configuration:
+
+- `@crowi/plugin-storage-local` — local filesystem storage
+- `@crowi/plugin-search-mongo` — MongoDB `$regex` search (the **default
+  search driver** — Elasticsearch / OpenSearch are opt-in)
+- `@crowi/plugin-mail-smtp` — SMTP mail
+
+Listing additional plugins and switching `*.driver` simply layers more
+options on top of these defaults.
+
+## `CrowiPlugin` and `PluginContext`
+
+Every plugin **default-exports** an object satisfying the `CrowiPlugin` type exposed by `@crowi/plugin-api`, and reaches core state only through the `PluginContext` passed to its `register*` callbacks (never by importing core directly). The fields and members are listed in [Plugin SDK](./plugin-api).
+
+## The runner project vs. the `@crowi/runner` library
+
+Two related things share the word "runner" — keep them apart:
+
+- A **runner project** is the small api-runtime project that *owns* the
+  plugins. It is an ordinary npm project with a `package.json` depending
+  on `@crowi/api` plus the `@crowi/plugin-*` packages you chose, a
+  `crowi.config.json`, and an `.env`. The monorepo ships a reference
+  one, **`apps/crowi-runner`** (package name `@crowi/runner-app`,
+  private); a self-hosting operator writes their own equivalent.
+- **`@crowi/runner`** (no `-app`) is an internal library in
+  `packages/runner`. It is the *resolution engine*: it reads
+  `crowi.config.json` and uses `createRequire` to load the listed
+  plugins from the runner project's `node_modules/`.
+
+## Plugin resolution
+
+The api package itself does not depend on plugins. Resolving plugin npm
+names is the job of the `@crowi/runner` library, against the runner
+project that boots the api.
+
+1. It reads `crowi.config.json` and takes the names listed in the
+   `plugins` array (prepending the implicit-default plugins).
+2. Using `createRequire(<projectDir>/package.json)` — where
+   `projectDir` is the runner project — it resolves those npm names
+   against the **runner project's `node_modules/`**.
+3. It walks each plugin's `requires` via BFS, loading transitive
+   dependencies too.
+4. The resulting list of resolved `CrowiPlugin` instances is handed to
+   the api boot sequence.
+
+So adding a plugin as an operator is just two steps:
+
+- Add the plugin to the runner project's `package.json` dependencies
+- List the package name in `plugins` in `crowi.config.json` (and switch
+  the matching `*.driver` if needed)
+
+No api rebuild is involved. For the concrete steps, see
+[Installing and configuring plugins](../operations/plugins).
+
+## Placement in the boot sequence
+
+Plugins start after config and models are ready, but before the legacy
+mailer / slack initialisers. The core renderer pipeline (TOC / wikilink
+/ mention / code block) is registered **before** plugins, so renderer
+plugins append on top of the core registrations.
+
+## Related pages
+
+- Enabling a plugin as an operator → [Installing and configuring plugins](../operations/plugins)
+- The list of renderer plugins → [Renderer plugins](../operations/renderers)
+- Building your own plugin → [Developing plugins](./plugins-developing)
+- The overall architecture → [Architecture](./architecture)
+- The SDK types → [Plugin SDK](./plugin-api)

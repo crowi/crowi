@@ -17,16 +17,12 @@ holds the following.
 - The body (Markdown)
 - The author
 - The creation timestamp
-- The saver (`savedBy`) and contributors (`contributors`)
+- Who saved it, and who was there at the time
 
-`savedBy` and `contributors` are recorded when you save during realtime
-collaborative editing. `savedBy` is the user who pressed the Save button, and
-`contributors` lists the users who were present on the same page during that
-save cycle. See [Realtime collaborative editing](./realtime-editing) for
-details.
-
-> **Note**: Older revisions created in Crowi 1.x have no `savedBy` /
-> `contributors`. In that case, only the author is shown, as before.
+Who saved a revision and who was present are recorded when you save during
+realtime collaborative editing — see [Realtime collaborative
+editing](./realtime-editing). Older revisions carry no such record and show
+only their author.
 
 ## Viewing history
 
@@ -71,17 +67,17 @@ between these revisions" message.
 
 You can open a specific past revision directly with the query string
 `?revision_id=<revisionId>` on a page URL. When the revision shown is
-**not the latest revision** for that page, a **stale-revision banner**
+**not the latest revision** for that page, a **"viewing an older version" banner**
 appears at the top of the page view, warning that you are looking at
 an older snapshot and offering a link back to the latest version.
 
-The stale-revision banner also suppresses social affordances such as
+The "viewing an older version" banner also suppresses social affordances such as
 the presence row and the page-action toolbar, since those operations
 only make sense against the latest revision.
 
 `?revision_id=` works the same way not only on normal pages but also on
 **portal pages** (directory pages whose path ends with `/`). When you
-open a portal at a past revision, the same stale-revision banner appears
+open a portal at a past revision, the same "viewing an older version" banner appears
 above the portal body.
 
 ## Rolling back to a past version
@@ -93,7 +89,7 @@ A rollback re-saves the body of a past revision as a new revision. Rather than
 rewinding history, it saves the past body again, so the page's latest state
 is replaced with the past content.
 
-The stale-revision banner shown when you open a past version with
+The "viewing an older version" banner shown when you open a past version with
 `?revision_id=` has a **"Revert to this version"** button.
 
 - Pressing the button performs the rollback in place, with no confirmation

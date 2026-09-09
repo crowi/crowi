@@ -1,10 +1,10 @@
 ---
-title: ストレージドライバ
+title: ストレージ設定
 description: ローカル / S3 のファイルストレージ設定
 ---
 
 Crowi にアップロードされた添付ファイルは、**ストレージドライバ** を通じて
-保存されます。Crowi 2.0 では、どのドライバを使うかをランナープロジェクトの
+保存されます。Crowi 2.0 では、どのドライバを使うかを runner プロジェクトの
 `crowi.config.json` (`storage.driver`) で選択し、ドライバの実体は対応する
 `@crowi/plugin-storage-*` プラグインが提供します。
 
@@ -12,17 +12,7 @@ Crowi にアップロードされた添付ファイルは、**ストレージド
 > ストレージの選択は `crowi.config.json` の `storage.driver` と、対応する
 > `@crowi/plugin-storage-*` パッケージの組み合わせで行います。
 
-## 利用できるドライバ
-
-| ドライバ名 | 提供プラグイン | 保存先 |
-| ---------- | -------------- | ------ |
-| `local` | `@crowi/plugin-storage-local` (デフォルトで常に有効) | サーバのローカルファイルシステム |
-| `s3` | `@crowi/plugin-storage-aws-s3` | Amazon S3 (互換ストレージ含む) |
-| `gcs` | `@crowi/plugin-storage-gcs` | Google Cloud Storage |
-
-`@crowi/plugin-storage-local` は **暗黙のデフォルトプラグイン** として常に
-読み込まれます。`crowi.config.json` に何も書かなければ、`local` ドライバが
-使われます。
+指定できるドライバ名と提供プラグインの対応は [crowi.config.json](../reference/config-file) にあります。`@crowi/plugin-storage-local` は **暗黙のデフォルトプラグイン** として常に読み込まれるため、`crowi.config.json` に何も書かなければ `local` ドライバが使われます。
 
 ## ローカルストレージ (local)
 
@@ -69,7 +59,7 @@ Amazon S3 (または S3 互換ストレージ) にファイルを保存するに
 `@crowi/plugin-storage-aws-s3` は AWS の共通クレデンシャル基盤である
 `@crowi/plugin-aws` に依存しているため、依存プラグインは自動で
 読み込まれます。プラグインの解決方法の詳細は
-[プラグインの管理](../plugins/managing) を参照してください。
+[プラグインの導入と設定](./plugins) を参照してください。
 
 ### 2. バケットとクレデンシャルを設定する
 
@@ -99,7 +89,7 @@ S3 のバケット名と AWS のクレデンシャルは、管理画面から設
 Google Cloud Storage にファイルを保存するには、`@crowi/plugin-storage-gcs`
 プラグインを使います。
 
-> **Tip**: バケット・サービスアカウント・IAM 権限を Google Cloud 側で用意する手順は [GCP の設定](../plugins/storage/gcp) を参照してください。
+> **Tip**: バケット・サービスアカウント・IAM 権限を Google Cloud 側で用意する手順は [GCS ストレージのセットアップ](./storage-gcp) を参照してください。
 
 ### 1. プラグインを有効化する
 
@@ -136,10 +126,9 @@ Google Cloud Storage にファイルを保存するには、`@crowi/plugin-stora
 更新して保存しても、キー欄を空欄のまま送信すれば既存のキーは
 上書きされません(管理画面は変更していないシークレットを再送しません)。
 
-サービスアカウントキーはシークレットフィールドです。
-`GET /api/admin/plugins/config` は生の値を返すことはなく、保存済みで
-あれば `{ hasValue: true }` を返すのみで、その内容がアプリケーション
-ログに出力されることもありません。
+サービスアカウントキーはシークレットフィールドです。管理画面が生の値を
+読み戻すことはなく、キーが保存済みかどうかだけが表示されます。その内容が
+アプリケーションログに出力されることもありません。
 
 **サービスアカウントキー JSON を空欄のままにする** と、
 [Application Default Credentials (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials)
@@ -156,26 +145,10 @@ Workload Identity Federation のクレデンシャル、またはローカルの
 
 ### 3. 必要な IAM 権限
 
-ドライバが呼び出す GCS オブジェクト操作は 3 つです:
-`storage.objects.create` (アップロード)、`storage.objects.get`
-(ダウンロード)、`storage.objects.delete` (削除)。この 3 つだけで
-構成したカスタムロールで十分です —— ドライバはオブジェクトの一覧取得を
-一切行いません。定義済みロール **Storage Object User**
-(`roles/storage.objectUser`) を使っても構いません。こちらは
-`storage.objects.list` も含みますが、ドライバはこれを呼び出さないだけで
-ロールに付随してくる分には問題ありません。`storage.buckets.*` 権限は
-不要です —— Crowi はバケットの作成・一覧・設定変更を一切行いません。
-
-**V4 署名付き URL の生成 (`signBlob`) は別の権限です。** inline
-サービスアカウントキーを使う接続では、秘密鍵でローカル署名するため
-追加の権限は不要です。ADC を使う接続で V4 署名を行うには、IAM
-Credentials の `signBlob` 権限
-(`roles/iam.serviceAccountTokenCreator` を自分自身に付与するか、
-`iam.serviceAccounts.signBlob` を個別付与) が別途必要です。ただし
-Crowi の添付ファイル配信ルート (`/api/attachments/:id` など) は
-現状 `signedUrl()` を呼び出さず、常に Crowi プロキシ経由で配信する
-ため、`signBlob` が無くても通常のアップロード・ダウンロードには
-影響しません。
+ドライバが呼び出すのはオブジェクトの作成・取得・削除の 3 つだけで、バケット
+操作もオブジェクトの一覧取得も行いません。付与する具体的なロールと、V4 署名付き
+URL (`signBlob`) が別権限になる点は
+[GCS ストレージのセットアップ](./storage-gcp) を参照してください。
 
 ### 4. プレフィックスは IAM 境界ではない
 
@@ -244,40 +217,12 @@ copy` を使いますが、**無停止のライブ移行は提供しません。
    (下の「crowi-admin rebuild attachment-display-derivatives」の
    Note を参照)。
 
-### 開発・テスト用の opt-in エミュレータ
-
-このプラグインの単体・結合テストは、通常の CI では起動しない
-opt-in の `fsouza/fake-gcs-server` サービス (`docker-compose.yml` の
-`crowi-test-gcs`、`gcs-test` プロファイル) を使います。
-
-```bash
-docker compose --profile gcs-test up -d crowi-test-gcs
-STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
-docker compose --profile gcs-test stop crowi-test-gcs
-```
-
-この実サーバ (GCS JSON API 互換) に対して、opt-in テストは
-Buffer/Readable のアップロード・ダウンロードの往復、プレフィックスから
-正しい物理オブジェクト名へのマッピング、idempotent な削除 (既存
-オブジェクトは成功、既に無いオブジェクトは no-op)、存在しない
-オブジェクトへの `get()` が変更していない `isMissingFileError` の
-判定する形へ変換されること、local から GCS への `runStorageCopy` の
-往復を検証します。
-
-このエミュレータは匿名リクエストを受け付けるだけで、ADC の解決や
-実際の IAM 権限チェック、`signBlob` の可否を再現しません。本番相当の
-ADC / IAM / 署名付き URL の動作確認には、実際の GCS バケットが
-必要です。
-
 ## ストレージの現在の状態を確認する
 
 管理画面のストレージ画面 (`/admin/storage`) を開くと、登録されている
-ドライバの一覧と、現在アクティブなドライバが表示されます。内部的には
-`GET /api/admin/storage` が呼ばれ、各ドライバについて以下が返ります。
-
-- `driverName` — ドライバ名 (`local` / `s3` など)
-- `pluginName` — そのドライバを登録したプラグイン名
-- `isActive` — `crowi.config.json` で選択中のドライバかどうか
+ドライバが一覧できます。ドライバごとに、ドライバ名 (`local` / `s3` など)、
+それを提供しているプラグイン、`crowi.config.json` で選択中のドライバかどうかが
+表示されます。
 
 ## ドライバの切り替えとファイル移行
 
@@ -313,13 +258,7 @@ crowi-admin rebuild storage copy --from local --to s3 --dry-run
 - 1 件単位のエラーはイテレーションを止めず、`failed` カウントに加算
   されます。再実行は安全です (local / S3 ドライバはキー単位で上書きします)。
 
-終了コードは次のとおりです。
-
-| 終了コード | 意味 |
-| ---------- | ---- |
-| `0` | 全件コピー成功 (または dry-run 完了) |
-| `1` | 致命的エラー (初期化失敗、または処理開始前の例外) |
-| `2` | 部分的失敗 (コピーは走ったが 1 件以上失敗 — 再実行を推奨) |
+終了コードは [crowi-admin](../reference/admin-cli) にまとめてあります。
 
 ### 推奨される移行手順
 
@@ -366,22 +305,7 @@ crowi-admin rebuild attachment-display-derivatives --gc
 crowi-admin rebuild attachment-display-derivatives --gc --confirm
 ```
 
-主なフラグ:
-
-| フラグ | 説明 |
-| ------ | ---- |
-| `--dry-run` | Mongo・ストレージのどちらにも書き込まず、対象件数と内訳のみ報告する |
-| `--concurrency <n>` | 並列ワーカー数 (既定 `2`)。容量見積もりは後述 |
-| `--force` | 現行 recipe で既に記述済みのレコードも再評価・上書きする |
-| `--repair-missing` | 現行 recipe の `resized` レコードだけを対象に、実体の有無を `get()` で確認し、無いものだけ再生成する (デコード・再エンコードは行わない軽量モード) |
-| `--only-missing` | `derivatives.display` が未記録の添付ファイルのみを対象にする |
-| `--only-stale` | 記録済みの `recipeVersion` が現行と異なる添付ファイルのみを対象にする |
-| `--page-id <id>` | 指定したページの添付ファイルのみを対象にする |
-| `--since <iso>` | この ISO 8601 タイムスタンプ以降に作成された添付ファイルのみを対象にする |
-| `--until <iso>` | この ISO 8601 タイムスタンプ以前に作成された添付ファイルのみを対象にする |
-| `--gc` | 無参照になった派生オブジェクトの候補を報告する (local ドライバのみ、v1) |
-| `--gc-grace-hours <n>` | `--gc` の候補から除外する猶予期間 (既定 24 時間)。生成中の `put`→publish の間隙を無参照と誤認しないための安全マージン |
-| `--confirm` | `--gc` の候補を実際に削除する (指定しない限り report-only) |
+オプションの一覧は [crowi-admin](../reference/admin-cli) にあります。
 
 ポイント:
 
@@ -407,14 +331,7 @@ crowi-admin rebuild attachment-display-derivatives --gc --confirm
 - 項目単位の失敗があっても実行は継続し、Attachment ID と分類済みの
   理由を出力します。
 
-終了コードは次のとおりです。
-
-| 終了コード | 意味 |
-| ---------- | ---- |
-| `0` | 全件成功 (または dry-run 完了) |
-| `1` | 致命的エラー (初期化失敗、または処理開始前の例外) |
-| `2` | 部分的失敗 (1 件以上のアイテムが失敗 — `failed` の内容を確認して再実行を検討) |
-| SIGINT による中断時 | 上記に関わらず非ゼロで終了する |
+終了コードは [crowi-admin](../reference/admin-cli) にまとめてあります (中断したときは非ゼロで終了します)。
 
 > **Note**: **ストレージドライバを移行した直後は `--force` の実行が
 > 必須です。** `storage copy` は original のみをコピーし、派生ファイルは
@@ -445,52 +362,25 @@ crowi-admin rebuild attachment-display-derivatives --gc --confirm
 
 ## エディタからのアップロード制限
 
-ページ編集画面では、画像の **貼り付け (paste)** とファイルの
-**ドラッグ&ドロップ** でエディタへ直接アップロードできます
-(利用者向けの説明は [添付ファイル](../guide/attachments) 参照)。
-これらのアップロードには、サーバ負荷とストレージ消費を抑えるための
-制限がかかっています。
+ページ編集画面では、画像の **貼り付け** とファイルの **ドラッグ&ドロップ**
+でエディタへ直接アップロードできます (利用者向けの説明は
+[添付ファイル](../guide/attachments) 参照)。運用者が知っておく制限は 3 つです。
 
-### レート制限
-
-エディタからのアップロードは **1 ユーザーあたり 1 分間に 20 回** まで
-です。上限に達すると `POST /api/attachments/upload` は HTTP 429 を
-`Retry-After` ヘッダ付きで返し、エディタ側には「アップロード上限に
-達しました。N 秒後に再試行してください」というトーストが表示されます。
-
-### サイズ上限
-
-| 経路 | 1 ファイルあたりの上限 |
-| ---- | ---------------------- |
-| 画像の貼り付け (paste) | 10 MB |
-| ドラッグ&ドロップ | 50 MB |
-
-ドラッグ&ドロップは 1 回の操作で **最大 5 ファイル** まで扱えます。
-これを超えてドロップした場合はアップロードされず、トーストで通知
-されます。
-
-### ファイル種別の許可リスト
-
-エディタからアップロードできるファイル種別は許可リストで制限されて
-います。既定の許可リストは次のとおりです。
-
-| 分類 | 受け付けるもの |
-| ---- | -------------- |
-| 画像 | `image/png` / `image/jpeg` / `image/gif` / `image/webp` / `image/svg+xml` |
-| 文書 | `.pdf` / `.txt` / `.md` / `.csv` |
-| アーカイブ | `.zip` |
-
-許可リストにない種別は拒否され、エディタ側には拒否された種別名を
-添えたトーストが表示されます。許可リストはインスタンス全体に対する
-グローバル設定です(ユーザーグループ単位の設定はありません)。
-
-> **Note**: これらの制限はエディタからの直接アップロード経路に対する
-> ものです。ページフッターの添付ファイルセクションからのアップロード
-> やストレージドライバ自体の設定とは独立しています。
+- **レート制限**: エディタからのアップロードは **1 ユーザーあたり 1 分間に
+  20 回** までです。上限に達するとサーバは 429 を返し、エディタには
+  「アップロード上限に達しました。N 秒後に再試行してください」と表示されます。
+- **サイズ上限**: 1 ファイルあたり既定 **50 MB** です。`CROWI_UPLOAD_MAX_BYTES`
+  で下げられます ([設定](./configuration))。この値はメモリ予算でもあるため、
+  上げることはできません。1 回のドラッグ&ドロップで扱えるのは 5 ファイルまで
+  です。
+- **ファイル種別**: 添付できる種別は固定の許可リストで決まっており、経路
+  (添付ボタン / 貼り付け / ドラッグ&ドロップ) によらず同じです。一覧は
+  [添付ファイル](../guide/attachments) にあります。インスタンスごとに変更する
+  設定はありません。
 
 ## 次のステップ
 
 - [設定](./configuration) — `crowi.config.json` の全体像
 - [機密設定の暗号化](./encryption) — S3 クレデンシャルの暗号化
-- [プラグインの管理](../plugins/managing) — プラグインの追加・有効化
+- [プラグインの導入と設定](./plugins) — プラグインの追加・有効化
 - [バックアップ](./backup) — データのバックアップ

@@ -1,0 +1,68 @@
+---
+title: HTTP API
+description: Where the API reference lives, the OAuth scopes, and the MCP tools
+---
+
+A running Crowi server documents its own HTTP API.
+
+| Entry point | What it serves |
+| --- | --- |
+| `/api/docs` | A browsable API reference covering every endpoint |
+| `/api/openapi.json` | The same content as an OpenAPI 3.1 document |
+| `/api/mcp` | The endpoint for AI clients. See [Using Crowi from AI tools (MCP)](../guide/mcp) |
+
+`/api/docs` is assembled from the endpoints the running server has registered, so it shows the shape that server actually serves.
+
+## OAuth scopes
+
+Every scope a token can carry. `write` implies the `read` of the same resource, and the umbrella `read` / `write` imply every `*:read` / `*:write`.
+
+| Scope | Covers | Issuable to a personal access token |
+| --- | --- | --- |
+| `read` | Umbrella — everything readable | Yes |
+| `write` | Umbrella — everything writable, reads included | Yes |
+| `pages:read` | Reading pages, revisions, drafts, backlinks, search and path completion | Yes |
+| `pages:write` | Creating, updating, moving and deleting the same | Yes |
+| `comments:read` | Reading comments | Yes |
+| `comments:write` | Posting, editing and deleting comments | Yes |
+| `bookmarks:read` | Reading bookmarks | Yes |
+| `bookmarks:write` | Adding and removing bookmarks | Yes |
+| `attachments:read` | Listing and downloading attachments | Yes |
+| `attachments:write` | Uploading and deleting attachments | Yes |
+| `notifications:read` | Reading notifications | Yes |
+| `notifications:write` | Marking notifications read and changing subscriptions | Yes |
+| `profile:read` | Reading your own and other users' profiles | Yes |
+| `profile:write` | Updating your own profile | Yes |
+| `admin:read` | Reading the admin API | No (reserved) |
+| `admin:write` | Writing through the admin API | No (reserved) |
+
+`admin:read` and `admin:write` are reserved and cannot be issued to a token — the admin API is reachable only from a browser session. That leaves the other 14 issuable to a personal access token.
+
+For how to issue one, see [Account and security](../guide/account-security).
+
+## MCP tools
+
+The tools a client sees after connecting to `/api/mcp`.
+
+| Tool | What it does | Scope needed |
+| --- | --- | --- |
+| `crowi_search_pages` | Full-text search | `pages:read` |
+| `crowi_get_page` | Read a page body by path or id | `pages:read` |
+| `crowi_list_pages` | List pages under a path or by user | `pages:read` |
+| `crowi_list_child_pages` | List child pages | `pages:read` |
+| `crowi_get_page_history` | List a page's revisions | `pages:read` |
+| `crowi_get_revision` | Read the body of one revision | `pages:read` |
+| `crowi_get_backlinks` | List the pages linking to this one | `pages:read` |
+| `crowi_autocomplete_pages` | Suggest page paths | `pages:read` |
+| `crowi_create_page` | Create a page | `pages:write` |
+| `crowi_update_page` | Update a page | `pages:write` |
+| `crowi_rename_page` | Rename or move a page | `pages:write` |
+| `crowi_delete_page` | Move a page to the trash (or delete it outright) | `pages:write` |
+| `crowi_revert_page` | Restore a page from the trash | `pages:write` |
+| `crowi_revert_to_revision` | Roll a page back to a past revision | `pages:write` |
+
+## Related pages
+
+- [Using Crowi from AI tools (MCP)](../guide/mcp) — issuing a token and connecting a client
+- [crowi CLI](./cli) — the command line that calls the same API
+- [Account and security](../guide/account-security) — issuing and revoking personal access tokens

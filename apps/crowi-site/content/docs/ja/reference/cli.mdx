@@ -1,0 +1,85 @@
+---
+title: crowi CLI
+description: crowi コマンドのサブコマンド・フラグ・終了コードの一覧
+---
+
+`crowi` は HTTP 越しに自分の権限で wiki を操作するエンドユーザー向け CLI です。インストールとログインの手順は [CLI (コマンドライン)](../guide/cli) を参照してください。
+
+## グローバルフラグ
+
+どのコマンドでも、コマンド名の前後どちらにも置けます。
+
+| フラグ | 意味 |
+| --- | --- |
+| `-p, --profile <alias>` | 保存済みのプロファイルを名前で選ぶ |
+| `--url <baseUrl>` | プロファイルを使わずサーバを直接指定する |
+| `--token <accessToken>` | トークンを直接渡す (個人アクセストークンなど) |
+| `--json` | 人間向け表示のかわりに生のレスポンスを JSON で出力する |
+| `-q, --quiet` | 進捗表示 (stderr) を抑止する |
+| `--help` / `--version` | ヘルプとバージョンを表示する |
+
+## コマンド
+
+必要なスコープは [HTTP API](./api) のスコープカタログの語です。既定のログインスコープは `pages:read pages:write` で、それ以外は `crowi login --scope` で追加します。
+
+| コマンド | 用途 | 固有のフラグ | 必要なスコープ |
+| --- | --- | --- | --- |
+| `login [url]` | サーバにサインインしてプロファイルに保存する | `--device` / `--token <pat>` / `--scope <scopes>` | — |
+| `logout` | トークンを失効・削除する | — | — |
+| `whoami` | サインイン中のユーザーと有効なスコープを表示する | — | — |
+| `profiles` | 保存済みのプロファイルを一覧する (通信なし) | — | — |
+| `profiles use <alias>` | 既定で使うプロファイルを切り替える (通信なし) | — | — |
+| `completion <shell>` | シェル補完スクリプトを出力する | — | — |
+| `open <path-or-id>` | ブラウザでページを開く | `--print` | — |
+| `search <query>` | 全文検索する | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `get <path-or-id>` (別名 `cat`) | ページ本文を標準出力へ書き出す | `--revision <id>` | `pages:read` |
+| `ls [path]` | パス配下の子ページを一覧する | `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `create <path>` | ページを作成する | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` | `pages:write` |
+| `edit <path>` | エディタで対話編集する | `--editor <bin>` / `--force` | `pages:write` |
+| `update <path>` | 本文を非対話で置き換える | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` | `pages:write` |
+| `mv <old> <new>` | ページを移動 / リネームする | `--no-redirect` / `--recursive` | `pages:write` |
+| `rm <path>` | ページを削除する | `--completely` / `--force` | `pages:write` |
+| `watch status <path-or-id>` | ウォッチしているかを表示する | — | `pages:read` |
+| `watch subscribe <path-or-id>` | ウォッチを開始する | — | `pages:write` |
+| `watch unsubscribe <path-or-id>` | ウォッチをやめる | — | `pages:write` |
+| `comment list <path-or-id>` | コメントを一覧する | — | `comments:read` |
+| `comment add <path-or-id>` | コメントを投稿する | `-m, --message <text>` / `-f, --file <path>` | `comments:write` |
+| `attach list <path-or-id>` | 添付ファイルを一覧する (行頭に添付 ID) | — | `attachments:read` |
+| `attach add <path-or-id> <file>` | 添付ファイルをアップロードする | — | `attachments:write` |
+| `attach download <id>` | 添付ファイルを取り出す | `-o, --output <file>` | `attachments:read` |
+| `bookmark list` | ブックマークを一覧する | `--limit <n>` / `--offset <n>` | `bookmarks:read` |
+| `bookmark add <path-or-id>` | ブックマークに追加する | — | `bookmarks:write` |
+| `bookmark remove <path-or-id>` | ブックマークから外す | — | `bookmarks:write` |
+
+## 出力フォーマット
+
+`search` と `ls` は `--format` / `--template` で出力を整形できます。
+
+| 値 | 出力 |
+| --- | --- |
+| `--format human` | 既定の人間向け表示 |
+| `--format table` | ヘッダ付きの整列カラム |
+| `--format json` | グローバルの `--json` と同じ JSON |
+| `--format template` | レコードごとに 1 行のテンプレート出力 |
+| `--template '<tpl>'` | テンプレートモード。`{{field}}` をレコードの値で置換する (`--format template` を含意) |
+
+`{{field}}` はドット区切り (`{{page.path}}`) でネストを辿り、欠落フィールドは空文字になります。テンプレート中の `\t` / `\n` はタブと改行に展開されます。進捗と警告はすべて stderr に出るため、`--json` の標準出力はスクリプト用にクリーンなままです。
+
+## 終了コード
+
+| コード | 意味 |
+| --- | --- |
+| `0` | 成功 |
+| `1` | 一般エラー / 通信失敗 |
+| `2` | 未サインイン (`crowi login` が必要) |
+| `3` | スコープ不足 (`--scope` を足して再ログインする) |
+| `4` | 対象が存在しない |
+| `5` | 編集競合 (`--force` で上書きできる) |
+| `6` | 引数不正 |
+| `7` | サーバ利用不可 / 機能が無効 |
+
+## 関連ページ
+
+- [CLI (コマンドライン)](../guide/cli) — インストール・認証・プロファイルの手順
+- [HTTP API](./api) — スコープカタログと API リファレンスの入口
+- [アカウントとセキュリティ](../guide/account-security) — 個人アクセストークンの発行

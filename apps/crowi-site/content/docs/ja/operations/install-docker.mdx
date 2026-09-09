@@ -1,0 +1,155 @@
+---
+title: 公式イメージで動かす
+description: crowi/crowi と crowi/crowi-web を compose で立ち上げて本番運用に載せる
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+公開されている Docker イメージだけで Crowi を立ち上げる手順です。イメージをビルドする必要はなく、用意するのは compose ファイルと `.env`、そして前段のリバースプロキシ設定だけです。
+
+## 公式イメージ
+
+| イメージ | 中身 |
+| --- | --- |
+| `crowi/crowi` | api。ファーストパーティのストレージ / 検索 / メール / レンダラのドライバをすべて同梱 |
+| `crowi/crowi:<version>-slim` | api。ローカルストレージ + MongoDB 検索 + SMTP の 3 ドライバだけ。MongoDB だけで動きます |
+| `crowi/crowi-web` | web。描画専任の Next.js サーバ |
+
+タグはリリースごとのバージョン (`2.0.0-alpha.17` など) と、プレリリースの間だけ動くチャネルタグ `alpha` があります。**本番では必ずバージョンを固定してください。** 安定版が出ると `latest` が動き始めます。
+
+<Callout type="info">
+  同梱されないプラグインを読み込みたい場合や、ドライバの組み合わせを自分で決めたい場合は、[セルフホスティング (自前の runner プロジェクト)](./self-hosting) で自前の runner プロジェクトをイメージ化します。
+</Callout>
+
+## 立ち上げる
+
+<Steps>
+
+<Step>
+
+### compose ファイルを書く
+
+api・web・MongoDB と、1 つのオリジンを見せる前段プロキシを並べます。Redis は単一インスタンスなら省略できますが、レプリカを増やす予定があるなら最初から入れておくのが楽です。
+
+```yaml title="compose.yaml"
+services:
+  mongodb:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - ./data/mongodb:/data/db
+
+  redis:
+    image: redis:8.8.0
+    restart: unless-stopped
+
+  api:
+    image: crowi/crowi:2.0.0-alpha.17
+    restart: unless-stopped
+    depends_on: [mongodb, redis]
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379
+      CLIENT_URL: https://wiki.example.com
+
+  web:
+    image: crowi/crowi-web:2.0.0-alpha.17
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [web, api]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "80:80"
+      - "443:443"
+```
+
+web コンテナにホストポートを与えていないのは意図的です。ブラウザに見せるのはプロキシの 1 オリジンだけで、`/api`・`/files` とリアルタイムの WebSocket はそこから api へ振り分けます。 既定のポート割り当ては [ポートと URL](../reference/ports) にあります。
+
+</Step>
+
+<Step>
+
+### 前段プロキシを設定する
+
+Caddy / nginx / Traefik の具体的な設定行と、WebSocket の `Upgrade` 透過・アップロードの body size 上限は [デプロイ構成](./deployment) にまとめてあります。**本番投入前に必ず読んでください** — ここを外すとリアルタイム共同編集と通知が静かに動かなくなります。
+
+</Step>
+
+<Step>
+
+### `.env` を用意する
+
+```bash title=".env"
+MONGO_URI=mongodb://mongodb:27017/crowi
+REDIS_URL=redis://redis:6379
+CROWI_ENCRYPTION_KEY=...     # openssl rand -base64 32
+WS_TOKEN_SECRET=...
+PASSWORD_SEED=...
+```
+
+各変数の意味と既定値は [環境変数](../reference/env) を参照してください。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
+
+</Step>
+
+<Step>
+
+### 起動して管理者を作る
+
+```bash
+docker compose up -d
+```
+
+api が `GET /api/app/info` に 200 を返すようになったら、公開オリジンをブラウザで開きます。インストーラ画面でサイト名と最初の管理者アカウントを作成すると、Wiki が使えるようになります。
+
+</Step>
+
+</Steps>
+
+## ドライバを差し替える
+
+どのプラグインを読み込み、どのドライバを使うかは `crowi.config.json` が決めます。イメージには既定のファイルが焼き込まれていますが、コンテナにマウントすれば再ビルドなしで上書きできます。
+
+```yaml
+    volumes:
+      - ./crowi.config.json:/app/crowi.config.json:ro
+```
+
+```json title="crowi.config.json"
+{
+  "plugins": ["@crowi/plugin-storage-aws-s3", "@crowi/plugin-search-elasticsearch"],
+  "storage": { "driver": "s3" },
+  "search": { "driver": "elasticsearch" }
+}
+```
+
+ここに書くのはドライバの選択までで、バケット名や認証情報は管理画面の [プラグインの導入と設定](./plugins) から入力します。ファイルの書式は [設定](./configuration) を参照してください。
+
+## セットアップに失敗したとき
+
+初回セットアップの途中で MongoDB への書き込みが失敗すると (接続断・タイムアウトなど)、管理者作成が完了しないまま止まることがあります。
+
+- **インストーラは開き直しません。** 初回セットアップの書き込みは複数の設定項目にまたがっており、途中で失敗しても、それまでに書き込めた項目はデータベースに残ります。この部分的な設定が残っている限り、インストーラは「すでにインストール済みです」と表示し続けます。
+- **管理ユーザーは既に作られています。** 失敗したのはその後の設定保存で、管理ユーザー自体はその前に作成済みです。同じユーザー名・メールアドレスでもう一度セットアップを試みても、インストーラが開かないため到達できません。
+- **復旧手段は、データベースを削除して作り直し、セットアップを最初からやり直すことだけです。** 部分的に書き込まれた設定だけを選んで消したり、インストーラを開き直したりする手段はありません。この時点ではまだ Wiki データが無いため、データベースを空にしても失うものはありません。
+
+## 次のステップ
+
+- [設定](./configuration) — 環境変数と `crowi.config.json` の全体像
+- [機密設定の暗号化](./encryption) — 保存する認証情報を暗号化する
+- [ストレージ設定](./storage) — 添付ファイルの保存先を選ぶ
+- [バックアップ](./backup) — 復元に必要なもの
+- [バージョンアップ](./upgrade) — イメージを入れ替えるときの注意
+- [v1 からの移行](./upgrading-from-v1) — 既存 Crowi からの移行

@@ -1,0 +1,155 @@
+---
+title: Run the official images
+description: Bring crowi/crowi and crowi/crowi-web up with compose and put them into production
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+This page runs Crowi from the published Docker images. Nothing is built locally: all you write is a compose file, an `.env`, and the configuration for the reverse proxy in front.
+
+## The official images
+
+| Image | Contents |
+| --- | --- |
+| `crowi/crowi` | The api, bundling every first-party storage / search / mail / renderer driver |
+| `crowi/crowi:<version>-slim` | The api with only three drivers — local storage, MongoDB search and SMTP. Runs on MongoDB alone |
+| `crowi/crowi-web` | The web app: a render-only Next.js server |
+
+Tags are the per-release version (for example `2.0.0-alpha.17`) plus the channel tag `alpha`, which moves for as long as the prereleases run. **Pin a version in production.** `latest` starts moving once a stable release exists.
+
+<Callout type="info">
+  To load a plugin the images do not bundle, or to pin your own driver set, build an image from your own runner project instead — see [Self-hosting (your own runner project)](./self-hosting).
+</Callout>
+
+## Bring it up
+
+<Steps>
+
+<Step>
+
+### Write the compose file
+
+Put api, web and MongoDB behind one proxy that presents a single origin. Redis is optional on a single instance, but adding it up front saves work if you ever add replicas.
+
+```yaml title="compose.yaml"
+services:
+  mongodb:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - ./data/mongodb:/data/db
+
+  redis:
+    image: redis:8.8.0
+    restart: unless-stopped
+
+  api:
+    image: crowi/crowi:2.0.0-alpha.17
+    restart: unless-stopped
+    depends_on: [mongodb, redis]
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379
+      CLIENT_URL: https://wiki.example.com
+
+  web:
+    image: crowi/crowi-web:2.0.0-alpha.17
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [web, api]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "80:80"
+      - "443:443"
+```
+
+The web container deliberately has no host port. The browser only ever sees the proxy's single origin, which routes `/api`, `/files` and the realtime WebSockets to the api. The default port allocation is listed in [Ports and URLs](../reference/ports).
+
+</Step>
+
+<Step>
+
+### Configure the front proxy
+
+The concrete Caddy / nginx / Traefik configuration, the WebSocket `Upgrade` pass-through and the upload body-size limit all live in [Deployment topologies](./deployment). **Read it before going live** — getting this wrong makes realtime collaboration and notifications fail quietly.
+
+</Step>
+
+<Step>
+
+### Write the `.env`
+
+```bash title=".env"
+MONGO_URI=mongodb://mongodb:27017/crowi
+REDIS_URL=redis://redis:6379
+CROWI_ENCRYPTION_KEY=...     # openssl rand -base64 32
+WS_TOKEN_SECRET=...
+PASSWORD_SEED=...
+```
+
+[Environment variables](../reference/env) explains each one. Without `CROWI_ENCRYPTION_KEY`, the credentials you enter in the admin panel are stored in plaintext ([Encrypting sensitive settings](./encryption)).
+
+</Step>
+
+<Step>
+
+### Start it and create the administrator
+
+```bash
+docker compose up -d
+```
+
+Once the api answers `GET /api/app/info` with a 200, open your public origin in a browser. The installer asks for the site name and the first administrator account, and the wiki is ready.
+
+</Step>
+
+</Steps>
+
+## Swapping drivers
+
+`crowi.config.json` decides which plugins load and which driver each subsystem uses. The image bakes a default copy in; mounting your own over it overrides the selection without a rebuild.
+
+```yaml
+    volumes:
+      - ./crowi.config.json:/app/crowi.config.json:ro
+```
+
+```json title="crowi.config.json"
+{
+  "plugins": ["@crowi/plugin-storage-aws-s3", "@crowi/plugin-search-elasticsearch"],
+  "storage": { "driver": "s3" },
+  "search": { "driver": "elasticsearch" }
+}
+```
+
+The file only selects drivers; bucket names and credentials are entered from [Installing and configuring plugins](./plugins) in the admin panel. [Configuration](./configuration) documents the file format.
+
+## When setup fails
+
+If a MongoDB write fails part-way through the first-run setup (a dropped connection, a timeout), the installer can stop before the administrator account is finished.
+
+- **The installer does not reopen.** First-run setup writes several settings, and whatever was written before the failure stays in the database. While that partial configuration exists, the installer keeps reporting that Crowi is already installed.
+- **The admin user already exists.** What failed was the settings write that follows it; the user itself was created first. Retrying with the same username and email cannot reach that screen because the installer no longer opens.
+- **The only recovery is to drop the database, recreate it and run setup again.** There is no way to delete just the partially written settings or to reopen the installer. No wiki data exists at this point, so emptying the database costs you nothing.
+
+## Next steps
+
+- [Configuration](./configuration) — environment variables and `crowi.config.json`
+- [Encrypting sensitive settings](./encryption) — encrypt the credentials Crowi stores
+- [Storage](./storage) — choose where attachments live
+- [Backup](./backup) — what you need in order to restore
+- [Upgrading](./upgrade) — what to watch for when replacing images
+- [Migrating from v1](./upgrading-from-v1) — migrating an existing Crowi

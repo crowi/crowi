@@ -12,15 +12,14 @@ Crowi 2.0 configuration is split into three layers.
 3. **Admin UI settings** — detailed values such as the app title, OAuth,
    mail, and storage. Stored in the MongoDB `Config` collection.
 
-This page covers 1 and 2. For the settings in 3, see [Admin](./admin).
+This page covers 1 and 2. For the settings in 3, see [Admin panel](./admin).
 
 ## Environment variables
 
-At boot, the API loads `.env` from the current working directory using
-`dotenv`. In development that directory is the **repository root** (the
-`pnpm dev` api script loads it explicitly). In production it is the
-**runner project's directory** (the `process.cwd()` the api boots
-against), or you inject the variables through your compose file /
+At boot, the API loads `.env` from the working directory it was started in.
+In development that directory is the **repository root** (the `pnpm dev` api
+script loads it explicitly). In production it is the **runner project's
+directory**, or you inject the variables through your compose file /
 orchestrator instead of a file. Copy `.env.example` and edit it.
 
 ```bash
@@ -39,10 +38,8 @@ reported together as a single consolidated warning in the boot log instead
 mail would otherwise be relative).
 
 `WS_TOKEN_SECRET` is the one exception whose **severity depends on
-`NODE_ENV`**: when it is set but shorter than 32 characters, boot fails
-under `NODE_ENV=production` (also the default when `NODE_ENV` is unset),
-and is reported in the same single consolidated warning otherwise
-(`development` / `test` / etc). See the table below for details.
+`NODE_ENV`**. Its requirement is stated on its row in
+[Environment variables](../reference/env).
 
 An env var carrying one of the known Crowi prefixes (`CROWI_`, `WS_TOKEN_`,
 `JWT_`, `COLLAB_`, `REDIS`, `MONGO`, `MIGRATION_`) that matches no known
@@ -53,40 +50,23 @@ flagged as a likely typo ("did you mean `XXX`?") in the same warning report
 Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
 `CI`, `GITHUB_*`, `npm_*`, etc.) are never flagged.
 
-### Key environment variables
+### The list of variables
 
-| Variable | Required | Purpose |
-| -------- | -------- | ------- |
-| `MONGO_URI` | No (default `mongodb://localhost/crowi`) | MongoDB connection string. Production deployments normally override it |
-| `PORT` | No (default `4301`) | The port the API server listens on |
-| `NODE_ENV` | No | `development` / `production` / `test` |
-| `REDIS_URL` | Conditional | Coordination for realtime-collab pub/sub, the editor-cap counter, presence, notification invalidation, Config sync, rate limiting, and LRU. Optional for single-instance, **required for multi-instance deployments**. Use `rediss://` for TLS |
-| `PASSWORD_SEED` | Yes | Legacy password hashing seed (still used for fallback verification) |
-| `CLIENT_URL` | Boots without it (warning only), but needed in practice in production | The web origin, set on the **api** side. Used as the CORS allowlist origin and to build links in outgoing mail. The api still starts when it is unset, but links in outgoing mail fall back to relative paths and stop working. Localhost origins are allowed automatically in development |
-| `CROWI_ENCRYPTION_KEY` | Recommended | Base64-encoded 32-byte master key used to encrypt sensitive Config with AES-256-GCM. Falls back to plaintext when unset. See [Encrypting sensitive config](./encryption) |
-| `JWT_ACCESS_TOKEN_TTL_SECONDS` | No (default `3600` = 1 hour) | TTL the api uses when signing JWT access tokens |
-| `OAUTH_REFRESH_REUSE_GRACE_MS` | No (default `60000` = 60s) | How long after an OAuth refresh token is rotated away that presenting it again is treated as a race rather than a replay. Concurrent refreshes of the same token make the loser present what the winner just revoked — indistinguishable from a stolen-token replay by shape alone. Within this window crowi does not revoke the rotation chain. **Capped at 5 minutes** (larger values are clamped). `0` disables the grace entirely, restoring unconditional revocation |
-| `JWT_REFRESH_TOKEN_TTL_SECONDS` | No (default `2592000` = 30 days) | TTL the api uses when signing JWT refresh tokens |
-| `CROWI_UPLOAD_MAX_BYTES` | No (default `52428800` = 50 MB) | Attachment upload size limit in bytes, shared by paste / drag-and-drop / direct attachment. **This value is effectively the memory budget** — `parseBody()` buffers the whole request body in memory, so consumption is roughly "concurrent uploads × this value" (per request, at most this value plus the 64KiB multipart framing allowance). It can therefore only be lowered: **a value above 50 MB is clamped to 50 MB** (with a boot-time warning). A non-numeric, non-positive, or unset value falls back to the 50 MB default. When a reverse proxy sits in front, its own body size limit must be set a margin above this value, not merely equal to it (multipart framing overhead) — see "Upload body size limit" in [Deployment topologies](./deployment) |
-| `SECRET_TOKEN` | No | Session-related secret |
-
-### Realtime collaboration variables
-
-These variables are used by realtime collaborative editing (RFC-0003).
-See [Operating realtime collaborative editing](./realtime-collab) for
-details.
-
-| Variable | Required | Purpose |
-| -------- | -------- | ------- |
-| `WS_TOKEN_SECRET` | Required for multi-instance | HMAC signing key for the short-lived JWT (wsToken) used to authenticate WebSocket connections (also shared by presence, notifications, and mail tokens). Must be the **same value** on every replica in a multi-instance deployment. When unset, a random secret is generated per process and a warning is logged. **Must be at least 32 characters when set** — under 32 characters, boot fails under `NODE_ENV=production` (the default) and warns otherwise (known placeholder values are exempt). Generate one with `openssl rand -base64 32` |
-| `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. Clients above the cap connect read-only |
-| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials, read at **runtime** (`window.__ENV`). When unset: `NEXT_PUBLIC_API_URL` → `window.location` (in dev, the `:4304` same-origin proxy). Set it when the api/web run on **distinct hosts** or on Vercel (whose edge cannot proxy WS) |
-| `NEXT_PUBLIC_API_URL` | No (cross-origin only) | The absolute api origin as seen by the **browser**, read at **runtime** (`window.__ENV`, no rebuild). Leave **unset** for the recommended same-origin + reverse-proxy setup (the browser uses relative `/api`). Set it only for the cross-origin topology — see [Deployment topologies](./deployment) |
-| `CROWI_API_URL` | No | The api URL the Next **server** uses for its `rewrites()` proxy. Baked at build for `output: 'standalone'`, so it applies only in `pnpm dev` / on Vercel's edge — self-host production uses a front reverse proxy instead |
+Names, defaults and meanings are listed in [Environment variables](../reference/env). For how the collaboration variables are used together see [Operating realtime collaboration](./realtime-collab), and for choosing `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_COLLAB_URL` per topology see [Deployment topologies](./deployment).
 
 > **Tip**: Both `WS_TOKEN_SECRET` and `CROWI_ENCRYPTION_KEY` can be
 > generated with `openssl rand -base64 32`. `CROWI_ENCRYPTION_KEY` can
 > also be generated with `pnpm --filter @crowi/api crypto:gen-key`.
+
+### The MCP endpoint
+
+The MCP endpoint for AI clients, `/api/mcp`, is always enabled — there is no feature flag. Three things matter operationally.
+
+- **Only personal access tokens authenticate there.** A web session or an OAuth access token cannot connect. The steps a user follows are in [Using Crowi from AI tools (MCP)](../guide/mcp).
+- **The front proxy only has to forward `/api/*` to the api.** MCP clients connect to `/api/mcp` on the same origin as the wiki; there is no extra port or process to expose.
+- **Setting `REDIS_URL` shares the rate-limit budget across replicas.** Without it each replica keeps its own in-memory budget, so the effective limit scales with the replica count.
+
+The server is stateless (a fresh session per request), so multi-replica deployments need no sticky sessions.
 
 ### Environment variables in Docker
 
@@ -100,24 +80,23 @@ through as long as they are present in `.env`.
 > **Tip**: The web app (`@crowi/web`) is a **separate deployable** with no
 > plugin dependencies; it talks to the api over HTTP and can run anywhere
 > (Vercel, a container, or co-located with the api). The api, by contrast,
-> is a long-lived Node server (Mongoose, Redis, the embedded Hocuspocus
-> WebSocket engine, runtime plugin loading), so it **requires a Node
-> runtime** — a Node host or a Node container (ECS / EKS / Fly / Render /
-> Cloud Run / Cloudflare Containers). It does not run on edge/isolate
-> serverless platforms such as Cloudflare Workers.
+> is a long-lived Node server (persistent database connections, pub/sub
+> between replicas, a resident WebSocket server, plugins loaded at boot), so
+> it **requires a Node runtime** — a Node host or a Node container (ECS / EKS
+> / Fly / Render / Cloud Run / Cloudflare Containers). It does not run on
+> edge/isolate serverless platforms such as Cloudflare Workers.
 
 ### Renderer plugin assets and CSP (Content-Security-Policy)
 
 Some renderer plugins — KaTeX, for example — serve static assets (CSS,
 fonts) from their own public route (`/api/plugins/<plugin-name>/...`).
-The web app discovers which plugins are active from app-info's
-`rendererStylesheets` manifest and loads them as `<link rel="stylesheet">`
-tags pointed at the api origin — the web app never needs to know a
-plugin's name or CSS ahead of time.
+The web app asks the api which renderer plugins are active and loads their
+stylesheets as `<link rel="stylesheet">` tags pointed at the api origin — the
+web app never needs to know a plugin's name or CSS ahead of time.
 
 Deployments where web and api share the **same origin** (the recommended
 reverse-proxy setup above) need no extra configuration. The existing CORS
-policy (allowing `CLIENT_URL` as the origin — see the table above) already
+policy (allowing `CLIENT_URL` as the origin) already
 covers the cross-origin CSS/font responses, so no extra CORS configuration
 is needed either.
 
@@ -139,10 +118,8 @@ for a CSP violation report.
 ## crowi.config.json
 
 `crowi.config.json` is a JSON file placed at the **root of the runner
-project** (in the monorepo, the reference runner project is
-`apps/crowi-runner`, so its config lives at
-`apps/crowi-runner/crowi.config.json`). It declares **which plugins to
-load and which drivers to enable**. Per-plugin configuration values
+project**. It declares **which plugins to load and which drivers to
+enable**. Per-plugin configuration values
 (S3 bucket name, OAuth client ID, mail / storage credentials, etc.) are
 not written here — they are stored in the MongoDB `Config` collection and
 edited from the admin UI.
@@ -164,26 +141,17 @@ edited from the admin UI.
 }
 ```
 
-### Fields
+### Fields and driver names
 
-| Key | Type | Default | Description |
-| --- | ---- | ------- | ----------- |
-| `plugins` | `string[]` | `[]` | npm package names of plugins to load at boot. Loaded in addition to the implicit defaults (`@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`, `@crowi/plugin-mail-smtp`) |
-| `storage.driver` | `string` | `"local"` | The storage driver name the file uploader uses. See [Storage drivers](./storage) |
-| `search.driver` | `string` | `"mongo"` | The driver name the search service uses. See [Search setup](./search-setup) |
-| `mail.driver` | `string` | `"smtp"` | The driver name the mail sender uses. Swap the `@crowi/plugin-mail-*` plugin to switch to `"resend"` / `"ses"` |
-
-If the file is missing or fields are omitted, the defaults above apply.
-Content that does not match the schema causes the server to fail at boot
-with an explicit error.
+The keys, their defaults, and the driver names you can set are listed in [crowi.config.json](../reference/config-file). The defaults apply when the file is missing or a key is omitted, and content that does not match the schema fails at boot with an explicit error.
 
 ### How plugins are resolved
 
 `@crowi/api` is **plugin-free**: it ships the SDK (`@crowi/plugin-api`) and
 core only, and bundles no drivers. The plugins are owned by the runner
 project. The names listed in `plugins` are resolved at boot from the runner
-project's `node_modules/` (via `createRequire(projectDir)`). To add a
-plugin, declare it as a dependency in the runner's `package.json` and add
+project's own `node_modules/`. To add a plugin, declare it as a dependency
+in the runner's `package.json` and add
 its name to `crowi.config.json:plugins`. The api package itself does not
 need to be rebuilt.
 
@@ -195,7 +163,7 @@ the only required infrastructure.
 
 The runner project is started with its `package.json` `"start": "crowi-api"`
 script (the `crowi-api` bin provided by `@crowi/api`), run from the project
-directory so that `process.cwd()` is the `projectDir`.
+directory itself so that plugins resolve against its `node_modules/`.
 
 When a plugin declares other plugins via `requires`, those dependencies are
 also **resolved and loaded automatically (transitively)**, so you do not need
@@ -208,31 +176,18 @@ explicitly (which avoids a double load). For the end-to-end procedure using
 the full AWS stack, see [Running on AWS Lightsail](./aws-lightsail).
 
 For detailed steps on adding and enabling plugins, see
-[Managing plugins](../plugins/managing); for the kinds of plugins, see
-[Plugins overview](../plugins/overview).
+[Installing and configuring plugins](./plugins); for the kinds of plugins, see
+[Plugin architecture](../develop/plugins-overview).
 
-### Driver names and plugins
-
-The driver names you can set for `storage.driver` / `search.driver` are
-those registered by the loaded plugins. The common mappings are as
-follows.
-
-| Setting | Driver name | Provided by |
-| ------- | ----------- | ----------- |
-| `storage.driver` | `local` | `@crowi/plugin-storage-local` (default) |
-| `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
-| `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (default) |
-| `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
-| `mail.driver` | `smtp` | `@crowi/plugin-mail-smtp` (default) |
-| `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
-| `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
+### Plugins with no driver to select
 
 Renderer plugins (`@crowi/plugin-renderer-katex` / `-plantuml` /
-`-crowi-legacy`) are enabled simply by adding them to `plugins`; they need
-no driver selection like `storage` / `search`. Emoji shortcodes and link
-cards (`@[card](url)`) are Crowi core features, not plugins — they are
-always on with no `plugins` entry required (link-card's outbound fetch can
-be disabled via the `linkCardEnabled` toggle under admin Security).
+`-mermaid` / `-crowi-legacy`) are enabled simply by adding them to
+`plugins`; they need no driver selection like `storage` / `search`. Emoji
+shortcodes and link cards (`@[card](url)`) are Crowi core features, not
+plugins — they are always on with no `plugins` entry required (link-card's
+outbound fetch can be disabled via the `linkCardEnabled` toggle under admin
+Security).
 
 > **Tip**: Even if you switch a driver name in `crowi.config.json`, a
 > warning is logged at boot if the corresponding plugin is not in
@@ -240,7 +195,9 @@ be disabled via the `linkCardEnabled` toggle under admin Security).
 
 ## Next steps
 
-- [Encrypting sensitive config](./encryption) — details on `CROWI_ENCRYPTION_KEY`
-- [Storage drivers](./storage) — how to switch `storage.driver`
-- [Search setup](./search-setup) — configuring Elasticsearch
-- [Managing plugins](../plugins/managing) — adding and enabling plugins
+- [Encrypting sensitive settings](./encryption) — details on `CROWI_ENCRYPTION_KEY`
+- [Storage](./storage) — how to switch `storage.driver`
+- [Search backend setup](./search-setup) — configuring Elasticsearch
+- [Installing and configuring plugins](./plugins) — adding and enabling plugins
+- [Environment variables](../reference/env) — names, defaults and meanings
+- [crowi.config.json](../reference/config-file) — fields and driver names
