@@ -41,6 +41,7 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
       body: '# hi',
       format: 'markdown',
       createdAt: '2026-05-01T00:00:00.000Z',
+      contentType: 'markdown',
     },
     creator: null,
     lastUpdateUser: null,
@@ -188,7 +189,7 @@ describe('PageActionsMenu — "Download Markdown" action (feature-page-markdown-
 
     const page = makePage({
       path: '/foo/bar',
-      revision: { _id: 'rev-1', path: '/foo/bar', body: '# hi', format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
+      revision: { _id: 'rev-1', path: '/foo/bar', body: '# hi', format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z', contentType: 'markdown' },
     });
     openCompactMenu(page);
     fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
@@ -215,7 +216,7 @@ describe('PageActionsMenu — "Download Markdown" action (feature-page-markdown-
 
   it('does nothing and shows no notification when the body is empty (AC-10)', () => {
     const page = makePage({
-      revision: { _id: 'rev-1', path: '/docs/guide/example', body: '', format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
+      revision: { _id: 'rev-1', path: '/docs/guide/example', body: '', format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z', contentType: 'markdown' },
     });
     openCompactMenu(page);
     fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
@@ -265,7 +266,7 @@ describe('PageActionsMenu — "Copy Markdown" action (feature-page-link-space-pa
 
     const body = '# Title\n\nSee [space link](/a b), [percent link](/a%20b) and [plus link](/a+b).';
     const page = makePage({
-      revision: { _id: 'rev-1', path: '/docs/guide/example', body, format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
+      revision: { _id: 'rev-1', path: '/docs/guide/example', body, format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z', contentType: 'markdown' },
     });
     openCompactMenu(page);
     fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_copy_markdown']() }));

@@ -13,6 +13,7 @@ function makeRevision(overrides: Partial<Revision> = {}): Revision {
     body: '# hi',
     format: 'markdown',
     createdAt: '2026-05-01T00:00:00.000Z',
+    contentType: 'markdown',
     ...overrides,
   };
 }
@@ -26,6 +27,7 @@ function makePage(overrides: Partial<Page> = {}): Page {
     likerCount: 0,
     seenUsersCount: 0,
     isLiked: false,
+    contentType: 'markdown',
     ...overrides,
   };
 }
@@ -70,6 +72,7 @@ describe('resolveDisplayUser', () => {
       likerCount: 0,
       seenUsersCount: 0,
       isLiked: false,
+      contentType: 'markdown',
       creator: null,
       lastUpdateUser: null,
       revision: makeRevision({ author: CAROL }),

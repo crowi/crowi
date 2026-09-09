@@ -52,6 +52,7 @@ const makePage = (overrides: Partial<Page> & { _id: string; path: string }): Pag
   likerCount: 0,
   seenUsersCount: 0,
   isLiked: false,
+  contentType: 'markdown',
   ...overrides,
 });
 
