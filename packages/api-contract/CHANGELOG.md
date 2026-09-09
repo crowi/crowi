@@ -1,5 +1,15 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.20
+
+### Minor Changes
+
+- 35e4640: Open the whole month in the page sidebar when you are inside a date hierarchy. Crowi's flow-note idiom (`<notebook>/YYYY/MM/DD/<title>`) leaves one or two pages under each day, so the sidebar used to show a column of bare day numbers and open only the day you were on — a shape that says nothing about what any other day holds. From a `YYYY/MM/` node and anywhere below it, every day of that month now lists the pages inside it, turning the rail into a readable month log; a year node still lists only its months, as before. The node you are on is scrolled into view when the opened month runs longer than the rail. `GET /pages/children` gains an optional `depth` (1-2, default 1) that widens the response to that many levels, returned as one flat list where each row carries its full path; the server already scanned the whole subtree, so a deeper request costs no extra query, and omitting `depth` returns exactly what it always did.
+
+### Patch Changes
+
+- 35aa704: Close 20 security advisories, including a critical one. Next.js moves to 16.3.3, which fixes unauthenticated remote code execution through the image optimization API when it handles AVIF files, and a second unauthenticated path that only affects Windows-hosted servers. Hono moves to 4.13.5 or later, nodemailer to 9.1.1, sharp to 0.35.4, and js-yaml to 4.3.2 on the 4.x line and 3.15.2 on the 3.x one. Three dependencies Crowi does not declare itself — svgo, baseline-browser-mapping and the 3.x js-yaml — are pinned to their patched versions, because no parent of theirs offers a version that already resolves there.
+
 ## 2.0.0-alpha.19
 
 ## 2.0.0-alpha.18
