@@ -130,17 +130,33 @@ export function proseLines(source) {
  * @returns {{href: string, line: number}[]}
  */
 export function extractRelativeLinks(source) {
+  return collectFromProse(source, LINK_RE, (match) => {
+    const href = normalizeHref(match[1])
+    return isFileRelative(href) ? href : null
+  })
+}
+
+/**
+ * The prose scan both extractors above and below are built from: walk the
+ * page's non-fenced lines, run one pattern over each, and keep the hrefs
+ * `pick` accepts. Only the pattern and that choice differ between them.
+ * @param {string} source
+ * @param {RegExp} pattern
+ * @param {(match: RegExpMatchArray) => string | null} pick href to keep, or null to skip
+ * @returns {{href: string, line: number}[]}
+ */
+function collectFromProse(source, pattern, pick) {
   /** @type {{href: string, line: number}[]} */
-  const links = []
+  const found = []
 
   for (const { text, line } of proseLines(source)) {
-    for (const match of text.matchAll(LINK_RE)) {
-      const href = normalizeHref(match[1])
-      if (isFileRelative(href)) links.push({ href, line })
+    for (const match of text.matchAll(pattern)) {
+      const href = pick(match)
+      if (href != null) found.push({ href, line })
     }
   }
 
-  return links
+  return found
 }
 
 /**
@@ -150,16 +166,7 @@ export function extractRelativeLinks(source) {
  * @returns {{href: string, line: number}[]}
  */
 export function extractJsxHrefs(source) {
-  /** @type {{href: string, line: number}[]} */
-  const hrefs = []
-
-  for (const { text, line } of proseLines(source)) {
-    for (const match of text.matchAll(JSX_HREF_RE)) {
-      hrefs.push({ href: match[1] ?? match[2], line })
-    }
-  }
-
-  return hrefs
+  return collectFromProse(source, JSX_HREF_RE, (match) => match[1] ?? match[2] ?? null)
 }
 
 /**

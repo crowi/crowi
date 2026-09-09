@@ -5,7 +5,7 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { findLeaks, findVocabularyLeaks, glossaryRuleId, isScannedPage, loadAllowList, loadGlossary, LOCALES, pageScope, RULES } from './check-docs-vocabulary.mjs'
+import { findLeaks, findVocabularyLeaks, glossaryRuleId, loadAllowList, loadGlossary, LOCALES, pageScope, RULES } from './check-docs-vocabulary.mjs'
 import { collectDocsFiles, DOCS_DIR } from './check-docs-links.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -30,16 +30,6 @@ describe('check-docs-vocabulary', () => {
 
     it('reports no folder for a locale-root page', () => {
       assert.deepEqual(pageScope(join('ja', 'index.mdx')), { locale: 'ja', folder: undefined })
-    })
-  })
-
-  describe('isScannedPage', () => {
-    it('scans every page, because the canonical-term rules are not folder-scoped', () => {
-      assert.equal(isScannedPage(join('ja', 'guide', 'cli.mdx')), true)
-      assert.equal(isScannedPage(join('en', 'operations', 'redis.mdx')), true)
-      assert.equal(isScannedPage(join('ja', 'reference', 'env.mdx')), true)
-      assert.equal(isScannedPage(join('ja', 'develop', 'architecture.mdx')), true)
-      assert.equal(isScannedPage(join('ja', 'index.mdx')), true)
     })
   })
 
@@ -327,9 +317,10 @@ describe('check-docs-vocabulary', () => {
     })
 
     it('scans develop/ too, but reports an internal identifier from the reader-facing pages only', () => {
-      const { violations, scanned, readerFacing } = findVocabularyLeaks(collectDocsFiles(root), [], root)
+      const files = collectDocsFiles(root)
+      const { violations, readerFacing } = findVocabularyLeaks(files, [], root)
 
-      assert.equal(scanned, 4)
+      assert.equal(files.length, 4)
       assert.equal(readerFacing, 2)
       assert.deepEqual(
         violations.map((violation) => `${violation.file} ${violation.text}`),

@@ -9,6 +9,7 @@
     "start": "next start --port ${PORT_SITE:-4303}",
     "lint": "eslint",
     "check:links": "node ../../scripts/check-docs-links.mjs",
+    "check:vocabulary": "node ../../scripts/check-docs-vocabulary.mjs",
     "type-check": "tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "preview": "next build && npx serve@latest out"

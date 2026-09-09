@@ -359,15 +359,6 @@ function ruleApplies(rule, page) {
   return rule.locale === undefined || rule.locale === page.locale
 }
 
-/**
- * @param {string} docsRelativePath
- * @returns {boolean}
- */
-export function isScannedPage(docsRelativePath) {
-  const page = pageScope(docsRelativePath)
-  return RULES.some((rule) => ruleApplies(rule, page))
-}
-
 const CODE_SPAN_RE = /`[^`]*`/g
 const LINK_DEST_RE = /\]\([^)]*\)/g
 
@@ -415,20 +406,18 @@ export function findLeaks(source, page, silencedRules = []) {
  * @param {string[]} files
  * @param {AllowEntry[]} allow
  * @param {string} [root]
- * @returns {{violations: {file: string, rule: string, line: number, text: string, message: string}[], scanned: number, readerFacing: number}}
+ * @returns {{violations: {file: string, rule: string, line: number, text: string, message: string}[], readerFacing: number}}
  */
 export function findVocabularyLeaks(files, allow, root = ROOT) {
   const docsRoot = join(root, DOCS_DIR)
   /** @type {{file: string, rule: string, line: number, text: string, message: string}[]} */
   const violations = []
-  let scanned = 0
   let readerFacing = 0
 
   for (const file of files) {
-    const docsRelative = relative(docsRoot, file)
-    if (!isScannedPage(docsRelative)) continue
-    const page = pageScope(docsRelative)
-    scanned += 1
+    // Every page is scanned: the canonical-term rules carry no folder or
+    // locale scope, so there is no page a rule cannot apply to.
+    const page = pageScope(relative(docsRoot, file))
     if (page.folder !== undefined && READER_FOLDERS.has(page.folder)) readerFacing += 1
 
     const repoRelative = relative(root, file).split(sep).join('/')
@@ -438,7 +427,7 @@ export function findVocabularyLeaks(files, allow, root = ROOT) {
     }
   }
 
-  return { violations, scanned, readerFacing }
+  return { violations, readerFacing }
 }
 
 function main() {
@@ -449,9 +438,9 @@ function main() {
     return
   }
 
-  const { violations, scanned, readerFacing } = findVocabularyLeaks(files, loadAllowList())
+  const { violations, readerFacing } = findVocabularyLeaks(files, loadAllowList())
   if (violations.length === 0) {
-    console.log(`docs vocabulary check: ${scanned} page(s) use the canonical vocabulary, ${readerFacing} of them name no internals.`)
+    console.log(`docs vocabulary check: ${files.length} page(s) use the canonical vocabulary, ${readerFacing} of them name no internals.`)
     return
   }
 
