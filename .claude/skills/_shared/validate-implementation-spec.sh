@@ -47,6 +47,24 @@ if [[ -z "$STALENESS_TMP_DIR" || ! -d "$STALENESS_TMP_DIR" ]]; then
   exit 1
 fi
 trap 'rm -rf "$STALENESS_TMP_DIR"' EXIT
+# The spec is this validator's primary input and lives outside git
+# (`.feature-state/` is ignored), so an unchanged HEAD and a clean worktree do
+# NOT establish that two runs saw the same input. Snapshot it once: every parse
+# below reads the snapshot, so no single verdict can be assembled from two
+# different versions of the spec, and the digest goes out with the verdict so a
+# caller can record what was actually judged.
+SPEC_SNAPSHOT="$STALENESS_TMP_DIR/spec"
+if ! cp -- "$SPEC_PATH" "$SPEC_SNAPSHOT"; then
+  echo "ERROR: staleness check failed: unable to snapshot spec: $SPEC_PATH" >&2
+  exit 1
+fi
+spec_digest_of() { git hash-object -- "$1" 2>/dev/null; }
+SPEC_DIGEST="$(spec_digest_of "$SPEC_SNAPSHOT")"
+if [[ -z "$SPEC_DIGEST" ]]; then
+  echo "ERROR: staleness check failed: unable to hash spec: $SPEC_PATH" >&2
+  exit 1
+fi
+
 GROUNDED_BLOB_FILE="$STALENESS_TMP_DIR/grounded-blob"
 HEAD_BLOB_FILE="$STALENESS_TMP_DIR/head-blob"
 GROUNDED_MATCH_FILE="$STALENESS_TMP_DIR/grounded-match"
@@ -72,10 +90,12 @@ resolve_validation_head() {
       add_error "CROWI_SPEC_VALIDATION_HEAD must be a full commit object id"
       return
     fi
-    if ! git cat-file -e "${supplied}^{commit}" >/dev/null 2>&1; then
-      add_error "CROWI_SPEC_VALIDATION_HEAD does not resolve to a commit: $supplied"
-      return
-    fi
+    git rev-parse --verify -q "${supplied}^{commit}" >/dev/null 2>&1
+    case "$?" in
+      0) ;;
+      1) add_error "CROWI_SPEC_VALIDATION_HEAD does not resolve to a commit: $supplied"; return ;;
+      *) add_error "staleness check failed: unable to inspect CROWI_SPEC_VALIDATION_HEAD: $supplied"; return ;;
+    esac
     VALIDATION_HEAD="$supplied"
   else
     VALIDATION_HEAD="$(git rev-parse HEAD 2>/dev/null)"
@@ -91,6 +111,16 @@ resolve_validation_head
 # earlier check has passed (no error recorded yet) — a stale HEAD found now
 # means something moved HEAD during this invocation, which invalidates every
 # comparison already made against VALIDATION_HEAD.
+recheck_spec_unchanged() {
+  local now
+  now="$(spec_digest_of "$SPEC_PATH")"
+  if [[ -z "$now" ]]; then
+    add_error "staleness check failed: unable to re-read spec: $SPEC_PATH"
+  elif [[ "$now" != "$SPEC_DIGEST" ]]; then
+    add_error "staleness check failed: spec changed during validation; rerun validator: $SPEC_PATH"
+  fi
+}
+
 recheck_validation_head_unchanged() {
   local recheck_head
   recheck_head="$(git rev-parse HEAD 2>/dev/null)"
@@ -176,7 +206,7 @@ frontmatter_value_of() {
 }
 
 frontmatter_value() {
-  frontmatter_value_of "$SPEC_PATH" "$1"
+  frontmatter_value_of "$SPEC_SNAPSHOT" "$1"
 }
 
 section_has_content() {
@@ -194,7 +224,7 @@ section_has_content() {
     }
     in_section && $0 !~ /^[[:space:]]*$/ { found = 1 }
     END { exit found ? 0 : 1 }
-  ' "$SPEC_PATH"
+  ' "$SPEC_SNAPSHOT"
 }
 
 require_section() {
@@ -258,13 +288,16 @@ if [[ "$KIND" == "umbrella" ]]; then
       next
     }
     in_phases { exit }
-  ' "$SPEC_PATH")
+  ' "$SPEC_SNAPSHOT")
 
   if [[ "${#PHASES[@]}" -eq 0 ]]; then
     add_error "umbrella spec must list phases as a frontmatter block sequence (phases:\\n  - feature-...)"
   else
     SEEN_PHASES=""
     VALIDATED_PHASES=0
+# <phase id>\t<path>\t<digest at the time its child was invoked>, so a phase
+# rewritten after its child accepted it cannot ride out on the parent's READY.
+PHASE_DIGESTS=()
     for phase in "${PHASES[@]}"; do
       # Phases are spec IDs, not paths. Requiring the ID form is what keeps an
       # umbrella pointing at its own sibling specs: a value like
@@ -299,10 +332,20 @@ if [[ "$KIND" == "umbrella" ]]; then
       : >"$phase_stderr_file"
       phase_structure_only_flag=""
       [[ "$STRUCTURE_ONLY" -eq 1 ]] && phase_structure_only_flag="--structure-only"
+      phase_digest_before="$(spec_digest_of "$phase_path")"
+      if [[ -z "$phase_digest_before" ]]; then
+        add_error "phase $phase: unable to hash phase spec: $phase_path"
+        continue
+      fi
+      PHASE_DIGESTS+=("$phase"$'\t'"$phase_path"$'\t'"$phase_digest_before")
       if ! CROWI_SPEC_VALIDATION_HEAD="$VALIDATION_HEAD" bash "$VALIDATOR" ${phase_structure_only_flag:+"$phase_structure_only_flag"} "$phase_path" >/dev/null 2>"$phase_stderr_file"; then
+        phase_errors_before="${#ERRORS[@]}"
         while IFS= read -r line; do
-          [[ -n "$line" ]] && add_error "phase $phase: ${line#ERROR: }"
+          [[ "$line" == ERROR:\ * ]] && add_error "phase $phase: ${line#ERROR: }"
         done <"$phase_stderr_file"
+        if [[ "${#ERRORS[@]}" -eq "$phase_errors_before" ]]; then
+          add_error "phase $phase: validator exited non-zero without an ERROR diagnostic"
+        fi
       else
         VALIDATED_PHASES=$((VALIDATED_PHASES + 1))
         while IFS= read -r line; do
@@ -319,6 +362,20 @@ if [[ "$KIND" == "umbrella" ]]; then
     recheck_validation_head_unchanged
   fi
 
+  recheck_spec_unchanged
+  for phase_record in "${PHASE_DIGESTS[@]:-}"; do
+    [[ -z "$phase_record" ]] && continue
+    IFS=$'\t' read -r phase_id phase_file phase_was <<<"$phase_record"
+    phase_now="$(spec_digest_of "$phase_file")"
+    if [[ -z "$phase_now" ]]; then
+      add_error "phase $phase_id: unable to re-read phase spec: $phase_file"
+    elif [[ "$phase_now" != "$phase_was" ]]; then
+      add_error "phase $phase_id: spec changed during validation; rerun validator: $phase_file"
+    fi
+  done
+
+  echo "INPUT: head=${VALIDATION_HEAD:--} spec=$SPEC_DIGEST" >&2
+
   if [[ "${#ERRORS[@]}" -gt 0 ]]; then
     for error in "${ERRORS[@]}"; do
       echo "ERROR: $error" >&2
@@ -328,7 +385,7 @@ if [[ "$KIND" == "umbrella" ]]; then
   for warning in "${WARNINGS[@]}"; do
     echo "WARN: $warning" >&2
   done
-  echo "READY: umbrella spec v2 ($SPEC_PATH) — $VALIDATED_PHASES phase specs validated"
+  echo "READY: umbrella spec v2 ($SPEC_PATH) — $VALIDATED_PHASES phase specs validated head=${VALIDATION_HEAD:--} spec=$SPEC_DIGEST"
   exit 0
 fi
 
@@ -384,7 +441,7 @@ MAP_ERRORS="$(awk '
     flush_change()
     if (change_count == 0) print "implementation map must contain at least one ### Change: `path` entry"
   }
-' "$SPEC_PATH")"
+' "$SPEC_SNAPSHOT")"
 if [[ -n "$MAP_ERRORS" ]]; then
   while IFS= read -r error; do
     [[ -n "$error" ]] && add_error "$error"
@@ -534,7 +591,7 @@ done < <(
       next
     }
     END { flush_change() }
-  ' "$SPEC_PATH"
+  ' "$SPEC_SNAPSHOT"
 )
 
 CONTRACT_ERRORS="$(awk '
@@ -595,14 +652,14 @@ CONTRACT_ERRORS="$(awk '
     if (!compatibility) print "contracts / invariants is missing Backward compatibility/migration"
     if (!performance) print "contracts / invariants is missing Performance/resource limit"
   }
-' "$SPEC_PATH")"
+' "$SPEC_SNAPSHOT")"
 if [[ -n "$CONTRACT_ERRORS" ]]; then
   while IFS= read -r error; do
     [[ -n "$error" ]] && add_error "$error"
   done <<<"$CONTRACT_ERRORS"
 fi
 
-AC_IDS="$(sed -n 's/^- \[[ xX]\] \(AC-[A-Za-z0-9._-]*\):.*/\1/p' "$SPEC_PATH")"
+AC_IDS="$(sed -n 's/^- \[[ xX]\] \(AC-[A-Za-z0-9._-]*\):.*/\1/p' "$SPEC_SNAPSHOT")"
 DUPLICATE_AC_IDS="$(printf '%s\n' "$AC_IDS" | sed '/^$/d' | sort | uniq -d)"
 if [[ -n "$DUPLICATE_AC_IDS" ]]; then
   while IFS= read -r ac_id; do
@@ -659,7 +716,7 @@ done < <(
       level = count >= 5 ? trim(cell[5]) : ""
       print ac sep file sep test_case sep level
     }
-  ' "$SPEC_PATH"
+  ' "$SPEC_SNAPSHOT"
 )
 if [[ -n "$TEST_ROW_ERRORS" ]]; then
   while IFS= read -r error; do
@@ -706,20 +763,38 @@ OPEN_QUESTION_ERRORS="$(awk '
       print "blocking open question: " item
     }
   }
-' "$SPEC_PATH")"
+' "$SPEC_SNAPSHOT")"
 if [[ -n "$OPEN_QUESTION_ERRORS" ]]; then
   while IFS= read -r error; do
     [[ -n "$error" ]] && add_error "$error"
   done <<<"$OPEN_QUESTION_ERRORS"
 fi
 
+# 0 = grounded_at exists as a commit and is an ancestor of VALIDATION_HEAD.
+# 1 = a reason was recorded. Failures to RUN either probe are reported as
+# themselves rather than collapsed into the negative answer, so a transient
+# object-store or process failure never reads as "the spec is stale".
+check_grounded_at_reachable() {
+  git rev-parse --verify -q "${GROUNDED_AT}^{commit}" >/dev/null 2>&1
+  case "$?" in
+    0) ;;
+    1) add_error "grounded_at commit does not exist: $GROUNDED_AT"; return 1 ;;
+    *) add_error "staleness check failed: unable to inspect grounded_at commit: $GROUNDED_AT"; return 1 ;;
+  esac
+  git merge-base --is-ancestor "$GROUNDED_AT" "$VALIDATION_HEAD" >/dev/null 2>&1
+  case "$?" in
+    0) return 0 ;;
+    1) add_error "spec is stale: grounded_at is not an ancestor of HEAD"; return 1 ;;
+    *) add_error "staleness check failed: unable to inspect ancestry of grounded_at against HEAD"; return 1 ;;
+  esac
+}
+
 if [[ "$GROUNDED_AT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
   if [[ -z "$VALIDATION_HEAD" ]]; then
     : # resolve_validation_head already recorded why (no worktree / bad env var).
-  elif ! git cat-file -e "${GROUNDED_AT}^{commit}" >/dev/null 2>&1; then
-    add_error "grounded_at commit does not exist: $GROUNDED_AT"
-  elif ! git merge-base --is-ancestor "$GROUNDED_AT" "$VALIDATION_HEAD" >/dev/null 2>&1; then
-    add_error "spec is stale: grounded_at is not an ancestor of HEAD"
+  elif ! check_grounded_at_reachable; then
+    : # check_grounded_at_reachable recorded why (absent, not an ancestor, or
+      # a probe that could not run — which is not a fact about the spec).
   elif [[ "$STRUCTURE_ONLY" -eq 1 ]]; then
     : # structure-only: grounded_at 自体の存在・ancestry は確認済み。ここから先の
       # 「参照 path が grounded_at 以降に変わっていないか」の diff/dirty 検査だけを
@@ -948,6 +1023,14 @@ if [[ "${#ERRORS[@]}" -eq 0 && "$STRUCTURE_ONLY" -eq 0 && -n "$VALIDATION_HEAD" 
   recheck_validation_head_unchanged
 fi
 
+# Unconditional, and independent of --structure-only: the spec was parsed
+# either way, so a rewrite underneath this run invalidates the verdict either
+# way.
+recheck_spec_unchanged
+
+# Always reported, whatever the verdict: these are the two inputs it rests on.
+echo "INPUT: head=${VALIDATION_HEAD:--} spec=$SPEC_DIGEST" >&2
+
 if [[ "${#ERRORS[@]}" -gt 0 ]]; then
   for error in "${ERRORS[@]}"; do
     echo "ERROR: $error" >&2
@@ -958,5 +1041,5 @@ fi
 for warning in "${WARNINGS[@]}"; do
   echo "WARN: $warning" >&2
 done
-echo "READY: implementation-ready spec v2 ($SPEC_PATH)"
+echo "READY: implementation-ready spec v2 ($SPEC_PATH) head=${VALIDATION_HEAD:--} spec=$SPEC_DIGEST"
 exit 0
