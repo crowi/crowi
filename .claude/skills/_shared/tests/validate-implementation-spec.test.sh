@@ -962,6 +962,141 @@ grep -q '^WARN: phase feature-fast-export-phase0: referenced path changed but gr
   || fail "umbrella must forward the child WARN with a phase prefix"
 grep -q '^READY:' "$OUTPUT" || fail "umbrella must still emit READY"
 
+# An umbrella is parsed here too (its phase list, its frontmatter), so it owes
+# the same two guarantees a leaf does: report the inputs the verdict rests on,
+# and refuse to answer if the file moved underneath the run.
+umbrella_digest="$(git hash-object "$UMBRELLA_SPEC")"
+umbrella_head="$(git -C "$UMBRELLA_REPO" rev-parse HEAD)"
+grep -q "^INPUT: head=$umbrella_head spec=$umbrella_digest$" "$OUTPUT" \
+  || fail "an umbrella run must report the head and spec digest it read"
+grep -q "^READY: umbrella .* head=$umbrella_head spec=$umbrella_digest$" "$OUTPUT" \
+  || fail "the umbrella READY line must carry the head and spec digest"
+
+UMBRELLA_MUTATE_SHIM_DIR="$TMP_ROOT/umbrella-mutate-shim"
+mkdir -p "$UMBRELLA_MUTATE_SHIM_DIR"
+cat >"$UMBRELLA_MUTATE_SHIM_DIR/git" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "$1" == "status" && ! -f "$SPEC_MUTATE_DONE" ]]; then
+  printf '\n<!-- edited by another session -->\n' >>"$SPEC_MUTATE_TARGET"
+  touch "$SPEC_MUTATE_DONE"
+fi
+exec "$REAL_GIT_BIN" "$@"
+SHIM
+chmod +x "$UMBRELLA_MUTATE_SHIM_DIR/git"
+SPEC_MUTATE_TARGET="$UMBRELLA_SPEC"
+SPEC_MUTATE_DONE="$TMP_ROOT/umbrella-mutate-done"
+rm -f "$SPEC_MUTATE_DONE"
+export SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+status="$(run_validator_with_path "$UMBRELLA_REPO" "$UMBRELLA_SPEC" "$OUTPUT" "$UMBRELLA_MUTATE_SHIM_DIR")"
+assert_status 1 "$status" "an umbrella rewritten during validation must not produce a verdict"
+grep -q 'spec changed during validation' "$OUTPUT" || fail "a mid-run umbrella rewrite must be named"
+grep -q '^READY:' "$OUTPUT" && fail "a mid-run umbrella rewrite must not emit READY"
+unset SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+
+# A child's own provenance line is metadata, not a finding: relaying it would
+# invent an error the phase never reported.
+UMBRELLA_BAD_PHASE_SPEC="$UMBRELLA_REPO/specs/feature-fast-export-bad-phase.md"
+cp "$PHASE_SPEC" "$UMBRELLA_BAD_PHASE_SPEC"
+sed -i.bak 's/^## 受け入れ基準/## 削除された見出し/' "$UMBRELLA_BAD_PHASE_SPEC" && rm -f "$UMBRELLA_BAD_PHASE_SPEC.bak"
+UMBRELLA_BAD_SPEC="$UMBRELLA_REPO/specs/feature-fast-export-bad-umbrella.md"
+cat >"$UMBRELLA_BAD_SPEC" <<'EOF'
+---
+spec_contract: 2
+kind: umbrella
+id: feature-fast-export-bad-umbrella
+status: approved
+phases:
+  - feature-fast-export-bad-phase
+---
+
+umbrella の運用契約とフェーズ表(人間向け)。
+EOF
+status="$(run_validator "$UMBRELLA_REPO" "$UMBRELLA_BAD_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "an umbrella with a failing phase must not be ready"
+grep -q 'phase feature-fast-export-bad-phase: INPUT:' "$OUTPUT" \
+  && fail "a child's INPUT line must not be forwarded as a phase error"
+
+# Forwarding only recognised diagnostics must not become a way to lose the
+# failure itself: a child that dies before printing anything still means the
+# phase did not validate.
+SILENT_CHILD_SHIM_DIR="$TMP_ROOT/silent-child-shim"
+mkdir -p "$SILENT_CHILD_SHIM_DIR"
+cat >"$SILENT_CHILD_SHIM_DIR/bash" <<'SHIM'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  if [[ "$arg" == *validate-implementation-spec.sh ]]; then
+    exit 1
+  fi
+done
+exec /bin/bash "$@"
+SHIM
+chmod +x "$SILENT_CHILD_SHIM_DIR/bash"
+set +e
+( cd "$UMBRELLA_REPO"; PATH="$SILENT_CHILD_SHIM_DIR:$PATH" /bin/bash "$VALIDATOR" "$UMBRELLA_SPEC" ) >"$OUTPUT" 2>&1
+status=$?
+set -e
+assert_status 1 "$status" "a phase whose validator dies silently must fail the umbrella"
+grep -q 'without an ERROR diagnostic' "$OUTPUT" || fail "a silent child failure must be named"
+grep -q '^READY:' "$OUTPUT" && fail "a silent child failure must not emit READY"
+
+# The umbrella's verdict rests on the phase files it dispatched, so those bytes
+# are bound too: a phase rewritten after its child accepted it must not ride
+# out on the parent's READY.
+PHASE_MUTATE_SHIM_DIR="$TMP_ROOT/phase-mutate-shim"
+mkdir -p "$PHASE_MUTATE_SHIM_DIR"
+cat >"$PHASE_MUTATE_SHIM_DIR/git" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "$1" == "merge-base" && ! -f "$SPEC_MUTATE_DONE" ]]; then
+  printf '\n<!-- phase edited by another session -->\n' >>"$SPEC_MUTATE_TARGET"
+  touch "$SPEC_MUTATE_DONE"
+fi
+exec "$REAL_GIT_BIN" "$@"
+SHIM
+chmod +x "$PHASE_MUTATE_SHIM_DIR/git"
+SPEC_MUTATE_TARGET="$PHASE_SPEC"
+SPEC_MUTATE_DONE="$TMP_ROOT/phase-mutate-done"
+rm -f "$SPEC_MUTATE_DONE"
+export SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+status="$(run_validator_with_path "$UMBRELLA_REPO" "$UMBRELLA_SPEC" "$OUTPUT" "$PHASE_MUTATE_SHIM_DIR")"
+assert_status 1 "$status" "a phase spec rewritten during validation must not produce an umbrella verdict"
+grep -q 'phase feature-fast-export-phase0: spec changed during validation' "$OUTPUT" \
+  || fail "a mid-run phase rewrite must be named with its phase id"
+grep -q '^READY:' "$OUTPUT" && fail "a mid-run phase rewrite must not emit READY"
+unset SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+
+# A run that already failed still owes an honest account of which bytes it
+# failed on: errors quoting a file that has since changed send the reader to a
+# spec that no longer says what the message claims.
+FAILING_MUTATE_REPO="$TMP_ROOT/failing-mutate-repo"
+cp -R "$REPO" "$FAILING_MUTATE_REPO"
+git -C "$FAILING_MUTATE_REPO" reset -q --hard "$BASE_SHA"
+FAILING_MUTATE_SPEC="$FAILING_MUTATE_REPO/specs/failing.md"
+write_ready_spec "$FAILING_MUTATE_SPEC" "$BASE_SHA" "src/export/export.ts"
+sed -i.bak 's/^## 受け入れ基準/## 削除された見出し/' "$FAILING_MUTATE_SPEC" && rm -f "$FAILING_MUTATE_SPEC.bak"
+FAILING_MUTATE_SHIM_DIR="$TMP_ROOT/failing-mutate-shim"
+mkdir -p "$FAILING_MUTATE_SHIM_DIR"
+cat >"$FAILING_MUTATE_SHIM_DIR/git" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "$1" == "hash-object" && ! -f "$SPEC_MUTATE_DONE" ]]; then
+  result="$("$REAL_GIT_BIN" "$@")"
+  printf '\n<!-- edited by another session -->\n' >>"$SPEC_MUTATE_TARGET"
+  touch "$SPEC_MUTATE_DONE"
+  printf '%s\n' "$result"
+  exit 0
+fi
+exec "$REAL_GIT_BIN" "$@"
+SHIM
+chmod +x "$FAILING_MUTATE_SHIM_DIR/git"
+SPEC_MUTATE_TARGET="$FAILING_MUTATE_SPEC"
+SPEC_MUTATE_DONE="$TMP_ROOT/failing-mutate-done"
+rm -f "$SPEC_MUTATE_DONE"
+export SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+status="$(run_validator_with_path "$FAILING_MUTATE_REPO" "$FAILING_MUTATE_SPEC" "$OUTPUT" "$FAILING_MUTATE_SHIM_DIR")"
+assert_status 1 "$status" "a failing spec rewritten mid-run must still fail"
+grep -q 'spec changed during validation' "$OUTPUT" \
+  || fail "a mid-run rewrite must be named even when the run had already failed"
+unset SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+
 # AC-8 (docs contract): kickoff and orchestrate B must document forwarding
 # raw WARN: lines grouped by spec id, not just the READY/ERROR contract. Each
 # assertion below targets one specific clause of the contract (grouping by
@@ -1104,5 +1239,99 @@ status="$(run_validator "$GENERATED_REPO" "$GENERATED_SPEC" "$OUTPUT")"
 assert_status 0 "$status" "a changed generated-artifact reference must not affect freshness"
 grep -q '^READY:' "$OUTPUT" || fail "generated-artifact regression must still emit READY"
 grep -qi 'generated/schema.ts' "$OUTPUT" && fail "a generated-artifact reference must never appear in staleness output"
+
+# A verdict must never be derived from a command that failed. `merge-base` and
+# the commit-existence probe both answer a question by their exit status, and
+# treating "non-zero" as the negative answer makes an execution failure read as
+# a fact about the spec — "not an ancestor", "does not exist" — which sends
+# someone off to re-ground a spec that was never stale.
+MB_FAIL_REPO="$TMP_ROOT/merge-base-fail-repo"
+cp -R "$REPO" "$MB_FAIL_REPO"
+git -C "$MB_FAIL_REPO" reset -q --hard "$BASE_SHA"
+write_ready_spec "$MB_FAIL_REPO/specs/ready.md" "$BASE_SHA" "src/export/export.ts"
+MB_SHIM_DIR="$TMP_ROOT/merge-base-shim"
+mkdir -p "$MB_SHIM_DIR"
+cat >"$MB_SHIM_DIR/git" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "$1" == "merge-base" ]]; then
+  echo "fatal: simulated merge-base failure" >&2
+  exit 128
+fi
+exec "$REAL_GIT_BIN" "$@"
+SHIM
+chmod +x "$MB_SHIM_DIR/git"
+status="$(run_validator_with_path "$MB_FAIL_REPO" "$MB_FAIL_REPO/specs/ready.md" "$OUTPUT" "$MB_SHIM_DIR")"
+assert_status 1 "$status" "a merge-base execution failure must not be ready"
+grep -q 'is not an ancestor' "$OUTPUT" && fail "a merge-base execution failure must not be reported as not-an-ancestor"
+grep -q 'unable to inspect ancestry' "$OUTPUT" || fail "a merge-base execution failure must name itself"
+grep -q '^READY:' "$OUTPUT" && fail "a merge-base execution failure must not emit READY"
+
+CF_FAIL_REPO="$TMP_ROOT/commit-probe-fail-repo"
+cp -R "$REPO" "$CF_FAIL_REPO"
+git -C "$CF_FAIL_REPO" reset -q --hard "$BASE_SHA"
+write_ready_spec "$CF_FAIL_REPO/specs/ready.md" "$BASE_SHA" "src/export/export.ts"
+CF_SHIM_DIR="$TMP_ROOT/commit-probe-shim"
+mkdir -p "$CF_SHIM_DIR"
+cat >"$CF_SHIM_DIR/git" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "$1" == "rev-parse" && "$2" == "--verify" ]]; then
+  echo "fatal: simulated object-store failure" >&2
+  exit 128
+fi
+exec "$REAL_GIT_BIN" "$@"
+SHIM
+chmod +x "$CF_SHIM_DIR/git"
+status="$(run_validator_with_path "$CF_FAIL_REPO" "$CF_FAIL_REPO/specs/ready.md" "$OUTPUT" "$CF_SHIM_DIR")"
+assert_status 1 "$status" "a commit-probe execution failure must not be ready"
+grep -q 'does not exist' "$OUTPUT" && fail "a commit-probe execution failure must not be reported as a missing commit"
+grep -q 'unable to inspect grounded_at' "$OUTPUT" || fail "a commit-probe execution failure must name itself"
+
+# The spec itself is the validator's primary input and lives outside git
+# (`.feature-state/` is ignored), so an identical HEAD and a clean `git status`
+# do NOT mean the same input. A spec rewritten by another session mid-run must
+# not yield a verdict at all: half the checks would describe the old bytes and
+# half the new.
+SPEC_MUTATE_REPO="$TMP_ROOT/spec-mutate-repo"
+cp -R "$REPO" "$SPEC_MUTATE_REPO"
+git -C "$SPEC_MUTATE_REPO" reset -q --hard "$BASE_SHA"
+write_ready_spec "$SPEC_MUTATE_REPO/specs/ready.md" "$BASE_SHA" "src/export/export.ts"
+status="$(run_validator "$SPEC_MUTATE_REPO" "$SPEC_MUTATE_REPO/specs/ready.md" "$OUTPUT")"
+assert_status 0 "$status" "spec-mutation control run must be ready before the shim is applied"
+SPEC_MUTATE_SHIM_DIR="$TMP_ROOT/spec-mutate-shim"
+mkdir -p "$SPEC_MUTATE_SHIM_DIR"
+cat >"$SPEC_MUTATE_SHIM_DIR/git" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "$1" == "status" && ! -f "$SPEC_MUTATE_DONE" ]]; then
+  printf '\n<!-- edited by another session -->\n' >>"$SPEC_MUTATE_TARGET"
+  touch "$SPEC_MUTATE_DONE"
+fi
+exec "$REAL_GIT_BIN" "$@"
+SHIM
+chmod +x "$SPEC_MUTATE_SHIM_DIR/git"
+SPEC_MUTATE_TARGET="$SPEC_MUTATE_REPO/specs/ready.md"
+SPEC_MUTATE_DONE="$TMP_ROOT/spec-mutate-done"
+rm -f "$SPEC_MUTATE_DONE"
+export SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+status="$(run_validator_with_path "$SPEC_MUTATE_REPO" "$SPEC_MUTATE_REPO/specs/ready.md" "$OUTPUT" "$SPEC_MUTATE_SHIM_DIR")"
+assert_status 1 "$status" "a spec rewritten during validation must not produce a verdict"
+grep -q 'spec changed during validation' "$OUTPUT" || fail "a mid-run spec rewrite must be named"
+grep -q '^READY:' "$OUTPUT" && fail "a mid-run spec rewrite must not emit READY"
+unset SPEC_MUTATE_TARGET SPEC_MUTATE_DONE
+
+# Both inputs the verdict rests on — the commit it compared against and the
+# bytes of the spec it read — are reported, so a caller can record them and a
+# later disagreement can be attributed to an edit rather than to the gate.
+DIGEST_REPO="$TMP_ROOT/digest-repo"
+cp -R "$REPO" "$DIGEST_REPO"
+git -C "$DIGEST_REPO" reset -q --hard "$BASE_SHA"
+write_ready_spec "$DIGEST_REPO/specs/ready.md" "$BASE_SHA" "src/export/export.ts"
+expected_digest="$(git hash-object "$DIGEST_REPO/specs/ready.md")"
+expected_head="$(git -C "$DIGEST_REPO" rev-parse HEAD)"
+status="$(run_validator "$DIGEST_REPO" "$DIGEST_REPO/specs/ready.md" "$OUTPUT")"
+assert_status 0 "$status" "the digest fixture must be ready"
+grep -q "^INPUT: head=$expected_head spec=$expected_digest$" "$OUTPUT" \
+  || fail "a ready run must report the head and spec digest it read"
+grep -q "^READY: .* head=$expected_head spec=$expected_digest$" "$OUTPUT" \
+  || fail "the READY line must carry the head and spec digest"
 
 echo "PASS: validate-implementation-spec"
