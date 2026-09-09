@@ -223,7 +223,10 @@ export async function runPageTransition(crowi: Crowi, input: PageTransitionInput
     entered = await enterTransition(crowi, input);
     if (entered != null) break;
 
-    const current = (await Page.findById(input.pageId).select('path status historyTransition').lean().exec()) as TransitionPageSnapshot | null;
+    // Primary: a secondary lagging behind the exit CAS reads as "not entered"
+    // and sends this delivery around the retry loop against a move that has
+    // already landed.
+    const current = (await Page.findById(input.pageId).select('path status historyTransition').read('primary').lean().exec()) as TransitionPageSnapshot | null;
     const decision = classifyResume(current, input);
     switch (decision.decision) {
       case 'resume-own':

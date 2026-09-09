@@ -5,6 +5,9 @@ import Crowi from 'src/crowi';
 import type { PageHistoryEventKind, PageHistoryEventSource } from 'src/models/page-history-event';
 import type { PageHistoryOperationDocument, PageHistoryOperationResult } from 'src/models/page-history-operation';
 
+import type { PendingHistoryEntry } from 'src/models/page';
+
+import { materializePendingEntry } from './materialize';
 import { redactErrorReason } from './repair';
 import { type ResumeExpectation, type TransitionPageSnapshot, classifyResume } from './transition';
 
@@ -214,6 +217,7 @@ const expectationOf = (operation: PageHistoryOperationDocument): ResumeExpectati
 
 type CompletionEvidencePageSnapshot = TransitionPageSnapshot & {
   historyTracking?: { state?: 'untracked' | 'migrating' | 'ready' | null } | null;
+  pendingHistoryEntry?: PendingHistoryEntry | null;
 };
 
 const eventKindForCommand = (command: string): PageHistoryEventKind | null => {
@@ -232,15 +236,36 @@ const eventKindForCommand = (command: string): PageHistoryEventKind | null => {
 
 async function subtreeGroupOperationId(crowi: Crowi, operation: PageHistoryOperationDocument): Promise<string | null> {
   if (operation.page == null) return null;
+  // Primary: this id gates the whole evidence check, so a lagging secondary
+  // that has not seen the root record yet would return null here and make a
+  // committed member look unproven.
   const roots = (await crowi
     .model('PageHistoryOperation')
     .find({ actor: operation.actor, command: 'subtree_rename', memberPageIds: operation.page })
+    .read('primary')
     .exec()) as PageHistoryOperationDocument[];
   const root = roots.find((candidate) => deriveMemberKey(candidate.idempotencyKey, operation.page as Types.ObjectId) === operation.idempotencyKey);
   return root?.groupOperationId ?? null;
 }
 
-/** The single durable definition of whether a path-moving operation completed. */
+/**
+ * The single durable definition of whether a path-moving operation completed.
+ *
+ * A move commits in three writes, not two. The exit CAS is the commit point:
+ * it moves `path`, releases `historyTransition`, and stages the event in the
+ * Page's outbox (`pendingHistoryEntry`) in one update. `materializePendingEntry`
+ * turns that staged entry into a `PageHistoryEvent` row several round-trips
+ * later, and `completeOperation` caches the verdict in `result` later still.
+ * Reading only the row therefore misses a move that has already landed, and a
+ * concurrent delivery observing that gap used to report a spurious member
+ * failure for a subtree move that fully succeeded.
+ *
+ * Hence the read order below: the Page snapshot first, then the staged entry,
+ * then the row. Snapshot-before-row matters. `materializePendingEntry` drains
+ * the outbox only after upserting the row, so a snapshot showing an empty
+ * outbox proves any upsert that was going to happen already has — which is
+ * what makes the subsequent row read conclusive rather than merely early.
+ */
 export async function hasOperationCompletionEvidence(
   crowi: Crowi,
   operation: PageHistoryOperationDocument,
@@ -253,21 +278,48 @@ export async function hasOperationCompletionEvidence(
     options.eventOperationId ?? (operation.command === 'subtree_rename_member' ? await subtreeGroupOperationId(crowi, operation) : operation.operationId);
   if (eventOperationId == null) return false;
 
-  const evidence = await crowi.model('PageHistoryEvent').exists({ page: operation.page, operationId: eventOperationId, kind });
-  if (evidence != null) return true;
-
-  // Subtree members are grouped under the root id, so projection-only success
-  // would lose the distinction between this member and another subtree move.
-  if (operation.command === 'subtree_rename_member') return false;
   const page =
     options.page === undefined
       ? ((await crowi
           .model('Page')
           .findById(operation.page)
-          .select('path status historyTransition historyTracking')
+          .select('path status historyTransition historyTracking pendingHistoryEntry')
+          .read('primary')
           .lean()
           .exec()) as CompletionEvidencePageSnapshot | null)
       : options.page;
+
+  const staged = page?.pendingHistoryEntry;
+  if (
+    staged?.type === 'page_event' &&
+    // A slot can hold a `page_event` entry with no event body (a repair
+    // fixture, or data an earlier bug left half-written). It names no move,
+    // so it is not evidence — and dereferencing it would throw.
+    staged.event != null &&
+    String(staged.event.page) === String(operation.page) &&
+    staged.event.operationId === eventOperationId &&
+    staged.event.kind === kind
+  ) {
+    // The entry is the commit itself, so it settles the operation on its own.
+    // Materialising on the winner's behalf is what lets later readers see the
+    // row; it is idempotent (`_id` upsert, `entryId`-matched drain), and a
+    // failure here does not un-commit the move that the entry already proves.
+    try {
+      await materializePendingEntry(crowi, operation.page);
+    } catch {
+      // Swallowed on purpose: the staged entry is already the proof, so a
+      // failed assist changes the answer for nobody. The repair sweep and the
+      // next reader both retry the materialize from the same entry.
+    }
+    return true;
+  }
+
+  const evidence = await crowi.model('PageHistoryEvent').exists({ page: operation.page, operationId: eventOperationId, kind }).read('primary');
+  if (evidence != null) return true;
+
+  // Subtree members are grouped under the root id, so projection-only success
+  // would lose the distinction between this member and another subtree move.
+  if (operation.command === 'subtree_rename_member') return false;
   if (page == null || page.historyTracking?.state === 'ready' || page.historyTracking?.state === 'migrating') return false;
   return classifyResume(page, expectationOf(operation)).decision === 'already-settled';
 }
