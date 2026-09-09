@@ -1,5 +1,22 @@
 # @crowi/api
 
+## 2.0.0-alpha.20
+
+### Minor Changes
+
+- e141321: Add a blocking preflight migration, `page-liker-seenusers-to-relations`, that moves `pages.liker` / `pages.seenUsers` into the independent `likes` / `seens` collections and then removes both fields from `pages`. This affects every deployment up to and including alpha.17, not only v1 — those legacy arrays are still how earlier alpha releases stored Like and seen-by membership. Until this migration is applied, the api refuses to boot under the default `block` preflight policy, because the `likes` / `seens` unique index does not exist yet and Like / seen-by counts read as zero. Applying it requires a maintenance window: stop all writers, take a MongoDB backup, then run `crowi-admin migrate apply --id page-liker-seenusers-to-relations` before starting the new binary. See the "Migrating Like / seen-by relations" section of the v1 upgrade guide for the full runbook and failure-recovery steps.
+- 35e4640: Open the whole month in the page sidebar when you are inside a date hierarchy. Crowi's flow-note idiom (`<notebook>/YYYY/MM/DD/<title>`) leaves one or two pages under each day, so the sidebar used to show a column of bare day numbers and open only the day you were on — a shape that says nothing about what any other day holds. From a `YYYY/MM/` node and anywhere below it, every day of that month now lists the pages inside it, turning the rail into a readable month log; a year node still lists only its months, as before. The node you are on is scrolled into view when the opened month runs longer than the rail. `GET /pages/children` gains an optional `depth` (1-2, default 1) that widens the response to that many levels, returned as one flat list where each row carries its full path; the server already scanned the whole subtree, so a deeper request costs no extra query, and omitting `depth` returns exactly what it always did.
+
+### Patch Changes
+
+- 9ef12db: Tell MCP clients how to write a link to a wiki page. The server's instructions covered path shape, page placement and the edit lock, but said nothing about turning a page into a URL — so an assistant handing someone a link had to guess, and a helpful extra round of percent-encoding turns `%20` into `%2520`, which addresses a page name nobody saved. The instructions now name the ID form as the link to prefer, state that a space in a page path is written `+`, and say not to encode a URL that is already a URL.
+- 35aa704: Close 20 security advisories, including a critical one. Next.js moves to 16.3.3, which fixes unauthenticated remote code execution through the image optimization API when it handles AVIF files, and a second unauthenticated path that only affects Windows-hosted servers. Hono moves to 4.13.5 or later, nodemailer to 9.1.1, sharp to 0.35.4, and js-yaml to 4.3.2 on the 4.x line and 3.15.2 on the 3.x one. Three dependencies Crowi does not declare itself — svgo, baseline-browser-mapping and the 3.x js-yaml — are pinned to their patched versions, because no parent of theirs offers a version that already resolves there.
+- 530670f: Fix a subtree move being reported as failed when it had fully succeeded. Renaming a subtree commits each member in three writes — the page move and the staged history event land together first, the event row is written a few round-trips later, and the operation's result is cached later still. Crowi only looked for the event row, so a delivery that arrived in that gap — a client retry after a timeout, a double submit, or a single request whose history write failed after the pages had already moved — found no proof the move had happened and answered `Failed to move the whole subtree — some pages may already have been moved`, even though every page had moved and every history entry was intact. Completion is now read from the staged entry as well as the row, from a single primary-pinned snapshot, so the gap reports success like any other moment.
+- Updated dependencies [35aa704]
+- Updated dependencies [35e4640]
+  - @crowi/api-contract@2.0.0-alpha.20
+  - @crowi/plugin-api@1.0.0-alpha.11
+
 ## 2.0.0-alpha.19
 
 ### Patch Changes
