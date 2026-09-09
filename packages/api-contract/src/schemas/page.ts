@@ -487,6 +487,44 @@ export const PageRevisionErrorSchema = z.object({
   }),
 });
 
+// RFC-0020 — the closed set of reasons `ingestHtmlArtifact` (packages/api's
+// artifact/ingest.ts) can reject a write with, plus the discriminator /
+// delivery-configuration reasons the write-path and delivery-policy leaves
+// add. This tuple is the single source of truth: `ingest.ts` imports the
+// type rather than redeclaring it, because `@crowi/api-contract` cannot
+// import from `@crowi/api` (the dependency runs the other way) so the HTTP
+// contract's union can only live here.
+export const ARTIFACT_INGEST_REJECTION_REASONS = [
+  'BODY_TOO_LARGE',
+  'DOM_LIMIT_EXCEEDED',
+  'HTML_PARSE_ERROR',
+  'DOCTYPE_INVALID',
+  'DOCUMENT_STRUCTURE_INVALID',
+  'ELEMENT_FORBIDDEN',
+  'INLINE_CODE_CONTENT_INVALID',
+  'ATTRIBUTE_FORBIDDEN',
+  'META_FORBIDDEN',
+  'EXTERNAL_REFERENCE',
+  'FONT_REFERENCE_FORBIDDEN',
+  'SCRIPT_TYPE_FORBIDDEN',
+  'MODULE_SPECIFIER_FORBIDDEN',
+  'CSS_PARSE_ERROR',
+  'CSS_AT_RULE_FORBIDDEN',
+  'CSS_FUNCTION_FORBIDDEN',
+  'CSS_STRING_ARGUMENT_FORBIDDEN',
+  'URL_FORBIDDEN',
+  'CSS_VALUE_NODE_LIMIT_EXCEEDED',
+  'CSS_VALUE_DEPTH_EXCEEDED',
+  'CSS_SOURCE_TOO_LARGE',
+  'NORMALIZER_MARKER_INVALID',
+  'NORMALIZATION_NOT_IDEMPOTENT',
+  'CONTENT_TYPE_INVALID',
+  'CONTENT_TYPE_CONFLICT',
+  'ARTIFACT_DELIVERY_NOT_CONFIGURED',
+] as const;
+export const ArtifactIngestRejectionReasonSchema = z.enum(ARTIFACT_INGEST_REJECTION_REASONS);
+export type ArtifactIngestRejectionReason = z.infer<typeof ArtifactIngestRejectionReasonSchema>;
+
 /**
  * RFC-0021 §5.3 — the `Idempotency-Key` a history-producing command requires:
  * 16-128 URL-safe characters. Lives here rather than beside the Mongoose model
