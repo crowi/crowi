@@ -1,4 +1,4 @@
-import type { PageUser } from '@crowi/api-contract';
+import type { PageContentType, PageUser } from '@crowi/api-contract';
 import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
@@ -278,6 +278,18 @@ export interface PageDocument extends Document {
   pendingHistoryEntry?: PendingHistoryEntry | null;
   /** RFC-0021 Phase 2c-2 — see `PageHistoryTransition`'s doc comment above. */
   historyTransition?: PageHistoryTransition | null;
+  /**
+   * RFC-0020 §1 — denormalized list-view hint, copied from the current
+   * Revision's `contentType` on the SAME Page document write that moves
+   * `revision`/`currentRevision`. Not an independent authority: a Page
+   * without a `revision` pointer has no kind yet, and any hint value left
+   * over on such a document must not be trusted (see
+   * `PageContentTypeConflictError` / `Revision.prepareRevision`'s
+   * pointer-aware resolution). Optional so pre-existing rows read as
+   * `undefined`; the response serializer normalizes missing to
+   * `'markdown'`.
+   */
+  contentType?: PageContentType;
 
   // dynamic fields
   latestRevision?: Types.ObjectId;
@@ -319,6 +331,39 @@ export interface PushRevisionOptions {
 export interface UpdatePageOptions extends PushRevisionOptions {
   grant?: number;
   editVia?: string;
+  /**
+   * RFC-0020 §1 — explicit body content discriminator for the new
+   * Revision. Omit to keep the current kind (pointer exists) or default
+   * to `'markdown'` (no pointer yet). See `Revision.prepareRevision`'s
+   * pointer-aware resolution and `Page.pushRevision`'s mismatch check.
+   */
+  contentType?: PageContentType;
+}
+
+/**
+ * RFC-0020 §1 — thrown by `Page.pushRevision` when a pointer-bearing Page
+ * (one whose kind is already settled) is asked to accept a new Revision of
+ * a DIFFERENT kind. This is not a variant/conversion mechanism: the kind
+ * mismatch is rejected outright, before the new Revision is persisted, so
+ * a Page can never silently flip between Markdown and artifact in place.
+ * Pointerless Pages have no settled kind and are never subject to this
+ * check (see the pointer-aware resolution in `Revision.prepareRevision`).
+ *
+ * Mirrors `PageCleanupIncompleteError` (`service/page-history/deletion.ts`):
+ * a fixed, closed message with no body/path/kind detail, so nothing about
+ * the conflicting content ever reaches an operator log or HTTP response.
+ */
+export class PageContentTypeConflictError extends Error {
+  readonly pageId: string;
+
+  constructor(pageId: Types.ObjectId, options?: { cause?: unknown }) {
+    super(`page content type conflict for page ${pageId}`);
+    this.name = 'PageContentTypeConflictError';
+    this.pageId = String(pageId);
+    if (options?.cause !== undefined) {
+      this.cause = options.cause;
+    }
+  }
 }
 
 export interface PageModel extends Model<PageDocument> {
@@ -871,6 +916,11 @@ export default (crowi: Crowi) => {
       // both absent and explicitly-null. A default would also make every
       // legacy Page write the field back on its next unrelated `save()`.
       historyTransition: { type: historyTransitionSchema },
+      // RFC-0020 §1 — denormalized list-view hint. `required: false` /
+      // no default so pre-existing rows and pointerless Pages keep
+      // reading as `undefined` on disk; see the `PageDocument` interface
+      // field doc above for the full authority contract.
+      contentType: { type: String, enum: ['markdown', 'artifact'], required: false },
     },
     {
       toJSON: { getters: true },
@@ -1674,7 +1724,7 @@ export default (crowi: Crowi) => {
 
     const [rawPages, total] = await Promise.all([
       Page.find(match)
-        .select('path redirectTo status grant grantedUsers creator lastUpdateUser commentCount createdAt updatedAt')
+        .select('path redirectTo status grant grantedUsers creator lastUpdateUser commentCount createdAt updatedAt contentType')
         .sort({ path: 1, _id: 1 })
         .skip(offset)
         .limit(limit)
@@ -2011,11 +2061,29 @@ export default (crowi: Crowi) => {
       debug('pushRevision on Create');
     }
 
+    // RFC-0020 §1 — the LAST chokepoint every content writer funnels
+    // through before a new Revision becomes durable, so no path (including a
+    // direct `pushRevision` call that bypasses `Page.updatePage`'s own
+    // earlier check below) can persist a mismatched Revision. A pointerless
+    // Page (`pageData.revision == null`) has no settled kind yet — its first
+    // Revision is accepted unconditionally (see `PageContentTypeConflictError`'s
+    // doc comment).
+    if (pageData.revision != null) {
+      const currentContentType: PageContentType = pageData.contentType ?? 'markdown';
+      const newContentType: PageContentType = newRevision.contentType ?? 'markdown';
+      if (newContentType !== currentContentType) {
+        throw new PageContentTypeConflictError(pageData._id);
+      }
+    }
+
     await newRevision.save();
 
     debug('Successfully saved new revision', newRevision);
 
     pageData.revision = newRevision;
+    // RFC-0020 §1 — the list-view hint is co-written in the SAME
+    // `pageData.save()` below as the pointer, never a separate write.
+    pageData.contentType = newRevision.contentType ?? 'markdown';
     // preserveTimestamps (body-rewrite migrations): keep the page's existing
     // lastUpdateUser / updatedAt so an `apply` neither bumps the page to the
     // top of recently-updated lists nor rewrites "last updated by" to the
@@ -2088,7 +2156,7 @@ export default (crowi: Crowi) => {
       grantedUsers: user ? [user] : [],
     });
 
-    const newRevision = await Revision.prepareRevision(newPage, body, user, { format, editVia: options.editVia });
+    const newRevision = await Revision.prepareRevision(newPage, body, user, { format, editVia: options.editVia, contentType: options.contentType });
     try {
       const revisionData = await Page.pushRevision(newPage, newRevision, user);
       pageEvent.emit('create', revisionData, user);
@@ -2112,7 +2180,25 @@ export default (crowi: Crowi) => {
     // explicit grant change working while making "no grant option" mean "keep".
     const grant = options.grant ?? pageData.grant;
     // update existing page
-    const newRevision = await Revision.prepareRevision(pageData, body, user, { editVia: options.editVia });
+    // RFC-0020 §1 — reject a pointer-bearing kind mismatch BEFORE
+    // `prepareRevision` runs, not just before `pushRevision` persists it.
+    // Otherwise a requested kind that differs from the current pointer's
+    // kind would still drive the caller's bytes through `prepareRevision`'s
+    // Markdown branch (full renderer / metadata / AST-budget pipeline) only
+    // to be rejected afterward — the artifact-never-reaches-the-renderer
+    // guarantee has to hold at the point of entry, not just at the point of
+    // write. A pointerless Page has no settled kind to compare against, so
+    // this is skipped and `prepareRevision` resolves the first kind itself.
+    // `pushRevision`'s own check (below, inside it) still re-confirms this
+    // right before the Revision document is saved — that's the backstop for
+    // callers that push a Revision directly, bypassing this method.
+    if (pageData.revision != null && options.contentType != null) {
+      const currentContentType: PageContentType = pageData.contentType ?? 'markdown';
+      if (options.contentType !== currentContentType) {
+        throw new PageContentTypeConflictError(pageData._id);
+      }
+    }
+    const newRevision = await Revision.prepareRevision(pageData, body, user, { editVia: options.editVia, contentType: options.contentType });
 
     // This is the external (REST / API) edit path — it bypasses the
     // collaborative editor. Per RFC-0003 §"Server-side direct Markdown
