@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
+import type { PageContentType, Revision, RevisionMetaShape } from '@crowi/api-contract';
 import type { RenderActor, RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
 import { Types } from 'mongoose';
@@ -33,6 +33,12 @@ export interface PopulatedRevision {
   rendererVersion?: string;
   /** RFC-0010 — edit channel ('web' | 'oauth' | 'pat'); absent = web. */
   editVia?: 'web' | 'oauth' | 'pat';
+  /**
+   * RFC-0020 §1 — this Revision's own content discriminator, authoritative
+   * for render behavior. Missing (legacy row) normalizes to `'markdown'`
+   * in `toRevisionResponse`.
+   */
+  contentType?: PageContentType;
 }
 
 /**
@@ -56,6 +62,13 @@ export interface PageLike {
   createdAt?: Date;
   updatedAt?: Date;
   latestRevision?: Types.ObjectId | string;
+  /**
+   * RFC-0020 §1 — denormalized list-view hint copied from the current
+   * Revision's `contentType`. Missing normalizes to `'markdown'` in
+   * `pageToResponse`; not an authority for a populated `revision`'s own
+   * render behavior (see `PopulatedRevision.contentType`).
+   */
+  contentType?: PageContentType;
   toObject?: () => PageLike;
 }
 
@@ -156,23 +169,37 @@ export interface RevisionResponseOptions {
   withRenderedAst?: boolean;
 }
 
-export const toRevisionResponse = (revision: PopulatedRevision, options: RevisionResponseOptions = {}): Revision => ({
-  _id: revision._id.toString(),
-  path: revision.path,
-  body: revision.body,
-  format: revision.format || 'markdown',
-  author: revision.author ? toPageUser(revision.author) : null,
-  ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
-  createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
-  // Sync path: only emits stored meta + renderedAst. Detail endpoints
-  // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
-  // afterwards to fold in the on-the-fly fallback for legacy revisions.
-  meta: resolveRevisionMeta(revision.meta, options.withMeta),
-  // The stored value is a bare mdast Root (never an envelope) — the
-  // legacy member of the contract union. Cast at this boundary; the
-  // detail endpoints overwrite it via `pickRenderedAstShape` anyway.
-  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst as Revision['renderedAst'], rendererVersion: revision.rendererVersion } : {}),
-});
+export const toRevisionResponse = (revision: PopulatedRevision, options: RevisionResponseOptions = {}): Revision => {
+  const contentType = revision.contentType ?? 'markdown';
+  // RFC-0020 §1 — an artifact Revision's response carries only its body +
+  // kind, never the Markdown-derived fields, regardless of what happens to
+  // be stored. `prepareRevision` never writes `meta` / `renderedAst` /
+  // `rendererVersion` onto an artifact Revision, but the response contract
+  // doesn't lean on that as its only guard — gating here means a response
+  // never leaks those fields even from a row that reached this shape some
+  // other way (legacy data, a future writer bug).
+  const isMarkdown = contentType === 'markdown';
+  return {
+    _id: revision._id.toString(),
+    path: revision.path,
+    body: revision.body,
+    format: revision.format || 'markdown',
+    author: revision.author ? toPageUser(revision.author) : null,
+    ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
+    createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
+    // Sync path: only emits stored meta + renderedAst. Detail endpoints
+    // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
+    // afterwards to fold in the on-the-fly fallback for legacy revisions.
+    meta: isMarkdown ? resolveRevisionMeta(revision.meta, options.withMeta) : undefined,
+    // The stored value is a bare mdast Root (never an envelope) — the
+    // legacy member of the contract union. Cast at this boundary; the
+    // detail endpoints overwrite it via `pickRenderedAstShape` anyway.
+    ...(isMarkdown && options.withRenderedAst
+      ? { renderedAst: revision.renderedAst as Revision['renderedAst'], rendererVersion: revision.rendererVersion }
+      : {}),
+    contentType,
+  };
+};
 
 export const resolveRevisionMeta = (stored: RevisionMetaContent | undefined, emit: boolean | undefined): RevisionMetaShape | undefined => {
   if (!emit) return undefined;
@@ -397,5 +424,6 @@ export const pageToResponse = (page: EnrichedPage, options: PageToResponseOption
     likerCount: page.likerCount,
     seenUsersCount: page.seenUsersCount,
     isLiked: page.isLiked,
+    contentType: pageObj.contentType ?? 'markdown',
   };
 };

@@ -94,6 +94,17 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
       return c.json(PAGE_NOT_FOUND_BODY, 404);
     }
 
+    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus (the first
+    // of 3 collaboration gates; see `onAuthenticate` / `onLoadDocument`
+    // for the other two). Reuses the same not-found body as the other
+    // pre-signing checks above so a token is never minted for one — no
+    // new response code distinguishes "artifact" from "not found" /
+    // "not granted" / "deleted". A missing hint is legacy Markdown.
+    if (loaded.page.contentType === 'artifact') {
+      debug('getYjsToken rejected: page %s is an artifact page', pageId);
+      return c.json(PAGE_NOT_FOUND_BODY, 404);
+    }
+
     try {
       const { readonly } = await checkEditorCap(crowi, pageId);
       const { token, expiresAt } = wsTokenUtil.signWsToken({

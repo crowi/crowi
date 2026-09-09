@@ -33,6 +33,7 @@ import {
   likePageRoute,
   listPageChildrenRoute,
   listPagesRoute,
+  type PageContentType,
   PageGrantEnum,
   renamePageRoute,
   renameSubtreeRoute,
@@ -332,7 +333,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           // On-the-fly fallback for legacy revisions — one pipeline run
           // produces both meta + renderedAst, stored values win on merge.
-          if (pageResponse.revision && isPopulatedRevision(page.revision)) {
+          // RFC-0020 §1 — artifact HTML must never reach the Markdown
+          // renderer; the selected Revision's own kind decides, not the
+          // Page's top-level hint (current/historical/portal detail alike).
+          if (pageResponse.revision && isPopulatedRevision(page.revision) && (page.revision.contentType ?? 'markdown') === 'markdown') {
             const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
               crowi,
               page.revision.meta,
@@ -587,7 +591,13 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // stuck on the "Rendering…" placeholder. List rows stay lean
           // (no renderedAst) as before.
           const portalPageResponse = enrichedPortalPage ? pageToResponse(enrichedPortalPage, { withMeta: true, withRenderedAst: true }) : null;
-          if (portalPageResponse?.revision && portalPage && isPopulatedRevision(portalPage.revision)) {
+          // RFC-0020 §1 — same Markdown-only gate as the getPage detail path.
+          if (
+            portalPageResponse?.revision &&
+            portalPage &&
+            isPopulatedRevision(portalPage.revision) &&
+            (portalPage.revision.contentType ?? 'markdown') === 'markdown'
+          ) {
             const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
               crowi,
               portalPage.revision.meta,
@@ -1454,12 +1464,35 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', 'Revision does not belong to this page'), 400);
           }
 
+          // RFC-0020 §1 — a revert stacks the historical Revision's body
+          // verbatim, bypassing `Revision.prepareRevision`'s normal
+          // kind-mismatch guard (which only fires on an explicit
+          // `options.contentType`, and this handler passes none of its
+          // own). Without this check, reverting to a mixed-kind history
+          // (possible from a concurrent pointerless first-save race — see
+          // the storage spec's "pointer を持つ Page の update / revert /
+          // quiet rewrite" section) would let artifact HTML sneak into a
+          // Markdown Revision and reach the renderer. A pointerless Page
+          // has no settled kind to compare against, so the target
+          // Revision's kind is accepted (first save) rather than compared.
+          const targetContentType: PageContentType = oldRevision.contentType ?? 'markdown';
+          if (pageData.revision != null) {
+            const currentContentType: PageContentType = pageData.contentType ?? 'markdown';
+            if (targetContentType !== currentContentType) {
+              return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', 'Revision content type does not match the current page'), 400);
+            }
+          }
+
           // Stack the old body as a new revision on top of the latest. The
           // base is pageData.revision (the server-side latest), set inside
           // prepareRevision — the client never supplies one. No `grant` option
           // is passed: updatePage defaults to `pageData.grant`, which keeps
           // the grant-update branch skipped (visibility is preserved).
-          const updateOptions = { editVia: c.get('authContext').kind };
+          // `contentType` is always passed explicitly (not just when
+          // pointerless) so the pointer-bearing case's resolution matches
+          // the guard above verbatim rather than relying on a separate
+          // "current kind" fallback path.
+          const updateOptions = { editVia: c.get('authContext').kind, contentType: targetContentType };
           const updated = (await Page.updatePage(pageData, oldRevision.body, user, updateOptions)) as PageDocument;
           const populated = await populateAndEnrich(updated, user);
           return c.json({ page: pageToResponse(populated) }, 200);
