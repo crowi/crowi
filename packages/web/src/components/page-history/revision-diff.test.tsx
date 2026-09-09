@@ -1,7 +1,9 @@
 import type { Revision } from '@crowi/api-contract';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { matchMediaImpl } from '@/lib/test-utils/mocks';
+import { WIDE_VIEWPORT_QUERY } from '@/lib/use-wide-viewport';
 import { RevisionDiff } from './revision-diff';
 
 // The real diff viewer depends on @emotion + a web worker and is loaded via
@@ -10,11 +12,12 @@ import { RevisionDiff } from './revision-diff';
 // the toggle test can assert on them without needing the real diff computation.
 vi.mock('react-diff-viewer-continued', () => ({
   DiffMethod: { LINES: 'LINES' },
-  default: (props: { oldValue?: string; newValue?: string; showDiffOnly?: boolean; extraLinesSurroundingDiff?: number }) => (
+  default: (props: { oldValue?: string; newValue?: string; splitView?: boolean; showDiffOnly?: boolean; extraLinesSurroundingDiff?: number }) => (
     <div
       data-testid="diff-viewer"
       data-old-value={props.oldValue}
       data-new-value={props.newValue}
+      data-split-view={String(props.splitView)}
       data-show-diff-only={String(props.showDiffOnly)}
       data-extra-lines-surrounding-diff={String(props.extraLinesSurroundingDiff)}
     />
@@ -54,6 +57,13 @@ function mockRevisions(revisions: Revision[]) {
 }
 
 describe('RevisionDiff fold toggle', () => {
+  // The split/unified control only exists at >=768px (see the narrow-viewport
+  // describe below), so these tests pin a wide viewport. `restoreMocks: true`
+  // undoes the spy after each test, hence beforeEach rather than a one-off.
+  beforeEach(() => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(matchMediaImpl((query) => query === WIDE_VIEWPORT_QUERY));
+  });
+
   it('keeps the previous diff visible while a newly selected pair is fetching', async () => {
     const previousRevisions = [baseRevision({ _id: 'rev-A', body: 'before' }), baseRevision({ _id: 'rev-B', body: 'previous result' })];
     mockRevisions(previousRevisions);
@@ -163,5 +173,21 @@ describe('RevisionDiff fold toggle', () => {
     // is hidden; the split/unified toggle still applies.
     expect(screen.queryByRole('button', { name: '変更のない行も全て表示' })).toBeNull();
     expect(screen.getByRole('button', { name: '統合表示' })).toBeDefined();
+  });
+});
+
+describe('RevisionDiff on a narrow viewport', () => {
+  // jsdom's default matchMedia reports "no match", which is exactly the
+  // narrow (<768px) case — no stub needed here.
+  it('renders unified and offers no split/unified toggle', async () => {
+    mockRevisions([baseRevision({ _id: 'rev-A', body: 'line1\nline2\n' }), baseRevision({ _id: 'rev-B', body: 'line1\nCHANGED\n' })]);
+
+    render(createElement(RevisionDiff, { fromId: 'rev-A', toId: 'rev-B' }));
+
+    expect((await screen.findByTestId('diff-viewer')).dataset.splitView).toBe('false');
+    expect(screen.queryByRole('button', { name: '統合表示' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '並列表示' })).toBeNull();
+    // The fold toggle is unaffected — it is useful at every width.
+    expect(screen.getByRole('button', { name: '変更のない行も全て表示' })).toBeDefined();
   });
 });
