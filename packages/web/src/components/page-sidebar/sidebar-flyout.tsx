@@ -244,10 +244,16 @@ export function SidebarFlyoutTrigger({ compact = false, className }: { compact?:
       aria-expanded={open}
       aria-haspopup="dialog"
       onClick={toggle}
-      onPointerEnter={(event) => {
-        // Touch fires `pointerenter` immediately before `click`, so without
-        // this gate a tap would open on enter and the click would toggle it
-        // straight back shut.
+      // Movement onto the control, not merely being under the pointer:
+      // `pointerenter` also fires when the button is *revealed* beneath a
+      // cursor that never moved — dismissing the full-screen mobile search,
+      // whose back button sits exactly here, hands the pointer straight to
+      // this icon and would open a panel nobody asked for. A pointer that
+      // travels onto the button always emits a move over it, so nothing is
+      // lost. Touch is excluded outright: it fires these immediately before
+      // `click`, so the tap would open on contact and the click would toggle
+      // it straight back shut.
+      onPointerMove={(event) => {
         if (event.pointerType !== 'mouse') return;
         hoverOpen();
       }}

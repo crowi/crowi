@@ -66,10 +66,22 @@ describe('SidebarFlyout', () => {
     expect(panel()).toBeNull();
   });
 
-  it('opens when a mouse enters the trigger and retracts once the pointer leaves', () => {
+  it('stays closed when the trigger merely appears under a pointer that never moved', () => {
+    // Dismissing the full-screen mobile search reveals this trigger under the
+    // cursor that just pressed its back button — `pointerenter` fires there
+    // with no movement at all, and opening on it hands the reader a panel
+    // they did not ask for.
     render(flyout());
 
     fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
+    fireEvent.pointerOver(openButton(), { pointerType: 'mouse' });
+    expect(panel()).toBeNull();
+  });
+
+  it('opens when a mouse moves onto the trigger and retracts once the pointer leaves', () => {
+    render(flyout());
+
+    fireEvent.pointerMove(openButton(), { pointerType: 'mouse' });
     expect(panel()).not.toBeNull();
 
     fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
@@ -83,7 +95,7 @@ describe('SidebarFlyout', () => {
   it('keeps a hover-opened panel that the pointer moved into', () => {
     render(flyout());
 
-    fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
+    fireEvent.pointerMove(openButton(), { pointerType: 'mouse' });
     fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
     fireEvent.pointerEnter(screen.getByRole('dialog'), { pointerType: 'mouse' });
 
@@ -94,7 +106,7 @@ describe('SidebarFlyout', () => {
   it('does not open on touch, where the tap that follows would close it again', () => {
     render(flyout());
 
-    fireEvent.pointerEnter(openButton(), { pointerType: 'touch' });
+    fireEvent.pointerMove(openButton(), { pointerType: 'touch' });
     expect(panel()).toBeNull();
 
     // The tap itself still opens it.
@@ -105,7 +117,7 @@ describe('SidebarFlyout', () => {
   it('pins a hover-opened panel when the trigger is clicked, rather than toggling it shut', () => {
     render(flyout());
 
-    fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
+    fireEvent.pointerMove(openButton(), { pointerType: 'mouse' });
     fireEvent.click(openButton());
     expect(panel()).not.toBeNull();
 
