@@ -27,7 +27,7 @@ import { SearchFocusProvider } from '@/lib/search-focus-context';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 import { MobileSearch } from '@/components/search/mobile-search';
 import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
-import { SidebarFlyout } from '@/components/page-sidebar/sidebar-flyout';
+import { SidebarFlyoutProvider, SidebarFlyoutTrigger } from '@/components/page-sidebar/sidebar-flyout';
 import { PluginReadinessBanner } from '@/components/admin/plugin-readiness-banner';
 import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
@@ -118,81 +118,92 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   // avoids creating a scroll container, so `position: sticky` (TOC
   // rail) and `position: fixed` (compact header) stay viewport-relative.
   return (
-    <div className="min-h-screen bg-background overflow-x-clip">
-      <LocaleSync />
-      <ThemeSync />
-      <RendererStylesheets />
-      {/* 接続エラーバナー */}
-      <ConnectionBanner />
+    <SidebarFlyoutProvider path={sidebarPath} enabled={showSidebar}>
+      <div className="min-h-screen bg-background overflow-x-clip">
+        <LocaleSync />
+        <ThemeSync />
+        <RendererStylesheets />
+        {/* 接続エラーバナー */}
+        <ConnectionBanner />
 
-      {/* サーバーエラーモーダル */}
-      <ServerErrorModal />
+        {/* サーバーエラーモーダル */}
+        <ServerErrorModal />
 
-      <SkipLink />
+        <SkipLink />
 
-      <SearchFocusProvider>
-        <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
-          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-            {/* `relative` so the sidebar control can hang off the left of
+        <SearchFocusProvider>
+          <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
+            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
+              {/* `relative` so the sidebar control can hang off the left of
               this cluster on viewports with a gutter to spare — see
               `SidebarFlyout`. */}
-            <div className="relative flex items-center gap-1 min-w-0 shrink-0">
-              {/* Below 1440px the left rail has no room beside the centred
+              <div className="relative flex items-center gap-1 min-w-0 shrink-0">
+                {/* Below 1440px the left rail has no room beside the centred
                 column and hides; this brings the same navigation back as a
                 panel over the content. Leads the cluster so it lines up with
-                the panel it opens, which slides in from the same edge. Same
-                visibility rule as the rail, so routes without a sidebar do
-                not grow a dead control. */}
-              {showSidebar && <SidebarFlyout path={sidebarPath} />}
-              <SiteBrand />
-              {/* Mobile (< md) search trigger next to the logo — the desktop
+                the panel it opens, which slides in from the same edge.
+                Renders nothing on routes the provider disables. */}
+                <SidebarFlyoutTrigger
+                  // Once the header's centred column has a gutter wide enough
+                  // to hold it (36px button + gap needs ~44px, which
+                  // `max-w-4xl`'s gutter reaches at about 950px), the button
+                  // leaves the flow and hangs off the left of the cluster, so
+                  // the logo stays exactly where it sits on a viewport with no
+                  // sidebar control at all. Narrower than that there is
+                  // nowhere to hang it without pushing it off-screen, so it
+                  // goes back in the flow and the logo shifts instead — better
+                  // a logo that moves than a control that cannot be reached.
+                  className="min-[960px]:absolute min-[960px]:top-1/2 min-[960px]:right-full min-[960px]:mr-1 min-[960px]:-translate-y-1/2"
+                />
+                <SiteBrand />
+                {/* Mobile (< md) search trigger next to the logo — the desktop
                 search input below is hidden on narrow viewports. */}
-              <MobileSearch />
-            </div>
-            <GlobalSearchInput />
-            <div className="flex items-center gap-2 ml-auto">
-              {/* 機密注意書き — app:confidential 設定時に常時表示。スクショ/
+                <MobileSearch />
+              </div>
+              <GlobalSearchInput />
+              <div className="flex items-center gap-2 ml-auto">
+                {/* 機密注意書き — app:confidential 設定時に常時表示。スクショ/
                 印刷で機密文書と分かるよう右クラスタ先頭に控えめに出す。 */}
-              <ConfidentialNotice />
-              <CreatePageButton />
-              <NotificationBell />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="hover:bg-muted flex items-center gap-2 px-1.5"
-                    aria-label={m['header.user_menu_aria']({ name: user?.name || user?.username || '' })}
-                  >
-                    {user && <UserAvatar user={user} size="sm" />}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  {user && <UserDropdownIdentity user={user} />}
-                  <DropdownMenuSeparator />
-                  {user && <UserMenuItems username={user.username} isAdmin={user.admin === true} />}
-                  <DropdownMenuItem onClick={logout} className="text-destructive">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    {m['header.user_dropdown_logout']()}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                <ConfidentialNotice />
+                <CreatePageButton />
+                <NotificationBell />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="hover:bg-muted flex items-center gap-2 px-1.5"
+                      aria-label={m['header.user_menu_aria']({ name: user?.name || user?.username || '' })}
+                    >
+                      {user && <UserAvatar user={user} size="sm" />}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    {user && <UserDropdownIdentity user={user} />}
+                    <DropdownMenuSeparator />
+                    {user && <UserMenuItems username={user.username} isAdmin={user.admin === true} />}
+                    <DropdownMenuItem onClick={logout} className="text-destructive">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      {m['header.user_dropdown_logout']()}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-          </div>
-        </header>
-      </SearchFocusProvider>
+          </header>
+        </SearchFocusProvider>
 
-      {/* プラグイン設定準備状況バナー — 管理者が active driver の必須設定 (S3
+        {/* プラグイン設定準備状況バナー — 管理者が active driver の必須設定 (S3
           bucket / 検索 driver の url 等) を未設定のまま使っている場合だけ、
           ヘッダー直下・本文より上に表示する (feature-plugin-config-readiness)。 */}
-      <PluginReadinessBanner isAdmin={user?.admin === true} containerClassName="max-w-4xl mx-auto" />
+        <PluginReadinessBanner isAdmin={user?.admin === true} containerClassName="max-w-4xl mx-auto" />
 
-      {/* 機密注意書き(モバイル) — 右クラスタに余地がない < sm では、ヘッダー
+        {/* 機密注意書き(モバイル) — 右クラスタに余地がない < sm では、ヘッダー
           直下の細い行で全文を表示し、どのビューポートでも機密マーカーが
           スクショ/印刷に残るようにする。 */}
-      <ConfidentialNotice placement="bar" />
+        <ConfidentialNotice placement="bar" />
 
-      {/*
+        {/*
         Page-grant accent strip — a thin horizontal bar directly
         under the header that picks up `--page-grant-accent`
         (transparent for PUBLIC, dark gray for OWNER/SPECIFIED, dark
@@ -201,19 +212,19 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         on it. Non-sticky on purpose: the sticky compact page header
         carries its own lock-icon affordance once you scroll.
       */}
-      <div aria-hidden className="h-1 transition-colors" style={{ backgroundColor: 'var(--page-grant-accent)' }} />
+        <div aria-hidden className="h-1 transition-colors" style={{ backgroundColor: 'var(--page-grant-accent)' }} />
 
-      <main
-        id={MAIN_CONTENT_ID}
-        tabIndex={-1}
-        className="max-w-4xl mx-auto px-4 py-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        {children}
-      </main>
+        <main
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="max-w-4xl mx-auto px-4 py-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {children}
+        </main>
 
-      {showSidebar && <PageSidebar path={sidebarPath} />}
+        {showSidebar && <PageSidebar path={sidebarPath} />}
 
-      {/* RFC-0003 Phase 7 — single toaster instance for collab connection
+        {/* RFC-0003 Phase 7 — single toaster instance for collab connection
           status notifications (offline / reconnected / auth-failed).
           Mounted at the (auth) shell level so a child-page rerender
           inside /_edit doesn't unmount the toast container and drop
@@ -222,7 +233,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           RFC-0004 Phase 1 — also the host for the shared `notify`
           utility (lib/notify.ts). `visibleToasts` caps the stack at 5
           so older toasts fade first when newer ones arrive. */}
-      <Toaster visibleToasts={MAX_VISIBLE_TOASTS} />
-    </div>
+        <Toaster visibleToasts={MAX_VISIBLE_TOASTS} />
+      </div>
+    </SidebarFlyoutProvider>
   );
 }

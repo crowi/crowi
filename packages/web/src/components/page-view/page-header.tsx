@@ -13,6 +13,7 @@ import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { UsePresenceResult } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
+import { SidebarFlyoutTrigger } from '@/components/page-sidebar/sidebar-flyout';
 import { useWideViewport } from '@/lib/use-wide-viewport';
 import { cn } from '@/lib/utils';
 import { BookmarkButton } from './bookmark-button';
@@ -411,17 +412,27 @@ export function PageHeader({
             className={cn('mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4', hasTocRail && 'min-[1280px]:max-[1439px]:-translate-x-[7.75rem]')}
           >
             <div className="flex items-center gap-2">
-              {/* Scroll-to-top — sits to the left of the title, hanging
-                  out past the content gutter (`-ml-9`). */}
-              <button
-                ref={scrollTopButtonRef}
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                aria-label={m['page.scroll_to_top']()}
-                className="-ml-9 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ArrowUp className="h-4 w-4" />
-              </button>
+              {/* Leading icons, hung out past the content gutter so the
+                  title below stays aligned with the article column. The
+                  hang has to match the group's own width, which changes
+                  with the sidebar control: it is present under 1440px (the
+                  app header carrying the other copy has scrolled away by
+                  now) and hidden above. Under `lg` the gutter is too narrow
+                  to hang anything in without pushing it off the left edge,
+                  so the group rejoins the flow and the title gives up the
+                  width instead. */}
+              <div className="flex shrink-0 items-center lg:-ml-16 min-[1440px]:-ml-9">
+                <SidebarFlyoutTrigger compact />
+                <button
+                  ref={scrollTopButtonRef}
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  aria-label={m['page.scroll_to_top']()}
+                  className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+              </div>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
               <div className="flex items-center gap-1 shrink-0">
                 {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}

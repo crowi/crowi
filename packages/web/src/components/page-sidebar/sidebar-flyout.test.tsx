@@ -1,7 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SidebarFlyout } from './sidebar-flyout';
+import { SidebarFlyoutProvider, SidebarFlyoutTrigger } from './sidebar-flyout';
 
 const { pathname } = vi.hoisted(() => ({ pathname: { value: '/some/page' } }));
 vi.mock('next/navigation', () => ({
@@ -16,7 +15,20 @@ vi.mock('./sidebar-body', async (importOriginal) => ({
 }));
 
 const openButton = () => screen.getByRole('button', { name: 'サイドバーを開く' });
+const openButtons = () => screen.queryAllByRole('button', { name: 'サイドバーを開く' });
 const panel = () => screen.queryByRole('dialog');
+const panels = () => screen.queryAllByRole('dialog');
+
+/** The shape every call site has: a provider somewhere above, triggers inside. */
+function flyout(path = '/some/page', triggerCount = 1) {
+  return (
+    <SidebarFlyoutProvider path={path} enabled>
+      {Array.from({ length: triggerCount }, (_, i) => (
+        <SidebarFlyoutTrigger key={i} />
+      ))}
+    </SidebarFlyoutProvider>
+  );
+}
 
 // `useMediaQuery` caches one MediaQueryList per query in a ref and re-reads
 // `.matches` off that same object, so a stub whose `matches` was fixed at
@@ -45,7 +57,7 @@ afterEach(cleanup);
 
 describe('SidebarFlyout', () => {
   it('opens on click and closes on a second click', () => {
-    render(createElement(SidebarFlyout, { path: '/some/page' }));
+    render(flyout());
 
     expect(panel()).toBeNull();
     fireEvent.click(openButton());
@@ -59,7 +71,7 @@ describe('SidebarFlyout', () => {
   it('opens when a mouse enters the trigger and retracts once the pointer leaves', () => {
     vi.useFakeTimers();
     try {
-      render(createElement(SidebarFlyout, { path: '/some/page' }));
+      render(flyout());
 
       fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
       expect(panel()).not.toBeNull();
@@ -78,7 +90,7 @@ describe('SidebarFlyout', () => {
   it('keeps a hover-opened panel that the pointer moved into', () => {
     vi.useFakeTimers();
     try {
-      render(createElement(SidebarFlyout, { path: '/some/page' }));
+      render(flyout());
 
       fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
       fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
@@ -94,7 +106,7 @@ describe('SidebarFlyout', () => {
   });
 
   it('does not open on touch, where the tap that follows would close it again', () => {
-    render(createElement(SidebarFlyout, { path: '/some/page' }));
+    render(flyout());
 
     fireEvent.pointerEnter(openButton(), { pointerType: 'touch' });
     expect(panel()).toBeNull();
@@ -107,7 +119,7 @@ describe('SidebarFlyout', () => {
   it('pins a hover-opened panel when the trigger is clicked, rather than toggling it shut', () => {
     vi.useFakeTimers();
     try {
-      render(createElement(SidebarFlyout, { path: '/some/page' }));
+      render(flyout());
 
       fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
       fireEvent.click(openButton());
@@ -123,7 +135,7 @@ describe('SidebarFlyout', () => {
   });
 
   it('closes on Escape', () => {
-    render(createElement(SidebarFlyout, { path: '/some/page' }));
+    render(flyout());
 
     fireEvent.click(openButton());
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -131,24 +143,52 @@ describe('SidebarFlyout', () => {
   });
 
   it('closes when a navigation lands on a new path', () => {
-    const { rerender } = render(createElement(SidebarFlyout, { path: '/some/page' }));
+    const { rerender } = render(flyout());
 
     fireEvent.click(openButton());
     expect(panel()).not.toBeNull();
 
     pathname.value = '/some/other-page';
-    rerender(createElement(SidebarFlyout, { path: '/some/other-page' }));
+    rerender(flyout('/some/other-page'));
     expect(panel()).toBeNull();
   });
 
   it('closes when the viewport widens far enough for the rail to take over', () => {
-    const { rerender } = render(createElement(SidebarFlyout, { path: '/some/page' }));
+    const { rerender } = render(flyout());
 
     fireEvent.click(openButton());
     expect(panel()).not.toBeNull();
 
     rail.matches = true;
-    rerender(createElement(SidebarFlyout, { path: '/some/page' }));
+    rerender(flyout());
     expect(panel()).toBeNull();
+  });
+
+  it('shows nothing on a route the provider disables', () => {
+    render(
+      <SidebarFlyoutProvider path="/some/page" enabled={false}>
+        <SidebarFlyoutTrigger />
+      </SidebarFlyoutProvider>,
+    );
+
+    expect(openButtons()).toHaveLength(0);
+  });
+
+  it('gives two triggers one shared panel rather than one each', () => {
+    // The app header and the compact page header both carry a trigger, and
+    // both are mounted while scrolled. Two panels would stack pixel-for-
+    // pixel, so dismissing the visible one would leave the other behind.
+    render(flyout('/some/page', 2));
+
+    const [headerTrigger, compactTrigger] = openButtons();
+    fireEvent.click(headerTrigger);
+    expect(panels()).toHaveLength(1);
+
+    // The second trigger reports the same state and closes what the first
+    // opened — an outside-pointerdown on a trigger must not fight its click.
+    expect(compactTrigger.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.pointerDown(compactTrigger);
+    fireEvent.click(compactTrigger);
+    expect(panels()).toHaveLength(0);
   });
 });
