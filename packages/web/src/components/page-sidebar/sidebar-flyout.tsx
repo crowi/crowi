@@ -33,7 +33,6 @@ interface SidebarFlyoutControls {
   toggle: () => void;
   hoverOpen: () => void;
   scheduleClose: () => void;
-  cancelClose: () => void;
   /** Ref callback every trigger passes to its button — see `triggers` below. */
   registerTrigger: (element: HTMLElement | null) => (() => void) | undefined;
 }
@@ -121,9 +120,14 @@ export function SidebarFlyoutProvider({ path, enabled, children }: { path: strin
     };
   }, []);
 
+  // Depends on `open`, not on `mode`: the memo reads nothing else off the
+  // state machine (`toggle` / `hoverOpen` go through functional `setMode`),
+  // so keying it on `mode` would rebuild the controls — and reattach both
+  // triggers' handlers — on the hover→pinned step, where `open` never moved.
+  const open = mode !== 'closed';
   const controls = useMemo<SidebarFlyoutControls>(
     () => ({
-      open: mode !== 'closed',
+      open,
       // Only a pinned panel toggles shut — a click on one the pointer
       // opened means "keep this", not "undo that".
       toggle: () => {
@@ -135,10 +139,9 @@ export function SidebarFlyoutProvider({ path, enabled, children }: { path: strin
         setMode((current) => (current === 'closed' ? 'hover' : current));
       },
       scheduleClose,
-      cancelClose,
       registerTrigger,
     }),
-    [mode, cancelClose, scheduleClose, registerTrigger],
+    [open, cancelClose, scheduleClose, registerTrigger],
   );
 
   // `enabled` flips on any navigation into or out of `/_edit` / `/_history`,
