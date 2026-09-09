@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodePagePathFromUrl,
   decodeRouteParamSegment,
+  recoverOverEncodedPagePath,
   defaultDraftBody,
   isReservedPagePath,
   isUserHomePath,
@@ -237,6 +238,37 @@ describe('pagePathToHref / decodePagePathFromUrl', () => {
 
   it('resolves %2B (percent-encoded "+") to a space too — literal "+" cannot survive this decode', () => {
     expect(decodePagePathFromUrl('/a%2Bb')).toBe('/a b');
+  });
+});
+
+describe('recoverOverEncodedPagePath', () => {
+  // A URL that was percent-encoded twice before reaching us (a link passed
+  // through a chat client or another tool that re-encoded an already-encoded
+  // URL) decodes once into a path that still carries the escape as literal
+  // text — `%2520` becomes the four characters `%20`, not a space — so the
+  // lookup misses a page that does exist.
+  it('recovers the real path from a once-decoded double-encoded URL', () => {
+    const path = decodePagePathFromUrl('/notes/2026/09/11/report%2520draft(v2)');
+    expect(path).toBe('/notes/2026/09/11/report%20draft(v2)');
+    expect(recoverOverEncodedPagePath(path)).toBe('/notes/2026/09/11/report draft(v2)');
+  });
+
+  it('recovers a double-encoded "+" as a space, matching the one-decode contract', () => {
+    expect(recoverOverEncodedPagePath('/a%2Bb')).toBe('/a b');
+  });
+
+  it('recovers a double-encoded non-ASCII segment', () => {
+    expect(recoverOverEncodedPagePath('/%E6%97%A5%E5%A0%B1/2026')).toBe('/日報/2026');
+  });
+
+  it('returns null for a path with nothing left to decode, so a found page is never second-guessed', () => {
+    expect(recoverOverEncodedPagePath('/a b/c')).toBeNull();
+    expect(recoverOverEncodedPagePath('/crowi/rfc/0001')).toBeNull();
+  });
+
+  it('returns null instead of throwing on a lone "%" that is not an escape', () => {
+    expect(recoverOverEncodedPagePath('/discount/100%off')).toBeNull();
+    expect(recoverOverEncodedPagePath('/a%')).toBeNull();
   });
 });
 

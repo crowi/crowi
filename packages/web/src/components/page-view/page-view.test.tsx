@@ -23,6 +23,7 @@ const { usePresence } = vi.hoisted(() => ({ usePresence: vi.fn() }));
 const { useMarkSeenOnView } = vi.hoisted(() => ({ useMarkSeenOnView: vi.fn() }));
 const { useRevertDeletedPage } = vi.hoisted(() => ({ useRevertDeletedPage: vi.fn() }));
 const { usePageGrantAccent } = vi.hoisted(() => ({ usePageGrantAccent: vi.fn() }));
+const { routerReplace } = vi.hoisted(() => ({ routerReplace: vi.fn() }));
 
 vi.mock('@/lib/use-page', () => ({ usePage }));
 vi.mock('@/lib/use-page-children', () => ({ usePageChildren }));
@@ -31,7 +32,7 @@ vi.mock('@/lib/use-presence', () => ({ usePresence }));
 vi.mock('@/lib/use-seen', () => ({ useMarkSeenOnView }));
 vi.mock('@/lib/use-page-mutations', () => ({ useRevertDeletedPage }));
 vi.mock('@/lib/use-page-grant-accent', () => ({ usePageGrantAccent }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: routerReplace, back: vi.fn() }) }));
 
 // Content leaves are irrelevant to render ORDER of the two banners — stub
 // each with an identifiable marker (their own behaviour has its own tests).
@@ -98,6 +99,73 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('PageView — a link that arrived percent-encoded twice', () => {
+  const REAL_PATH = '/notes/2026/09/11/report draft(v2)';
+  // What one decode of `.../report%2520draft(v2)` leaves behind: the escape
+  // survives as the literal characters `%20`, so the lookup misses.
+  const ASKED_PATH = '/notes/2026/09/11/report%20draft(v2)';
+
+  const missing = {
+    page: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+    notFound: true,
+    notGranted: false,
+    redirectTo: null,
+    isDeleted: false,
+    refetch: vi.fn(),
+  };
+
+  const renderAt = (path: string) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    return render(createElement(PageView, { path }), { wrapper });
+  };
+
+  it('sends the viewer to the page that does exist, instead of offering to create an empty one', () => {
+    const real = makePage({ path: REAL_PATH, grant: PageGrantEnum.PUBLIC });
+    usePage.mockImplementation((params: { path?: string }) => (params.path === REAL_PATH ? { ...missing, page: real, notFound: false } : missing));
+
+    renderAt(ASKED_PATH);
+
+    // `+` is the canonical URL form of a space, and the banner names where
+    // the viewer came from — the same shape a renamed page redirects with.
+    expect(routerReplace).toHaveBeenCalledWith(`/notes/2026/09/11/report+draft(v2)?redirectFrom=${encodeURIComponent(ASKED_PATH)}`);
+    expect(screen.queryByText(m['page.not_found_title']())).toBeNull();
+  });
+
+  it('carries an explicitly requested revision through the recovery', () => {
+    const real = makePage({ path: REAL_PATH, grant: PageGrantEnum.PUBLIC });
+    usePage.mockImplementation((params: { path?: string }) => (params.path === REAL_PATH ? { ...missing, page: real, notFound: false } : missing));
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    render(createElement(PageView, { path: ASKED_PATH, revisionId: 'rev-old' }), { wrapper });
+
+    expect(routerReplace).toHaveBeenCalledWith(`/notes/2026/09/11/report+draft(v2)?redirectFrom=${encodeURIComponent(ASKED_PATH)}&revision_id=rev-old`);
+  });
+
+  it('keeps the not-found card for the path the viewer asked for when the decoded candidate is missing too', () => {
+    usePage.mockImplementation(() => missing);
+
+    renderAt(ASKED_PATH);
+
+    expect(routerReplace).not.toHaveBeenCalled();
+    expect(screen.getByText(m['page.not_found_title']())).toBeTruthy();
+  });
+
+  it('never second-guesses a page that really is named with a percent escape', () => {
+    const literal = makePage({ path: ASKED_PATH, grant: PageGrantEnum.PUBLIC });
+    usePage.mockImplementation((params: { path?: string }) => (params.path === ASKED_PATH ? { ...missing, page: literal, notFound: false } : missing));
+
+    renderAt(ASKED_PATH);
+
+    expect(routerReplace).not.toHaveBeenCalled();
+    expect(screen.queryByText(m['page.not_found_title']())).toBeNull();
+  });
 });
 
 describe('PageView — RestrictedShareBanner / PortalizeBanner render order (AC6)', () => {

@@ -244,3 +244,36 @@ export function decodePagePathFromUrl(urlPath: string): string {
 export function decodeRouteParamSegment(segment: string): string {
   return segment.replace(/\+/g, ' ');
 }
+
+/**
+ * The path a URL meant, when that URL reached us percent-encoded twice.
+ *
+ * A link that passes through a tool which re-encodes an already-encoded URL
+ * arrives with its escapes escaped: the space in `/a b` leaves here as `/a+b`
+ * or `/a%20b`, and comes back as `/a%2520b`. One decode turns that into the
+ * four literal characters `%20`, which is a page name nothing is saved under,
+ * so the viewer is offered an empty page for a page that exists.
+ *
+ * Decoding until the string stops changing would be wrong — `%` is a legal
+ * character in a page path, so a page really named `/a%20b` must keep
+ * winning. That is why this returns only a CANDIDATE: the caller looks the
+ * real path up first and consults this only when that lookup finds nothing,
+ * which is the one situation where the literal reading has already been ruled
+ * out. `null` means there is nothing further to try — the path holds no
+ * escape, or holds a bare `%` that is not one.
+ *
+ *   /a%20b  → /a b
+ *   /a%2Bb  → /a b     (the `+`-as-space contract, one layer up)
+ *   /a b    → null     (nothing left to decode)
+ *   /100%off → null    (not an escape — decoding would throw)
+ */
+export function recoverOverEncodedPagePath(path: string): string | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+  const candidate = decodeRouteParamSegment(decoded);
+  return candidate === path ? null : candidate;
+}

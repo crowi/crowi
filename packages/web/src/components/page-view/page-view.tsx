@@ -16,7 +16,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { apiClient } from '@/lib/api-client';
-import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
+import { isUserHomePath, pagePathToHref, recoverOverEncodedPagePath } from '@/lib/page-path';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { usePage } from '@/lib/use-page';
@@ -111,6 +111,33 @@ export function PageView({ path, revisionId }: PageViewProps) {
       router.replace(redirectUrl);
     }
   }, [redirectTo, path, router]);
+
+  // A link that reached us percent-encoded twice decodes into a path holding
+  // the escape as literal text (`%2520` → the characters `%20`), which finds
+  // nothing. Only once THIS path has missed is the literal reading ruled out,
+  // so the candidate is looked up second and never competes with a page
+  // really named with a `%` in it. A candidate that also misses changes
+  // nothing: the viewer keeps the not-found card for the path they asked for.
+  const overEncodedPath = notFound ? recoverOverEncodedPagePath(path) : null;
+  // Deliberately without `revision_id`: this asks only whether the path
+  // exists. A revision filter could miss for an unrelated reason and lose a
+  // recovery that should have happened; the revision rides on the redirect.
+  const overEncodedQuery = usePage({ path: overEncodedPath ?? undefined });
+  // Read the query only when there IS a candidate. Without a path the query
+  // never runs, so every field below is inert — but tying the state to the
+  // candidate rather than to the query's own output keeps that a property of
+  // this component instead of an assumption about the hook's disabled shape.
+  const overEncodedPage = overEncodedPath == null ? null : overEncodedQuery.page;
+  const isResolvingOverEncoded = overEncodedPath != null && overEncodedQuery.isLoading;
+
+  useEffect(() => {
+    if (overEncodedPage == null) return;
+    // Carry the revision through: a link to one historical revision of a page
+    // must land on that revision, not on the current one, or the recovery
+    // quietly answers a different question than the one that was asked.
+    const revisionQuery = revisionId ? `&revision_id=${encodeURIComponent(revisionId)}` : '';
+    router.replace(`${pagePathToHref(overEncodedPage.path)}?redirectFrom=${encodeURIComponent(path)}${revisionQuery}`);
+  }, [overEncodedPage, path, revisionId, router]);
 
   // Mirror the page's `grant` onto `<html data-page-grant=...>` so CSS
   // (`--page-grant-accent`) tints the header strip / chip / icons.
@@ -626,6 +653,11 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
   if (notGranted) {
     return <AccessDeniedCard onGoBack={() => router.back()} />;
+  }
+
+  // Still deciding whether this was a double-encoded link to a real page.
+  if (isResolvingOverEncoded || overEncodedPage != null) {
+    return <LoadingSpinner message={m['page.loading']()} />;
   }
 
   if (notFound) {
