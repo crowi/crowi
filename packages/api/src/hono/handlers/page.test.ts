@@ -3972,6 +3972,226 @@ describe('Routes /api/pages/revert-to-revision (Hono revertToRevision)', () => {
   });
 });
 
+describe('RFC-0020 §1 — content type discriminator (Hono page routes)', () => {
+  const PATH_PREFIX = '/hono-page-artifact-storage-test/';
+  let Page;
+  let Revision;
+  let accessToken: string;
+  let user;
+  let userId: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+    Revision = crowi.model('Revision');
+    const created = await createTestUser({ name: 'Artifact Storage Test', username: 'artifactStorageTester', email: 'artifact-storage-tester@example.com' });
+    accessToken = created.accessToken;
+    user = created.user;
+    userId = String(created.user._id);
+  });
+
+  // Builds a genuinely artifact-kind Page + current Revision via the same
+  // model seam a future write-path leaf will use (`Revision.prepareRevision`
+  // + `Page.pushRevision`), rather than flipping `contentType` on a Revision
+  // that was actually created through the Markdown renderer — the latter
+  // would leave a stale `meta` behind that a real artifact Revision never
+  // gets (RFC-0020 §1: the artifact branch skips the renderer entirely).
+  const createArtifactPage = async (path: string, body: string) => {
+    const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
+    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact' });
+    return Page.pushRevision(page, newRevision, user);
+  };
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  test('AC-SC-3: a pointerless Page recovers via a revision_id-omitted PUT, saving the first Revision and the Page hint together', async () => {
+    const path = `${PATH_PREFIX}pointerless-recovery`;
+    const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
+    expect(page.revision).toBeUndefined();
+
+    const res = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: page._id.toString(), body: '# recovered' });
+    expect(res.status).toBe(200);
+    expect(res.body.page.contentType).toBe('markdown');
+    expect(res.body.page.revision.body).toBe('# recovered');
+
+    const reloaded = await Page.findById(page._id).lean();
+    expect(reloaded.contentType).toBe('markdown');
+    expect(reloaded.revision?.toString()).toBe(res.body.page.revision._id);
+  });
+
+  test('AC-SC-4: a plain PUT co-writes the current kind pointer and hint in the same Page save', async () => {
+    const created = await createPageViaApi(accessToken, `${PATH_PREFIX}plain-put-hint`, '# v1');
+    const res = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: created._id, body: '# v2' });
+    expect(res.status).toBe(200);
+    expect(res.body.page.contentType).toBe('markdown');
+    const reloaded = await Page.findById(created._id).lean();
+    expect(reloaded.contentType).toBe('markdown');
+    expect(reloaded.revision?.toString()).toBe(res.body.page.revision._id);
+  });
+
+  test('AC-SC-4: reverting to a historical Revision whose kind differs from the current Page kind is rejected before Page.updatePage, and the renderer is never invoked', async () => {
+    const created = await createPageViaApi(accessToken, `${PATH_PREFIX}revert-mismatch`, '# v1');
+    // Simulates the mixed-kind history a concurrent pointerless first-save
+    // race can leave behind (storage spec §pointer を持つ Page の update /
+    // revert / quiet rewrite) — an orphaned artifact Revision sharing this
+    // Page's immutable `page` ref, without ever going through pushRevision.
+    const orphanArtifact = await Revision.create({
+      path: created.path,
+      page: new Types.ObjectId(created._id),
+      body: '<html>orphan</html>',
+      author: userId,
+      contentType: 'artifact',
+    });
+
+    const before = await Revision.countDocuments({ path: created.path });
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'runRender');
+    let res;
+    try {
+      res = await request(app)
+        .post('/api/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: created._id, revision_id: orphanArtifact._id.toString() });
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('PAGE_REVERT_TO_REVISION_FAILED');
+
+    const after = await Revision.countDocuments({ path: created.path });
+    expect(after).toBe(before);
+
+    const reloaded = await Page.findById(created._id).lean();
+    expect(reloaded.contentType).toBe('markdown');
+  });
+
+  test('AC-SC-4: reverting a pointerless Page to an orphaned artifact Revision succeeds as a first save, and the renderer is never invoked', async () => {
+    const path = `${PATH_PREFIX}pointerless-revert`;
+    const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
+    const orphan = await Revision.create({
+      path,
+      page: page._id,
+      body: '<html>orphan</html>',
+      author: userId,
+      contentType: 'artifact',
+    });
+
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'runRender');
+    let res;
+    try {
+      res = await request(app)
+        .post('/api/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: page._id.toString(), revision_id: orphan._id.toString() });
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(200);
+    expect(res.body.page.contentType).toBe('artifact');
+    expect(res.body.page.revision.contentType).toBe('artifact');
+  });
+
+  test('AC-SC-6: list rows return the Page hint (missing = markdown) without an extra Revision query', async () => {
+    const markdownPage = await createPageViaApi(accessToken, `${PATH_PREFIX}list-markdown`, '# md');
+    const artifactPage = await createArtifactPage(`${PATH_PREFIX}list-artifact`, '<html></html>');
+
+    const revisionFindSpy = jest.spyOn(Revision, 'find');
+    const revisionFindByIdSpy = jest.spyOn(Revision, 'findById');
+    let res;
+    try {
+      res = await request(app).get('/api/pages/list').query({ path: PATH_PREFIX }).set(authHeaders(accessToken));
+    } finally {
+      revisionFindSpy.mockRestore();
+      revisionFindByIdSpy.mockRestore();
+    }
+    expect(res.status).toBe(200);
+    const byPath = new Map(res.body.pages.map((p) => [p.path, p.contentType]));
+    expect(byPath.get(markdownPage.path)).toBe('markdown');
+    expect(byPath.get(artifactPage.path)).toBe('artifact');
+    expect(revisionFindSpy).not.toHaveBeenCalled();
+    expect(revisionFindByIdSpy).not.toHaveBeenCalled();
+  });
+
+  test('AC-SC-7: current page detail for an artifact Page returns the nested kind without invoking the renderer', async () => {
+    const created = await createArtifactPage(`${PATH_PREFIX}detail-artifact`, '<html><body>hi</body></html>');
+
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'runRender');
+    let res;
+    try {
+      res = await request(app).get('/api/pages').query({ page_id: created._id.toString() }).set(authHeaders(accessToken));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(200);
+    expect(res.body.page.contentType).toBe('artifact');
+    expect(res.body.page.revision.contentType).toBe('artifact');
+    expect(res.body.page.revision.meta).toBeUndefined();
+    expect(res.body.page.revision.renderedAst).toBeUndefined();
+  });
+
+  test('AC-SC-7: historical page detail returns the selected artifact Revision kind while the top-level hint reflects the latest Markdown Page', async () => {
+    const created = await createPageViaApi(accessToken, `${PATH_PREFIX}historical-artifact`, '# v1');
+    const orphanArtifact = await Revision.create({
+      path: created.path,
+      page: new Types.ObjectId(created._id),
+      body: '<html>orphan</html>',
+      author: userId,
+      contentType: 'artifact',
+    });
+
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'runRender');
+    let res;
+    try {
+      res = await request(app).get('/api/pages').query({ path: created.path, revision_id: orphanArtifact._id.toString() }).set(authHeaders(accessToken));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(200);
+    expect(res.body.page.contentType).toBe('markdown');
+    expect(res.body.page.revision._id).toBe(orphanArtifact._id.toString());
+    expect(res.body.page.revision.contentType).toBe('artifact');
+    expect(res.body.page.revision.meta).toBeUndefined();
+  });
+
+  test('AC-SC-7: portal detail for an artifact portal Page returns the nested kind without invoking the renderer', async () => {
+    const portalPath = `${PATH_PREFIX}portal-artifact/`;
+    await createArtifactPage(portalPath, '<html>portal</html>');
+
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'runRender');
+    let res;
+    try {
+      res = await request(app).get('/api/pages/list').query({ path: portalPath }).set(authHeaders(accessToken));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(200);
+    expect(res.body.portalPage.contentType).toBe('artifact');
+    expect(res.body.portalPage.revision.contentType).toBe('artifact');
+  });
+
+  test('AC-SC-15: PUT still accepts an omitted revision_id, and a stale one still 409s', async () => {
+    const path = `${PATH_PREFIX}revision-id-optional`;
+    const createRes = await request(app).post('/api/pages').set(authHeaders(accessToken)).send({ path, body: '# v1' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id;
+    const v1RevisionId = createRes.body.page.revision._id;
+
+    const omitRes = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body: '# v2' });
+    expect(omitRes.status).toBe(200);
+
+    const staleRes = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body: '# v3', revision_id: v1RevisionId });
+    expect(staleRes.status).toBe(409);
+  });
+});
+
 describe('Routes /api/pages (Hono getPage — past revision / stale detection)', () => {
   const PATH_PREFIX = '/hono-page-get-revision-test/';
   let accessToken: string;

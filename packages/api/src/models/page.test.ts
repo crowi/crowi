@@ -1,5 +1,13 @@
 import { Types } from 'mongoose';
-import { STATUS_DELETED, STATUS_PUBLISHED, STATUS_RENAMING, STATUSES, isTransitionalPageStatus, visiblePageGrantOr } from 'src/models/page';
+import {
+  PageContentTypeConflictError,
+  STATUS_DELETED,
+  STATUS_PUBLISHED,
+  STATUS_RENAMING,
+  STATUSES,
+  isTransitionalPageStatus,
+  visiblePageGrantOr,
+} from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 
 describe('Page', () => {
@@ -1341,6 +1349,292 @@ describe('Page', () => {
       expect(allPaths).toEqual(['/user/alice/page-0', '/user/alice/page-1', '/user/alice/page-2', '/user/alice/page-3', '/user/alice/page-4']);
       expect(page1.total).toBe(5);
       expect(page2.total).toBe(5);
+    });
+
+    test('AC-SC-6: the allowlist projection includes the artifact hint, and pagination/count are unaffected', async () => {
+      await Fixture.generate('Page', [
+        { path: '/user/alice/markdown-note', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        { path: '/user/alice/artifact-note', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', contentType: 'artifact' },
+      ]);
+
+      const { rawPages, total } = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 50, offset: 0 });
+      const byPath = new Map(rawPages.map((p) => [p.path, p.contentType]));
+      expect(byPath.get('/user/alice/markdown-note')).toBeUndefined();
+      expect(byPath.get('/user/alice/artifact-note')).toBe('artifact');
+      expect(total).toBe(2);
+      expect(rawPages).toHaveLength(2);
+    });
+  });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    let Revision;
+    let actor;
+
+    beforeAll(() => {
+      Revision = crowi.model('Revision');
+      actor = createdUsers[0];
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({ path: { $regex: '^/artifact-storage-model' } });
+      await Revision.deleteMany({ path: { $regex: '^/artifact-storage-model' } });
+    });
+
+    test('AC-SC-3: the only new persisted fields are Page.contentType and Revision.contentType', () => {
+      expect(Object.keys(Page.schema.paths).sort()).toEqual(
+        [
+          '__v',
+          '_id',
+          'collabLifecycleVersion',
+          'commentCount',
+          'contentType',
+          'createdAt',
+          'creator',
+          'currentRevision',
+          'extended',
+          'grant',
+          'grantedUsers',
+          'historySequence',
+          'historyTracking',
+          'historyTransition',
+          'lastUpdateUser',
+          'path',
+          'pendingHistoryEntry',
+          'redirectTo',
+          'revision',
+          'status',
+          'updatedAt',
+          'yjsCheckpointAt',
+          'yjsState',
+        ].sort(),
+      );
+      expect(Object.keys(Revision.schema.paths).sort()).toEqual(
+        [
+          '__v',
+          '_id',
+          'author',
+          'body',
+          'contentType',
+          'contributors',
+          'createdAt',
+          'editVia',
+          'format',
+          'historyOperationId',
+          'historySequence',
+          'message',
+          'meta',
+          'page',
+          'parentRevisionId',
+          'path',
+          'renderedAst',
+          'rendererVersion',
+          'savedBy',
+          'type',
+          'yjsUpdate',
+        ].sort(),
+      );
+    });
+
+    test('AC-SC-1: Page.contentType is optional — a Page created without pushRevision reads back as undefined on disk', async () => {
+      const page = await Page.create({
+        path: '/artifact-storage-model/legacy-pointerless',
+        creator: actor,
+        lastUpdateUser: actor,
+        grant: Page.GRANT_PUBLIC,
+        status: 'published',
+        grantedUsers: [actor],
+      });
+      const reloaded = await Page.findById(page._id).lean();
+      expect(reloaded.contentType).toBeUndefined();
+    });
+
+    test('AC-SC-1: Page.contentType persists a valid enum value and rejects an invalid one', async () => {
+      const page = await Page.create({
+        path: '/artifact-storage-model/explicit-hint',
+        creator: actor,
+        lastUpdateUser: actor,
+        grant: Page.GRANT_PUBLIC,
+        status: 'published',
+        grantedUsers: [actor],
+        contentType: 'artifact',
+      });
+      const reloaded = await Page.findById(page._id).lean();
+      expect(reloaded.contentType).toBe('artifact');
+
+      await expect(
+        Page.create({
+          path: '/artifact-storage-model/invalid-hint',
+          creator: actor,
+          lastUpdateUser: actor,
+          grant: Page.GRANT_PUBLIC,
+          status: 'published',
+          grantedUsers: [actor],
+          contentType: 'rogue',
+        }),
+      ).rejects.toThrow(/`rogue` is not a valid enum value for path `contentType`/);
+    });
+
+    test('AC-SC-3: pointerless first-save persists Markdown by default and sets the hint in the same save as the pointer', async () => {
+      const page = await Page.create({
+        path: '/artifact-storage-model/pointerless-markdown',
+        creator: actor,
+        lastUpdateUser: actor,
+        grant: Page.GRANT_PUBLIC,
+        status: 'published',
+        grantedUsers: [actor],
+      });
+      expect(page.contentType).toBeUndefined();
+      expect(page.revision).toBeUndefined();
+
+      const newRevision = await Revision.prepareRevision(page, 'first body', actor, {});
+      const saved = await Page.pushRevision(page, newRevision, actor);
+      expect(saved.contentType).toBe('markdown');
+      expect(saved.revision._id.toString()).toBe(newRevision._id.toString());
+    });
+
+    test('AC-SC-3: pointerless first-save accepts an explicit artifact kind without a fail-closed / repair path', async () => {
+      const page = await Page.create({
+        path: '/artifact-storage-model/pointerless-artifact',
+        creator: actor,
+        lastUpdateUser: actor,
+        grant: Page.GRANT_PUBLIC,
+        status: 'published',
+        grantedUsers: [actor],
+      });
+      const newRevision = await Revision.prepareRevision(page, '<html></html>', actor, { contentType: 'artifact' });
+      const saved = await Page.pushRevision(page, newRevision, actor);
+      expect(saved.contentType).toBe('artifact');
+    });
+
+    test('AC-SC-4: a pointer-bearing Page allows kind omission / same-value updates and rejects a differing kind before persisting a new Revision', async () => {
+      const created = await Page.createPage('/artifact-storage-model/mismatch', 'before', actor, {});
+      expect(created.contentType).toBe('markdown');
+
+      const updatedOmit = await Page.updatePage(created, 'after-1', actor, {});
+      expect(updatedOmit.contentType).toBe('markdown');
+
+      const updatedSame = await Page.updatePage(updatedOmit, 'after-2', actor, { contentType: 'markdown' });
+      expect(updatedSame.contentType).toBe('markdown');
+
+      const revisionCountBefore = await Revision.countDocuments({ page: created._id });
+
+      // A `rejects.toThrow` + unchanged-revision-count assertion alone
+      // can't tell this mismatch's rejection point apart from
+      // `pushRevision`'s own backstop check: in THIS direction (markdown
+      // page, artifact-kind request), `prepareRevision` would resolve
+      // 'artifact' — an explicit `options.contentType` always wins over
+      // the pointer fallback — and build an unsaved artifact Revision
+      // without ever touching the renderer, so a `runRender` spy can't
+      // discriminate here either (unlike the reverse-direction test
+      // below). Spying on `Revision.prepareRevision` itself is the only
+      // way to pin that `updatePage`'s own pre-check rejects BEFORE
+      // `prepareRevision` runs at all, not just before `pushRevision`
+      // persists whatever `prepareRevision` already built.
+      const prepareRevisionSpy = jest.spyOn(Revision, 'prepareRevision');
+      try {
+        await expect(Page.updatePage(updatedSame, '<html></html>', actor, { contentType: 'artifact' })).rejects.toThrow(PageContentTypeConflictError);
+        expect(prepareRevisionSpy).not.toHaveBeenCalled();
+      } finally {
+        prepareRevisionSpy.mockRestore();
+      }
+
+      const revisionCountAfter = await Revision.countDocuments({ page: created._id });
+      expect(revisionCountAfter).toBe(revisionCountBefore);
+
+      const reloaded = await Page.findById(created._id).lean();
+      expect(reloaded.contentType).toBe('markdown');
+    });
+
+    test('AC-SC-4: Page.updatePage rejects an artifact Page’s markdown-kind update BEFORE Revision.prepareRevision runs the Markdown renderer', async () => {
+      const created = await Page.createPage('/artifact-storage-model/mismatch-artifact-to-markdown', '<html></html>', actor, { contentType: 'artifact' });
+      expect(created.contentType).toBe('artifact');
+
+      const revisionCountBefore = await Revision.countDocuments({ page: created._id });
+
+      // RFC-0020 §1 — this is the direction the mismatch guard has to catch
+      // BEFORE `prepareRevision` runs: requesting 'markdown' against a
+      // pointer whose current kind is 'artifact' resolves `prepareRevision`'s
+      // OWN kind to 'markdown' (an explicit `options.contentType` always
+      // wins over the pointer fallback), which — without a pre-check in
+      // `updatePage` itself — would run the full Markdown render pipeline on
+      // the request body before `pushRevision`'s re-check ever rejects it.
+      // The reverse direction (markdown page, artifact-kind request) doesn't
+      // exercise this: `prepareRevision` resolves 'artifact' there too and
+      // already skips the renderer regardless of when the guard fires.
+      //
+      // Spying on `Revision.prepareRevision` itself (rather than only the
+      // renderer it would call) pins the exact contract in this test's
+      // title — the guard has to reject before `prepareRevision` is invoked
+      // at all, not merely before some step inside it runs. A future change
+      // that moves the render call around inside `prepareRevision` would
+      // still be caught by this assertion; a `runRender`-only spy would not.
+      const renderer = crowi.getRenderer();
+      const renderSpy = jest.spyOn(renderer, 'runRender');
+      const prepareRevisionSpy = jest.spyOn(Revision, 'prepareRevision');
+      try {
+        await expect(Page.updatePage(created, '# markdown', actor, { contentType: 'markdown' })).rejects.toThrow(PageContentTypeConflictError);
+        expect(prepareRevisionSpy).not.toHaveBeenCalled();
+        expect(renderSpy).not.toHaveBeenCalled();
+      } finally {
+        prepareRevisionSpy.mockRestore();
+        renderSpy.mockRestore();
+      }
+
+      const revisionCountAfter = await Revision.countDocuments({ page: created._id });
+      expect(revisionCountAfter).toBe(revisionCountBefore);
+
+      const reloaded = await Page.findById(created._id).lean();
+      expect(reloaded.contentType).toBe('artifact');
+    });
+
+    test('AC-SC-4: Page.pushRevision rejects a mismatched Revision before persisting it, independent of Page.updatePage’s own earlier check', async () => {
+      const created = await Page.createPage('/artifact-storage-model/mismatch-pushrevision', 'before', actor, {});
+      expect(created.contentType).toBe('markdown');
+
+      // Bypasses `Page.updatePage` entirely — this exercises `pushRevision`
+      // as the last-resort chokepoint for a caller (e.g. a future writer)
+      // that prepares a Revision itself and calls `pushRevision` directly.
+      const mismatchedRevision = await Revision.prepareRevision(created, '<html></html>', actor, { contentType: 'artifact' });
+      expect(mismatchedRevision.isNew).toBe(true);
+
+      const revisionCountBefore = await Revision.countDocuments({ page: created._id });
+
+      await expect(Page.pushRevision(created, mismatchedRevision, actor)).rejects.toThrow(PageContentTypeConflictError);
+
+      expect(mismatchedRevision.isNew).toBe(true);
+      const revisionCountAfter = await Revision.countDocuments({ page: created._id });
+      expect(revisionCountAfter).toBe(revisionCountBefore);
+
+      const reloaded = await Page.findById(created._id).lean();
+      expect(reloaded.contentType).toBe('markdown');
+      expect(reloaded.revision.toString()).toBe(created.revision._id.toString());
+    });
+
+    test('AC-SC-5: rename preserves the artifact Page pointer/hint, and the redirect stub left behind is Markdown', async () => {
+      const created = await Page.createPage('/artifact-storage-model/rename-source', '<html></html>', actor, { contentType: 'artifact' });
+      expect(created.contentType).toBe('artifact');
+
+      const redirectStub = await Page.rename(created, '/artifact-storage-model/rename-dest', actor, { createRedirectPage: true });
+      expect(redirectStub.contentType).toBe('markdown');
+      expect(redirectStub.redirectTo).toBe('/artifact-storage-model/rename-dest');
+
+      const moved = await Page.findById(created._id).lean();
+      expect(moved.path).toBe('/artifact-storage-model/rename-dest');
+      expect(moved.contentType).toBe('artifact');
+      expect(moved.revision?.toString()).toBe(created.revision._id.toString());
+    });
+
+    test('AC-SC-5: soft delete preserves the artifact Page pointer/hint, and the redirect stub left behind is Markdown', async () => {
+      const created = await Page.createPage('/artifact-storage-model/delete-source', '<html></html>', actor, { contentType: 'artifact' });
+      expect(created.contentType).toBe('artifact');
+
+      const redirectStub = await Page.deletePage(created, actor);
+      expect(redirectStub.contentType).toBe('markdown');
+
+      const deleted = await Page.findById(created._id).lean();
+      expect(deleted.status).toBe(STATUS_DELETED);
+      expect(deleted.contentType).toBe('artifact');
+      expect(deleted.revision?.toString()).toBe(created.revision._id.toString());
     });
   });
 

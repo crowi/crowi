@@ -242,6 +242,41 @@ describe('Routes /api/pages/:id/yjs-token (Hono getYjsToken)', () => {
     });
   });
 
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    it('AC-SC-9: rejects an artifact Page with the same not-found body used for missing/ungranted/deleted pages, without minting a token', async () => {
+      const pageId = await createPage('artifact');
+      const Page = crowi.model('Page');
+      await Page.updateOne({ _id: pageId }, { $set: { contentType: 'artifact' } });
+
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('AC-SC-9: a missing contentType hint (legacy Markdown) still issues a token', async () => {
+      const pageId = await createPage('missing-hint');
+      const Page = crowi.model('Page');
+      // Defensive: the create path already writes 'markdown' explicitly —
+      // simulate a genuinely legacy row with no stored hint at all.
+      await Page.updateOne({ _id: pageId }, { $unset: { contentType: '' } });
+
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.wsToken).toBe('string');
+    });
+
+    it('AC-SC-9: an explicit markdown hint still issues a token', async () => {
+      const pageId = await createPage('markdown-hint');
+
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.wsToken).toBe('string');
+    });
+  });
+
   it('signs and verifies a wsToken within a single ws-token util instance (sign↔verify round trip)', async () => {
     // This bypasses HTTP — it asserts the in-process invariant that
     // `verifyWsToken` accepts a token freshly produced by the same

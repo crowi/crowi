@@ -227,4 +227,127 @@ describe('Revision (RFC-0003 collab fields)', () => {
       }
     });
   });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    async function seedPage(pathSuffix: string) {
+      return await Page.create({
+        path: `/artifact-storage-${pathSuffix}-${Date.now()}`,
+        creator: user._id,
+        lastUpdateUser: user._id,
+        grant: 1,
+        status: 'published',
+        grantedUsers: [user._id],
+      });
+    }
+
+    test('AC-SC-1: contentType is an optional enum — a raw document written without it reads back as undefined', async () => {
+      const doc = await Revision.create({
+        path: '/artifact-storage/legacy',
+        body: 'legacy body',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(),
+      });
+      const fetched = await Revision.findById(doc._id).lean();
+      expect(fetched.contentType).toBeUndefined();
+    });
+
+    test('AC-SC-1: contentType persists a valid enum value verbatim', async () => {
+      const doc = await Revision.create({
+        path: '/artifact-storage/explicit',
+        body: '<html></html>',
+        format: 'markdown',
+        author: user._id,
+        contentType: 'artifact',
+        createdAt: new Date(),
+      });
+      const fetched = await Revision.findById(doc._id).lean();
+      expect(fetched.contentType).toBe('artifact');
+    });
+
+    test('AC-SC-1: rejects a contentType value outside the markdown/artifact enum', async () => {
+      await expect(
+        Revision.create({
+          path: '/artifact-storage/invalid',
+          body: 'x',
+          author: user._id,
+          contentType: 'rogue',
+        }),
+      ).rejects.toThrow(/`rogue` is not a valid enum value for path `contentType`/);
+    });
+
+    test('AC-SC-2: Markdown prepareRevision keeps the existing derived fields (renderer runs)', async () => {
+      const page = await seedPage('markdown-derived');
+      const rev = await Revision.prepareRevision(page, '# Heading\n\nbody', user, { contentType: 'markdown' });
+      expect(rev.contentType).toBe('markdown');
+      expect(rev.rendererVersion).toBeDefined();
+      expect(rev.meta).toBeDefined();
+      expect(rev.meta?.toc?.[0]?.text).toBe('Heading');
+    });
+
+    test('AC-SC-2: artifact prepareRevision skips the renderer/metadata/AST-budget pipeline entirely', async () => {
+      const page = await seedPage('artifact-skip-renderer');
+      const renderer = crowi.getRenderer();
+      const spy = jest.spyOn(renderer, 'runRender');
+      try {
+        const rev = await Revision.prepareRevision(page, '<html><body>hi</body></html>', user, { contentType: 'artifact' });
+        expect(spy).not.toHaveBeenCalled();
+        expect(rev.contentType).toBe('artifact');
+        expect(rev.body).toBe('<html><body>hi</body></html>');
+        expect(rev.meta).toBeUndefined();
+        expect(rev.renderedAst).toBeUndefined();
+        expect(rev.rendererVersion).toBeUndefined();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('AC-SC-2: artifact prepareRevision still stamps the page ref and RFC-0003 collab options like Markdown does', async () => {
+      const page = await seedPage('artifact-collab-fields');
+      const contributorIds = [new mongoose.Types.ObjectId()];
+      const parentRevisionId = new mongoose.Types.ObjectId();
+      const rev = await Revision.prepareRevision(page, '<html></html>', user, {
+        contentType: 'artifact',
+        savedBy: user._id,
+        contributors: contributorIds,
+        message: 'artifact checkpoint',
+        editVia: 'web',
+        type: 'snapshot',
+        parentRevisionId,
+      });
+      expect(rev.page?.toString()).toBe(page._id.toString());
+      expect(rev.savedBy?.toString()).toBe(user._id.toString());
+      expect(rev.contributors?.map((id) => id.toString())).toEqual(contributorIds.map((id) => id.toString()));
+      expect(rev.message).toBe('artifact checkpoint');
+      expect(rev.editVia).toBe('web');
+      expect(rev.type).toBe('snapshot');
+      expect(rev.parentRevisionId?.toString()).toBe(parentRevisionId.toString());
+    });
+
+    test('pointer-aware resolution: omitting options.contentType on a pointerless Page defaults to markdown', async () => {
+      const page = await seedPage('pointerless-default');
+      const rev = await Revision.prepareRevision(page, 'body', user);
+      expect(rev.contentType).toBe('markdown');
+    });
+
+    test('pointer-aware resolution: omitting options.contentType on a pointer-bearing artifact Page inherits the current kind', async () => {
+      const page = await seedPage('pointer-inherit');
+      const first = await Revision.prepareRevision(page, '<html></html>', user, { contentType: 'artifact' });
+      await first.save();
+      page.revision = first._id;
+      page.contentType = 'artifact';
+      const rev = await Revision.prepareRevision(page, '<html>v2</html>', user);
+      expect(rev.contentType).toBe('artifact');
+    });
+
+    test("pointer-aware resolution: a pointerless Page's own stray hint is not trusted as authority", async () => {
+      const page = await seedPage('pointerless-hint-not-authority');
+      // Simulate a stray hint left on a pointerless Page (never a real
+      // persisted state this leaf produces, but the resolution formula
+      // must not read it when `pageData.revision` is unset).
+      page.contentType = 'artifact';
+      const rev = await Revision.prepareRevision(page, 'body', user);
+      expect(rev.contentType).toBe('markdown');
+    });
+  });
 });

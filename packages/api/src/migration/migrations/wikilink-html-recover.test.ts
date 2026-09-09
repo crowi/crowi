@@ -388,6 +388,30 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
     expect(report?.counts?.collisions).toBe(0);
   });
 
+  it('AC-SC-10 (RFC-0020 §1): an artifact Page with a [[/tag]] candidate is excluded from isPending / detect / apply, and a co-existing Markdown page is still recovered', async () => {
+    await Page.createPage(`${PATH_PREFIX}/artifact-with-candidate`, 'see [[/font]] here', admin, { contentType: 'artifact' });
+    const markdownPage = await Page.createPage(`${PATH_PREFIX}/markdown-with-candidate`, 'see [[/font]] here', admin, {});
+    // A legacy row that predates the contentType field (missing-kind, not
+    // explicit 'markdown') — the walker must still treat it as Markdown.
+    await Revision.updateOne({ _id: markdownPage.revision._id }, { $unset: { contentType: '' } });
+    await Page.updateOne({ _id: markdownPage._id }, { $unset: { contentType: '' } });
+
+    const runner = new MigrationRunner(crowi);
+    expect(await runner.isPending(wikilinkHtmlRecover)).toBe(true);
+
+    const report = await runner.detect(wikilinkHtmlRecover);
+    expect(report?.counts?.pages).toBe(1);
+
+    const revisionCountBefore = await Revision.countDocuments({ path: { $regex: `^${PATH_PREFIX}/artifact-with-candidate` } });
+    await runner.apply(wikilinkHtmlRecover);
+    const revisionCountAfter = await Revision.countDocuments({ path: { $regex: `^${PATH_PREFIX}/artifact-with-candidate` } });
+    expect(revisionCountAfter).toBe(revisionCountBefore);
+
+    const artifactReloaded = await Page.findOne({ path: `${PATH_PREFIX}/artifact-with-candidate` }).populate('revision');
+    expect(artifactReloaded.revision.body).toBe('see [[/font]] here');
+    expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+  });
+
   it('apply is idempotent — a second run is a no-op (not pending)', async () => {
     await Page.createPage(`${PATH_PREFIX}/idem`, 'has [[/marquee]] tag', admin, {});
     const runner = new MigrationRunner(crowi);

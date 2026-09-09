@@ -527,4 +527,61 @@ describe('Routes /api/pages/.../revisions (Hono)', () => {
       expect(asOwner.body.revisions).toHaveLength(2);
     });
   });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    it('AC-SC-8: list meta / batch / single detail surface each Revision kind, normalizing a missing stored value to markdown, and the single-detail route never renders an artifact body', async () => {
+      const Revision = crowi.model('Revision');
+      const Page = crowi.model('Page');
+      const { pageId, revisionId: v1 } = await createTestPage(`${PATH_PREFIX}kind-authority`, '# v1');
+      const page = await Page.findById(pageId);
+      const legacyRevision = await Revision.create({
+        path: page.path,
+        page: page._id,
+        body: 'legacy body, no contentType field at all',
+        author: accessTokenUserId,
+      });
+      const artifactRevision = await Revision.create({
+        path: page.path,
+        page: page._id,
+        body: '<html>artifact</html>',
+        author: accessTokenUserId,
+        contentType: 'artifact',
+      });
+
+      const listRes = await request(app).get(`/api/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+      expect(listRes.status).toBe(200);
+      const byId = new Map(listRes.body.revisions.map((r: { _id: string; contentType: string }) => [r._id, r.contentType]));
+      expect(byId.get(v1)).toBe('markdown');
+      expect(byId.get(legacyRevision._id.toString())).toBe('markdown');
+      expect(byId.get(artifactRevision._id.toString())).toBe('artifact');
+
+      const batchRes = await request(app)
+        .get('/api/pages/revisions')
+        .query({ ids: `${v1},${legacyRevision._id},${artifactRevision._id}` })
+        .set(authHeaders(accessToken));
+      expect(batchRes.status).toBe(200);
+      const batchById = new Map(batchRes.body.revisions.map((r: { _id: string; contentType: string }) => [r._id, r.contentType]));
+      expect(batchById.get(v1)).toBe('markdown');
+      expect(batchById.get(legacyRevision._id.toString())).toBe('markdown');
+      expect(batchById.get(artifactRevision._id.toString())).toBe('artifact');
+
+      const renderer = crowi.getRenderer();
+      const spy = jest.spyOn(renderer, 'runRender');
+      let singleRes;
+      try {
+        singleRes = await request(app).get(`/api/pages/revisions/${artifactRevision._id}`).set(authHeaders(accessToken));
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+      expect(singleRes.status).toBe(200);
+      expect(singleRes.body.revision.contentType).toBe('artifact');
+      expect(singleRes.body.revision.meta).toBeUndefined();
+      expect(singleRes.body.revision.renderedAst).toBeUndefined();
+
+      const singleMarkdownRes = await request(app).get(`/api/pages/revisions/${v1}`).set(authHeaders(accessToken));
+      expect(singleMarkdownRes.status).toBe(200);
+      expect(singleMarkdownRes.body.revision.contentType).toBe('markdown');
+    });
+  });
 });
