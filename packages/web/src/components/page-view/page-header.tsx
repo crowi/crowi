@@ -171,16 +171,6 @@ export function PageHeader({
   const isDraft = page.status === PageStatusEnum.DRAFT;
   const pageTitle = getPageTitle(page.path);
 
-  // When a TOC rail is shown (≥1280, ≥2 entries), the article is part of
-  // a centred `content + TOC` pair and sits 7.75rem left of dead-centre
-  // in the [1280, 1440) band (see PageView). The compact header is a
-  // `fixed inset-x-0` overlay that centres its own `max-w-4xl` content,
-  // so without matching that shift its title would drift right of the
-  // article in that band. Apply the same shift, gated to the same band +
-  // TOC condition. At ≥1440 (spacer balances) and < 1280 (no rail) the
-  // article is dead-centre, so no shift.
-  const hasTocRail = toc.length >= 2;
-
   const editButton = onEdit && (
     <Button variant="ghost" size="sm" onClick={onEdit} className="shrink-0 text-muted-foreground hover:text-foreground">
       <Edit2 className="h-4 w-4 mr-1" />
@@ -409,19 +399,27 @@ export function PageHeader({
               is a fixed 60px tall; the title row and the (shrunken)
               presence row are vertically centred inside it. */}
           <div
-            className={cn('mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4', hasTocRail && 'min-[1280px]:max-[1439px]:-translate-x-[7.75rem]')}
+            // From 1280 the article is part of a centred `content + rail`
+            // pair and sits 7.75rem left of dead-centre until the 1440 left
+            // spacer balances it again (see `PageTocColumns`). This bar is a
+            // `fixed inset-x-0` overlay centring its own `max-w-4xl`, so it
+            // has to repeat that shift or its title drifts right of the
+            // article it labels. The rail column is there for every page in
+            // that band — it carries the page actions even where there are
+            // too few headings for a TOC — so the shift is unconditional.
+            className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4 min-[1280px]:max-[1439px]:-translate-x-[7.75rem]"
           >
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center gap-2">
               {/* Leading icons, hung out past the content gutter so the
-                  title below stays aligned with the article column. The
-                  hang has to match the group's own width, which changes
-                  with the sidebar control: it is present under 1440px (the
-                  app header carrying the other copy has scrolled away by
-                  now) and hidden above. Under `lg` the gutter is too narrow
-                  to hang anything in without pushing it off the left edge,
-                  so the group rejoins the flow and the title gives up the
-                  width instead. */}
-              <div className="flex shrink-0 items-center lg:-ml-16 min-[1440px]:-ml-9">
+                  title stays aligned with the article column. Positioned
+                  rather than pulled by a negative margin so the hang sizes
+                  itself: the group is one icon wider under 1440px, where
+                  the sidebar control shows because the app header carrying
+                  the other copy has scrolled away. Under `lg` the gutter is
+                  too narrow to hang anything in without pushing it off the
+                  left edge, so the group rejoins the flow and the title
+                  gives up the width instead. */}
+              <div className="flex shrink-0 items-center lg:absolute lg:top-1/2 lg:right-full lg:mr-2 lg:-translate-y-1/2">
                 <SidebarFlyoutTrigger compact />
                 <button
                   ref={scrollTopButtonRef}

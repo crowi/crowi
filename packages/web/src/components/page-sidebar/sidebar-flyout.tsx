@@ -21,11 +21,10 @@ import { SIDEBAR_SCROLLER_ATTR } from './sidebar-scroll';
 const HOVER_CLOSE_GRACE_MS = 200;
 
 /**
- * `closed` / `hover` / `pinned` rather than a boolean: the panel that a
- * pointer opened must retract when the pointer leaves, while the one a
- * click opened must stay until it is dismissed, and only the hover-opened
- * one may skip the focus move (hovering must not steal focus, and hovering
- * away must not paint a focus ring on the trigger).
+ * `closed` / `hover` / `pinned` rather than a boolean: the panel a pointer
+ * opened must retract when the pointer leaves, while the one a click opened
+ * must stay until it is dismissed, and only the hover-opened one skips the
+ * focus move — pointing at an icon is not a request to be taken there.
  */
 type Mode = 'closed' | 'hover' | 'pinned';
 
@@ -36,7 +35,7 @@ interface SidebarFlyoutControls {
   scheduleClose: () => void;
   cancelClose: () => void;
   /** Ref callback every trigger passes to its button — see `triggers` below. */
-  registerTrigger: (element: HTMLElement | null) => void;
+  registerTrigger: (element: HTMLElement | null) => (() => void) | undefined;
 }
 
 const SidebarFlyoutContext = createContext<SidebarFlyoutControls | null>(null);
@@ -61,15 +60,25 @@ export function SidebarFlyoutProvider({ path, enabled, children }: { path: strin
   const railVisible = useMediaQuery(SIDEBAR_RAIL_QUERY);
   const [mode, setMode] = useState<Mode>('closed');
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Read by Radix's focus callbacks, which fire after `mode` has already
-  // moved on (it is `closed` by the time the close handler runs), so the
-  // "was this a hover?" answer has to outlive the state it came from.
-  const hoverOpened = useRef(false);
   // Every mounted trigger's element. The panel dismisses itself on an
   // outside pointerdown, and a trigger is exactly the place where that
   // would fight the trigger's own click — close, then reopen, so the
   // control could never shut the panel it opened.
   const triggers = useRef(new Set<HTMLElement>());
+  // Kept out of the `controls` memo below so a hover does not hand every
+  // mounted trigger a new ref identity (which React answers by detaching
+  // and reattaching each one). The returned cleanup is React 19's ref
+  // teardown: it runs with the element still in scope, so removal needs no
+  // guess about which entry is going away.
+  const registerTrigger = useCallback((element: HTMLElement | null) => {
+    // React does not pass `null` to a ref callback that returns a cleanup,
+    // but the type still permits it for callbacks that do not.
+    if (element === null) return;
+    triggers.current.add(element);
+    return () => {
+      triggers.current.delete(element);
+    };
+  }, []);
 
   // Following a link inside the panel navigates underneath it; leaving it
   // open over the page just arrived at reads as the click not having
@@ -115,106 +124,93 @@ export function SidebarFlyoutProvider({ path, enabled, children }: { path: strin
   const controls = useMemo<SidebarFlyoutControls>(
     () => ({
       open: mode !== 'closed',
+      // Only a pinned panel toggles shut — a click on one the pointer
+      // opened means "keep this", not "undo that".
       toggle: () => {
         cancelClose();
-        setMode((current) => {
-          // A click on a panel the pointer opened means "keep this", not
-          // "toggle it shut".
-          if (current === 'hover') {
-            hoverOpened.current = false;
-            return 'pinned';
-          }
-          if (current === 'pinned') return 'closed';
-          hoverOpened.current = false;
-          return 'pinned';
-        });
+        setMode((current) => (current === 'pinned' ? 'closed' : 'pinned'));
       },
       hoverOpen: () => {
         cancelClose();
-        setMode((current) => {
-          if (current !== 'closed') return current;
-          hoverOpened.current = true;
-          return 'hover';
-        });
+        setMode((current) => (current === 'closed' ? 'hover' : current));
       },
       scheduleClose,
       cancelClose,
-      registerTrigger: (element) => {
-        // A ref callback fires with the element on mount and `null` on
-        // unmount, so the set only ever holds triggers that are on the page.
-        if (element) triggers.current.add(element);
-        else for (const el of triggers.current) if (!el.isConnected) triggers.current.delete(el);
-      },
+      registerTrigger,
     }),
-    [mode, cancelClose, scheduleClose],
+    [mode, cancelClose, scheduleClose, registerTrigger],
   );
 
-  if (!enabled) return children;
-
+  // `enabled` flips on any navigation into or out of `/_edit` / `/_history`,
+  // so it must not change the shape of what this returns: swapping the
+  // returned element's type would unmount and remount the whole (auth) shell
+  // beneath it — including the Toaster that is mounted at this level
+  // precisely so an editor rerender cannot drop in-flight notifications.
+  // Children stay the first child of the same provider either way.
   return (
-    <SidebarFlyoutContext.Provider value={controls}>
+    <SidebarFlyoutContext.Provider value={enabled ? controls : null}>
       {children}
-      <Sheet
-        open={mode !== 'closed'}
-        modal={false}
-        onOpenChange={(next) => {
-          cancelClose();
-          // Only an open clears the flag — a click-open is never a hover. On
-          // a close it has to survive until `onCloseAutoFocus` reads it, or
-          // Esc out of a hover-opened panel would restore focus to a trigger
-          // and leave a focus ring on an icon the user only pointed at.
-          if (next) hoverOpened.current = false;
-          setMode(next ? 'pinned' : 'closed');
-        }}
-      >
-        <SheetContent
-          side="left"
-          aria-describedby={undefined}
-          onPointerEnter={cancelClose}
-          onPointerLeave={(event) => {
-            if (event.pointerType !== 'mouse') return;
-            scheduleClose();
+      {enabled && (
+        <Sheet
+          open={mode !== 'closed'}
+          modal={false}
+          // Radix only ever reports a close here: the opening path runs through
+          // `DialogTrigger`, and neither trigger is one (see `triggers` above).
+          onOpenChange={() => {
+            cancelClose();
+            setMode('closed');
           }}
-          onPointerDownOutside={(event) => {
-            const target = event.target as Node | null;
-            if (target === null) return;
-            for (const el of triggers.current) {
-              if (el.contains(target)) {
-                event.preventDefault();
-                return;
-              }
-            }
-          }}
-          onOpenAutoFocus={(event) => {
-            if (hoverOpened.current) event.preventDefault();
-          }}
-          onCloseAutoFocus={(event) => {
-            if (hoverOpened.current) event.preventDefault();
-          }}
-          // Detached panel rather than a flush-to-the-edge drawer: inset from
-          // the viewport on every side, rounded, and carrying the shared
-          // popover shadow, so it reads as floating above the page instead of
-          // being part of its chrome. Height follows the content up to what
-          // the viewport leaves, and the tree scrolls inside past that —
-          // `min-h-0` on the scroller because a flex child otherwise refuses
-          // to shrink below its content and would overflow the rounded frame.
-          className="min-[1440px]:hidden top-20 bottom-auto left-3 h-auto max-h-[calc(100vh-6.5rem)] w-64 max-w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-xl border p-0"
         >
-          {/* Gives the corner ✕ a row of its own — on touch a trigger sits
-              underneath the panel, so that button is the reachable way back. */}
-          <div className="flex h-12 shrink-0 items-center border-b px-4">
-            <SheetTitle className="text-sm font-medium text-muted-foreground">{m['sidebar.flyout_title']()}</SheetTitle>
-          </div>
-          <div
-            // Same contract as the rail: the tree scrolls its own container to
-            // keep the current node in view, and finds it by this attribute.
-            {...{ [SIDEBAR_SCROLLER_ATTR]: '' }}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
+          <SheetContent
+            side="left"
+            aria-describedby={undefined}
+            onPointerEnter={cancelClose}
+            onPointerLeave={(event) => {
+              if (event.pointerType !== 'mouse') return;
+              scheduleClose();
+            }}
+            onPointerDownOutside={(event) => {
+              const target = event.target as Node | null;
+              if (target === null) return;
+              for (const el of triggers.current) {
+                if (el.contains(target)) {
+                  event.preventDefault();
+                  return;
+                }
+              }
+            }}
+            // Pointing at an icon must not pull focus out of whatever the
+            // reader was doing. Nothing is needed on the close side: with no
+            // Radix trigger registered there is no element it would restore
+            // focus to.
+            onOpenAutoFocus={(event) => {
+              if (mode === 'hover') event.preventDefault();
+            }}
+            // Detached panel rather than a flush-to-the-edge drawer: inset from
+            // the viewport on every side, rounded, and carrying the shared
+            // popover shadow, so it reads as floating above the page instead of
+            // being part of its chrome. Height follows the content up to what
+            // the viewport leaves, and the tree scrolls inside past that —
+            // `min-h-0` on the scroller because a flex child otherwise refuses
+            // to shrink below its content and would overflow the rounded frame.
+            className="top-20 bottom-auto left-3 h-auto max-h-[calc(100vh-6.5rem)] w-64 max-w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-xl border p-0"
           >
-            <SidebarBody path={path} />
-          </div>
-        </SheetContent>
-      </Sheet>
+            {/* Gives the corner ✕ a row of its own — on touch a trigger sits
+              underneath the panel, so that button is the reachable way back. */}
+            <div className="flex h-12 shrink-0 items-center border-b px-4">
+              <SheetTitle className="text-sm font-medium text-muted-foreground">{m['sidebar.flyout_title']()}</SheetTitle>
+            </div>
+            <div
+              // Same contract as the rail: the tree scrolls its own container to
+              // keep the current node in view, and finds it by this attribute.
+              {...{ [SIDEBAR_SCROLLER_ATTR]: '' }}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
+            >
+              <SidebarBody path={path} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </SidebarFlyoutContext.Provider>
   );
 }

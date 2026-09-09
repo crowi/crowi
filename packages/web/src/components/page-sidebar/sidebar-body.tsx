@@ -17,13 +17,14 @@ function isHierarchyPath(path: string): boolean {
 }
 
 /**
- * The width the rail reserves, and the viewport at which it fits beside the
- * centred column. Below this the rail is `display: none` and `SidebarFlyout`
- * is the only way to reach the same navigation, so both live here rather
- * than being retyped at each site — a rail that hides at one number while
- * the flyout appears at another leaves a band with no navigation at all.
+ * The viewport at which the rail fits beside the centred column, for the
+ * `matchMedia` side of that decision. Below it the rail is `display: none`
+ * and the flyout is the only way to reach the same navigation. The Tailwind
+ * `min-[1440px]:` half is necessarily retyped at each site — a class string
+ * assembled at runtime is invisible to Tailwind's scanner — so the number
+ * has to be kept in step by hand: a rail that hides at one width while the
+ * flyout appears at another leaves a band with no navigation at all.
  */
-export const SIDEBAR_WIDTH_CLASS = 'w-56';
 export const SIDEBAR_RAIL_QUERY = '(min-width: 1440px)';
 
 /**

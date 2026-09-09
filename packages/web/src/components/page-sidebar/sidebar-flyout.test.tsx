@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { matchMediaImpl } from '@/lib/test-utils/mocks';
 import { SidebarFlyoutProvider, SidebarFlyoutTrigger } from './sidebar-flyout';
 
 const { pathname } = vi.hoisted(() => ({ pathname: { value: '/some/page' } }));
@@ -30,30 +31,27 @@ function flyout(path = '/some/page', triggerCount = 1) {
   );
 }
 
-// `useMediaQuery` caches one MediaQueryList per query in a ref and re-reads
-// `.matches` off that same object, so a stub whose `matches` was fixed at
-// construction could never report the viewport widening. A live getter can.
+// Flipped mid-test to play the viewport widening past the rail breakpoint;
+// `matchMediaImpl` re-asks on every read, so the change is picked up.
 const rail = { matches: false };
 
 beforeEach(() => {
   pathname.value = '/some/page';
   rail.matches = false;
-  vi.spyOn(window, 'matchMedia').mockImplementation(
-    (query: string) =>
-      ({
-        get matches() {
-          return rail.matches;
-        },
-        media: query,
-        onchange: null,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      }) as unknown as MediaQueryList,
-  );
+  vi.spyOn(window, 'matchMedia').mockImplementation(matchMediaImpl(() => rail.matches));
+  // The hover grace window is the only timer here, and every test drives it
+  // with synchronous `fireEvent` / `rerender` — no `findBy` / `waitFor` that
+  // a faked clock would stall.
+  vi.useFakeTimers();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
+
+/** Advance past the grace window; the timer's setState needs an act() flush. */
+const settleHover = () => act(() => vi.advanceTimersByTime(500));
 
 describe('SidebarFlyout', () => {
   it('opens on click and closes on a second click', () => {
@@ -69,40 +67,28 @@ describe('SidebarFlyout', () => {
   });
 
   it('opens when a mouse enters the trigger and retracts once the pointer leaves', () => {
-    vi.useFakeTimers();
-    try {
-      render(flyout());
+    render(flyout());
 
-      fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
-      expect(panel()).not.toBeNull();
+    fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
+    expect(panel()).not.toBeNull();
 
-      fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
-      // Still open during the grace window — the pointer may be crossing the
-      // gap towards the panel.
-      expect(panel()).not.toBeNull();
-      act(() => vi.advanceTimersByTime(500));
-      expect(panel()).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
+    // Still open during the grace window — the pointer may be crossing the
+    // gap towards the panel.
+    expect(panel()).not.toBeNull();
+    settleHover();
+    expect(panel()).toBeNull();
   });
 
   it('keeps a hover-opened panel that the pointer moved into', () => {
-    vi.useFakeTimers();
-    try {
-      render(flyout());
+    render(flyout());
 
-      fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
-      fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
-      const content = panel();
-      if (content === null) throw new Error('expected the panel to be open');
-      fireEvent.pointerEnter(content, { pointerType: 'mouse' });
+    fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
+    fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
+    fireEvent.pointerEnter(screen.getByRole('dialog'), { pointerType: 'mouse' });
 
-      act(() => vi.advanceTimersByTime(500));
-      expect(panel()).not.toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    settleHover();
+    expect(panel()).not.toBeNull();
   });
 
   it('does not open on touch, where the tap that follows would close it again', () => {
@@ -117,21 +103,16 @@ describe('SidebarFlyout', () => {
   });
 
   it('pins a hover-opened panel when the trigger is clicked, rather than toggling it shut', () => {
-    vi.useFakeTimers();
-    try {
-      render(flyout());
+    render(flyout());
 
-      fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
-      fireEvent.click(openButton());
-      expect(panel()).not.toBeNull();
+    fireEvent.pointerEnter(openButton(), { pointerType: 'mouse' });
+    fireEvent.click(openButton());
+    expect(panel()).not.toBeNull();
 
-      // Pinned means the pointer leaving no longer retracts it.
-      fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
-      act(() => vi.advanceTimersByTime(500));
-      expect(panel()).not.toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    // Pinned means the pointer leaving no longer retracts it.
+    fireEvent.pointerLeave(openButton(), { pointerType: 'mouse' });
+    settleHover();
+    expect(panel()).not.toBeNull();
   });
 
   it('closes on Escape', () => {
