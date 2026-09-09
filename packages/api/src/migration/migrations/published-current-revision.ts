@@ -75,8 +75,11 @@ export async function forEachPublishedCurrentRevision(
   const flush = async (): Promise<typeof STOP | void> => {
     if (batch.length === 0) return;
     const ids = batch.map((p) => p.revision).filter((id) => id != null);
+    // RFC-0020 §1 — `contentType` rides along on every caller's projection
+    // (not opt-in) so artifact Revisions can be excluded from `visit`
+    // unconditionally, regardless of what each migration itself projects.
     const revisions = await Revision.find({ _id: { $in: ids } })
-      .select(projection)
+      .select(`${projection} contentType`)
       .lean()
       .exec();
     const byId = new Map<string, Record<string, unknown>>();
@@ -88,6 +91,9 @@ export async function forEachPublishedCurrentRevision(
     for (const page of pages) {
       const revision = byId.get(String(page.revision));
       if (!revision) continue;
+      // Missing kind is legacy Markdown; artifact bodies must never reach
+      // a migration's pending/detect/apply logic (RFC-0020 §1).
+      if (revision.contentType === 'artifact') continue;
       const result = await visit({ revision, pageId: String(page._id) });
       if (result === STOP) return STOP;
     }

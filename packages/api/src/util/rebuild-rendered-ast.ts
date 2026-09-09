@@ -88,6 +88,8 @@ interface LeanRevisionRow {
   rendererVersion?: string;
   body?: string;
   yjsUpdate?: Buffer;
+  /** RFC-0020 §1 — artifact rows are never eligible; see `isEligible`. */
+  contentType?: string;
 }
 
 function parseSemver(version: string): [number, number, number] | null {
@@ -108,8 +110,17 @@ function semverGte(a: string, b: string): boolean {
   return true;
 }
 
-/** The unified eligibility predicate (see module doc comment). */
-function isEligible(observedVersion: string | undefined, capturedTargetVersion: string): boolean {
+/**
+ * The unified eligibility predicate (see module doc comment). RFC-0020
+ * §1 — an artifact Revision is never eligible: it carries no
+ * `renderedAst` / renderer pipeline output to rebuild, and must never be
+ * handed to `crowi.getRenderer().runRender`. Checked ahead of the
+ * `rendererVersion` comparison so a rendererVersion-less artifact row
+ * (which would otherwise read as eligible via the `undefined` branch)
+ * is excluded the same way as any other artifact row.
+ */
+function isEligible(observedVersion: string | undefined, capturedTargetVersion: string, contentType?: string): boolean {
+  if (contentType === 'artifact') return false;
   if (observedVersion === undefined) return true;
   return !semverGte(observedVersion, capturedTargetVersion);
 }
@@ -131,12 +142,12 @@ export async function runRenderedAstRebuild(crowi: Crowi, ctx: MigrationContext,
 
   await runner.mapBounded(targets, async (target) => {
     ctx.progress.setLabel(`rendered-ast ${target.path}`);
-    const revision = await Revision.findById(target.revisionId).select('rendererVersion body meta yjsUpdate').lean<LeanRevisionRow | null>().exec();
+    const revision = await Revision.findById(target.revisionId).select('rendererVersion body meta yjsUpdate contentType').lean<LeanRevisionRow | null>().exec();
     if (!revision) return;
     const observedVersion = revision.rendererVersion;
     // Monotonic version guard — identical to the unified predicate, so
     // a row skipped here is also never counted as "remaining".
-    if (!isEligible(observedVersion, capturedTargetVersion)) return;
+    if (!isEligible(observedVersion, capturedTargetVersion, revision.contentType)) return;
     eligible += 1;
     if (ctx.dryRun) {
       ctx.progress.increment();
@@ -220,8 +231,12 @@ async function collectPrefilteredTargets(Page: PageModel, Revision: RevisionMode
   const ids = Array.from(byRevisionId.keys());
   for (let i = 0; i < ids.length; i += SCAN_CHUNK) {
     const chunk = ids.slice(i, i + SCAN_CHUNK);
+    // RFC-0020 §1 — artifact rows are excluded from the coarse prefilter
+    // itself (not just the per-item `isEligible` check below), so
+    // `scanned` never counts them.
     const rows = (await Revision.find({
       _id: { $in: chunk },
+      contentType: { $ne: 'artifact' },
       $or: [{ rendererVersion: { $exists: false } }, { rendererVersion: { $ne: capturedTargetVersion } }],
     })
       .select('_id')
@@ -242,11 +257,11 @@ async function countRemainingEligible(Page: PageModel, Revision: RevisionModel, 
   for (let i = 0; i < targets.length; i += SCAN_CHUNK) {
     const chunk = targets.slice(i, i + SCAN_CHUNK);
     const rows = (await Revision.find({ _id: { $in: chunk.map((t) => t.revisionId) } })
-      .select('_id rendererVersion')
+      .select('_id rendererVersion contentType')
       .lean()
-      .exec()) as unknown as Array<{ _id: Types.ObjectId; rendererVersion?: string }>;
+      .exec()) as unknown as Array<{ _id: Types.ObjectId; rendererVersion?: string; contentType?: string }>;
     for (const row of rows) {
-      if (isEligible(row.rendererVersion, capturedTargetVersion)) remaining += 1;
+      if (isEligible(row.rendererVersion, capturedTargetVersion, row.contentType)) remaining += 1;
     }
   }
   return remaining;

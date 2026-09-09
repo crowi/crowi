@@ -583,11 +583,15 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           // otherwise lose track of this page's own past revisions, and a
           // path later reused by an unrelated page would otherwise pull in
           // that page's revision metadata here.
-          const revisions = (await Revision.find({ page: page._id }).select('_id body createdAt author').sort({ createdAt: -1 }).populate('author')) as Array<{
+          const revisions = (await Revision.find({ page: page._id })
+            .select('_id body createdAt author contentType')
+            .sort({ createdAt: -1 })
+            .populate('author')) as Array<{
             _id: Types.ObjectId;
             body?: string;
             createdAt?: Date;
             author?: PopulatedUserPublic | Types.ObjectId | string | null;
+            contentType?: string;
           }>;
 
           // `page.revision` may be a bare ObjectId or a populated
@@ -608,7 +612,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           >();
 
           for (const revision of revisions) {
-            const ids = revision.body ? collectReferencedAttachmentIds(revision.body) : new Set<string>();
+            // RFC-0020 §1 — an artifact Revision's body is opaque HTML,
+            // never scanned for Crowi attachment references. Its CSP
+            // (`img-src` limited to `data:`/`blob:`) can't reference a
+            // Crowi attachment URL anyway, so excluding it here never
+            // orphans a live reference.
+            const ids = revision.contentType === 'artifact' || !revision.body ? new Set<string>() : collectReferencedAttachmentIds(revision.body);
             const isLatest = latestRevisionId !== null && revision._id.toString() === latestRevisionId;
             if (isLatest) {
               latestIds = ids;
@@ -684,8 +693,15 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           let referencedIds: Set<string> | null = null;
           if (revisionId) {
             const Revision = crowi.model('Revision');
-            const revision = (await Revision.findById(revisionId).select('body')) as { body?: string } | null;
-            if (revision?.body) {
+            const revision = (await Revision.findById(revisionId).select('body contentType')) as { body?: string; contentType?: string } | null;
+            // RFC-0020 §1 — artifact bodies are never scanned; every
+            // attachment is classified not-in-use for this page (distinct
+            // from the missing/empty-body fallback below, which defaults
+            // to `true` so files aren't hidden while reference state is
+            // genuinely undetermined).
+            if (revision?.contentType === 'artifact') {
+              referencedIds = new Set();
+            } else if (revision?.body) {
               referencedIds = collectReferencedAttachmentIds(revision.body);
             }
           }
