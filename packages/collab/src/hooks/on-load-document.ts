@@ -290,12 +290,23 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   return async (data: onLoadDocumentPayload<CollabContext>): Promise<void> => {
     const { documentName, document, instance } = data;
 
-    const page = await Page.findById(documentName).select('_id revision currentRevision yjsState status collabLifecycleVersion').exec();
+    const page = await Page.findById(documentName).select('_id revision currentRevision yjsState status collabLifecycleVersion contentType').exec();
     if (!page) {
       // Defensive — `onAuthenticate` already confirmed existence, so
       // this branch only fires on a race where the page was deleted
       // between auth and load.
       debug('page %s not found at load time', documentName);
+      throw new Error('page not found');
+    }
+
+    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus. Rejected
+    // here, before the epoch store, any Yjs checkpoint restore, Revision
+    // body fetch, Y.Text seed, or residual-update replay — this is
+    // defence-in-depth for the case where `onAuthenticate` accepted a
+    // token minted before the page became an artifact page. Same generic
+    // message as the not-found branch above (no leak of existence/kind).
+    if (page.contentType === 'artifact') {
+      debug('page %s is an artifact page at load time — rejecting materialisation', documentName);
       throw new Error('page not found');
     }
 

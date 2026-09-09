@@ -57,6 +57,8 @@ interface DraftablePageRow {
   creator?: unknown;
   /** RFC-0017 Phase 1 §5/§D5. */
   collabLifecycleVersion?: number;
+  /** RFC-0020 §1 — a missing/undefined value means legacy Markdown. */
+  contentType?: string;
 }
 
 export interface OnAuthenticateDeps {
@@ -172,11 +174,22 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
     // plain object, so `creator` is an ObjectId — compare via `String(...)`.
     const page = (await (deps.models.Page as DraftablePageModel)
       .findById(claims.pageId)
-      .select('_id status creator collabLifecycleVersion')
+      .select('_id status creator collabLifecycleVersion contentType')
       .lean()
       .exec()) as DraftablePageRow | null;
     if (!page) {
       debug('reject: page %s not found', claims.pageId);
+      throw new Error('invalid token');
+    }
+
+    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus. This is
+    // defence-in-depth for a token minted BEFORE storage's live-doc-kind
+    // guard is even relevant: it also rejects the case where a valid,
+    // already-issued token is presented for a page that has SINCE become
+    // an artifact page. Generic message, checked before epoch/draft/cap
+    // so a rejected artifact connection never touches those paths.
+    if (page.contentType === 'artifact') {
+      debug('reject: page %s is an artifact page', claims.pageId);
       throw new Error('invalid token');
     }
 

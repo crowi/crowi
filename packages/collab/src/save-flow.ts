@@ -379,6 +379,13 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
           message,
           type: 'snapshot',
           parentRevisionId,
+          // RFC-0020 §1 — the collab save flow only ever produces Markdown
+          // Revisions (artifact Pages are rejected upstream by the 3
+          // connect-time gates, so no live doc can reach this point for
+          // one). Explicit rather than relying on the pointer-aware
+          // fallback, matching the same `contentType` this write's pointer
+          // CAS stamps onto the Page hint below.
+          contentType: 'markdown',
         });
       } catch (err) {
         throw new CollabSaveError('RENDERER_FAILED', `renderer pipeline failed: ${(err as Error).message}`);
@@ -423,7 +430,19 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // `currentRevision`, so `docBaseFilterValue` still matches — the epoch
       // predicate is the ONLY thing that rejects a stale post-rename save.
       const expectedEpoch = docEpochRevisions?.get(pageId);
-      const pointerFilter: Record<string, unknown> = { _id: pageId, currentRevision: docBaseFilterValue, status: { $ne: DELETED_STATUS } };
+      // RFC-0020 §1 — closes the window where a live doc's Page acquires
+      // artifact kind mid-session (the connect-time gates can't catch
+      // that): if the pointer-bearing Page has since become artifact,
+      // this CAS now misses and falls into the existing CONFLICT path
+      // below instead of writing a Markdown pointer/hint over an artifact
+      // Page. Matches a missing field too (legacy Markdown), same as the
+      // other `$ne` predicates in this filter.
+      const pointerFilter: Record<string, unknown> = {
+        _id: pageId,
+        currentRevision: docBaseFilterValue,
+        status: { $ne: DELETED_STATUS },
+        contentType: { $ne: 'artifact' },
+      };
       if (expectedEpoch !== undefined) {
         pointerFilter.collabLifecycleVersion = expectedEpoch;
       }
@@ -433,6 +452,7 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
           $set: {
             revision: newRevision._id,
             currentRevision: newRevision._id,
+            contentType: 'markdown',
             lastUpdateUser: user._id,
             updatedAt: new Date(),
           },
