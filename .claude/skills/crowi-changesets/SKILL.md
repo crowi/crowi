@@ -44,3 +44,14 @@ pnpm changeset status     # list accumulated, unreleased changesets
 Add one file just before merging to main (or within the PR). The initial `.changeset/initial-release.md` is a sentinel covering the whole restructure, placed when `feature-monorepo-packages-restructure` completed — do not delete it.
 
 なお changeset の summary は hard-wrap しない (1 段落 1 行)。GitHub Release / Version PR が GFM でレンダリングするため、改行が `<br>` になって読みにくくなる。commit message は従来どおり折る。
+
+## 依存パッケージの脆弱性対応の書き方
+
+主語を取り違えない。**Crowi に脆弱性があったのか、依存パッケージにあったのか**を書き分ける。「脆弱性 N 件を解消」と書くと Crowi 自体に N 件あったように読める。
+
+- 依存の更新なら: 「脆弱性が報告されていた依存パッケージを更新」
+- そのうち Crowi が実際に通る経路にあるものは、そう書く: 「Next.js の未認証 RCE は画像最適化 API 経由で Crowi が通る経路にあり、16.3.3 で解消」
+
+「Crowi の脆弱性ではない」と言い切るのも同じくらい不正確で、依存の脆弱性が到達可能なら Crowi の脆弱性として効く。到達可能かどうかを書く。分からなければ断定せず、更新した事実だけを書く。
+
+**弁明を足して長くしない。**正しい主語で 1 文書けば足りる。この規則は changeset だけでなく、そこから流れる先 (CHANGELOG / GitHub Release / team wiki のリリースページ / Discord 告知) すべてに効く。
