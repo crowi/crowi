@@ -1,7 +1,6 @@
 'use client';
 
 import type { TocEntryResponse } from '@crowi/api-contract';
-import { cn } from '@/lib/utils';
 import { PageToc } from './page-toc';
 
 /**
@@ -13,10 +12,14 @@ import { PageToc } from './page-toc';
  * `[spacer | content | toc]` triple.
  *
  * The left spacer (≥1440) reserves the fixed nav rail's width so the content
- * stays dead-centre; below 1440 it collapses and content + TOC re-centre as a
- * pair; below 1280 the TOC column hides (the header `PageTocMenu` takes over).
- * The right column stays reserved at ≥1440 even with no TOC so a
- * heading-light page is still symmetric.
+ * stays dead-centre; below 1440 it collapses and content + right rail
+ * re-centre as a pair; below 1280 the right column hides too (the header
+ * `PageTocMenu` takes over the TOC, the page dotmenu the rail actions).
+ *
+ * That 1280 does not depend on whether the page has a TOC. A heading-light
+ * page still has rail actions to draw in that column, so gating the column
+ * on the TOC would take them off screen 160px before any other part of the
+ * shell collapses — three columns straight to one, copy button included.
  *
  * `railActions` is pinned under the TOC inside the same sticky block (the
  * TOC list scrolls, the actions do not). Its visibility rides on the TOC
@@ -46,7 +49,7 @@ export function PageTocColumns({
     <div className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
       <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
       <div className="w-full min-w-0 max-w-4xl">{children}</div>
-      <div className={cn('w-56 shrink-0', hasToc ? 'hidden min-[1280px]:block' : 'hidden min-[1440px]:block')}>
+      <div className="hidden w-56 shrink-0 min-[1280px]:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-3">
           {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
           {railActions}
