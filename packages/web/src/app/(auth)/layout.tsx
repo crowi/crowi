@@ -27,6 +27,7 @@ import { SearchFocusProvider } from '@/lib/search-focus-context';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 import { MobileSearch } from '@/components/search/mobile-search';
 import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
+import { SidebarFlyout } from '@/components/page-sidebar/sidebar-flyout';
 import { PluginReadinessBanner } from '@/components/admin/plugin-readiness-banner';
 import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
@@ -132,7 +133,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <SearchFocusProvider>
         <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-            <div className="flex items-center gap-1 min-w-0 shrink-0">
+            {/* `relative` so the sidebar control can hang off the left of
+              this cluster on viewports with a gutter to spare — see
+              `SidebarFlyout`. */}
+            <div className="relative flex items-center gap-1 min-w-0 shrink-0">
+              {/* Below 1440px the left rail has no room beside the centred
+                column and hides; this brings the same navigation back as a
+                panel over the content. Leads the cluster so it lines up with
+                the panel it opens, which slides in from the same edge. Same
+                visibility rule as the rail, so routes without a sidebar do
+                not grow a dead control. */}
+              {showSidebar && <SidebarFlyout path={sidebarPath} />}
               <SiteBrand />
               {/* Mobile (< md) search trigger next to the logo — the desktop
                 search input below is hidden on narrow viewports. */}

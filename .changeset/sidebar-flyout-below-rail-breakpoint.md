@@ -1,0 +1,5 @@
+---
+'@crowi/web': minor
+---
+
+Bring the page sidebar back on viewports too narrow for the left rail. The rail needs room beside the centred column and hides below 1440px — most laptops — which previously left the nav links and the page hierarchy tree with no way back for the rest of the session. A panel icon now sits beside the site logo wherever the sidebar applies — hanging off to its left, leaving the logo where it was, on any viewport whose header has gutter to spare: pointing at the icon floats the same sidebar out over the content as a rounded, shadowed panel inset from the window edges, clicking pins it open, and it dismisses on Escape, on a click outside, on following a link, and on widening the window far enough for the rail to take over. Touch taps to open rather than opening on contact, and the panel carries its own close button since the icon sits underneath it on a phone.
