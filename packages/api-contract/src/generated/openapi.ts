@@ -2593,6 +2593,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -2632,6 +2634,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                         };
                     };
@@ -3880,6 +3884,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -3919,6 +3925,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             recentBookmarks?: {
                                 _id: string;
@@ -3988,6 +3996,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -4027,6 +4037,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -4203,6 +4215,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -4242,6 +4256,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -4422,6 +4438,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4461,6 +4479,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -4625,6 +4645,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4664,6 +4686,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -5048,6 +5072,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -5087,6 +5113,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -5335,6 +5363,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -5374,6 +5404,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -5923,6 +5955,8 @@ export interface paths {
                                 /** @enum {string} */
                                 editVia?: "web" | "oauth" | "pat";
                                 createdAt: string;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -6079,6 +6113,8 @@ export interface paths {
                                 message?: string;
                                 /** @enum {string} */
                                 editVia?: "web" | "oauth" | "pat";
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                         };
                     };
@@ -6230,6 +6266,8 @@ export interface paths {
                                 message?: string;
                                 /** @enum {string} */
                                 editVia?: "web" | "oauth" | "pat";
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -6507,6 +6545,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6546,6 +6586,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -6709,6 +6751,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6748,6 +6792,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -6907,6 +6953,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6946,6 +6994,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -7076,6 +7126,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7115,6 +7167,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -7311,6 +7365,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7350,6 +7406,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -7422,6 +7480,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7461,6 +7521,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             } | null;
                             contentPage?: {
                                 _id: string;
@@ -7528,6 +7590,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7567,6 +7631,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             } | null;
                             total: number;
                         };
@@ -7772,6 +7838,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7811,6 +7879,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -8178,6 +8248,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8217,6 +8289,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -8375,6 +8449,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8414,6 +8490,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -8572,6 +8650,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8611,6 +8691,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                             granted: boolean;
                         };
@@ -8976,6 +9058,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -9015,6 +9099,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -9206,6 +9292,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -9245,6 +9333,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -9408,6 +9498,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -9447,6 +9539,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                             renamed_count: number;
                         };
@@ -11539,6 +11633,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -11578,6 +11674,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                             }[];
                         };
@@ -16550,6 +16648,8 @@ export interface components {
                 message?: string;
                 /** @enum {string} */
                 editVia?: "web" | "oauth" | "pat";
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -16589,6 +16689,8 @@ export interface components {
             likerCount: number;
             seenUsersCount: number;
             isLiked: boolean;
+            /** @enum {string} */
+            contentType: "markdown" | "artifact";
         };
         RenderedAstEnvelope: {
             /** @enum {number} */
@@ -16666,6 +16768,8 @@ export interface components {
                 message?: string;
                 /** @enum {string} */
                 editVia?: "web" | "oauth" | "pat";
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -16705,6 +16809,8 @@ export interface components {
             likerCount: number;
             seenUsersCount: number;
             isLiked: boolean;
+            /** @enum {string} */
+            contentType: "markdown" | "artifact";
         };
         Revision: {
             _id: string;
@@ -16769,6 +16875,8 @@ export interface components {
             message?: string;
             /** @enum {string} */
             editVia?: "web" | "oauth" | "pat";
+            /** @enum {string} */
+            contentType: "markdown" | "artifact";
         };
         RevisionMeta: {
             toc?: {
@@ -16893,6 +17001,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -16932,6 +17042,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             }[];
             pager: {
                 prev: number | null;
@@ -17004,6 +17116,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17043,6 +17157,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             } | null;
             contentPage?: {
                 _id: string;
@@ -17110,6 +17226,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17149,6 +17267,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             } | null;
             total: number;
         };
@@ -17219,6 +17339,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17258,6 +17380,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             };
         };
         UpdatePageRequest: {
@@ -17377,6 +17501,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17416,6 +17542,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             }[];
         };
         Attachment: {

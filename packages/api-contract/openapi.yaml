@@ -912,11 +912,17 @@ components:
                     - web
                     - oauth
                     - pat
+                contentType:
+                  type: string
+                  enum:
+                    - markdown
+                    - artifact
               required:
                 - _id
                 - path
                 - body
                 - createdAt
+                - contentType
         redirectTo:
           type:
             - string
@@ -1024,6 +1030,11 @@ components:
           minimum: 0
         isLiked:
           type: boolean
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - _id
         - path
@@ -1031,6 +1042,7 @@ components:
         - likerCount
         - seenUsersCount
         - isLiked
+        - contentType
     RenderedAstEnvelope:
       type: object
       properties:
@@ -1239,11 +1251,17 @@ components:
                 - web
                 - oauth
                 - pat
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
             - body
             - createdAt
+            - contentType
         redirectTo:
           type:
             - string
@@ -1349,6 +1367,11 @@ components:
           minimum: 0
         isLiked:
           type: boolean
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - _id
         - path
@@ -1357,6 +1380,7 @@ components:
         - likerCount
         - seenUsersCount
         - isLiked
+        - contentType
     Revision:
       type: object
       properties:
@@ -1535,11 +1559,17 @@ components:
             - web
             - oauth
             - pat
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - _id
         - path
         - body
         - createdAt
+        - contentType
     RevisionMeta:
       type: object
       properties:
@@ -1871,11 +1901,17 @@ components:
                           - web
                           - oauth
                           - pat
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
                       - body
                       - createdAt
+                      - contentType
               redirectTo:
                 type:
                   - string
@@ -1983,6 +2019,11 @@ components:
                 minimum: 0
               isLiked:
                 type: boolean
+              contentType:
+                type: string
+                enum:
+                  - markdown
+                  - artifact
             required:
               - _id
               - path
@@ -1990,6 +2031,7 @@ components:
               - likerCount
               - seenUsersCount
               - isLiked
+              - contentType
         pager:
           type: object
           properties:
@@ -2196,11 +2238,17 @@ components:
                         - web
                         - oauth
                         - pat
+                    contentType:
+                      type: string
+                      enum:
+                        - markdown
+                        - artifact
                   required:
                     - _id
                     - path
                     - body
                     - createdAt
+                    - contentType
             redirectTo:
               type:
                 - string
@@ -2308,6 +2356,11 @@ components:
               minimum: 0
             isLiked:
               type: boolean
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
@@ -2315,6 +2368,7 @@ components:
             - likerCount
             - seenUsersCount
             - isLiked
+            - contentType
         contentPage:
           type:
             - object
@@ -2504,11 +2558,17 @@ components:
                         - web
                         - oauth
                         - pat
+                    contentType:
+                      type: string
+                      enum:
+                        - markdown
+                        - artifact
                   required:
                     - _id
                     - path
                     - body
                     - createdAt
+                    - contentType
             redirectTo:
               type:
                 - string
@@ -2616,6 +2676,11 @@ components:
               minimum: 0
             isLiked:
               type: boolean
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
@@ -2623,6 +2688,7 @@ components:
             - likerCount
             - seenUsersCount
             - isLiked
+            - contentType
         total:
           type: number
       required:
@@ -2817,11 +2883,17 @@ components:
                     - web
                     - oauth
                     - pat
+                contentType:
+                  type: string
+                  enum:
+                    - markdown
+                    - artifact
               required:
                 - _id
                 - path
                 - body
                 - createdAt
+                - contentType
             redirectTo:
               type:
                 - string
@@ -2927,6 +2999,11 @@ components:
               minimum: 0
             isLiked:
               type: boolean
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
@@ -2935,6 +3012,7 @@ components:
             - likerCount
             - seenUsersCount
             - isLiked
+            - contentType
       required:
         - page
     UpdatePageRequest:
@@ -3256,11 +3334,17 @@ components:
                           - web
                           - oauth
                           - pat
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
                       - body
                       - createdAt
+                      - contentType
               redirectTo:
                 type:
                   - string
@@ -3368,6 +3452,11 @@ components:
                 minimum: 0
               isLiked:
                 type: boolean
+              contentType:
+                type: string
+                enum:
+                  - markdown
+                  - artifact
             required:
               - _id
               - path
@@ -3375,6 +3464,7 @@ components:
               - likerCount
               - seenUsersCount
               - isLiked
+              - contentType
       required:
         - pages
     Attachment:
@@ -8608,11 +8698,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -8720,6 +8816,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -8727,6 +8828,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                 required:
                   - pages
         '401':
@@ -10377,11 +10479,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -10489,6 +10597,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -10496,6 +10609,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   recentBookmarks:
                     type: array
                     items:
@@ -10691,11 +10805,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -10803,6 +10923,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -10810,6 +10935,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                         user:
                           anyOf:
                             - type: string
@@ -11166,11 +11292,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -11278,6 +11410,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -11285,6 +11422,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                         user:
                           anyOf:
                             - type: string
@@ -11653,11 +11791,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -11765,6 +11909,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -11772,6 +11921,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -12096,11 +12246,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -12208,6 +12364,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -12215,6 +12376,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -12874,11 +13036,17 @@ paths:
                                       - web
                                       - oauth
                                       - pat
+                                  contentType:
+                                    type: string
+                                    enum:
+                                      - markdown
+                                      - artifact
                                 required:
                                   - _id
                                   - path
                                   - body
                                   - createdAt
+                                  - contentType
                           redirectTo:
                             type:
                               - string
@@ -12986,6 +13154,11 @@ paths:
                             minimum: 0
                           isLiked:
                             type: boolean
+                          contentType:
+                            type: string
+                            enum:
+                              - markdown
+                              - artifact
                         required:
                           - _id
                           - path
@@ -12993,6 +13166,7 @@ paths:
                           - likerCount
                           - seenUsersCount
                           - isLiked
+                          - contentType
                       user:
                         anyOf:
                           - type: string
@@ -13437,11 +13611,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -13549,6 +13729,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -13556,6 +13741,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                         user:
                           anyOf:
                             - type: string
@@ -14443,10 +14629,16 @@ paths:
                             - pat
                         createdAt:
                           type: string
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
                         - createdAt
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -14738,11 +14930,17 @@ paths:
                             - web
                             - oauth
                             - pat
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
                         - body
                         - createdAt
+                        - contentType
                 required:
                   - revisions
         '400':
@@ -15019,11 +15217,17 @@ paths:
                           - web
                           - oauth
                           - pat
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
                       - body
                       - createdAt
+                      - contentType
                 required:
                   - revision
         '400':
@@ -15473,11 +15677,17 @@ paths:
                               - web
                               - oauth
                               - pat
+                          contentType:
+                            type: string
+                            enum:
+                              - markdown
+                              - artifact
                         required:
                           - _id
                           - path
                           - body
                           - createdAt
+                          - contentType
                       redirectTo:
                         type:
                           - string
@@ -15583,6 +15793,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -15591,6 +15806,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '401':
@@ -15903,11 +16119,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -16015,6 +16237,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -16022,6 +16249,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -16288,11 +16516,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -16400,6 +16634,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -16407,6 +16646,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -16720,11 +16960,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -16832,6 +17078,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -16839,6 +17090,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -17270,11 +17522,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -17382,6 +17640,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -17389,6 +17652,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -17595,11 +17859,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -17707,6 +17977,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -17714,6 +17989,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   contentPage:
                     type:
                       - object
@@ -17903,11 +18179,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -18015,6 +18297,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -18022,6 +18309,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   total:
                     type: number
                 required:
@@ -18381,11 +18669,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -18493,6 +18787,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -18500,6 +18799,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -19065,11 +19365,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -19177,6 +19483,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -19184,6 +19495,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -19471,11 +19783,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -19583,6 +19901,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -19590,6 +19913,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -19875,11 +20199,17 @@ paths:
                               - web
                               - oauth
                               - pat
+                          contentType:
+                            type: string
+                            enum:
+                              - markdown
+                              - artifact
                         required:
                           - _id
                           - path
                           - body
                           - createdAt
+                          - contentType
                       redirectTo:
                         type:
                           - string
@@ -19985,6 +20315,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -19993,6 +20328,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   granted:
                     type: boolean
                 required:
@@ -20550,11 +20886,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -20662,6 +21004,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -20669,6 +21016,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -21028,11 +21376,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -21140,6 +21494,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -21147,6 +21506,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -21445,11 +21805,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -21557,6 +21923,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -21564,6 +21935,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   renamed_count:
                     type: number
                 required:
@@ -24753,11 +25125,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -24865,6 +25243,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -24872,6 +25255,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                       required:
                         - pageId
                         - path

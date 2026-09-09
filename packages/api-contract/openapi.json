@@ -1317,13 +1317,21 @@
                       "oauth",
                       "pat"
                     ]
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "artifact"
+                    ]
                   }
                 },
                 "required": [
                   "_id",
                   "path",
                   "body",
-                  "createdAt"
+                  "createdAt",
+                  "contentType"
                 ]
               }
             ]
@@ -1490,6 +1498,13 @@
           },
           "isLiked": {
             "type": "boolean"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "artifact"
+            ]
           }
         },
         "required": [
@@ -1498,7 +1513,8 @@
           "createdAt",
           "likerCount",
           "seenUsersCount",
-          "isLiked"
+          "isLiked",
+          "contentType"
         ]
       },
       "RenderedAstEnvelope": {
@@ -1813,13 +1829,21 @@
                   "oauth",
                   "pat"
                 ]
+              },
+              "contentType": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "artifact"
+                ]
               }
             },
             "required": [
               "_id",
               "path",
               "body",
-              "createdAt"
+              "createdAt",
+              "contentType"
             ]
           },
           "redirectTo": {
@@ -1970,6 +1994,13 @@
           },
           "isLiked": {
             "type": "boolean"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "artifact"
+            ]
           }
         },
         "required": [
@@ -1979,7 +2010,8 @@
           "createdAt",
           "likerCount",
           "seenUsersCount",
-          "isLiked"
+          "isLiked",
+          "contentType"
         ]
       },
       "Revision": {
@@ -2251,13 +2283,21 @@
               "oauth",
               "pat"
             ]
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "artifact"
+            ]
           }
         },
         "required": [
           "_id",
           "path",
           "body",
-          "createdAt"
+          "createdAt",
+          "contentType"
         ]
       },
       "RevisionMeta": {
@@ -2751,13 +2791,21 @@
                             "oauth",
                             "pat"
                           ]
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
                         "_id",
                         "path",
                         "body",
-                        "createdAt"
+                        "createdAt",
+                        "contentType"
                       ]
                     }
                   ]
@@ -2924,6 +2972,13 @@
                 },
                 "isLiked": {
                   "type": "boolean"
+                },
+                "contentType": {
+                  "type": "string",
+                  "enum": [
+                    "markdown",
+                    "artifact"
+                  ]
                 }
               },
               "required": [
@@ -2932,7 +2987,8 @@
                 "createdAt",
                 "likerCount",
                 "seenUsersCount",
-                "isLiked"
+                "isLiked",
+                "contentType"
               ]
             }
           },
@@ -3247,13 +3303,21 @@
                           "oauth",
                           "pat"
                         ]
+                      },
+                      "contentType": {
+                        "type": "string",
+                        "enum": [
+                          "markdown",
+                          "artifact"
+                        ]
                       }
                     },
                     "required": [
                       "_id",
                       "path",
                       "body",
-                      "createdAt"
+                      "createdAt",
+                      "contentType"
                     ]
                   }
                 ]
@@ -3420,6 +3484,13 @@
               },
               "isLiked": {
                 "type": "boolean"
+              },
+              "contentType": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "artifact"
+                ]
               }
             },
             "required": [
@@ -3428,7 +3499,8 @@
               "createdAt",
               "likerCount",
               "seenUsersCount",
-              "isLiked"
+              "isLiked",
+              "contentType"
             ]
           },
           "contentPage": {
@@ -3717,13 +3789,21 @@
                           "oauth",
                           "pat"
                         ]
+                      },
+                      "contentType": {
+                        "type": "string",
+                        "enum": [
+                          "markdown",
+                          "artifact"
+                        ]
                       }
                     },
                     "required": [
                       "_id",
                       "path",
                       "body",
-                      "createdAt"
+                      "createdAt",
+                      "contentType"
                     ]
                   }
                 ]
@@ -3890,6 +3970,13 @@
               },
               "isLiked": {
                 "type": "boolean"
+              },
+              "contentType": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "artifact"
+                ]
               }
             },
             "required": [
@@ -3898,7 +3985,8 @@
               "createdAt",
               "likerCount",
               "seenUsersCount",
-              "isLiked"
+              "isLiked",
+              "contentType"
             ]
           },
           "total": {
@@ -4192,13 +4280,21 @@
                       "oauth",
                       "pat"
                     ]
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "artifact"
+                    ]
                   }
                 },
                 "required": [
                   "_id",
                   "path",
                   "body",
-                  "createdAt"
+                  "createdAt",
+                  "contentType"
                 ]
               },
               "redirectTo": {
@@ -4349,6 +4445,13 @@
               },
               "isLiked": {
                 "type": "boolean"
+              },
+              "contentType": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "artifact"
+                ]
               }
             },
             "required": [
@@ -4358,7 +4461,8 @@
               "createdAt",
               "likerCount",
               "seenUsersCount",
-              "isLiked"
+              "isLiked",
+              "contentType"
             ]
           }
         },
@@ -4842,13 +4946,21 @@
                             "oauth",
                             "pat"
                           ]
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
                         "_id",
                         "path",
                         "body",
-                        "createdAt"
+                        "createdAt",
+                        "contentType"
                       ]
                     }
                   ]
@@ -5015,6 +5127,13 @@
                 },
                 "isLiked": {
                   "type": "boolean"
+                },
+                "contentType": {
+                  "type": "string",
+                  "enum": [
+                    "markdown",
+                    "artifact"
+                  ]
                 }
               },
               "required": [
@@ -5023,7 +5142,8 @@
                 "createdAt",
                 "likerCount",
                 "seenUsersCount",
-                "isLiked"
+                "isLiked",
+                "contentType"
               ]
             }
           }
@@ -12798,13 +12918,21 @@
                                       "oauth",
                                       "pat"
                                     ]
+                                  },
+                                  "contentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "markdown",
+                                      "artifact"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "_id",
                                   "path",
                                   "body",
-                                  "createdAt"
+                                  "createdAt",
+                                  "contentType"
                                 ]
                               }
                             ]
@@ -12971,6 +13099,13 @@
                           },
                           "isLiked": {
                             "type": "boolean"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
@@ -12979,7 +13114,8 @@
                           "createdAt",
                           "likerCount",
                           "seenUsersCount",
-                          "isLiked"
+                          "isLiked",
+                          "contentType"
                         ]
                       }
                     }
@@ -15493,13 +15629,21 @@
                                       "oauth",
                                       "pat"
                                     ]
+                                  },
+                                  "contentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "markdown",
+                                      "artifact"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "_id",
                                   "path",
                                   "body",
-                                  "createdAt"
+                                  "createdAt",
+                                  "contentType"
                                 ]
                               }
                             ]
@@ -15666,6 +15810,13 @@
                           },
                           "isLiked": {
                             "type": "boolean"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
@@ -15674,7 +15825,8 @@
                           "createdAt",
                           "likerCount",
                           "seenUsersCount",
-                          "isLiked"
+                          "isLiked",
+                          "contentType"
                         ]
                       }
                     },
@@ -15969,13 +16121,21 @@
                                           "oauth",
                                           "pat"
                                         ]
+                                      },
+                                      "contentType": {
+                                        "type": "string",
+                                        "enum": [
+                                          "markdown",
+                                          "artifact"
+                                        ]
                                       }
                                     },
                                     "required": [
                                       "_id",
                                       "path",
                                       "body",
-                                      "createdAt"
+                                      "createdAt",
+                                      "contentType"
                                     ]
                                   }
                                 ]
@@ -16142,6 +16302,13 @@
                               },
                               "isLiked": {
                                 "type": "boolean"
+                              },
+                              "contentType": {
+                                "type": "string",
+                                "enum": [
+                                  "markdown",
+                                  "artifact"
+                                ]
                               }
                             },
                             "required": [
@@ -16150,7 +16317,8 @@
                               "createdAt",
                               "likerCount",
                               "seenUsersCount",
-                              "isLiked"
+                              "isLiked",
+                              "contentType"
                             ]
                           },
                           "user": {
@@ -16695,13 +16863,21 @@
                                           "oauth",
                                           "pat"
                                         ]
+                                      },
+                                      "contentType": {
+                                        "type": "string",
+                                        "enum": [
+                                          "markdown",
+                                          "artifact"
+                                        ]
                                       }
                                     },
                                     "required": [
                                       "_id",
                                       "path",
                                       "body",
-                                      "createdAt"
+                                      "createdAt",
+                                      "contentType"
                                     ]
                                   }
                                 ]
@@ -16868,6 +17044,13 @@
                               },
                               "isLiked": {
                                 "type": "boolean"
+                              },
+                              "contentType": {
+                                "type": "string",
+                                "enum": [
+                                  "markdown",
+                                  "artifact"
+                                ]
                               }
                             },
                             "required": [
@@ -16876,7 +17059,8 @@
                               "createdAt",
                               "likerCount",
                               "seenUsersCount",
-                              "isLiked"
+                              "isLiked",
+                              "contentType"
                             ]
                           },
                           "user": {
@@ -17441,13 +17625,21 @@
                                       "oauth",
                                       "pat"
                                     ]
+                                  },
+                                  "contentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "markdown",
+                                      "artifact"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "_id",
                                   "path",
                                   "body",
-                                  "createdAt"
+                                  "createdAt",
+                                  "contentType"
                                 ]
                               }
                             ]
@@ -17614,6 +17806,13 @@
                           },
                           "isLiked": {
                             "type": "boolean"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
@@ -17622,7 +17821,8 @@
                           "createdAt",
                           "likerCount",
                           "seenUsersCount",
-                          "isLiked"
+                          "isLiked",
+                          "contentType"
                         ]
                       }
                     },
@@ -18116,13 +18316,21 @@
                                       "oauth",
                                       "pat"
                                     ]
+                                  },
+                                  "contentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "markdown",
+                                      "artifact"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "_id",
                                   "path",
                                   "body",
-                                  "createdAt"
+                                  "createdAt",
+                                  "contentType"
                                 ]
                               }
                             ]
@@ -18289,6 +18497,13 @@
                           },
                           "isLiked": {
                             "type": "boolean"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
@@ -18297,7 +18512,8 @@
                           "createdAt",
                           "likerCount",
                           "seenUsersCount",
-                          "isLiked"
+                          "isLiked",
+                          "contentType"
                         ]
                       }
                     },
@@ -19311,13 +19527,21 @@
                                         "oauth",
                                         "pat"
                                       ]
+                                    },
+                                    "contentType": {
+                                      "type": "string",
+                                      "enum": [
+                                        "markdown",
+                                        "artifact"
+                                      ]
                                     }
                                   },
                                   "required": [
                                     "_id",
                                     "path",
                                     "body",
-                                    "createdAt"
+                                    "createdAt",
+                                    "contentType"
                                   ]
                                 }
                               ]
@@ -19484,6 +19708,13 @@
                             },
                             "isLiked": {
                               "type": "boolean"
+                            },
+                            "contentType": {
+                              "type": "string",
+                              "enum": [
+                                "markdown",
+                                "artifact"
+                              ]
                             }
                           },
                           "required": [
@@ -19492,7 +19723,8 @@
                             "createdAt",
                             "likerCount",
                             "seenUsersCount",
-                            "isLiked"
+                            "isLiked",
+                            "contentType"
                           ]
                         },
                         "user": {
@@ -20180,13 +20412,21 @@
                                           "oauth",
                                           "pat"
                                         ]
+                                      },
+                                      "contentType": {
+                                        "type": "string",
+                                        "enum": [
+                                          "markdown",
+                                          "artifact"
+                                        ]
                                       }
                                     },
                                     "required": [
                                       "_id",
                                       "path",
                                       "body",
-                                      "createdAt"
+                                      "createdAt",
+                                      "contentType"
                                     ]
                                   }
                                 ]
@@ -20353,6 +20593,13 @@
                               },
                               "isLiked": {
                                 "type": "boolean"
+                              },
+                              "contentType": {
+                                "type": "string",
+                                "enum": [
+                                  "markdown",
+                                  "artifact"
+                                ]
                               }
                             },
                             "required": [
@@ -20361,7 +20608,8 @@
                               "createdAt",
                               "likerCount",
                               "seenUsersCount",
-                              "isLiked"
+                              "isLiked",
+                              "contentType"
                             ]
                           },
                           "user": {
@@ -21718,12 +21966,20 @@
                           },
                           "createdAt": {
                             "type": "string"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
                           "_id",
                           "path",
-                          "createdAt"
+                          "createdAt",
+                          "contentType"
                         ]
                       }
                     },
@@ -22173,13 +22429,21 @@
                               "oauth",
                               "pat"
                             ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
                           "_id",
                           "path",
                           "body",
-                          "createdAt"
+                          "createdAt",
+                          "contentType"
                         ]
                       }
                     }
@@ -22600,13 +22864,21 @@
                             "oauth",
                             "pat"
                           ]
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
                         "_id",
                         "path",
                         "body",
-                        "createdAt"
+                        "createdAt",
+                        "contentType"
                       ]
                     }
                   },
@@ -23290,13 +23562,21 @@
                                 "oauth",
                                 "pat"
                               ]
+                            },
+                            "contentType": {
+                              "type": "string",
+                              "enum": [
+                                "markdown",
+                                "artifact"
+                              ]
                             }
                           },
                           "required": [
                             "_id",
                             "path",
                             "body",
-                            "createdAt"
+                            "createdAt",
+                            "contentType"
                           ]
                         },
                         "redirectTo": {
@@ -23447,6 +23727,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -23456,7 +23743,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -23941,13 +24229,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -24114,6 +24410,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -24122,7 +24425,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -24532,13 +24836,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -24705,6 +25017,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -24713,7 +25032,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -25198,13 +25518,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -25371,6 +25699,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -25379,7 +25714,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -26036,13 +26372,21 @@
                                       "oauth",
                                       "pat"
                                     ]
+                                  },
+                                  "contentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "markdown",
+                                      "artifact"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "_id",
                                   "path",
                                   "body",
-                                  "createdAt"
+                                  "createdAt",
+                                  "contentType"
                                 ]
                               }
                             ]
@@ -26209,6 +26553,13 @@
                           },
                           "isLiked": {
                             "type": "boolean"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
@@ -26217,7 +26568,8 @@
                           "createdAt",
                           "likerCount",
                           "seenUsersCount",
-                          "isLiked"
+                          "isLiked",
+                          "contentType"
                         ]
                       }
                     },
@@ -26532,13 +26884,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -26705,6 +27065,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -26713,7 +27080,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     },
                     "contentPage": {
@@ -27002,13 +27370,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -27175,6 +27551,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -27183,7 +27566,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     },
                     "total": {
@@ -27729,13 +28113,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -27902,6 +28294,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -27910,7 +28309,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -28780,13 +29180,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -28953,6 +29361,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -28961,7 +29376,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -29402,13 +29818,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -29575,6 +29999,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -29583,7 +30014,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -30019,13 +30451,21 @@
                                 "oauth",
                                 "pat"
                               ]
+                            },
+                            "contentType": {
+                              "type": "string",
+                              "enum": [
+                                "markdown",
+                                "artifact"
+                              ]
                             }
                           },
                           "required": [
                             "_id",
                             "path",
                             "body",
-                            "createdAt"
+                            "createdAt",
+                            "contentType"
                           ]
                         },
                         "redirectTo": {
@@ -30176,6 +30616,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -30185,7 +30632,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     },
                     "granted": {
@@ -31057,13 +31505,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -31230,6 +31686,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -31238,7 +31701,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -31799,13 +32263,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -31972,6 +32444,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -31980,7 +32459,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     }
                   },
@@ -32441,13 +32921,21 @@
                                     "oauth",
                                     "pat"
                                   ]
+                                },
+                                "contentType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "markdown",
+                                    "artifact"
+                                  ]
                                 }
                               },
                               "required": [
                                 "_id",
                                 "path",
                                 "body",
-                                "createdAt"
+                                "createdAt",
+                                "contentType"
                               ]
                             }
                           ]
@@ -32614,6 +33102,13 @@
                         },
                         "isLiked": {
                           "type": "boolean"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "markdown",
+                            "artifact"
+                          ]
                         }
                       },
                       "required": [
@@ -32622,7 +33117,8 @@
                         "createdAt",
                         "likerCount",
                         "seenUsersCount",
-                        "isLiked"
+                        "isLiked",
+                        "contentType"
                       ]
                     },
                     "renamed_count": {
@@ -37407,13 +37903,21 @@
                                           "oauth",
                                           "pat"
                                         ]
+                                      },
+                                      "contentType": {
+                                        "type": "string",
+                                        "enum": [
+                                          "markdown",
+                                          "artifact"
+                                        ]
                                       }
                                     },
                                     "required": [
                                       "_id",
                                       "path",
                                       "body",
-                                      "createdAt"
+                                      "createdAt",
+                                      "contentType"
                                     ]
                                   }
                                 ]
@@ -37580,6 +38084,13 @@
                               },
                               "isLiked": {
                                 "type": "boolean"
+                              },
+                              "contentType": {
+                                "type": "string",
+                                "enum": [
+                                  "markdown",
+                                  "artifact"
+                                ]
                               }
                             },
                             "required": [
@@ -37588,7 +38099,8 @@
                               "createdAt",
                               "likerCount",
                               "seenUsersCount",
-                              "isLiked"
+                              "isLiked",
+                              "contentType"
                             ]
                           }
                         },

@@ -457,6 +457,7 @@ const stubRevision = {
   format: 'markdown',
   author: null,
   createdAt: '',
+  contentType: 'markdown' as const,
 };
 const stubGetRevision: GetRevisionResponse = { revision: stubRevision };
 const stubGetRevisions: GetRevisionsResponse = { revisions: [] };
@@ -491,6 +492,7 @@ const stubPage: Page = {
   likerCount: 0,
   seenUsersCount: 0,
   isLiked: false,
+  contentType: 'markdown',
 };
 
 const stubPageWithRevision: GetPageResponse = {
@@ -503,12 +505,14 @@ const stubPageWithRevision: GetPageResponse = {
       body: '',
       format: 'markdown',
       createdAt: '',
+      contentType: 'markdown',
     },
     commentCount: 0,
     createdAt: '',
     likerCount: 0,
     seenUsersCount: 0,
     isLiked: false,
+    contentType: 'markdown',
   },
 };
 

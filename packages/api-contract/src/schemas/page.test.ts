@@ -16,6 +16,7 @@ const basePage = {
   likerCount: 0,
   seenUsersCount: 0,
   isLiked: false,
+  contentType: 'markdown',
 };
 
 describe('schemas/page', () => {

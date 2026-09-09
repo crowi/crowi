@@ -33,6 +33,14 @@ export const PageTypeEnum = {
   PUBLIC: 'public',
 } as const;
 
+// RFC-0020 — body content discriminator. Distinct from `RevisionTypeSchema`
+// (`snapshot | incremental`, the storage representation): this is what the
+// bytes ARE (Markdown source vs. sandboxed HTML artifact), not how they were
+// persisted. `Revision.contentType` is the authority; `Page.contentType` is
+// a denormalized list-view hint copied from the Page's current Revision.
+export const PageContentTypeSchema = z.enum(['markdown', 'artifact']);
+export type PageContentType = z.infer<typeof PageContentTypeSchema>;
+
 // User schema - minimal user information for page responses
 export const PageUserSchema = z.object({
   _id: z.string(),
@@ -133,6 +141,10 @@ export const RevisionSchema = z.object({
   // RFC-0010 — edit channel ('web' | 'oauth' | 'pat'); absent on
   // pre-RFC-0010 / collaborative / browser revisions.
   editVia: z.enum(['web', 'oauth', 'pat']).optional(),
+  // RFC-0020 — body content discriminator, authoritative for this Revision.
+  // Required on the wire; the serializer normalizes a missing stored value
+  // to 'markdown' (legacy rows predate this field).
+  contentType: PageContentTypeSchema,
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 
@@ -174,6 +186,11 @@ export const PageSchema = z.object({
   likerCount: z.number().int().nonnegative(),
   seenUsersCount: z.number().int().nonnegative(),
   isLiked: z.boolean(),
+  // RFC-0020 — denormalized list-view hint copied from the current
+  // Revision's `contentType` on the same Page document write. Not an
+  // independent authority: nested `revision.contentType` (when populated)
+  // is what determines render behavior for that specific Revision.
+  contentType: PageContentTypeSchema,
 });
 export type Page = z.infer<typeof PageSchema>;
 
