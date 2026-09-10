@@ -4,7 +4,7 @@ import 'server-only';
  * Public env keys exposed to the browser via `window.__ENV`. Keep in sync with
  * the build-time fallback in `runtime-env.ts`.
  */
-const PUBLIC_ENV_KEYS = ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_COLLAB_URL'] as const;
+const PUBLIC_ENV_KEYS = ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_COLLAB_URL', 'NEXT_PUBLIC_ARTIFACT_ORIGIN'] as const;
 
 /**
  * Read the public `NEXT_PUBLIC_*` env at REQUEST time on the server — the

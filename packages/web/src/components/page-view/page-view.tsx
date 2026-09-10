@@ -26,14 +26,15 @@ import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { usePresence } from '@/lib/use-presence';
 import { useMarkSeenOnView } from '@/lib/use-seen';
+import { ArtifactView } from './artifact-view';
 import { AttachmentList } from './attachment-list';
 import { BacklinkList } from './backlink-list';
+import { CopyPageMarkdownButton } from './copy-page-markdown-button';
 import { LiveSyncBanner } from './live-sync-banner';
 import { initialLiveSyncBannerState, isDisplayingOld, type LiveSyncBannerEvent, reduceLiveSyncBanner } from './live-sync-banner-state';
 import { isHeadNewer, isLifecycleChanged, mergePageLevelFields, pageLevelFieldsChanged, pageUserDisplayName } from './live-sync-reconcile';
 import { PageContent } from './page-content';
 import { PageHeader } from './page-header';
-import { CopyPageMarkdownButton } from './copy-page-markdown-button';
 import { useTocScrollSpy } from './page-toc';
 import { PageTocColumns } from './page-toc-columns';
 import { PortalizeBanner } from './portalize-dialog';
@@ -784,7 +785,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}
-          <PageContent page={renderedPage} />
+          {renderedPage.revision.contentType === 'artifact' ? <ArtifactView page={renderedPage} /> : <PageContent page={renderedPage} />}
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />
