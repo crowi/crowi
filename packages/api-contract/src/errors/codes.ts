@@ -83,6 +83,7 @@ export const ERROR_CODES = [
   'LINKED_IDENTITIES_EXIST',
   // --- artifact (RFC-0020) ---
   'ARTIFACT_SETTINGS_REJECTED',
+  'ARTIFACT_WRITE_REJECTED',
 ] as const;
 
 export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi('ErrorCode');

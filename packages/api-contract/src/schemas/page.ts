@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { RevisionTypeSchema } from './collab';
+import { ApiErrorSchema } from './common';
 import { RenderedAstArtifactKeySchema, RenderedAstValueSchema } from './rendered-ast';
 import { UserPublicSchema } from './user-public';
 
@@ -524,6 +525,43 @@ export const ARTIFACT_INGEST_REJECTION_REASONS = [
 ] as const;
 export const ArtifactIngestRejectionReasonSchema = z.enum(ARTIFACT_INGEST_REJECTION_REASONS);
 export type ArtifactIngestRejectionReason = z.infer<typeof ArtifactIngestRejectionReasonSchema>;
+
+/**
+ * RFC-0020 — the write-only content-type declaration for POST/PUT `/pages`.
+ * Deliberately `z.string().optional()` rather than an enum: OpenAPIHono's
+ * shared `defaultHook` (`packages/api/src/hono/middleware/default-hook.ts`)
+ * collapses request-validation failures into a generic `VALIDATION_ERROR`
+ * that cannot carry a `reason` / `ruleId`, so an invalid value must reach
+ * the handler's own AI-D01 check (`readArtifactContentTypeDeclaration`)
+ * instead of failing schema validation. `revertToRevisionRoute` does not
+ * declare this header — a revert always uses the target Revision's own
+ * `contentType`.
+ */
+export const ArtifactContentTypeHeaderSchema = z.object({
+  'x-crowi-page-content-type': z.string().optional(),
+});
+
+/**
+ * RFC-0020 — the structured rejection envelope create/update/revert return
+ * for both `ingestHtmlArtifact` rule violations (`AI-R*`, 400/413) and the
+ * write-path's own discriminator / delivery-configuration checks (`AI-D01`
+ * header declaration, `AI-D02` kind conflict, `AI-D03` delivery not
+ * configured). `reason` is the closed `ARTIFACT_INGEST_REJECTION_REASONS`
+ * union above; `message` is a fixed per-reason string (never a parser/
+ * library message or author content); `target` is an optional bounded
+ * identifier (offending tag/attribute/rule name), never a value/URL/source
+ * excerpt.
+ */
+export const ArtifactWriteRejectionSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('ARTIFACT_WRITE_REJECTED'),
+    reason: ArtifactIngestRejectionReasonSchema,
+    ruleId: z.string().regex(/^AI-(R\d{2}[a-c]?|D0[1-3])$/),
+    message: z.string(),
+    target: z.string().optional(),
+  }),
+});
+export type ArtifactWriteRejection = z.infer<typeof ArtifactWriteRejectionSchema>;
 
 /**
  * RFC-0021 §5.3 — the `Idempotency-Key` a history-producing command requires:
