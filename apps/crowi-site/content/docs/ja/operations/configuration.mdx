@@ -159,6 +159,12 @@ curl -fsS https://artifacts.example.net/api/app/info
 smoke check です)。到達しない場合、artifact ページの保存自体は通常どおり
 行われますが、routing を直すまで配信できません(データは失われません)。
 
+artifact origin がこの api instance へ到達させる必要がある path prefix は `/api/artifact/`(sandbox 化された文書自体が fetch する、token 認証の配信 route)と `/api/pages/`(署名付き配信 URL を発行する route)の 2 つだけです — 推奨のリバースプロキシ構成では、他の `/api/*` の呼び出しと同様にこの 2 つも既に route されています。配信 response が cookie を発行することはありません — 60 秒だけ有効な署名付き URL が唯一の認証情報で、cookie は一切持ちません。
+
+artifact ページの HTML を添付ファイルとしてダウンロードする機能(`GET /pages/{id}/artifact-download`、通常のセッション/PAT 認証配下)は配信モードとは独立していて、上記のどちらのモードも設定していなくても動作します — 設定が必要なのは sandbox 化されたインライン プレビューだけです。
+
+署名付き配信 URL の token は query string(`?t=…`)に載って運ばれます。Crowi 自身の log にはこれを一切記録しませんが、artifact origin の手前に置く reverse proxy や CDN は既定で request URL 全体を access log に記録することがあります。`/api/artifact/` については query string を記録しないよう設定してください。漏れた log の 1 行が(有効期限内は)そのまま有効な配信 URL として再生されてしまいます。
+
 same-origin 配信には知っておくべき残余リスクがあります。artifact への
 request にも Crowi のセッション cookie が送られます(文書自体からは分かり
 ません)。また、reverse proxy や CDN が response header を除去・上書き

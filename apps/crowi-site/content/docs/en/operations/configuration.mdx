@@ -160,6 +160,12 @@ correct — the same boot-readiness check used elsewhere in these docs. If it
 does not resolve, artifact pages save normally but cannot be delivered until
 the routing is fixed; no data is lost.
 
+The artifact origin only needs to reach 2 path prefixes on this api instance: `/api/artifact/` (the token-authenticated delivery route the sandboxed document itself is fetched from) and `/api/pages/` (the route that mints the signed delivery URL, and the recommended reverse-proxy topology already routes both alongside every other `/api/*` call). The delivery response never sets a cookie — the signed URL, valid for 60 seconds, is the only credential it accepts, and it carries none of its own.
+
+Downloading an artifact page's HTML as an attachment (`GET /pages/{id}/artifact-download`, behind the normal session/PAT auth) is independent of delivery mode and works even when neither mode above is configured — only the sandboxed inline preview requires a mode to be active.
+
+The signed delivery URL's token travels in the query string (`?t=…`). Crowi's own logs never record it, but a reverse proxy or CDN placed in front of the artifact origin might record the full request URL in its access log by default — configure it to omit the query string for `/api/artifact/` so a leaked log line cannot be replayed as a (time-limited) valid delivery URL.
+
 Same-origin delivery has residual risk worth knowing before enabling it:
 the artifact request still carries Crowi's session cookie (invisible from
 the document itself), and a reverse proxy or CDN that strips or rewrites
