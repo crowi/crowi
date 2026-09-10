@@ -38,6 +38,10 @@ export interface paths {
                             capabilities: components["schemas"]["Capability"][];
                             canSelfRegister: boolean;
                             rendererStylesheets: string[];
+                            artifactDelivery: {
+                                enabled: boolean;
+                                origin: string | null;
+                            };
                         };
                     };
                 };
@@ -15874,6 +15878,225 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the current HTML artifact delivery mode and settings */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current artifact delivery mode and settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            deliveryMode: "separate-origin" | "same-origin" | "disabled";
+                            artifactOrigin: string | null;
+                            crowiOrigin: string | null;
+                            writeEnabled: boolean;
+                            /** @enum {string|null} */
+                            sameOriginInactiveReason: "separate-origin-active" | "client-url-unset" | null;
+                            settings: {
+                                sameOriginEnabled: boolean;
+                                allowWebFonts: boolean;
+                                maxBytes: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        /** Update HTML artifact delivery settings (sameOriginEnabled / allowWebFonts / maxBytes) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sameOriginEnabled: boolean;
+                        allowWebFonts: boolean;
+                        maxBytes: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated settings (re-resolved from in-memory cache) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            deliveryMode: "separate-origin" | "same-origin" | "disabled";
+                            artifactOrigin: string | null;
+                            crowiOrigin: string | null;
+                            writeEnabled: boolean;
+                            /** @enum {string|null} */
+                            sameOriginInactiveReason: "separate-origin-active" | "client-url-unset" | null;
+                            settings: {
+                                sameOriginEnabled: boolean;
+                                allowWebFonts: boolean;
+                                maxBytes: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Validation failure or a same-origin toggle rejected for missing CLIENT_URL */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_SETTINGS_REJECTED";
+                                message: string;
+                                /** @enum {string} */
+                                reason: "CLIENT_URL_REQUIRED_FOR_SAME_ORIGIN";
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications": {
         parameters: {
             query?: never;
@@ -16345,7 +16568,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "IDEMPOTENCY_KEY_REQUIRED" | "IDEMPOTENCY_KEY_CONFLICT" | "PAGE_TRANSITION_IN_PROGRESS" | "PAGE_TRANSITION_INCOMPLETE" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "IDEMPOTENCY_KEY_REQUIRED" | "IDEMPOTENCY_KEY_CONFLICT" | "PAGE_TRANSITION_IN_PROGRESS" | "PAGE_TRANSITION_INCOMPLETE" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST" | "ARTIFACT_SETTINGS_REJECTED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
