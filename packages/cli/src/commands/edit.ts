@@ -39,7 +39,14 @@ export function registerEdit(program: Command): void {
         info(`Page ${normalisePath(path)} does not exist — it will be created on save.`, globals);
       }
 
-      const edited = await editInEditor(original, resolveEditor(options.editor));
+      // RFC-0020 §E table — the temp file's extension matches the page's
+      // CURRENT kind (a new page has none yet, so it defaults to markdown)
+      // so the editor's syntax highlighting matches the body. Never sent
+      // back as `--type`: `edit` always keeps whatever kind the page
+      // already has (or, for a new page, whatever the server defaults a
+      // create to).
+      const extension = current?.contentType === 'artifact' ? 'html' : 'md';
+      const edited = await editInEditor(original, resolveEditor(options.editor), extension);
 
       if (edited === original) {
         render({ path: current?.path ?? normalisePath(path), changed: false }, () => 'No changes — page left untouched.', globals);
