@@ -37,6 +37,8 @@ import { registerAdminStorageRoutes } from './handlers/admin/storage';
 import { registerAdminUsersRoutes } from './handlers/admin/users';
 import { registerAdminCryptoRoutes } from './handlers/admin-crypto';
 import { registerAppRoutes } from './handlers/app';
+import { registerArtifactRoutes } from './handlers/artifact';
+import { registerArtifactStreamRoutes } from './handlers/artifact-stream';
 import { registerAttachmentRoutes } from './handlers/attachment';
 import { registerAttachmentStreamRoutes } from './handlers/attachment-stream';
 import { registerAutocompleteRoutes } from './handlers/autocomplete';
@@ -271,11 +273,15 @@ export const buildHonoApp = (crowi: Crowi) => {
   // credential resolution twice per request — see the doc comment in
   // `attachment-stream.ts`).
   registerAttachmentStreamRoutes(withAttachment, crowi);
+  // Artifact routes must register after registerRevisionRoutes
+  // to inherit the /pages/* JWT middleware.
+  const withArtifact = registerArtifactRoutes(withAttachment, crowi);
+  registerArtifactStreamRoutes(withArtifact, crowi);
   // Batch 7 — search. Singleton literal path `/search` (OUTSIDE the
   // revision-owned `/pages/*` apply). The handler installs jwtAuth on
   // the literal path itself, same single-route install pattern as
   // `/users/autocomplete`. No rate limit.
-  const withSearch = registerSearchRoutes(withAttachment, crowi);
+  const withSearch = registerSearchRoutes(withArtifact, crowi);
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
   // admin-only (first time `createJwtAdminRequired` lands on Hono).
   const withAdminCrypto = registerAdminCryptoRoutes(withSearch, crowi);

@@ -222,7 +222,7 @@ const toWebStream = (stream: Readable): ReadableStream => {
  * filename — so that input is reachable. Replacing unpaired surrogates with
  * U+FFFD first makes the encode total.
  */
-const encodeRfc8187 = (name: string): string => {
+export const encodeRfc8187 = (name: string): string => {
   // `String.prototype.toWellFormed` (ES2024) swaps lone surrogates for
   // U+FFFD. It is present on every Node version this package supports but
   // is not in the configured `lib`, hence the guarded call rather than a
