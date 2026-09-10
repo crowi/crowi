@@ -1455,7 +1455,11 @@ export async function validateModuleSpecifiers(source: string): Promise<Artifact
   }
   for (const record of imports) {
     if (record.t === ImportType.ImportMeta) continue;
-    return { target: record.n ? truncateArtifactIdentifier(record.n) : 'script' };
+    // `record.n` is the import specifier the author wrote (a path/URL
+    // string) — AC-AI-9 forbids reflecting URLs/paths in `target`, so this
+    // always returns the fixed `'script'` identifier the ingest-core spec
+    // assigns to AI-R14, never the specifier itself.
+    return { target: 'script' };
   }
   return null;
 }
@@ -1605,6 +1609,15 @@ const HTML_URL_ATTRS = new Set([
   'usemap',
 ]);
 const SVG_PRESENTATION_URL_ATTRS = new Set(['fill', 'stroke', 'filter', 'clip-path', 'mask', 'cursor', 'marker-start', 'marker-mid', 'marker-end']);
+/**
+ * `tagName` is an author-controlled identifier with no length limit (custom
+ * element names in particular) — always truncate the combined `tag[attr]`
+ * form to AC-AI-9's 128-code-point bound before returning it as a `target`.
+ */
+function elementAttributeTarget(tagName: string, attrName: string): string {
+  return truncateArtifactIdentifier(`${tagName}[${attrName}]`);
+}
+
 function checkHtmlUrlAttr(tagName: string, attrName: string, value: string): boolean /* true = OK */ {
   const cls = classifyArtifactUrlValue(value);
   if ((tagName === 'a' || tagName === 'area') && attrName === 'href') return isFragmentOnlyOk(cls);
@@ -1636,7 +1649,7 @@ function checkGenericHtmlUrlAttrs(
     if (!HTML_URL_ATTRS.has(attr.name)) continue;
     if (node.tagName === 'link' && attr.name === 'href' && isGoogleFontsStylesheetLinkElement(node)) continue; // AI-R12 decides.
     if (checkHtmlUrlAttr(node.tagName, attr.name, attr.value)) continue;
-    return { target: `${node.tagName}[${attr.name}]` };
+    return { target: elementAttributeTarget(node.tagName, attr.name) };
   }
   return null;
 }
@@ -1651,7 +1664,7 @@ async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<Artif
       for (const attr of attrs) {
         if (isHrefLikeAttr(attr)) {
           const cls = classifyArtifactUrlValue(attr.value);
-          const target = `${node.tagName}[${attr.prefix ? `${attr.prefix}:` : ''}${attr.name}]`;
+          const target = elementAttributeTarget(node.tagName, `${attr.prefix ? `${attr.prefix}:` : ''}${attr.name}`);
           if (node.tagName === 'image') {
             if (!isDataOnlyOk(cls)) return { target };
           } else if (node.tagName === 'script') {
@@ -1662,7 +1675,7 @@ async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<Artif
           continue;
         }
         if (SVG_PRESENTATION_URL_ATTRS.has(attr.name) && !valueContainsOnlyFragmentUrls(attr.value)) {
-          return { target: `${node.tagName}[${attr.name}]` };
+          return { target: elementAttributeTarget(node.tagName, attr.name) };
         }
       }
       continue;
@@ -1672,11 +1685,11 @@ async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<Artif
       for (const attr of attrs) {
         if (isHrefLikeAttr(attr)) {
           const cls = classifyArtifactUrlValue(attr.value);
-          if (!isFragmentOnlyOk(cls)) return { target: `${node.tagName}[${attr.name}]` };
+          if (!isFragmentOnlyOk(cls)) return { target: elementAttributeTarget(node.tagName, attr.name) };
           continue;
         }
         if (!attr.prefix && attr.name === 'definitionURL') {
-          return { target: `${node.tagName}[definitionURL]` };
+          return { target: elementAttributeTarget(node.tagName, 'definitionURL') };
         }
       }
       // MathML elements aren't otherwise covered — the HTML name table
@@ -1755,7 +1768,11 @@ async function checkAiR13(context: Readonly<ArtifactRuleContext>): Promise<Artif
     const attrs = node.attrs as ArtifactAttribute[];
     const typeAttr = findAttr(attrs, (a) => !a.namespace && a.name === 'type');
     const type = (typeAttr?.value ?? '').trim().toLowerCase();
-    if (!ALLOWED_SCRIPT_TYPES.has(type)) return { target: truncateArtifactIdentifier(type) };
+    // `type` is the attribute VALUE the author wrote (e.g. an arbitrary
+    // MIME-like string) — AC-AI-9 forbids reflecting attribute values in
+    // `target`, so this returns the fixed attribute identifier instead,
+    // matching the `meta[charset]` / `meta[name=viewport]` precedent below.
+    if (!ALLOWED_SCRIPT_TYPES.has(type)) return { target: 'script[type]' };
   }
   return null;
 }
