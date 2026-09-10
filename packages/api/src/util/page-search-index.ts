@@ -89,10 +89,16 @@ export async function indexPageInSearch(crowi: Crowi, page: PageLike): Promise<v
       return 0;
     });
 
+    // RFC-0020 — an artifact page's body is HTML, not prose; indexing it
+    // would make an agent-authored document's raw markup searchable text.
+    // Only `body` is affected: `path` (the searchable title) and `meta` are
+    // unchanged, so the page is still findable by path.
+    const isArtifact = target.contentType === 'artifact';
+
     const doc: SearchableDoc = {
       id,
       path: target.path,
-      body: target.revision.body,
+      body: isArtifact ? '' : target.revision.body,
       meta: {
         username: creator?.username,
         grant: target.grant,

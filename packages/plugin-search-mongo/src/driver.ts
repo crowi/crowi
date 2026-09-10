@@ -129,13 +129,23 @@ export function createMongoSearchDriver(ctx: PluginContext): SearchDriver {
       // PATH pass (pages whose path matches the keyword) and BODY candidate
       // pass (viewer-visible pages whose revision we will match) are
       // independent Mongo reads — run them together.
+      //
+      // RFC-0020 (AC-CH-9) — the BODY pass excludes artifact pages (an
+      // artifact's body is HTML, not prose) IN the candidate query itself,
+      // before `.limit(CANDIDATE_CAP)` truncates it: filtering the result
+      // afterward would let artifact pages consume candidate slots and push
+      // out genuine Markdown body hits on a deployment with many artifacts.
+      // `$ne` also matches pages with no `contentType` field at all (pre-
+      // RFC-0020 rows), which is the desired "Markdown" default. The PATH
+      // pass and `buildPageFilter` are untouched — a path/title hit is
+      // still a hit regardless of kind.
       const [pathPages, candidatePages] = await Promise.all([
         Page.find(buildPageFilter({ ...scope, matchPath: true }))
           .select('_id path revision')
           .limit(CANDIDATE_CAP)
           .lean()
           .exec(),
-        Page.find(buildPageFilter({ ...scope, matchPath: false }))
+        Page.find({ ...buildPageFilter({ ...scope, matchPath: false }), contentType: { $ne: 'artifact' } })
           .select('_id path revision')
           .limit(CANDIDATE_CAP)
           .lean()
