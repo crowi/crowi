@@ -1,11 +1,19 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Command } from 'commander';
+import { Command } from 'commander';
 
 import { version as pkgVersion } from '../package.json';
 import { createProgram, getGlobalOptions } from './cli';
+import { registerCreate } from './commands/create';
+import { registerEdit } from './commands/edit';
+import { registerGet } from './commands/get';
+import { registerUpdate } from './commands/update';
 import * as capabilityModule from './lib/capability';
+import { upsertProfile } from './lib/config';
+import * as editorModule from './lib/editor';
+import { CliError, EXIT, setRefreshHook } from './lib/http';
 
 /**
  * Profile-option discoverability + command-side precedence (RFC: CLI
@@ -202,5 +210,198 @@ describe('createProgram — --version reports the published package version', ()
     const source = readFileSync(join(__dirname, 'cli.ts'), 'utf8');
     expect(source).toMatch(/import \{ version as CLI_VERSION \} from '\.\.\/package\.json'/);
     expect(source).not.toMatch(/\.version\(\s*['"]/);
+  });
+});
+
+/**
+ * RFC-0020 §7 (feature-html-artifact-clients) — `create` / `update --type`,
+ * `edit`'s temp-file extension, and `get --json`'s `contentType`. Follows
+ * `commands/attach.test.ts`'s local `build()` + mocked-`fetch` pattern
+ * (rather than `createProgram()`'s full tree) since these tests drive real
+ * command actions end-to-end, not just option parsing.
+ */
+describe('RFC-0020 §7 — content_type / --type (create, update, edit, get)', () => {
+  type FetchMock = jest.Mock<Promise<Response>, [string, RequestInit]>;
+
+  function jsonResponse(status: number, body: unknown): Response {
+    return { ok: status >= 200 && status < 300, status, text: async () => (body === undefined ? '' : JSON.stringify(body)) } as Response;
+  }
+
+  let fetchMock: FetchMock;
+  const originalFetch = global.fetch;
+  let tmpRoot: string;
+  const ORIGINAL_XDG = process.env.XDG_CONFIG_HOME;
+  let stderr: jest.SpyInstance;
+  let stdout: jest.SpyInstance;
+
+  beforeEach(() => {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'crowi-cli-clients-'));
+    process.env.XDG_CONFIG_HOME = tmpRoot;
+    delete process.env.CROWI_PROFILE;
+    delete process.env.CROWI_URL;
+    delete process.env.CROWI_TOKEN;
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    stdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    setRefreshHook(undefined);
+    upsertProfile({ alias: 'work', endpoint: 'https://wiki.example.com', tokens: { accessToken: 'pat-1', scope: 'pages:write pages:read' } });
+  });
+
+  afterEach(() => {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    if (ORIGINAL_XDG === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = ORIGINAL_XDG;
+    }
+    global.fetch = originalFetch;
+    stderr.mockRestore();
+    stdout.mockRestore();
+    setRefreshHook(undefined);
+    jest.restoreAllMocks();
+  });
+
+  function build(): Command {
+    const program = new Command();
+    program.exitOverride();
+    program.option('-p, --profile <alias>').option('--url <baseUrl>').option('--token <accessToken>').option('--json').option('-q, --quiet');
+    registerCreate(program);
+    registerUpdate(program);
+    registerEdit(program);
+    registerGet(program);
+    return program;
+  }
+
+  it('create and update advertise --type in --help', () => {
+    const program = build();
+    expect(findCommand(program, 'create').helpInformation()).toContain('--type <kind>');
+    expect(findCommand(program, 'update').helpInformation()).toContain('--type <kind>');
+  });
+
+  describe('create --type / update --type validation (AC-CL-5)', () => {
+    it.each(['create', 'update'])('%s --type bogus fails with EXIT.INVALID before any request', async (cmd) => {
+      const args = cmd === 'create' ? ['create', '/a', '--type', 'bogus', '-m', 'x'] : ['update', '/a', '--type', 'bogus', '-m', 'x'];
+      let caught: unknown;
+      try {
+        await build().parseAsync(args, { from: 'user' });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(CliError);
+      expect((caught as CliError).exitCode).toBe(EXIT.INVALID);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create --type artifact sends the header (AC-CL-5, and a regression for C-1b: create goes through postPage)', () => {
+    it('sends X-Crowi-Page-Content-Type: artifact on the real POST /pages request', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+
+      await build().parseAsync(['create', '/a', '--type', 'artifact', '-m', '<html></html>'], { from: 'user' });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain('/api/pages');
+      expect(init.method).toBe('POST');
+      expect((init.headers as Record<string, string>)['X-Crowi-Page-Content-Type']).toBe('artifact');
+      expect(JSON.parse(init.body as string)).not.toHaveProperty('content_type');
+    });
+  });
+
+  describe('create --file <html> without --type sends no header (AC-CL-6 — no inference from extension)', () => {
+    it('does not infer artifact from a .html file extension', async () => {
+      const file = join(tmpRoot, 'page.html');
+      writeFileSync(file, '<html><body>hi</body></html>');
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+
+      await build().parseAsync(['create', '/a', '--file', file], { from: 'user' });
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect((init.headers as Record<string, string> | undefined)?.['X-Crowi-Page-Content-Type']).toBeUndefined();
+    });
+  });
+
+  describe('update --type artifact --force resends the header on the retry (AC-CL-5, C-2b)', () => {
+    it('sends the header on both the initial PUT and the --force retry PUT', async () => {
+      // fetchCurrentPage (GET), PUT (409), fetchCurrentPage retry (GET), PUT retry (200)
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'rev1', body: 'old' } } }))
+        .mockResolvedValueOnce(jsonResponse(409, { error: { code: 'PAGE_REVISION_ERROR', message: 'stale' } }))
+        .mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'rev2', body: 'old' } } }))
+        .mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'rev3' } } }));
+
+      await build().parseAsync(['update', '/a', '--type', 'artifact', '--force', '-m', '<html>v2</html>'], { from: 'user' });
+
+      const putCalls = fetchMock.mock.calls.filter(([, init]) => init.method === 'PUT');
+      expect(putCalls).toHaveLength(2);
+      for (const [, init] of putCalls) {
+        expect((init.headers as Record<string, string>)['X-Crowi-Page-Content-Type']).toBe('artifact');
+      }
+    });
+  });
+
+  describe('edit — temp file extension follows the CURRENT kind, and update omits --type (AC-CL-7)', () => {
+    it('opens a .html temp file for an artifact page, and the save carries no content-type header (kind preserved)', async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse(200, {
+            page: { _id: 'p1', path: '/a', contentType: 'artifact', revision: { _id: 'rev1', body: '<html>v1</html>', contentType: 'artifact' } },
+          }),
+        )
+        .mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'rev2' } } }));
+
+      const editSpy = jest.spyOn(editorModule, 'editInEditor').mockResolvedValue('<html>v2</html>');
+
+      await build().parseAsync(['edit', '/a'], { from: 'user' });
+
+      expect(editSpy).toHaveBeenCalledWith('<html>v1</html>', expect.any(String), 'html');
+      const [, putInit] = fetchMock.mock.calls[1];
+      expect((putInit.headers as Record<string, string> | undefined)?.['X-Crowi-Page-Content-Type']).toBeUndefined();
+    });
+
+    it('opens a .md temp file for a markdown page (existing behaviour unchanged)', async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse(200, { page: { _id: 'p1', path: '/a', contentType: 'markdown', revision: { _id: 'rev1', body: '# v1', contentType: 'markdown' } } }),
+        )
+        .mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'rev2' } } }));
+
+      const editSpy = jest.spyOn(editorModule, 'editInEditor').mockResolvedValue('# v2');
+
+      await build().parseAsync(['edit', '/a'], { from: 'user' });
+
+      expect(editSpy).toHaveBeenCalledWith('# v1', expect.any(String), 'md');
+    });
+  });
+
+  describe('get --json includes contentType; plain get prints the body only (AC-CL-8)', () => {
+    it('includes contentType in --json output', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          page: { _id: 'p1', path: '/a', contentType: 'artifact', revision: { _id: 'rev1', body: '<html></html>', contentType: 'artifact' } },
+        }),
+      );
+
+      await build().parseAsync(['--json', 'get', '/a'], { from: 'user' });
+
+      const written = stdout.mock.calls.map((c) => String(c[0])).join('');
+      const parsed = JSON.parse(written) as { contentType?: string; body?: string };
+      expect(parsed.contentType).toBe('artifact');
+      expect(parsed.body).toBe('<html></html>');
+    });
+
+    it('prints only the body for a plain (non --json) get', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          page: { _id: 'p1', path: '/a', contentType: 'artifact', revision: { _id: 'rev1', body: '<html>hi</html>', contentType: 'artifact' } },
+        }),
+      );
+
+      await build().parseAsync(['get', '/a'], { from: 'user' });
+
+      const written = stdout.mock.calls.map((c) => String(c[0])).join('');
+      expect(written).toBe('<html>hi</html>\n');
+    });
   });
 });

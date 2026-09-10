@@ -102,6 +102,62 @@ describe('postPage validation (v2 floor)', () => {
   });
 });
 
+/**
+ * RFC-0020 §C-1 — `contentType` rides `X-Crowi-Page-Content-Type`, never
+ * the JSON body (`CreatePageRequestSchema` / `UpdatePageRequestSchema` have
+ * no `content_type` field, so it would be silently dropped by the server's
+ * non-strict zod schema either way — the header is what actually carries
+ * the declaration).
+ */
+describe('putPage / postPage — content_type header (RFC-0020 §C-1)', () => {
+  it('putPage adds the header when contentType is given', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/x', revision: { _id: 'rev2' } } }));
+    await putPage(PROFILE, { pageId: 'p1', body: 'new', revisionId: 'rev1', contentType: 'artifact' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)['X-Crowi-Page-Content-Type']).toBe('artifact');
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('contentType');
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('content_type');
+  });
+
+  it('putPage sends no header when contentType is omitted', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/x', revision: { _id: 'rev2' } } }));
+    await putPage(PROFILE, { pageId: 'p1', body: 'new', revisionId: 'rev1' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string> | undefined)?.['X-Crowi-Page-Content-Type']).toBeUndefined();
+  });
+
+  it('postPage adds the header when contentType is given, and none when omitted', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p9', path: '/n', revision: { _id: 'r1' } } }));
+    await postPage(PROFILE, { path: '/n', body: 'hello', contentType: 'markdown' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)['X-Crowi-Page-Content-Type']).toBe('markdown');
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('contentType');
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p10', path: '/n2', revision: { _id: 'r2' } } }));
+    await postPage(PROFILE, { path: '/n2', body: 'hello' });
+    const [, init2] = fetchMock.mock.calls[1];
+    expect((init2.headers as Record<string, string> | undefined)?.['X-Crowi-Page-Content-Type']).toBeUndefined();
+  });
+
+  it('an artifact write rejection is classified as a CliError with EXIT.INVALID and the formatted message', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, {
+        error: {
+          code: 'ARTIFACT_WRITE_REJECTED',
+          reason: 'SCRIPT_TYPE_FORBIDDEN',
+          ruleId: 'AI-R13',
+          message: 'This script type is not allowed in an artifact page.',
+          target: 'script[type]',
+        },
+      }),
+    );
+    const err = await postPage(PROFILE, { path: '/n', body: '<html></html>', contentType: 'artifact' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).exitCode).toBe(EXIT.INVALID);
+    expect((err as CliError).message).toContain('AI-R13 / SCRIPT_TYPE_FORBIDDEN');
+  });
+});
+
 describe('fetchCurrentPage', () => {
   it('flattens body + revision id from the populated page', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/x', revision: { _id: 'rev1', body: '# hi' } } }));
@@ -129,5 +185,22 @@ describe('fetchCurrentPage', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('page_id=507f1f77bcf86cd799439011');
     await fetchCurrentPage(PROFILE, 'foo/bar');
     expect(fetchMock.mock.calls[1][0]).toContain('path=%2Ffoo%2Fbar');
+  });
+
+  // RFC-0020 §R — the selected revision's own contentType is authoritative;
+  // the page-level contentType is only a fallback hint (used below by the
+  // no-populated-revision case).
+  it('reads contentType from the populated revision', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        page: { _id: 'p1', path: '/x', contentType: 'markdown', revision: { _id: 'rev1', body: '<html></html>', contentType: 'artifact' } },
+      }),
+    );
+    await expect(fetchCurrentPage(PROFILE, '/x')).resolves.toMatchObject({ contentType: 'artifact' });
+  });
+
+  it('falls back to the page-level contentType hint when the response has no populated revision', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/x', contentType: 'artifact' } }));
+    await expect(fetchCurrentPage(PROFILE, '/x')).resolves.toMatchObject({ contentType: 'artifact' });
   });
 });

@@ -106,6 +106,7 @@ describe('authedFetch error mapping', () => {
     [401, EXIT.UNAUTHENTICATED],
     [403, EXIT.FORBIDDEN],
     [400, EXIT.INVALID],
+    [413, EXIT.INVALID],
     [422, EXIT.INVALID],
     [503, EXIT.UNAVAILABLE],
     [500, EXIT.GENERAL],
@@ -130,6 +131,48 @@ describe('authedFetch error mapping', () => {
       exitCode: EXIT.UNAUTHENTICATED,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * RFC-0020 §J-1 — `parseResponse` (private to `http.ts`) delegates to
+ * `formatArtifactRejection` for a non-2xx body, and its own unit tests
+ * (`artifact-rejection.test.ts`) already pin the exact formatting; these
+ * tests only need to prove the wiring — 400/413/422 with a full artifact
+ * envelope get the richer message and EXIT.INVALID, and an ordinary error
+ * body is unaffected.
+ */
+describe('authedFetch error mapping — artifact rejection envelopes (RFC-0020 §J-1)', () => {
+  const artifactBody = (target?: string) => ({
+    error: {
+      code: 'ARTIFACT_WRITE_REJECTED',
+      reason: 'SCRIPT_TYPE_FORBIDDEN',
+      ruleId: 'AI-R13',
+      message: 'This script type is not allowed in an artifact page.',
+      ...(target !== undefined ? { target } : {}),
+    },
+  });
+
+  it.each([400, 413, 422])('formats a full artifact envelope on a %i response, with EXIT.INVALID', async (status) => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(status, artifactBody('script[type]')));
+    const err = (await authedFetch(PROFILE, 'POST', '/pages').catch((e: unknown) => e)) as CliError;
+    expect(err.exitCode).toBe(EXIT.INVALID);
+    expect(err.apiCode).toBe('ARTIFACT_WRITE_REJECTED');
+    expect(err.message).toBe('This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)\ntarget: script[type]');
+  });
+
+  it('omits the target line when the envelope has no target', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(422, artifactBody()));
+    const err = (await authedFetch(PROFILE, 'POST', '/pages').catch((e: unknown) => e)) as CliError;
+    expect(err.message).toBe('This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)');
+    expect(err.message).not.toContain('target:');
+  });
+
+  it("leaves an ordinary (non-artifact) error body's message untouched", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(400, { error: { code: 'VALIDATION_ERROR', message: 'path is required' } }));
+    const err = (await authedFetch(PROFILE, 'POST', '/pages').catch((e: unknown) => e)) as CliError;
+    expect(err.message).toBe('path is required');
+    expect(err.apiCode).toBe('VALIDATION_ERROR');
   });
 });
 
