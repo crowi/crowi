@@ -89,6 +89,7 @@ components:
         - LINKED_IDENTITIES_EXIST
         - ARTIFACT_SETTINGS_REJECTED
         - ARTIFACT_WRITE_REJECTED
+        - ARTIFACT_URL_UNAVAILABLE
     ApplicationNotInstalledError:
       type: object
       properties:
@@ -22986,6 +22987,252 @@ paths:
                   - retryAfterSeconds
         '500':
           description: Renderer pipeline failure
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /pages/{id}/artifact-url:
+    post:
+      tags:
+        - artifact
+      security:
+        - bearerAuth: []
+      summary: Mint a signed delivery URL for a Page HTML artifact
+      parameters:
+        - schema:
+            type: string
+            description: Page id (24-char hex ObjectId)
+            example: 507f1f77bcf86cd799439011
+          required: true
+          description: Page id (24-char hex ObjectId)
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revisionId:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: Signed artifact URL minted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  expiresAt:
+                    type: string
+                required:
+                  - url
+                  - expiresAt
+        '400':
+          description: >-
+            Invalid page id, invalid request body, or the target revision is not
+            an HTML artifact
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - INVALID_PAGE_ID
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - VALIDATION_ERROR
+                          message:
+                            type: string
+                          details:
+                            type: object
+                            properties:
+                              fieldErrors:
+                                type: object
+                                additionalProperties:
+                                  type: array
+                                  items:
+                                    type: string
+                              formErrors:
+                                type: array
+                                items:
+                                  type: string
+                            required:
+                              - fieldErrors
+                              - formErrors
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - ARTIFACT_URL_UNAVAILABLE
+                          reason:
+                            type: string
+                            enum:
+                              - NOT_AN_ARTIFACT
+                              - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - reason
+                          - message
+                    required:
+                      - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: The access token does not grant pages:read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INSUFFICIENT_SCOPE
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          requiredScope:
+                            type: string
+                        required:
+                          - requiredScope
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: >-
+            Page not found, not granted, or the revision does not belong to this
+            page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - PAGE_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - Page not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '422':
+          description: HTML artifact delivery is not configured on this server
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_URL_UNAVAILABLE
+                      reason:
+                        type: string
+                        enum:
+                          - NOT_AN_ARTIFACT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:
