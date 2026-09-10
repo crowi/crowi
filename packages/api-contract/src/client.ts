@@ -99,6 +99,7 @@ import { accessTokenRoutes } from './contracts/access-token';
 import { oauthRoutes } from './contracts/oauth';
 import { oauthSessionRoutes } from './contracts/oauth-session';
 import { notificationRoutes } from './contracts/notification';
+import { artifactRoutes } from './contracts/artifact';
 import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
 import { pagePreviewRoutes } from './contracts/page-preview';
@@ -147,6 +148,7 @@ import type {
   OpenNotificationResponseSchema,
 } from './schemas/notification';
 import type { WsTokenResponseSchema } from './schemas/collab';
+import type { MintArtifactUrlResponseSchema } from './schemas/artifact';
 import type {
   GetPageResponseSchema,
   ListPageChildrenResponseSchema,
@@ -256,6 +258,7 @@ type ListPageChildrenResponse = z.infer<typeof ListPageChildrenResponseSchema>;
 type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
 type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
 type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;
+type MintArtifactUrlResponse = z.infer<typeof MintArtifactUrlResponseSchema>;
 type WsTokenResponse = z.infer<typeof WsTokenResponseSchema>;
 type PresenceTokenResponse = z.infer<typeof PresenceTokenResponseSchema>;
 type LikersResponse = z.infer<typeof LikersResponseSchema>;
@@ -525,6 +528,10 @@ const stubListPageChildren: ListPageChildrenResponse = { children: [] };
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };
 const stubPreview: PreviewPageResponse = {};
+const stubArtifactUrl: MintArtifactUrlResponse = {
+  url: 'https://artifacts.example.net/api/artifact/000000000000000000000000/000000000000000000000000?t=stub',
+  expiresAt: '',
+};
 const stubWsToken: WsTokenResponse = {
   wsToken: '',
   pageId: '',
@@ -727,7 +734,7 @@ const bookmarkBacklinkCommentRevisionChain = new OpenAPIHono()
   // chains (the split exists to keep the inferred types under TS2589).
   .openapi(getPageHistoryRoute, (c) => c.json(stubPageHistory, 200));
 
-// page / page-preview / pageCollab / presence — 18 routes. Page CRUD
+// page / page-preview / artifact / pageCollab / presence — 19 routes. Page CRUD
 // registers AFTER revision in the runtime chain so the shared
 // `/pages/*` `createJwtAuth` apply in revision is reused. Inside this
 // block, literal sub-paths (`/pages/list`, `/pages/grant`, `/pages/seen`,
@@ -763,6 +770,9 @@ const pageChain = new OpenAPIHono()
   // (getPage) or POST /pages (createPage) — Hono dispatches by
   // method+path so this is purely organisational.
   .openapi(pagePreviewRoutes.previewPageRoute, (c) => c.json(stubPreview, 200))
+  // Artifact URL minting — same `/pages/{id}/<suffix>` shape family (24-hex id,
+  // no collision with literal paths like `/pages/list`).
+  .openapi(artifactRoutes.mintArtifactUrlRoute, (c) => c.json(stubArtifactUrl, 200))
   // pageCollab + presence — `/pages/{id}/<suffix>` routes that share
   // the revision handler's `/pages/*` jwtAuth apply. RFC-0003 wsToken
   // and RFC-0005 presence token / likers list. The path uses a 24-hex

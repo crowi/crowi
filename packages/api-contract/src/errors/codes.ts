@@ -84,6 +84,7 @@ export const ERROR_CODES = [
   // --- artifact (RFC-0020) ---
   'ARTIFACT_SETTINGS_REJECTED',
   'ARTIFACT_WRITE_REJECTED',
+  'ARTIFACT_URL_UNAVAILABLE',
 ] as const;
 
 export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi('ErrorCode');

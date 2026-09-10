@@ -15,6 +15,7 @@ export * from './schemas/admin/users';
 export * from './schemas/admin-crypto';
 export * from './schemas/app';
 export * from './schemas/app-capabilities';
+export * from './schemas/artifact';
 export * from './schemas/attachment';
 export * from './schemas/auth';
 export * from './schemas/autocomplete';

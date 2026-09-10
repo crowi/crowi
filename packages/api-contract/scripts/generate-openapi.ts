@@ -47,6 +47,7 @@ import {
   adminStorageRoutes,
   adminUsersRoutes,
   appRoutes,
+  artifactRoutes,
   attachmentRoutes,
   autocompleteRoutes,
   backlinkRoutes,
@@ -361,6 +362,8 @@ const routeGroups = [
   // `packages/api/src/hono/index.ts:buildHonoApp`).
   pageRoutes,
   pagePreviewRoutes,
+  // Artifact URL minting route, registered after page-preview.
+  artifactRoutes,
   pageCollabRoutes,
   presenceRoutes,
   // Batch 6 — draft / autocomplete / attachment. The `/pages/drafts`
