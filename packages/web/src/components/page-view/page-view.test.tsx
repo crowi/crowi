@@ -38,6 +38,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: 
 // each with an identifiable marker (their own behaviour has its own tests).
 vi.mock('./page-header', () => ({ PageHeader: () => createElement('div', { 'data-testid': 'page-header-stub' }) }));
 vi.mock('./page-content', () => ({ PageContent: () => createElement('div', { 'data-testid': 'page-content-stub' }) }));
+vi.mock('./artifact-view', () => ({ ArtifactView: () => createElement('div', { 'data-testid': 'artifact-view-stub' }) }));
 vi.mock('./backlink-list', () => ({ BacklinkList: () => createElement('div', { 'data-testid': 'backlink-list-stub' }) }));
 vi.mock('./attachment-list', () => ({ AttachmentList: () => createElement('div', { 'data-testid': 'attachment-list-stub' }) }));
 vi.mock('@/components/page-comments', () => ({ PageComments: () => createElement('div', { 'data-testid': 'page-comments-stub' }) }));
@@ -57,6 +58,7 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
       format: 'markdown',
       createdAt: '2026-05-01T00:00:00.000Z',
       author: { _id: 'u1', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
+      contentType: 'markdown',
     },
     latestRevision: 'rev-1',
     creator: null,
@@ -70,7 +72,7 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   } as PageWithRevision;
 }
 
-function renderPageView(page: PageWithRevision) {
+function renderPageView(page: PageWithRevision, usePageOverrides: { isDeleted?: boolean } = {}) {
   usePage.mockReturnValue({
     page,
     isLoading: false,
@@ -81,6 +83,7 @@ function renderPageView(page: PageWithRevision) {
     redirectTo: null,
     isDeleted: false,
     refetch: vi.fn(),
+    ...usePageOverrides,
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
@@ -198,5 +201,40 @@ describe('PageView — RestrictedShareBanner / PortalizeBanner render order (AC6
 
     expect(screen.queryByText(m['page.share.restricted_banner_title']())).toBeNull();
     expect(screen.getByRole('button', { name: m['page_list.portalize_banner_action']() })).toBeTruthy();
+  });
+});
+
+function makeArtifactRevision(overrides: Partial<PageWithRevision['revision']> = {}): PageWithRevision['revision'] {
+  return {
+    _id: 'rev-artifact-1',
+    path: '/docs/guide/example',
+    body: '<!doctype html><html><body>hi</body></html>',
+    format: 'artifact',
+    createdAt: '2026-05-01T00:00:00.000Z',
+    contentType: 'artifact',
+    ...overrides,
+  };
+}
+
+describe('PageView — artifact vs Markdown body rendering (feature-html-artifact-shell AC-SH-1, AC-SH-9)', () => {
+  it('renders ArtifactView (not PageContent) for a page whose displayed Revision is an artifact (AC-SH-1)', () => {
+    renderPageView(makePage({ revision: makeArtifactRevision(), latestRevision: 'rev-artifact-1' }));
+
+    expect(screen.getByTestId('artifact-view-stub')).toBeTruthy();
+    expect(screen.queryByTestId('page-content-stub')).toBeNull();
+  });
+
+  it('renders PageContent (not ArtifactView) for a Markdown page (AC-SH-1)', () => {
+    renderPageView(makePage());
+
+    expect(screen.getByTestId('page-content-stub')).toBeTruthy();
+    expect(screen.queryByTestId('artifact-view-stub')).toBeNull();
+  });
+
+  it('never renders ArtifactView on the deleted-page card, even for an artifact-kind Revision (AC-SH-9)', () => {
+    renderPageView(makePage({ revision: makeArtifactRevision(), latestRevision: 'rev-artifact-1' }), { isDeleted: true });
+
+    expect(screen.queryByTestId('artifact-view-stub')).toBeNull();
+    expect(screen.getByTestId('page-content-stub')).toBeTruthy();
   });
 });
