@@ -27,9 +27,10 @@ cp .env.example .env
 ```
 
 The API validates all of these environment variables together at boot. If
-`PORT`, `MONGO_URI` (or an alias), `REDIS_URL` (or an alias), or
-`CROWI_ENCRYPTION_KEY` is malformed, boot fails immediately with a single
-error message listing every problem found. A malformed `CLIENT_URL`,
+`PORT`, `MONGO_URI` (or an alias), `REDIS_URL` (or an alias),
+`CROWI_ENCRYPTION_KEY`, or `CROWI_ARTIFACT_ORIGIN` is malformed, boot fails
+immediately with a single error message listing every problem found. A
+malformed `CLIENT_URL`,
 `CROWI_MULTI_INSTANCE`, `NODE_ENV`, `JWT_ACCESS_TOKEN_TTL_SECONDS`,
 `JWT_REFRESH_TOKEN_TTL_SECONDS`, `COLLAB_MAX_EDITORS_PER_PAGE`, or
 `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` does not block boot — these are
@@ -114,6 +115,56 @@ Forgetting this allowance silently blocks the CSS/fonts in the browser even
 though the plugin is active and healthy — neither the api nor the web app
 logs an error, since nothing failed server-side. Check the browser console
 for a CSP violation report.
+
+### HTML artifact delivery (CROWI_ARTIFACT_ORIGIN)
+
+HTML artifact pages must never execute inside a security context that can
+reach the rest of Crowi (cookies, other pages, the API). Two delivery modes
+exist, and neither is on by default.
+
+- **Separate-origin (recommended)**: set `CROWI_ARTIFACT_ORIGIN` to a
+  different **hostname** than `CLIENT_URL` — a different port or scheme on
+  the same hostname is rejected at boot, because cookies are scoped by host,
+  not by origin. Prefer a different registrable domain (e.g.
+  `artifacts.example.net` for a wiki at `wiki.example.com`), routed to the
+  same api process (a reverse-proxy rule or a second DNS record pointed at
+  it — the api itself cannot verify this; a smoke check is below).
+- **Same-origin (explicit opt-in)**: enable it from **Admin > Artifact**
+  instead of an environment variable. It requires `CLIENT_URL` to be set and
+  assumes the api is reachable under that same origin (the recommended
+  reverse-proxy topology). If you publish the api on a separate host, use
+  separate-origin delivery instead. With more than one api instance, this
+  setting's propagation to other replicas is best-effort — after turning it
+  off, restart every instance to be sure it has taken effect everywhere.
+
+If neither mode is configured, Crowi boots normally and the boot log
+explains what to set; artifact writes are rejected until one of them is
+active (reading pre-existing artifact pages still works, just without the
+executable preview).
+
+Regardless of mode, artifact delivery also requires a real application
+secret: set `app:secret` (Admin settings) or `SECRET_TOKEN` to a value of
+your own. Signed artifact URLs are derived from that secret, and the
+built-in development default would let anyone forge them — with the
+default in place, delivery is disabled even if a mode above is configured.
+
+After setting `CROWI_ARTIFACT_ORIGIN`, confirm the origin actually reaches
+this Crowi instance:
+
+```bash
+curl -fsS https://artifacts.example.net/api/app/info
+```
+
+A `200` response with this instance's `version` confirms the routing is
+correct — the same boot-readiness check used elsewhere in these docs. If it
+does not resolve, artifact pages save normally but cannot be delivered until
+the routing is fixed; no data is lost.
+
+Same-origin delivery has residual risk worth knowing before enabling it:
+the artifact request still carries Crowi's session cookie (invisible from
+the document itself), and a reverse proxy or CDN that strips or rewrites
+response headers silently removes the sandboxing protection. Admin >
+Artifact repeats both points next to the toggle.
 
 ## crowi.config.json
 
