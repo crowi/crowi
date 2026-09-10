@@ -117,6 +117,10 @@ export const ERROR_MESSAGE_KEYS = {
   // (plugin-config-form.tsx's confirmation dialog) renders its own
   // count-bearing message instead of this parameterless one.
   LINKED_IDENTITIES_EXIST: m['errors.linked_identities_exist'],
+  // artifact (RFC-0020) — the primary UI path (`use-admin-artifact.ts`'s
+  // `mapValidationError`) already localizes the single known `reason` via
+  // its own message key; this is the fallback for any other caller.
+  ARTIFACT_SETTINGS_REJECTED: m['errors.artifact_settings_rejected'],
 } satisfies Record<ErrorCode, MessageFn>;
 
 const isKnownCode = (code: string): code is ErrorCode => code in ERROR_MESSAGE_KEYS;
