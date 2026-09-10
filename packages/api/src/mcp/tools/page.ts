@@ -83,6 +83,33 @@ const RevertToRevisionShape = {
   revision_id: z.string().describe('The id of the PAST revision whose body to revert TO (from `crowi_get_page_history`).'),
 };
 
+/**
+ * RFC-0020 §T-1 — the write-only content-type declaration `crowi_create_page`
+ * / `crowi_update_page` accept. Omitted (not inferred from `body`) means the
+ * server default: markdown on create, the page's current kind on update.
+ */
+const ARTIFACT_DESCRIPTION_NOTE =
+  "When `content_type` is 'artifact', `body` MUST be a single self-contained HTML document: no external script/stylesheet/image/module references and no relative paths — embed any binary asset as a `data:` URI.";
+const ContentTypeField = z
+  .enum(['markdown', 'artifact'])
+  .optional()
+  .describe(
+    "The page kind to declare for this write. Omit to keep the server default (markdown on create, the page's current kind on update). Never inferred from `body`.",
+  );
+
+/**
+ * RFC-0020 §M-2/M-4 — `requestFrom` for `crowi_create_page` /
+ * `crowi_update_page`: when the validated input carries `content_type`,
+ * declare it via the `X-Crowi-Page-Content-Type` header (the write-path
+ * leaf's discriminator) and remove it from the JSON body so it is not sent
+ * twice. Omitted input → `undefined` → no header, no body change.
+ */
+const requestFromContentType: NonNullable<ToolDescriptor['requestFrom']> = (args) => {
+  const contentType = args.content_type;
+  if (contentType !== 'markdown' && contentType !== 'artifact') return undefined;
+  return { headers: { 'X-Crowi-Page-Content-Type': contentType }, omitFromBody: ['content_type'] };
+};
+
 // --- result mappers (RFC-0011 §9) ----------------------------------------
 
 type Json = Record<string, unknown>;
@@ -97,12 +124,19 @@ const mapPageResult = (body: unknown) => {
   const page = (body as { page?: Json }).page ?? {};
   const revision = (page.revision as Json | undefined) ?? {};
   const text = typeof revision.body === 'string' ? revision.body : JSON.stringify(page, null, 2);
+  // RFC-0020 §R-1 — the selected Revision's own `contentType` is
+  // authoritative (it is what a `revision_id`-scoped read actually returned);
+  // `page.contentType` is only a same-write denormalized hint, read here as a
+  // fallback for the delete/revert/rename resultMappers, whose dispatched
+  // routes return a page with no populated `revision` at all.
+  const contentType = typeof revision.contentType === 'string' ? revision.contentType : page.contentType;
   return okResultWithBody(text, {
     path: page.path,
     page_id: page._id,
     revision_id: revision._id,
     grant: page.grant,
     updatedAt: page.updatedAt,
+    content_type: contentType,
   });
 };
 
@@ -110,7 +144,9 @@ const mapPageResult = (body: unknown) => {
 const mapRevisionResult = (body: unknown) => {
   const revision = (body as { revision?: Json }).revision ?? {};
   const text = typeof revision.body === 'string' ? revision.body : JSON.stringify(revision, null, 2);
-  return okResultWithBody(text, { revision_id: revision._id, path: revision.path, createdAt: revision.createdAt });
+  // RFC-0020 §R-1b — this IS the revision (no page-level hint to fall back
+  // to), so its own `contentType` is the whole answer.
+  return okResultWithBody(text, { revision_id: revision._id, path: revision.path, createdAt: revision.createdAt, content_type: revision.contentType });
 };
 
 /**
@@ -179,7 +215,7 @@ export const pageTools: ToolDescriptor[] = [
   {
     name: 'crowi_get_page',
     description:
-      'Read a wiki page (markdown body + metadata) by `path` or `page_id`. Returns the page body as text. Read this before updating a page so you have its current `revision_id`.',
+      'Read a wiki page (body + metadata) by `path` or `page_id`. Returns the page body as text — markdown for an ordinary page, or the single self-contained HTML document for an artifact page (see `content_type` in the result). Read this before updating a page so you have its current `revision_id`.',
     method: 'GET',
     path: '/pages',
     schema: GetPageRequestSchema.shape,
@@ -220,7 +256,8 @@ export const pageTools: ToolDescriptor[] = [
   },
   {
     name: 'crowi_get_revision',
-    description: "Fetch a single revision's full markdown body by revision `id`.",
+    description:
+      "Fetch a single revision's full body by revision `id` — markdown or, for an artifact revision, the single self-contained HTML document (see `content_type` in the result).",
     method: 'GET',
     path: '/pages/revisions/{id}',
     schema: GetRevisionShape,
@@ -251,25 +288,25 @@ export const pageTools: ToolDescriptor[] = [
   // --------------------------------------------------------------- writes
   {
     name: 'crowi_create_page',
-    description:
-      'Create a new wiki page at `path` with markdown `body` (optional `grant` visibility). Fails if a page already exists at `path`. Paths are slash-separated hierarchies; date-based pages nest by slash, not hyphens — use `/parent/YYYY/MM/DD/title` (e.g. /crowi/qa/2026/06/08/mcp-server), not `/parent/2026-06-08-title`.',
+    description: `Create a new wiki page at \`path\` with \`body\` (markdown by default; optional \`grant\` visibility). Fails if a page already exists at \`path\`. Paths are slash-separated hierarchies; date-based pages nest by slash, not hyphens — use \`/parent/YYYY/MM/DD/title\` (e.g. /crowi/qa/2026/06/08/mcp-server), not \`/parent/2026-06-08-title\`. ${ARTIFACT_DESCRIPTION_NOTE}`,
     method: 'POST',
     path: '/pages',
-    schema: CreatePageRequestSchema.shape,
+    schema: { ...CreatePageRequestSchema.shape, content_type: ContentTypeField },
     kind: 'body',
     scope: 'pages:write',
     resultMapper: mapPageResult,
+    requestFrom: requestFromContentType,
   },
   {
     name: 'crowi_update_page',
-    description:
-      "Update a page (`page_id`) with new markdown `body`. ALWAYS pass `revision_id` (the page's current revision, from `crowi_get_page`) for optimistic locking — a stale `revision_id` returns a 409 conflict and you must re-fetch the page and retry. The returned `revision_id` is the new one for chaining edits.",
+    description: `Update a page (\`page_id\`) with a new \`body\`. ALWAYS pass \`revision_id\` (the page's current revision, from \`crowi_get_page\`) for optimistic locking — a stale \`revision_id\` returns a 409 conflict and you must re-fetch the page and retry. The returned \`revision_id\` is the new one for chaining edits. Omitting \`content_type\` keeps the page's current kind. ${ARTIFACT_DESCRIPTION_NOTE}`,
     method: 'PUT',
     path: '/pages',
-    schema: UpdatePageRequestSchema.shape,
+    schema: { ...UpdatePageRequestSchema.shape, content_type: ContentTypeField },
     kind: 'body',
     scope: 'pages:write',
     resultMapper: mapPageResult,
+    requestFrom: requestFromContentType,
   },
   {
     name: 'crowi_rename_page',
