@@ -40,7 +40,8 @@
   "dependencies": {
     "@crowi/api-contract": "workspace:^",
     "commander": "^12.1.0",
-    "open": "^10.1.0"
+    "open": "^10.1.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
