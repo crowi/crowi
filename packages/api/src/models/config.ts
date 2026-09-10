@@ -1,6 +1,7 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
+import { ARTIFACT_CONFIG_SEED } from 'src/artifact/config';
 import { decrypt, encrypt, isEncrypted, isEncryptionConfigured } from 'src/util/crypto';
 import { isSensitiveConfig } from './config-sensitive';
 
@@ -139,6 +140,13 @@ export default (crowi: Crowi) => {
       // will return as an auth provider plugin. The `googleLoginEnabled` /
       // `githubLoginEnabled` readers below are kept (they now always return
       // false) because dormant `User` methods still reference them.
+
+      // feature-html-artifact-delivery-policy §K 表 — `artifact:policy`,
+      // seeded so the row (and therefore its 3 default fields) is present
+      // from the first boot rather than lazily materializing on first admin
+      // save. An existing install with no row still resolves the identical
+      // defaults via `artifact/policy.ts`'s §C 表 missing-key fallback.
+      ...ARTIFACT_CONFIG_SEED,
     };
   }
 
