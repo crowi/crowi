@@ -604,6 +604,7 @@
   "errors.admin_required": "管理者権限が必要です。",
   "errors.application_not_installed": "アプリケーションがまだインストールされていません。",
   "errors.artifact_settings_rejected": "same-origin での artifact 配信には api 側で CLIENT_URL の設定が必要です。",
+  "errors.artifact_write_rejected": "この HTML artifact は検証で拒否されました。",
   "errors.auth_required": "認証が必要です",
   "errors.comment_not_found": "コメントが見つかりませんでした。",
   "errors.conflict_generic": "既存のデータと競合しています。",
