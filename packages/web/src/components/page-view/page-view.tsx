@@ -637,7 +637,11 @@ export function PageView({ path, revisionId }: PageViewProps) {
   // body — otherwise the right-rail / compact TOC would point at the latest
   // revision's anchors over an older body. Shared with the render block.
   const displayedPage = isDisplayingOld(bannerState) && snapshot?.page && snapshot.page.path === page?.path ? snapshot.page : (page ?? null);
-  const toc = displayedPage?.revision?.meta?.toc ?? EMPTY_TOC;
+  // RFC-0020 — reads the DISPLAYED Revision's own kind, not the page's
+  // latest, so a historical Markdown revision of a page whose current head
+  // is an artifact (or vice versa) still lays out correctly.
+  const isArtifact = displayedPage?.revision?.contentType === 'artifact';
+  const toc = isArtifact ? EMPTY_TOC : (displayedPage?.revision?.meta?.toc ?? EMPTY_TOC);
   const activeTocId = useTocScrollSpy(toc);
 
   if (isLoading) {
@@ -754,9 +758,10 @@ export function PageView({ path, revisionId }: PageViewProps) {
     const isDraft = page.status === PageStatusEnum.DRAFT;
     // Offer "make this a portal" when descendants already live under
     // `/path/...` — the page is implicitly a folder, so portalizing lets it
-    // index them. Suppressed for drafts, the historical (stale) view, and the
-    // user-home page (which can't be renamed).
-    const showPortalizeBanner = !isStaleRevision && !isDraft && hasDescendants && !isUserHomePath(page.path);
+    // index them. Suppressed for drafts, the historical (stale) view, the
+    // user-home page (which can't be renamed), and artifact pages (RFC-0020 —
+    // what an artifact body means at the portal position is undefined).
+    const showPortalizeBanner = !isStaleRevision && !isDraft && !isArtifact && hasDescendants && !isUserHomePath(page.path);
     const showRestrictedShareBanner = shouldShowRestrictedShareBanner(page, { isStaleRevision, isDraft });
     const handleEdit = () => {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
@@ -766,8 +771,12 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // `?? page` only narrows the nullable top-level value to non-null inside
     // this `if (page)` block — it can never actually fall back here.
     const renderedPage = displayedPage ?? page;
+    // RFC-0020 — an artifact page has no Markdown to copy, so the rail's
+    // copy-markdown button is not drawn at all (not just hidden inside the
+    // dotmenu, which independently omits its own copy-markdown item).
+    const railActions = isArtifact ? undefined : <CopyPageMarkdownButton key={renderedPage._id} page={renderedPage} />;
     return (
-      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={<CopyPageMarkdownButton key={renderedPage._id} page={renderedPage} />}>
+      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={railActions}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
         <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
@@ -785,7 +794,20 @@ export function PageView({ path, revisionId }: PageViewProps) {
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}
-          {renderedPage.revision.contentType === 'artifact' ? <ArtifactView page={renderedPage} /> : <PageContent page={renderedPage} />}
+          {isArtifact ? (
+            // RFC-0020 — the toc rail is empty (`toc` above
+            // is `EMPTY_TOC`) but the rail COLUMN still occupies its width at
+            // ≥1280px (`PageTocColumns` draws it unconditionally); this
+            // negative margin reclaims that width (14rem rail + 1.5rem gap)
+            // for the artifact instead of leaving it as dead space. Wrapping
+            // only this element — not `children` as a whole — keeps the
+            // comment/backlink/attachment sections at the normal prose width.
+            <div className="min-[1280px]:-mr-[15.5rem]">
+              <ArtifactView page={renderedPage} />
+            </div>
+          ) : (
+            <PageContent page={renderedPage} />
+          )}
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />

@@ -30,8 +30,24 @@ const MAX_BASE_NAME_LENGTH = 100;
  *   /          -> `${fallback}.md`
  */
 export function toMarkdownFileName(path: string, fallback: string): string {
+  return toFileName(path, fallback, 'md');
+}
+
+/**
+ * Same derivation as {@link toMarkdownFileName}, `.html` extension instead —
+ * RFC-0020's "Download HTML" action for an artifact page.
+ *
+ *   /foo/bar   -> bar.html
+ *   /foo/bar/  -> bar.html
+ *   /          -> `${fallback}.html`
+ */
+export function toHtmlFileName(path: string, fallback: string): string {
+  return toFileName(path, fallback, 'html');
+}
+
+function toFileName(path: string, fallback: string, extension: string): string {
   const baseName = sanitizeBaseName(pageBasename(path));
-  return `${baseName.length > 0 ? baseName : fallback}.md`;
+  return `${baseName.length > 0 ? baseName : fallback}.${extension}`;
 }
 
 function sanitizeBaseName(raw: string): string {

@@ -217,12 +217,20 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
         // (that would create a second doc at `/foo/`), no folder rename
         // (ambiguous while a content page sits here). Instead, a portalize
         // banner sits in the portal-body slot offering to move `/foo` →
-        // `/foo/`.
+        // `/foo/`. RFC-0020 — suppressed for an artifact content page: what
+        // an artifact body means at the portal position is undefined, same
+        // as the menu's own Portalize item.
         <div>
           <PortalFallbackHeader path={portalPath} showCreatePortal={false} />
-          <div className="mt-6">
-            <PortalizeBanner page={contentPage} title={m['page_list.portalize_banner_title']()} description={<ContentPageSentence path={contentPage.path} />} />
-          </div>
+          {contentPage.contentType !== 'artifact' && (
+            <div className="mt-6">
+              <PortalizeBanner
+                page={contentPage}
+                title={m['page_list.portalize_banner_title']()}
+                description={<ContentPageSentence path={contentPage.path} />}
+              />
+            </div>
+          )}
         </div>
       ) : (
         portalPath && (

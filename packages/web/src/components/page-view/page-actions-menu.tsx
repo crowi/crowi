@@ -7,8 +7,9 @@ import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, FileDown, History, Lin
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { apiFetch } from '@/lib/api-client';
 import { notify } from '@/lib/notify';
-import { toMarkdownFileName } from '@/lib/page-download-filename';
+import { toHtmlFileName, toMarkdownFileName } from '@/lib/page-download-filename';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
 import { useForceCloseable } from '@/lib/use-force-closeable';
@@ -18,6 +19,35 @@ import { DeletePageDialog } from './delete-page-dialog';
 import { PortalizeDialog } from './portalize-dialog';
 import { RenameDialog } from './rename-dialog';
 import { ShareDialog } from './share-dialog';
+
+/**
+ * Triggers a browser download of `blob` as `fileName` via a transient
+ * object URL. The happy path revokes at the end of `try`; on any throw
+ * (anchor creation/click, or the revoke call itself) a second revoke is
+ * attempted and its own failure is swallowed, then the original error is
+ * rethrown for the caller to report — a single failure notification with
+ * best-effort cleanup.
+ */
+function saveBlobAsDownload(blob: Blob, fileName: string): void {
+  let url: string | null = null;
+  try {
+    url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    if (url !== null) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // already reported by the caller's catch
+      }
+    }
+    throw error;
+  }
+}
 
 interface PageActionsMenuProps {
   page: PageWithRevision;
@@ -72,10 +102,15 @@ export function PageActionsMenu({
   // A user's home page (`/user/<username>`) is bound to the username, so it
   // can't be renamed — the server rejects it too (`isRenamableName`).
   const canRename = !isUserHomePath(page.path);
+  // RFC-0020 — reads the DISPLAYED Revision's own kind (`page` here IS the
+  // currently displayed revision, per `PageView`).
+  const isArtifact = page.revision.contentType === 'artifact';
   // "Portalize" turns this content page into the `/path/` portal. Offered
   // only for a renamable, non-portal page (a path already ending in `/` is
   // already a portal). User home pages are excluded via `canRename`.
-  const canPortalize = canRename && !page.path.endsWith('/');
+  // Excluded for an artifact page — what its body means at the portal
+  // position is undefined.
+  const canPortalize = canRename && !page.path.endsWith('/') && !isArtifact;
 
   const handleCopyMarkdown = () => {
     const body = page.revision?.body ?? '';
@@ -94,29 +129,40 @@ export function PageActionsMenu({
     // useless to the recipient and would only give the false impression
     // that something was downloaded.
     if (body.length === 0) return;
-    let url: string | null = null;
     try {
-      const fileName = toMarkdownFileName(page.path, page._id);
-      const blob = new Blob([body], { type: 'text/markdown;charset=utf-8' });
-      url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = fileName;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      saveBlobAsDownload(new Blob([body], { type: 'text/markdown;charset=utf-8' }), toMarkdownFileName(page.path, page._id));
     } catch {
       notify.error(m['page.markdown_download_failed']());
-      // The revoke call above may be what threw, or may never have been
-      // reached — either way the object URL must not leak. Retry it here,
-      // swallowing a second failure: cleanup must never escape past the
-      // notification already shown.
-      if (url !== null) {
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          // already notified above
-        }
+    }
+  };
+
+  /**
+   * RFC-0020 — "Download HTML" for an artifact page. Bytes come from the
+   * delivery route (`GET /pages/{id}/artifact-download`),
+   * not `page.revision.body` — that route is the one place the
+   * `Content-Disposition: attachment` contract is enforced server-side (a
+   * curl/CLI caller bypassing this button still gets it). `apiFetch` is
+   * used directly (not the typed `apiClient`) because this route carries no
+   * `@crowi/api-contract` entry — it deliberately never crosses the
+   * cross-origin artifact delivery boundary CSP is built around — and
+   * `apiFetch` does not prepend `/api` itself (unlike the typed client), so
+   * the path is written out in full here.
+   */
+  const handleDownloadArtifactHtml = async () => {
+    try {
+      const response = await apiFetch(`/api/pages/${page._id}/artifact-download?revision=${encodeURIComponent(page.revision._id)}`);
+      if (!response.ok) {
+        notify.error(m['page.artifact_download_failed']());
+        return;
       }
+      const bytes = await response.arrayBuffer();
+      // Forced to `application/octet-stream` regardless of the response's
+      // own `Content-Type` (`text/html`) — a `text/html` blob: URL executes
+      // as HTML in the Crowi origin if it is ever navigated to, and this
+      // object URL briefly exists in that state between creation and revoke.
+      saveBlobAsDownload(new Blob([bytes], { type: 'application/octet-stream' }), toHtmlFileName(page.path, page._id));
+    } catch {
+      notify.error(m['page.artifact_download_failed']());
     }
   };
 
@@ -149,13 +195,18 @@ export function PageActionsMenu({
               <DropdownMenuSeparator />
             </>
           )}
-          <DropdownMenuItem onSelect={handleCopyMarkdown}>
-            <ClipboardCopy className="h-4 w-4 mr-2" />
-            {m['page.action_copy_markdown']()}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleDownloadMarkdown}>
+          {/* RFC-0020 — an artifact page has no Markdown to copy. */}
+          {!isArtifact && (
+            <DropdownMenuItem onSelect={handleCopyMarkdown}>
+              <ClipboardCopy className="h-4 w-4 mr-2" />
+              {m['page.action_copy_markdown']()}
+            </DropdownMenuItem>
+          )}
+          {/* RFC-0020 — an artifact page downloads its own HTML (from the
+              delivery route, always as an attachment) instead of Markdown. */}
+          <DropdownMenuItem onSelect={() => (isArtifact ? void handleDownloadArtifactHtml() : handleDownloadMarkdown())}>
             <FileDown className="h-4 w-4 mr-2" />
-            {m['page.action_download_markdown']()}
+            {isArtifact ? m['page.action_download_html']() : m['page.action_download_markdown']()}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => router.push(`/_history?path=${encodeURIComponent(page.path)}`)}>
