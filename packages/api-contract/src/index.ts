@@ -4,6 +4,7 @@ export * from './errors/codes';
 export * from './schemas/access-token';
 export * from './schemas/activation';
 export * from './schemas/admin/app';
+export * from './schemas/admin/artifact';
 export * from './schemas/admin/auth';
 export * from './schemas/admin/mail';
 export * from './schemas/admin/plugins';

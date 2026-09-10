@@ -77,6 +77,7 @@ import { hc } from 'hono/client';
 import type { z } from 'zod';
 
 import { adminAppRoutes } from './contracts/admin/app';
+import { adminArtifactRoutes } from './contracts/admin/artifact';
 import { adminAuthRoutes } from './contracts/admin/auth';
 import { adminMailRoutes } from './contracts/admin/mail';
 import { adminPageDeletionRoutes } from './contracts/admin/page-deletion';
@@ -185,6 +186,7 @@ import type {
   PluginConfigResponseSchema,
   UpdatePluginConfigResponseSchema,
 } from './schemas/admin/plugins';
+import type { GetArtifactSettingsResponseSchema } from './schemas/admin/artifact';
 import type { GetSearchStatusResponseSchema } from './schemas/admin/search';
 import type { GetSecuritySettingsResponseSchema, UpdateSecuritySettingsResponseSchema } from './schemas/admin/security';
 import type { GetStorageStatusResponseSchema } from './schemas/admin/storage';
@@ -273,6 +275,7 @@ type UpdateAppSettingsResponse = z.infer<typeof UpdateAppSettingsResponseSchema>
 type GetAuthSettingsResponse = z.infer<typeof GetAuthSettingsResponseSchema>;
 type UpdateAuthSettingsResponse = z.infer<typeof UpdateAuthSettingsResponseSchema>;
 type GetSecuritySettingsResponse = z.infer<typeof GetSecuritySettingsResponseSchema>;
+type GetArtifactSettingsResponse = z.infer<typeof GetArtifactSettingsResponseSchema>;
 type UpdateSecuritySettingsResponse = z.infer<typeof UpdateSecuritySettingsResponseSchema>;
 type GetMailSettingsResponse = z.infer<typeof GetMailSettingsResponseSchema>;
 type UpdateMailSettingsResponse = z.infer<typeof UpdateMailSettingsResponseSchema>;
@@ -591,6 +594,14 @@ const stubSecuritySettings: GetSecuritySettingsResponse = {
   registrationWhiteList: [],
   linkCardEnabled: true,
 };
+const stubArtifactSettings: GetArtifactSettingsResponse = {
+  deliveryMode: 'disabled',
+  artifactOrigin: null,
+  crowiOrigin: null,
+  writeEnabled: false,
+  sameOriginInactiveReason: null,
+  settings: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: 0 },
+};
 const stubMailSettings: GetMailSettingsResponse = {
   from: '',
   activeDriver: '',
@@ -639,6 +650,7 @@ const appAuthMeUserChain = new OpenAPIHono()
         capabilities: [],
         canSelfRegister: true,
         rendererStylesheets: [],
+        artifactDelivery: { enabled: false, origin: null },
       } satisfies AppInfoResponse,
       200,
     ),
@@ -801,10 +813,11 @@ const lateContractApp = new OpenAPIHono()
   .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
 /**
- * Batch 9 — admin sub-contracts (26 endpoints across two chains):
+ * Batch 9 — admin sub-contracts (26 endpoints across two chains), plus
+ * feature-html-artifact-delivery-policy's `admin.artifact` (2 endpoints):
  *
  * - `adminSettingsContractApp`: the 6 read+write settings sub-contracts
- *   (app / auth / security / mail / storage / search) = 11 routes.
+ *   (app / artifact / auth / security / mail / storage / search) = 13 routes.
  * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (6)
  *   sub-contracts = 16 routes.
  *
@@ -822,6 +835,8 @@ const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminAuthRoutes.updateAuthSettingsRoute, (c) => c.json(stubAuthSettings, 200))
   .openapi(adminSecurityRoutes.getSecuritySettingsRoute, (c) => c.json(stubSecuritySettings, 200))
   .openapi(adminSecurityRoutes.updateSecuritySettingsRoute, (c) => c.json(stubSecuritySettings, 200))
+  .openapi(adminArtifactRoutes.getArtifactSettingsRoute, (c) => c.json(stubArtifactSettings, 200))
+  .openapi(adminArtifactRoutes.updateArtifactSettingsRoute, (c) => c.json(stubArtifactSettings, 200))
   .openapi(adminMailRoutes.getMailSettingsRoute, (c) => c.json(stubMailSettings, 200))
   .openapi(adminMailRoutes.updateMailSettingsRoute, (c) => c.json(stubUpdateMailSettings, 200))
   .openapi(adminMailRoutes.sendTestMailRoute, (c) => c.json(stubSendTestMail, 200))

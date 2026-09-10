@@ -81,6 +81,8 @@ export const ERROR_CODES = [
   'PLUGIN_NOT_FOUND',
   'PLUGIN_CONFIG_VALIDATION_FAILED',
   'LINKED_IDENTITIES_EXIST',
+  // --- artifact (RFC-0020) ---
+  'ARTIFACT_SETTINGS_REJECTED',
 ] as const;
 
 export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi('ErrorCode');
