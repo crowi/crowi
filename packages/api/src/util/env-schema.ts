@@ -383,6 +383,21 @@ const AUTH_PUBLIC_WEB_URL_DESCRIPTOR: EnvVarDescriptor = {
   check: { severity: 'fail', validate: validateOriginOnlyUrl },
 };
 
+/**
+ * feature-html-artifact-delivery-policy §E-1 — Mode A (separate-origin
+ * artifact delivery) opt-in. Reuses `validateOriginOnlyUrl` (the same
+ * origin-only check `AUTH_PUBLIC_API_URL` / `AUTH_PUBLIC_WEB_URL` use):
+ * userinfo/path/query/fragment fail boot. Unlike those two, this has no
+ * CLIENT_URL fallback — Mode A is opt-in only (see
+ * {@link resolveArtifactDeliveryOrigins}) — and its cross-field relationship
+ * with `CLIENT_URL` is enforced separately by
+ * {@link detectArtifactOriginConflict} (E-2/E-3).
+ */
+const CROWI_ARTIFACT_ORIGIN_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'CROWI_ARTIFACT_ORIGIN',
+  check: { severity: 'fail', validate: validateOriginOnlyUrl },
+};
+
 const CROWI_MULTI_INSTANCE_DESCRIPTOR: EnvVarDescriptor = {
   name: 'CROWI_MULTI_INSTANCE',
   check: { severity: 'warn', validate: validateMultiInstance },
@@ -519,6 +534,7 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   CLIENT_URL_DESCRIPTOR,
   AUTH_PUBLIC_API_URL_DESCRIPTOR,
   AUTH_PUBLIC_WEB_URL_DESCRIPTOR,
+  CROWI_ARTIFACT_ORIGIN_DESCRIPTOR,
   CROWI_MULTI_INSTANCE_DESCRIPTOR,
   NODE_ENV_DESCRIPTOR,
   JWT_ACCESS_TTL_DESCRIPTOR,
@@ -661,6 +677,78 @@ function detectUnresolvableRedisKeyspace(resolvedByDescriptor: ReadonlyMap<EnvVa
 }
 
 /**
+ * feature-html-artifact-delivery-policy §E-2/E-3 — cross-field check between
+ * `CROWI_ARTIFACT_ORIGIN` and `CLIENT_URL`. Only evaluated when
+ * `CROWI_ARTIFACT_ORIGIN` is set AND already passed its own E-1 origin-only
+ * check — mirrors {@link detectUnresolvableRedisKeyspace}'s re-validate
+ * pattern (the descriptor's own `check` in the main loop already reported an
+ * E-1 failure; re-comparing a value that failed to even parse as an origin
+ * would either throw or double-report it, same reasoning as
+ * `detectUnresolvableRedisKeyspace` not re-flagging an already-invalid
+ * `REDIS_KEY_PREFIX` override).
+ *
+ * E-2: `CLIENT_URL` unset, or set but not a valid absolute URL, is a boot
+ * failure — `CLIENT_URL`'s own descriptor is warn-severity, so without this
+ * cross-field fail Mode A could end up active with no trusted Crowi origin
+ * to build `frame-ancestors` from.
+ *
+ * E-3: hostname-only comparison (not full origin) — cookies are host-scoped
+ * and don't distinguish scheme/port, so `CROWI_ARTIFACT_ORIGIN` on the same
+ * hostname as `CLIENT_URL` (even a different port/scheme) still shares
+ * Crowi's session cookie, defeating the origin isolation Mode A exists for.
+ */
+function detectArtifactOriginConflict(resolvedByDescriptor: ReadonlyMap<EnvVarDescriptor, ReturnType<typeof resolveRaw>>): string | null {
+  const artifactOrigin = resolvedByDescriptor.get(CROWI_ARTIFACT_ORIGIN_DESCRIPTOR);
+  if (!artifactOrigin) return null; // Mode A not requested — nothing to cross-check.
+  if (validateOriginOnlyUrl(artifactOrigin.raw) != null) return null; // Already reported by CROWI_ARTIFACT_ORIGIN_DESCRIPTOR's own check.
+
+  const clientUrl = resolvedByDescriptor.get(CLIENT_URL_DESCRIPTOR);
+  if (!clientUrl || validateAbsoluteUrl(clientUrl.raw) != null) {
+    return (
+      'CROWI_ARTIFACT_ORIGIN is set but CLIENT_URL is not a valid, set absolute URL — set CLIENT_URL to the Crowi web ' +
+      'origin so artifact delivery has a trusted origin to compare against and to build frame-ancestors from.'
+    );
+  }
+
+  const artifactHostname = new URL(normalizeOriginOnlyUrl(artifactOrigin.raw)).hostname;
+  const clientHostname = new URL(clientUrl.raw).hostname;
+  if (artifactHostname === clientHostname) {
+    return (
+      `CROWI_ARTIFACT_ORIGIN (${JSON.stringify(redactUserinfo(artifactOrigin.raw))}) must use a different hostname than ` +
+      `CLIENT_URL (${JSON.stringify(redactUserinfo(clientUrl.raw))}) — the same hostname on a different port or scheme ` +
+      'still shares the Crowi session cookie, defeating the origin isolation separate-origin artifact delivery exists for.'
+    );
+  }
+
+  return null;
+}
+
+/**
+ * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+ * pair `Crowi.getArtifactDeliveryEnv()` exposes to `src/artifact/policy.ts`.
+ * Unlike {@link resolveFederatedAuthPublicUrls}, `artifactOrigin` NEVER falls
+ * back to `CLIENT_URL` — separate-origin (Mode A) delivery is opt-in via
+ * `CROWI_ARTIFACT_ORIGIN` alone; an unset value means Mode A is not
+ * requested, not "derive it from CLIENT_URL". `crowiOrigin` uses
+ * `CLIENT_URL`'s own (path-permitting) `validateAbsoluteUrl` check — matching
+ * {@link resolveFederatedAuthPublicUrls}'s `crowiOrigin`-equivalent
+ * derivation — and is `new URL(raw).origin`, not the raw value, so a
+ * `CLIENT_URL` carrying a path still yields a bare origin here.
+ */
+export type ArtifactDeliveryEnv = Readonly<{ artifactOrigin: string | null; crowiOrigin: string | null }>;
+
+function resolveArtifactDeliveryOrigins(resolvedByDescriptor: ReadonlyMap<EnvVarDescriptor, ReturnType<typeof resolveRaw>>): ArtifactDeliveryEnv {
+  const artifactOriginResolved = resolvedByDescriptor.get(CROWI_ARTIFACT_ORIGIN_DESCRIPTOR);
+  const artifactOrigin =
+    artifactOriginResolved && validateOriginOnlyUrl(artifactOriginResolved.raw) == null ? normalizeOriginOnlyUrl(artifactOriginResolved.raw) : null;
+
+  const clientUrl = resolvedByDescriptor.get(CLIENT_URL_DESCRIPTOR);
+  const crowiOrigin = clientUrl && validateAbsoluteUrl(clientUrl.raw) == null ? new URL(clientUrl.raw).origin : null;
+
+  return { artifactOrigin, crowiOrigin };
+}
+
+/**
  * RFC-0014 phase 1 §5 — resolve the federated-auth trusted origin fallback
  * chain: `AUTH_PUBLIC_WEB_URL` defaults to `CLIENT_URL` RE-VALIDATED as
  * origin-only (a `CLIENT_URL` carrying a path/query/userinfo cannot back
@@ -764,6 +852,12 @@ export interface EnvValidationResult {
      * "federated auth disabled".
      */
     federatedAuthPublicUrls: { apiUrl: string; webUrl: string } | null;
+    /**
+     * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+     * pair `src/artifact/policy.ts`'s policy resolver reads via
+     * `Crowi.getArtifactDeliveryEnv()`. See {@link resolveArtifactDeliveryOrigins}.
+     */
+    artifactDelivery: ArtifactDeliveryEnv;
   };
   /** Human-readable warning strings, for a consolidated boot-time report. Empty when nothing is amiss. */
   warnings: string[];
@@ -809,6 +903,9 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
   const keyspaceFailure = detectUnresolvableRedisKeyspace(resolvedByDescriptor);
   if (keyspaceFailure) failMessages.push(keyspaceFailure);
 
+  const artifactOriginConflict = detectArtifactOriginConflict(resolvedByDescriptor);
+  if (artifactOriginConflict) failMessages.push(artifactOriginConflict);
+
   warnMessages.push(...detectTypoWarnings(env));
 
   if (failMessages.length > 0) {
@@ -826,6 +923,7 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
       mongoUri: resolvedByDescriptor.get(MONGO_URI_DESCRIPTOR)?.raw ?? 'mongodb://localhost/crowi',
       encryptionKey: resolvedByDescriptor.get(CROWI_ENCRYPTION_KEY_DESCRIPTOR)?.raw ?? null,
       federatedAuthPublicUrls: resolveFederatedAuthPublicUrls(resolvedByDescriptor),
+      artifactDelivery: resolveArtifactDeliveryOrigins(resolvedByDescriptor),
     },
     warnings: warnMessages,
   };

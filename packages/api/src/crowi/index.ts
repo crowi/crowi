@@ -5,6 +5,7 @@ import http from 'http';
 import mongoose from 'mongoose';
 import path, { sep } from 'path';
 import { createClient } from 'redis';
+import { reportArtifactPolicyAtBoot } from 'src/artifact/policy';
 import { type AttachedCollab, attachCollabServer } from 'src/collab/attach';
 import { ALL_BOOT_STEPS, CLI_SKIP_STEPS, resolveBootOrder } from 'src/crowi/boot-steps';
 import events from 'src/events';
@@ -21,7 +22,7 @@ import { createRenderer, type Renderer } from 'src/renderer';
 import { MailService } from 'src/service/mail';
 import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
-import { validateEnv } from 'src/util/env-schema';
+import { type ArtifactDeliveryEnv, validateEnv } from 'src/util/env-schema';
 import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
 import LRU from '../service/lru';
@@ -122,6 +123,18 @@ class Crowi {
    * `getFederatedAuthPublicUrls()` instead — see that method's doc comment.
    */
   federatedAuthPublicUrls: { apiUrl: string; webUrl: string } | null = null;
+
+  /**
+   * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+   * pair `validateEnv()` resolved once at construction (`CROWI_ARTIFACT_ORIGIN`
+   * / `CLIENT_URL`, already cross-validated — see `util/env-schema.ts`'s
+   * `resolveArtifactDeliveryOrigins`). Process-fixed, like `redisUrl` /
+   * `mongoUri`. Public so tests can override it directly for the shared
+   * singleton `crowi` (`src/test/setup.ts`); handler / policy code reads it
+   * via `getArtifactDeliveryEnv()` instead — never the request's Host /
+   * Origin header, for the same reason `getBaseUrl()` never does.
+   */
+  artifactDeliveryEnv: ArtifactDeliveryEnv = { artifactOrigin: null, crowiOrigin: null };
 
   /**
    * `warn`-severity findings from the constructor's one-time
@@ -230,6 +243,7 @@ class Crowi {
     this.mongoUri = envResult.values.mongoUri;
     this.encryptionKey = envResult.values.encryptionKey;
     this.federatedAuthPublicUrls = envResult.values.federatedAuthPublicUrls;
+    this.artifactDeliveryEnv = envResult.values.artifactDelivery;
 
     const redisRejectUnauthorized = this.env.REDIS_REJECT_UNAUTHORIZED !== '0';
     this.redisOpts = this.buildRedisOpts(this.redisUrl, redisRejectUnauthorized);
@@ -543,6 +557,21 @@ class Crowi {
   }
 
   /**
+   * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+   * pair resolved ONCE by `validateEnv()` in the constructor
+   * (`util/env-schema.ts#resolveArtifactDeliveryOrigins`), returned verbatim.
+   * `src/artifact/policy.ts`'s `resolveArtifactPolicyState` reads this method
+   * (not the field directly) so tests can `jest.spyOn` it to exercise a
+   * booted harness's Mode A / `CLIENT_URL`-unset paths.
+   *
+   * Deliberately NOT derived from the request Host/Origin/forwarded headers
+   * — same rationale as `getBaseUrl()` / `getFederatedAuthPublicUrls()`.
+   */
+  getArtifactDeliveryEnv(): ArtifactDeliveryEnv {
+    return this.artifactDeliveryEnv;
+  }
+
+  /**
    * The address the api server itself is listening on (`this.port`, default
    * 4301). Used for the boot reporter's `🚀 API ready` banner and the
    * `@@crowi:ready api <url>` marker that `scripts/dev.mjs` keys on.
@@ -733,6 +762,18 @@ class Crowi {
   async ensureRelationUniqueIndexes(): Promise<void> {
     await this.model('Like').ensureUniqueIndex();
     await this.model('Seen').ensureUniqueIndex();
+  }
+
+  /**
+   * feature-html-artifact-delivery-policy §S-3 — boot-time artifact policy
+   * status note. Delegates to `src/artifact/policy.ts`'s
+   * `reportArtifactPolicyAtBoot(this)`; the `artifactPolicy` boot step
+   * (`boot-steps.ts`) calls this method rather than importing that module
+   * directly so `boot-steps.test.ts` can observe the call on a fake `Crowi`,
+   * same as `relationUniqueIndexes` calling `ensureRelationUniqueIndexes()`.
+   */
+  reportArtifactPolicyAtBoot(): void {
+    reportArtifactPolicyAtBoot(this);
   }
 
   setupEvents() {
