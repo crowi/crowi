@@ -100,7 +100,8 @@ export const createCors = (crowi: Crowi): MiddlewareHandler => {
     // `X-Crowi-Ast-Version` (RFC-0023 §9): today only the iOS native
     // app (not CORS-constrained) sends it, but allow-listing it now
     // keeps future browser-based debug/admin callers from silently
-    // failing preflight.
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Crowi-Ast-Version'],
+    // failing preflight. `X-Crowi-Page-Content-Type` (RFC-0020) is the
+    // POST/PUT /pages artifact write discriminator.
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Crowi-Ast-Version', 'X-Crowi-Page-Content-Type'],
   });
 };
