@@ -124,6 +124,9 @@ export const ERROR_MESSAGE_KEYS = {
   // web never triggers this (it never sends the artifact write header), but
   // the code is a valid server response so the exhaustive map must cover it.
   ARTIFACT_WRITE_REJECTED: m['errors.artifact_write_rejected'],
+  // web doesn't call this route yet, but the code is a valid server
+  // response so the exhaustive map must cover it.
+  ARTIFACT_URL_UNAVAILABLE: m['errors.artifact_url_unavailable'],
 } satisfies Record<ErrorCode, MessageFn>;
 
 const isKnownCode = (code: string): code is ErrorCode => code in ERROR_MESSAGE_KEYS;

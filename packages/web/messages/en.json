@@ -604,6 +604,7 @@
   "errors.admin_required": "Administrator permission is required.",
   "errors.application_not_installed": "The application has not been installed yet.",
   "errors.artifact_settings_rejected": "Same-origin artifact delivery requires CLIENT_URL to be set on the api.",
+  "errors.artifact_url_unavailable": "This artifact cannot be displayed right now.",
   "errors.artifact_write_rejected": "The HTML artifact was rejected by validation.",
   "errors.auth_required": "Authentication required",
   "errors.comment_not_found": "The comment was not found.",
