@@ -54,8 +54,8 @@ Crowi の HTTP API は稼働中のサーバ自身がドキュメントを配信�
 | `crowi_get_revision` | 特定のリビジョンの本文を読む | `pages:read` |
 | `crowi_get_backlinks` | そのページへのリンク元一覧 | `pages:read` |
 | `crowi_autocomplete_pages` | ページパスの補完候補 | `pages:read` |
-| `crowi_create_page` | ページを作成 | `pages:write` |
-| `crowi_update_page` | ページを更新 | `pages:write` |
+| `crowi_create_page` | ページを作成 (省略可能な `content_type`: `markdown` または `artifact`) | `pages:write` |
+| `crowi_update_page` | ページを更新 (省略可能な `content_type`: `markdown` または `artifact`) | `pages:write` |
 | `crowi_rename_page` | ページをリネーム / 移動 | `pages:write` |
 | `crowi_delete_page` | ゴミ箱へ削除 (または完全削除) | `pages:write` |
 | `crowi_revert_page` | ゴミ箱のページを復元 | `pages:write` |
