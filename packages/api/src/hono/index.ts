@@ -26,6 +26,7 @@ import { createHonoApp } from './app';
 import { registerAccessTokenRoutes } from './handlers/access-token';
 import { registerActivationRoutes } from './handlers/activation';
 import { registerAdminAppRoutes } from './handlers/admin/app';
+import { registerAdminArtifactRoutes } from './handlers/admin/artifact';
 import { registerAdminAuthRoutes } from './handlers/admin/auth';
 import { registerAdminMailRoutes } from './handlers/admin/mail';
 import { registerPageDeletionRoutes } from './handlers/admin/page-deletion';
@@ -293,7 +294,8 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withAdminSearch = registerAdminSearchRoutes(withAdminStorage, crowi);
   const withAdminUsers = registerAdminUsersRoutes(withAdminSearch, crowi);
   const withAdminPlugins = registerAdminPluginsRoutes(withAdminUsers, crowi);
-  const withNotification = registerNotificationRoutes(withAdminPlugins, crowi);
+  const withAdminArtifact = registerAdminArtifactRoutes(withAdminPlugins, crowi);
+  const withNotification = registerNotificationRoutes(withAdminArtifact, crowi);
 
   // RFC-0011 — built-in MCP server. `/mcp` is a normal Hono route (not a
   // WS upgrade), so it is attached here alongside the other handler
