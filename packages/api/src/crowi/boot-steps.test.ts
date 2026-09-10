@@ -63,7 +63,7 @@ describe('resolveBootOrder', () => {
 });
 
 describe('ALL_BOOT_STEPS', () => {
-  it('declares each of the 12 runInitLayers steps exactly once', () => {
+  it('declares each of the 13 runInitLayers steps exactly once', () => {
     const names = ALL_BOOT_STEPS.map((s) => s.name);
     expect(names).toEqual([
       'encryption',
@@ -71,6 +71,7 @@ describe('ALL_BOOT_STEPS', () => {
       'models',
       'redis',
       'config',
+      'artifactPolicy',
       'bootMigrations',
       'relationUniqueIndexes',
       'seedOAuthClients',
@@ -113,6 +114,7 @@ describe('ALL_BOOT_STEPS', () => {
       models: 'setupModels',
       redis: 'setupRedisClient',
       config: 'setupConfig',
+      artifactPolicy: 'checkArtifactPolicy',
       bootMigrations: 'runBootMigrations',
       relationUniqueIndexes: 'ensureRelationUniqueIndexes',
       seedOAuthClients: 'seedOAuthClients',
@@ -154,5 +156,22 @@ describe('ALL_BOOT_STEPS', () => {
     resolveDeferred?.();
     await runPromise;
     expect(settled).toBe(true);
+  });
+
+  it('feature-html-artifact-delivery-policy §S-1/S-3: the artifactPolicy step run() calls crowi.reportArtifactPolicyAtBoot() exactly once', () => {
+    const step = ALL_BOOT_STEPS.find((s) => s.name === 'artifactPolicy');
+    expect(step).toBeDefined();
+    expect(step?.after).toEqual(['config']);
+    expect(step?.debugLabel).toBe('checkArtifactPolicy');
+
+    let callCount = 0;
+    const fakeCrowi = {
+      reportArtifactPolicyAtBoot: () => {
+        callCount += 1;
+      },
+    } as unknown as Crowi;
+
+    step?.run(fakeCrowi, { mode: 'server' });
+    expect(callCount).toBe(1);
   });
 });

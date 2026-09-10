@@ -122,6 +122,53 @@ describe('GET /api/app/info (Hono)', () => {
     expect(() => AppInfoResponseSchema.parse(res.body)).not.toThrow();
   });
 
+  // feature-html-artifact-delivery-policy §AC-DP-9b — the public bootstrap
+  // slice of the artifact delivery policy (§R 表). The harness never sets
+  // CROWI_ARTIFACT_ORIGIN or an app:secret, so R-0 (app secret unusable)
+  // applies by default; the other modes are reproduced via a
+  // `getArtifactDeliveryEnv` spy, matching `artifact/policy.test.ts`'s
+  // own approach.
+  describe('artifactDelivery', () => {
+    afterEach(async () => {
+      await Config.deleteMany({ ns: 'crowi', key: { $in: ['app:secret', 'artifact:policy'] } });
+      await reloadConfigCache();
+      jest.restoreAllMocks();
+    });
+
+    it('is { enabled: false, origin: null } by default (R-0: app secret unusable)', async () => {
+      const res = await request(app).get('/api/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.artifactDelivery).toEqual({ enabled: false, origin: null });
+    });
+
+    it('is { enabled: true, origin: artifactOrigin } for a Mode A (separate-origin) snapshot', async () => {
+      await crowi.getConfigService().saveConfig('crowi', { 'app:secret': 'a-real-secret-value' });
+      jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.example.net', crowiOrigin: 'https://wiki.example.com' });
+
+      const res = await request(app).get('/api/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.artifactDelivery).toEqual({ enabled: true, origin: 'https://artifacts.example.net' });
+    });
+
+    it('is { enabled: true, origin: crowiOrigin } for a Mode B (same-origin) snapshot', async () => {
+      await crowi.getConfigService().saveConfig('crowi', {
+        'app:secret': 'a-real-secret-value',
+        'artifact:policy': { sameOriginEnabled: true, allowWebFonts: false, maxBytes: 2 * 1024 * 1024 },
+      });
+      jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: null, crowiOrigin: 'https://wiki.example.com' });
+
+      const res = await request(app).get('/api/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.artifactDelivery).toEqual({ enabled: true, origin: 'https://wiki.example.com' });
+    });
+
+    it('does not change the capabilities value set', async () => {
+      const res = await request(app).get('/api/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications', 'link-card']));
+    });
+  });
+
   // AC: "capabilities フィールドが既知 vocabulary(STATIC_CAPABILITIES + 動的3値)の
   // enum として wire schema 上で検証される。未知の文字列を含む body が...厳密な parse で
   // 失敗することを unit test で示す。"

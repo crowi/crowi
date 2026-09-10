@@ -83,6 +83,27 @@ describe('Crowi constructor env validation wiring', () => {
     ).toThrow(/CROWI_ENCRYPTION_KEY/);
   });
 
+  it("feature-html-artifact-delivery-policy §E-4: getArtifactDeliveryEnv() returns validateEnv()'s artifactDelivery value verbatim", () => {
+    const bothUnset = new Crowi(ROOT_DIR, {} as unknown as NodeJS.ProcessEnv);
+    expect(bothUnset.getArtifactDeliveryEnv()).toEqual({ artifactOrigin: null, crowiOrigin: null });
+
+    const bothSet = new Crowi(ROOT_DIR, {
+      CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net',
+      CLIENT_URL: 'https://wiki.example.com',
+    } as unknown as NodeJS.ProcessEnv);
+    expect(bothSet.getArtifactDeliveryEnv()).toEqual({ artifactOrigin: 'https://artifacts.example.net', crowiOrigin: 'https://wiki.example.com' });
+  });
+
+  it("feature-html-artifact-delivery-policy §E-3: CROWI_ARTIFACT_ORIGIN sharing CLIENT_URL's hostname on a different port throws at construction", () => {
+    expect(
+      () =>
+        new Crowi(ROOT_DIR, {
+          CROWI_ARTIFACT_ORIGIN: 'https://wiki.example.com:8443',
+          CLIENT_URL: 'https://wiki.example.com',
+        } as unknown as NodeJS.ProcessEnv),
+    ).toThrow(/CROWI_ARTIFACT_ORIGIN/);
+  });
+
   it('AC-16: initForCli() flushes the constructor-computed warnings (no second validateEnv() pass)', async () => {
     const crowi = new Crowi(ROOT_DIR, {
       NODE_ENV: 'staging', // recognised var, invalid value → warn-severity
