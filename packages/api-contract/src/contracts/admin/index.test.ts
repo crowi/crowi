@@ -13,6 +13,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { adminAppRoutes } from './app';
+import { adminArtifactRoutes } from './artifact';
 import { adminAuthRoutes } from './auth';
 import { adminMailRoutes } from './mail';
 import { adminPageDeletionRoutes } from './page-deletion';
@@ -24,6 +25,7 @@ import { adminUsersRoutes } from './users';
 
 const allAdminRoutes = [
   ...Object.entries(adminAppRoutes),
+  ...Object.entries(adminArtifactRoutes),
   ...Object.entries(adminAuthRoutes),
   ...Object.entries(adminSecurityRoutes),
   ...Object.entries(adminMailRoutes),
