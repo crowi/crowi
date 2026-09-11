@@ -5,11 +5,22 @@ import { PageToc } from './page-toc';
 
 /**
  * The page's 3-column reading shell: a left spacer reserving the fixed nav
- * rail's width, the centered content column (max-w-4xl), and the right TOC
- * rail. Escapes the parent's centered `max-w-4xl` main with a `w-screen`
- * group (margins/flex, no transform, so the sticky rail + fixed compact
- * header stay viewport-relative) and re-centres the content as a
+ * rail's width, the centered content column, and the right TOC rail.
+ * Escapes the parent's centered `max-w-4xl` main with a `w-screen` group
+ * (margins/flex, no transform, so the sticky rail + fixed compact header
+ * stay viewport-relative) and re-centres the content as a
  * `[spacer | content | toc]` triple.
+ *
+ * The content column is 54rem, not `max-w-4xl`: the app header and the
+ * plain `<main>` are `max-w-4xl` INCLUDING their `px-4` gutters, so their
+ * text runs 54rem wide. A 56rem column would sit a gutter wider on each side
+ * than the header's logo / avatar and than a portal-less listing. The compact
+ * page header and the fixed nav rail (`PageSidebar`) are placed against the
+ * same 54rem column.
+ *
+ * `data-toc-columns` marks the shell for the app header in `(auth)/layout`,
+ * which widens itself over `content + rail` from 1280 up to 1440 while this
+ * shell is on screen (see the header's class there).
  *
  * The left spacer (≥1440) reserves the fixed nav rail's width so the content
  * stays dead-centre; below 1440 it collapses and content + right rail
@@ -46,9 +57,9 @@ export function PageTocColumns({
 }) {
   const hasToc = toc.length >= 2;
   return (
-    <div className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
+    <div data-toc-columns className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
       <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
-      <div className="w-full min-w-0 max-w-4xl">{children}</div>
+      <div className="w-full min-w-0 max-w-[54rem]">{children}</div>
       <div className="hidden w-56 shrink-0 min-[1280px]:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-3">
           {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
