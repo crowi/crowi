@@ -66,6 +66,14 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Lint must be errors=0** (warnings tolerated). pre-push lefthook enforces.
 - **Format**: Biome auto-runs on staged files (lefthook pre-commit). `pnpm
   format` only when bypassing hooks.
+- **Why the `next dev` scripts start with `env -u`**: `next dev` writes
+  `AGENTS.md` + `CLAUDE.md` into the Next app's directory whenever it detects
+  an AI coding agent in the environment, and re-creates them every start, so
+  they kept reappearing as untracked files in main and in every worktree.
+  Next offers no opt-out flag (`node_modules/next/dist/server/lib/generate-agent-files.js`),
+  and the detector only ever answers "yes" — so the dev scripts in
+  `packages/web` and `apps/crowi-site` unset the variables it reads. Do not
+  drop that prefix; the files come straight back.
 - **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
   build` to regenerate dts before api/web consumers pick them up (turbo `^build`
   handles this in `dev` / `build` / `test`).

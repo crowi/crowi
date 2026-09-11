@@ -5,7 +5,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port ${PORT_WEB:-4302}",
+    "dev": "env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE -u CLAUDE_CODE_IS_COWORK -u CODEX_SANDBOX -u CODEX_CI -u CODEX_THREAD_ID next dev --turbopack --port ${PORT_WEB:-4302}",
     "build": "next build",
     "start": "next start --port ${PORT_WEB:-4302}",
     "lint": "eslint",
