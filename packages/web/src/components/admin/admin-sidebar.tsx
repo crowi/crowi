@@ -7,10 +7,10 @@ import {
   Bell,
   Cloud,
   Database,
-  FileCode2,
   HardDrive,
   Key,
   KeyRound,
+  LayoutFreeform,
   Mail,
   Plug,
   Search,
@@ -99,7 +99,7 @@ const STATIC_GROUPS: AdminNavGroup[] = [
       {
         href: '/admin/artifact',
         label: () => m['admin.nav_artifact'](),
-        icon: FileCode2,
+        icon: LayoutFreeform,
         description: () => m['admin.nav_artifact_summary'](),
       },
       {
