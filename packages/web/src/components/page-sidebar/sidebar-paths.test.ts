@@ -1,6 +1,6 @@
 import type { PageChildSegment } from '@crowi/api-contract';
 import { describe, expect, it } from 'vitest';
-import { dateMonthPath, deepChildRowsOf, pageSidebarLayout, resolveSidebarSelfLink } from './sidebar-paths';
+import { dateMonthPath, deepChildRowsOf, pageSidebarLayout, resolveSidebarSelfLinks } from './sidebar-paths';
 
 describe('pageSidebarLayout', () => {
   // The defining invariant of the unified tree (feature-update-pages-list-ux
@@ -140,10 +140,10 @@ describe('pageSidebarLayout', () => {
   });
 });
 
-describe('resolveSidebarSelfLink', () => {
-  const seg = (over: Partial<PageChildSegment>): PageChildSegment => ({
-    segment: 'c',
-    path: '/a/b/c/',
+describe('resolveSidebarSelfLinks', () => {
+  const seg = (path: string, over: Partial<PageChildSegment> = {}): PageChildSegment => ({
+    segment: path.replace(/\/$/, '').split('/').pop() as string,
+    path,
     isPage: false,
     hasPortal: false,
     count: 0,
@@ -154,27 +154,50 @@ describe('resolveSidebarSelfLink', () => {
   // node `c` is listed at level 1 (children of /a/b/).
   const layout = pageSidebarLayout('/a/b/c');
 
-  it('surfaces the content page as a self-link when the node is a page WITH children', () => {
-    const levels: PageChildSegment[][] = [[], [seg({ isPage: true, count: 3 })], []];
+  it("surfaces the current node's content page at the top of its own listing when it is a page WITH children", () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { isPage: true, count: 3 })], []];
     // On the content page itself → the self-link is the current node.
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toEqual({ contentPath: '/a/b/c', isCurrent: true });
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: true }]);
     // On the portal listing → same link, but the folder node stays current.
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c/')).toEqual({ contentPath: '/a/b/c', isCurrent: false });
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c/')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: false }]);
   });
 
-  it('returns null for a pure directory (no content page at the node)', () => {
-    const levels: PageChildSegment[][] = [[], [seg({ isPage: false, count: 3 })], []];
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toBeNull();
+  it('surfaces an opened ANCESTOR folder that is also a page, never as the current node', () => {
+    // /xxx/yyy/aa/bb → levels ['/xxx/yyy/', '/xxx/yyy/aa/', '/xxx/yyy/aa/bb/'].
+    // `aa` is rendered as the folder `aa/` holding `bb`, so its content page
+    // at `/xxx/yyy/aa` would otherwise vanish from the tree while `bb` is open.
+    const deep = pageSidebarLayout('/xxx/yyy/aa/bb');
+    const levels: PageChildSegment[][] = [
+      [seg('/xxx/yyy/aa/', { isPage: true, count: 1 }), seg('/xxx/yyy/zz/', { isPage: true })],
+      [seg('/xxx/yyy/aa/bb/', { isPage: true })],
+      [],
+    ];
+    expect(resolveSidebarSelfLinks(deep, levels, '/xxx/yyy/aa/bb')).toEqual([null, { contentPath: '/xxx/yyy/aa', label: 'aa', isCurrent: false }, null]);
   });
 
-  it('returns null for a childless leaf page (the node already links to /a/b/c)', () => {
-    const levels: PageChildSegment[][] = [[], [seg({ isPage: true, count: 0 })], []];
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toBeNull();
+  it('surfaces nothing for a folder-page that is NOT on the open branch', () => {
+    // On a sibling (`zz`), `aa/` stays a collapsed folder row.
+    const sibling = pageSidebarLayout('/xxx/yyy/zz');
+    const levels: PageChildSegment[][] = [
+      [seg('/xxx/yyy/', { count: 3 })],
+      [seg('/xxx/yyy/aa/', { isPage: true, count: 1 }), seg('/xxx/yyy/zz/', { isPage: true })],
+      [],
+    ];
+    expect(resolveSidebarSelfLinks(sibling, levels, '/xxx/yyy/zz')).toEqual([null, null, null]);
   });
 
-  it('returns null at the (un-rendered) root where there is no current node', () => {
-    const rootLayout = pageSidebarLayout('/');
-    expect(resolveSidebarSelfLink(rootLayout, [[]], '/')).toBeNull();
+  it('surfaces nothing for a pure directory (no content page at the node)', () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { count: 3 })], []];
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, null]);
+  });
+
+  it('surfaces nothing for a childless leaf page (the node already links to /a/b/c)', () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { isPage: true })], []];
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, null]);
+  });
+
+  it('surfaces nothing at the (un-rendered) root, which the ⤴ / user home stands for', () => {
+    expect(resolveSidebarSelfLinks(pageSidebarLayout('/'), [[]], '/')).toEqual([null]);
   });
 });
 

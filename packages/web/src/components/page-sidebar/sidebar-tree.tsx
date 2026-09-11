@@ -1,5 +1,6 @@
 'use client';
 
+import type { PageChildSegment } from '@crowi/api-contract';
 import { CornerLeftUp, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef } from 'react';
@@ -9,7 +10,15 @@ import { cn } from '@/lib/utils';
 import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { SidebarRow, SidebarRowLink } from './sidebar-row';
 import { SidebarUserHome } from './sidebar-user-home';
-import { dateMonthPath, deepChildRowsOf, MEMBER_DIR_PATH, pageSidebarLayout, resolveSidebarSelfLink } from './sidebar-paths';
+import {
+  dateMonthPath,
+  deepChildRowsOf,
+  folderPageSelfLink,
+  MEMBER_DIR_PATH,
+  pageSidebarLayout,
+  resolveSidebarSelfLinks,
+  type SidebarSelfLink,
+} from './sidebar-paths';
 import { SIDEBAR_SCROLLER_ATTR, scrollOffsetToCenter } from './sidebar-scroll';
 
 /**
@@ -44,12 +53,13 @@ export function SidebarTree({ path }: { path: string }) {
   const directLevels = levels.map((rows, index) => deepChildRowsOf(rows, layout.levelPaths[index]));
   const isLoading = results.some((r) => r.isLoading);
 
-  // When the current node is both a content page and a directory, its folder
-  // node `x/` links to the portal listing `/…/x/`, leaving the content page
-  // at `/…/x` unreachable. Surface it as the first child under `x/`. When the
-  // viewer is on that content page, the self-link is the current node (so the
-  // folder node yields the highlight to it — see `selfLink.isCurrent` below).
-  const selfLink = resolveSidebarSelfLink(layout, directLevels, path);
+  // An open folder node `x/` that is also a content page links to the portal
+  // listing `/…/x/`, leaving the content page at `/…/x` unreachable. Surface
+  // it as the first child under `x/`. When the viewer is on the current
+  // node's content page, that self-link is the current row (so the folder
+  // node yields the highlight to it — see `currentSelfLinkIsCurrent` below).
+  const selfLinks = resolveSidebarSelfLinks(layout, directLevels, path);
+  const currentSelfLinkIsCurrent = selfLinks[layout.currentLevelIndex + 1]?.isCurrent ?? false;
 
   // The user-home node occupies depth 0, so its space's levels nest under
   // it one step deeper.
@@ -72,14 +82,29 @@ export function SidebarTree({ path }: { path: string }) {
     scroller.scrollTop += scrollOffsetToCenter(current.getBoundingClientRect(), scroller.getBoundingClientRect());
   }, [isLoading, path]);
 
+  // A folder's own content page, listed first among the children it opens.
+  const renderSelfLink = (selfLink: SidebarSelfLink, depth: number): React.ReactNode => (
+    <li key="__self__">
+      <SidebarRow
+        href={selfLink.contentPath}
+        label={selfLink.label}
+        leading={<FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        depth={depth}
+        isCurrent={selfLink.isCurrent}
+      />
+    </li>
+  );
+
   // The pages of one non-active day, taken from the month level's deeper
   // fetch. A day the viewer is not on can never hold the current node, so
   // these rows need no active state.
-  const renderMonthDay = (dayPath: string): React.ReactNode => {
-    const pages = deepChildRowsOf(levels[monthIndex], dayPath);
+  const renderMonthDay = (day: PageChildSegment): React.ReactNode => {
+    const pages = deepChildRowsOf(levels[monthIndex], day.path);
     if (pages.length === 0) return null;
+    const selfLink = folderPageSelfLink(day);
     return (
       <ul className="space-y-0.5">
+        {selfLink && renderSelfLink(selfLink, monthIndex + 1 + baseDepth)}
         {pages.map((page) => (
           <li key={page.segment}>
             <SidebarRowLink segment={page} depth={monthIndex + 1 + baseDepth} />
@@ -96,35 +121,25 @@ export function SidebarTree({ path }: { path: string }) {
     // drop it wherever it would appear (only ever at the top level).
     const children = (directLevels[k] ?? []).filter((c) => c.path !== MEMBER_DIR_PATH);
     const isDeepest = k === layout.levelPaths.length - 1;
-    // The content-page self-link is injected at the top of the current
-    // node's own (deepest) listing.
-    const showSelfLink = isDeepest && selfLink !== null;
-    if (children.length === 0 && !showSelfLink) return null;
+    // The opened parent folder's content-page self-link, injected at the
+    // top of this listing.
+    const selfLink = selfLinks[k];
+    if (children.length === 0 && !selfLink) return null;
     const activeSegment = layout.activeSegments[k];
 
     return (
       <ul className="space-y-0.5">
-        {showSelfLink && selfLink && (
-          <li key="__self__">
-            <SidebarRow
-              href={selfLink.contentPath}
-              label={layout.currentSegment}
-              leading={<FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
-              depth={k + baseDepth}
-              isCurrent={selfLink.isCurrent}
-            />
-          </li>
-        )}
+        {selfLink && renderSelfLink(selfLink, k + baseDepth)}
         {children.map((child) => {
           const isActive = activeSegment !== null && child.segment === activeSegment;
           // The folder node yields its highlight to the self-link when the
-          // viewer is on the content page itself (`selfLink.isCurrent`).
-          const isCurrent = k === layout.currentLevelIndex && child.segment === layout.currentSegment && !selfLink?.isCurrent;
+          // viewer is on the content page itself.
+          const isCurrent = k === layout.currentLevelIndex && child.segment === layout.currentSegment && !currentSelfLinkIsCurrent;
           return (
             <li key={child.segment}>
               <SidebarRowLink segment={child} depth={k + baseDepth} isCurrent={isCurrent} isOpen={isActive && !isCurrent} />
               {isActive && !isDeepest && renderLevel(k + 1)}
-              {!isActive && k === monthIndex && renderMonthDay(child.path)}
+              {!isActive && k === monthIndex && renderMonthDay(child)}
             </li>
           );
         })}
