@@ -135,14 +135,58 @@ describe('SidebarFlyout', () => {
     expect(panel()).toBeNull();
   });
 
-  it('closes when a navigation lands on a new path', () => {
+  it('stays open over each page a navigation lands on, following it with the tree', () => {
+    // Following a link in the panel is navigating with it: the page behind
+    // changes and the panel keeps its place, not just for the first hop.
     const { rerender } = render(flyout());
-
     fireEvent.click(openButton());
-    expect(panel()).not.toBeNull();
 
-    pathname.value = '/some/other-page';
-    rerender(flyout('/some/other-page'));
+    for (const next of ['/some/other-page', '/some/third-page']) {
+      pathname.value = next;
+      rerender(flyout(next));
+      expect(panel()).not.toBeNull();
+      expect(screen.getByTestId('sidebar-body')).toHaveTextContent(next);
+    }
+  });
+
+  it('stays open when a route change moves focus to the main landmark', () => {
+    // `useRouteFocus` focuses `#main-content` after every navigation. That is
+    // outside this non-modal panel, which would otherwise dismiss on it.
+    render(
+      <>
+        {flyout()}
+        <main id="main-content" tabIndex={-1} />
+      </>,
+    );
+    fireEvent.click(openButton());
+
+    act(() => document.getElementById('main-content')?.focus());
+    expect(panel()).not.toBeNull();
+  });
+
+  it('still closes when focus moves somewhere else outside it', () => {
+    render(
+      <>
+        {flyout()}
+        <button type="button">elsewhere</button>
+      </>,
+    );
+    fireEvent.click(openButton());
+
+    act(() => screen.getByRole('button', { name: 'elsewhere' }).focus());
+    expect(panel()).toBeNull();
+  });
+
+  it('does not come back open after passing through a route with no sidebar', () => {
+    const { rerender } = render(flyout());
+    fireEvent.click(openButton());
+
+    rerender(
+      <SidebarFlyoutProvider path="/_edit" enabled={false}>
+        <SidebarFlyoutTrigger />
+      </SidebarFlyoutProvider>,
+    );
+    rerender(flyout());
     expect(panel()).toBeNull();
   });
 

@@ -3,7 +3,7 @@
 import type { PageChildSegment } from '@crowi/api-contract';
 import { CornerLeftUp, FileText } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { m } from '@paraglide/messages.js';
 import { usePageChildrenLevels } from '@/lib/use-page-children';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ import {
   deepChildRowsOf,
   folderPageSelfLink,
   MEMBER_DIR_PATH,
+  type PageSidebarLayout,
   pageSidebarLayout,
   resolveSidebarSelfLinks,
   type SidebarSelfLink,
@@ -45,13 +46,52 @@ export function SidebarTree({ path }: { path: string }) {
   const monthIndex = layout.levelPaths.indexOf(dateMonthPath(path) ?? '');
   const depths = layout.levelPaths.map((_, index) => (index === monthIndex ? 2 : 1));
   const results = usePageChildrenLevels(layout.levelPaths, depths);
-  // Positionally aligned with layout.levelPaths.
-  const levels = results.map((r) => r.data?.children ?? []);
+  // `isPending`, not `isLoading`: a query paused while offline has no data
+  // either, but is not fetching, so `isLoading` would call it done.
+  const isPending = results.some((r) => r.isPending);
+  // Positionally aligned with layout.levelPaths. A level whose fetch failed
+  // has no rows and draws as empty.
+  const fetched = results.map((r) => r.data?.children);
+
+  // A page change nearly always brings a level nothing has fetched yet — the
+  // new node's own children — so the tree would drop to the skeleton on
+  // almost every navigation, and the flyout panel, which sizes itself to this
+  // content, would visibly collapse and grow back around it. Until every
+  // level of the new path is in, keep drawing the last tree that was
+  // complete; it moves over in one step once they arrive. Stored during
+  // render rather than in an effect, so it is kept in the same commit that
+  // draws it.
+  const [settled, setSettled] = useState<SidebarTreeViewProps | null>(null);
+  const isSettled = settled?.path === path && settled.fetched.length === fetched.length && settled.fetched.every((rows, index) => rows === fetched[index]);
+  if (!isPending && !isSettled) setSettled({ path, layout, monthIndex, fetched });
+
+  const shown = isPending ? settled : { path, layout, monthIndex, fetched };
+  if (shown === null) {
+    return (
+      <div className="space-y-1.5" aria-hidden>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-5 animate-pulse rounded bg-muted/60" style={{ marginLeft: `${Math.min(i, 3) * 0.5}rem` }} />
+        ))}
+      </div>
+    );
+  }
+  return <SidebarTreeView {...shown} />;
+}
+
+interface SidebarTreeViewProps {
+  path: string;
+  layout: PageSidebarLayout;
+  monthIndex: number;
+  fetched: (PageChildSegment[] | undefined)[];
+}
+
+/** The tree for one path whose levels have all been fetched. */
+function SidebarTreeView({ path, layout, monthIndex, fetched }: SidebarTreeViewProps) {
+  const levels = fetched.map((rows) => rows ?? []);
   // The same levels narrowed to each level's DIRECT children. Only the
   // month level can differ (its response spans two levels), but taking
   // this uniformly keeps every consumer below reading one kind of list.
   const directLevels = levels.map((rows, index) => deepChildRowsOf(rows, layout.levelPaths[index]));
-  const isLoading = results.some((r) => r.isLoading);
 
   // An open folder node `x/` that is also a content page links to the portal
   // listing `/…/x/`, leaving the content page at `/…/x` unreachable. Surface
@@ -73,14 +113,14 @@ export function SidebarTree({ path }: { path: string }) {
   // someone who has scrolled it themselves.
   const scrolledForPath = useRef<string | null>(null);
   useEffect(() => {
-    if (isLoading || scrolledForPath.current === path) return;
+    if (scrolledForPath.current === path) return;
     const root = containerRef.current;
     const current = root?.querySelector<HTMLElement>('[aria-current="page"]');
     const scroller = root?.closest<HTMLElement>(`[${SIDEBAR_SCROLLER_ATTR}]`);
     if (!root || !current || !scroller) return;
     scrolledForPath.current = path;
     scroller.scrollTop += scrollOffsetToCenter(current.getBoundingClientRect(), scroller.getBoundingClientRect());
-  }, [isLoading, path]);
+  }, [path]);
 
   // A folder's own content page, listed first among the children it opens.
   const renderSelfLink = (selfLink: SidebarSelfLink, depth: number): React.ReactNode => (
@@ -146,16 +186,6 @@ export function SidebarTree({ path }: { path: string }) {
       </ul>
     );
   };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-1.5" aria-hidden>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-5 animate-pulse rounded bg-muted/60" style={{ marginLeft: `${Math.min(i, 3) * 0.5}rem` }} />
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div ref={containerRef} className="space-y-0.5">

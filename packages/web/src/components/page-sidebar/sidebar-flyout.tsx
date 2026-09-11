@@ -2,11 +2,11 @@
 
 import { m } from '@paraglide/messages.js';
 import { PanelLeft } from 'lucide-react';
-import { usePathname } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { MAIN_CONTENT_ID } from '@/lib/use-route-focus';
 import { cn } from '@/lib/utils';
 import { SIDEBAR_RAIL_QUERY, SidebarBody } from './sidebar-body';
 import { SIDEBAR_SCROLLER_ATTR } from './sidebar-scroll';
@@ -55,7 +55,6 @@ const SidebarFlyoutContext = createContext<SidebarFlyoutControls | null>(null);
  * rather than each caller having to repeat the condition.
  */
 export function SidebarFlyoutProvider({ path, enabled, children }: { path: string; enabled: boolean; children: React.ReactNode }) {
-  const pathname = usePathname();
   const railVisible = useMediaQuery(SIDEBAR_RAIL_QUERY);
   const [mode, setMode] = useState<Mode>('closed');
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -79,21 +78,14 @@ export function SidebarFlyoutProvider({ path, enabled, children }: { path: strin
     };
   }, []);
 
-  // Following a link inside the panel navigates underneath it; leaving it
-  // open over the page just arrived at reads as the click not having
-  // worked. Adjusting during render rather than in an effect keeps this to
-  // one commit (same pattern as `RevisionDiff`'s pair reset).
-  const [seenPathname, setSeenPathname] = useState(pathname);
-  if (seenPathname !== pathname) {
-    setSeenPathname(pathname);
-    if (mode !== 'closed') setMode('closed');
-  }
-
   // Widening past the breakpoint hands navigation back to the rail and takes
   // the triggers away with it (they are CSS-hidden, which is what keeps the
   // desktop first paint free of a flash of them). Without this the panel
   // would linger as an open-but-invisible dialog behind the rail.
-  if (railVisible && mode !== 'closed') {
+  // Likewise a route with no sidebar (`/_edit`, `/_history`) unmounts the
+  // panel without closing it, and it would come back open on the next route
+  // that has one.
+  if ((railVisible || !enabled) && mode !== 'closed') {
     setMode('closed');
   }
 
@@ -171,6 +163,13 @@ export function SidebarFlyoutProvider({ path, enabled, children }: { path: strin
             onPointerLeave={(event) => {
               if (event.pointerType !== 'mouse') return;
               scheduleClose();
+            }}
+            // A link followed from the panel is someone navigating with it, so
+            // the panel stays up over each page it lands on. The route change
+            // then focuses `#main-content` (`useRouteFocus`), which is outside
+            // this non-modal panel — without this, that focus dismisses it.
+            onFocusOutside={(event) => {
+              if ((event.target as HTMLElement | null)?.id === MAIN_CONTENT_ID) event.preventDefault();
             }}
             onPointerDownOutside={(event) => {
               const target = event.target as Node | null;

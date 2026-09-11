@@ -32,13 +32,56 @@ const serveLevels = (levels: PageChildSegment[][]) => {
   const requestedDepths: number[][] = [];
   usePageChildrenLevels.mockImplementation((_paths: string[], depths: number[] = []) => {
     requestedDepths.push(depths);
-    return levels.map((children) => ({ data: { children }, isLoading: false }));
+    return levels.map((children) => ({ data: { children }, isPending: false, isLoading: false }));
   });
   return { lastDepths: () => requestedDepths[requestedDepths.length - 1] };
 };
 
 beforeEach(() => usePageChildrenLevels.mockReset());
 afterEach(cleanup);
+
+describe('SidebarTree while the next path loads', () => {
+  // /xxx/yyy/zz and /xxx/yyy/aa share their ancestors' levels; only the
+  // deepest one (the node's own children) is new, as on most page changes.
+  const ancestors = [dir('/xxx/yyy/', 2)];
+  const siblings = [page('/xxx/yyy/aa/'), page('/xxx/yyy/zz/')];
+  // Pending with no fetch running — a query paused while offline. TanStack
+  // Query reports that as `isLoading: false`, yet there is still no data.
+  const loadingOwnChildren = () =>
+    usePageChildrenLevels.mockImplementation(() => [
+      { data: { children: ancestors }, isPending: false, isLoading: false },
+      { data: { children: siblings }, isPending: false, isLoading: false },
+      { data: undefined, isPending: true, isLoading: false },
+    ]);
+
+  it('keeps drawing the tree it last showed instead of dropping to a skeleton', () => {
+    serveLevels([ancestors, siblings, []]);
+    const { rerender } = render(<SidebarTree path="/xxx/yyy/zz" />);
+
+    loadingOwnChildren();
+    rerender(<SidebarTree path="/xxx/yyy/aa" />);
+    expect(screen.getByText('zz').closest('a')?.getAttribute('aria-current')).toBe('page');
+    expect(screen.getByText('aa')).toBeTruthy();
+  });
+
+  it('moves over to the new tree once its levels are in', () => {
+    serveLevels([ancestors, siblings, []]);
+    const { rerender } = render(<SidebarTree path="/xxx/yyy/zz" />);
+    loadingOwnChildren();
+    rerender(<SidebarTree path="/xxx/yyy/aa" />);
+
+    serveLevels([ancestors, siblings, []]);
+    rerender(<SidebarTree path="/xxx/yyy/aa" />);
+    expect(screen.getByText('aa').closest('a')?.getAttribute('aria-current')).toBe('page');
+    expect(screen.getByText('zz').closest('a')?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('shows the skeleton on a first load, with no tree to keep', () => {
+    loadingOwnChildren();
+    const { container } = render(<SidebarTree path="/xxx/yyy/aa" />);
+    expect(container.querySelector('a')).toBeNull();
+  });
+});
 
 describe('SidebarTree around a folder that is also a page', () => {
   // `/xxx/yyy/aa` is a page AND the folder holding `/xxx/yyy/aa/bb`, so the
