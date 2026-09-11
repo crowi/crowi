@@ -28,6 +28,8 @@ description: crowi の planner ロールでセッションを起動/再起動し
 - **Workflow を起動する前に shell の cwd を repo root へ戻す**: Bash tool の cwd は呼び出し間で持続し、subagent もそれを継承する。`cd .reviews/...` の直後に Workflow を起動すると、相対の `briefPath` も出力先 `.feature-state/specs/` も解決できず、writer が「brief が存在しない」で即死する(実際に 1 ラウンド落とした)。**mv / ls を `cd` で書かず絶対パスかサブシェルで済ませる**のが根本対処。
 - **Workflow の args は script に JSON 文字列で届く**: 閉じ括弧欠け等の JSON 破損は `parseArgs` の fallback で空 `{}` になり `FAILED (got: {})` で即死する。args は送信前に構造を確認。
 - **収束規律**: 小 spec は指摘ゼロを追わない(性質が「設計の穴」→「文言精度」に移ったら畳む)。large は「大 RFC 収束ルール」(approach 合意済みなら残りを gate/OQ 化して Draft 確定)。
+- **指摘が「事実の精度」に移ったら、brief 再生成をやめて spec を直接手直しする**: そこから先を Workflow B の write→review ループで回すと、writer が毎ラウンド brief から書き直すため未検証の主張が新しく混入し、それが次ラウンドの指摘になって発散する。切り替え後は (1) 指摘を実コードで裏取りし、(2) spec の restate 箇所を**全列挙してから**一括で直し、(3) 裏取り済みの事実だけを brief へ記録して次の writer が引用できるようにし、(4) `reviewOnly` を `_round` を変えて 1 回だけ回す。誤指摘は直さず rebut して brief に「この規則は存在しない」と根拠つきで書く(再燃を防ぐ)。
+- **cross-phase の板挟みは後段でなく発生源を直す**: 先行 phase の spec が「file 5 本」のような**成功すると偽になる数**を prose・AC・テストケース名に書いていると、後段 phase が out-of-scope 契約と衝突する。後段に例外条項を足すのではなく、先行 phase を pattern 表記へ直す(approved 後でも validator を再実行すればよい)。
 - **wiki publish の手順**: CLAUDE.md の二段階手順(Write→Read→そのまま渡す・応答長の照合)を厳守。ローカル dev が落ちていると MCP(`http://localhost:4301/mcp`)が繋がらない — 必要なら `pnpm dev:api` を一時起動し、終わったら止める。
 
 ## 終了/引き継ぎ
