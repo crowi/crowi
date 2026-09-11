@@ -45,7 +45,7 @@
   "admin.artifact.section_same_origin_heading": "same-origin 配信",
   "admin.artifact.status_artifact_origin_label": "artifact origin",
   "admin.artifact.status_crowi_origin_label": "Crowi origin",
-  "admin.artifact.status_disabled_hint": "CROWI_ARTIFACT_ORIGIN を設定する(推奨)か、下の same-origin 配信を有効にしてください。いずれかを設定するまで artifact の書き込みは拒否されます。",
+  "admin.artifact.status_disabled_hint": "CROWI_ARTIFACT_ORIGIN を設定する(推奨)か、下の same-origin 配信を有効にしてください。加えて、application secret(app:secret または SECRET_TOKEN)を開発用の既定値から変更してください — 署名付き artifact URL の鍵はこの secret から導かれるため、既定値のままでは上記を設定しても配信は無効のままになります。これらすべてを満たすまで artifact の書き込みは拒否されます。",
   "admin.artifact.status_heading": "状態",
   "admin.artifact.status_mode_disabled": "無効",
   "admin.artifact.status_mode_label": "配信モード",

@@ -45,7 +45,7 @@
   "admin.artifact.section_same_origin_heading": "Same-origin delivery",
   "admin.artifact.status_artifact_origin_label": "Artifact origin",
   "admin.artifact.status_crowi_origin_label": "Crowi origin",
-  "admin.artifact.status_disabled_hint": "Set CROWI_ARTIFACT_ORIGIN (recommended) or enable same-origin delivery below. Artifact writes are rejected until one of them is configured.",
+  "admin.artifact.status_disabled_hint": "Set CROWI_ARTIFACT_ORIGIN (recommended) or enable same-origin delivery below. You must also change the application secret (app:secret or SECRET_TOKEN) away from its development default — signed artifact URLs are derived from this secret, so delivery stays disabled while the default is in use even after the above is configured. Artifact writes are rejected until all of these are satisfied.",
   "admin.artifact.status_heading": "Status",
   "admin.artifact.status_mode_disabled": "Disabled",
   "admin.artifact.status_mode_label": "Delivery mode",
