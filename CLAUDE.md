@@ -72,8 +72,19 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
   they kept reappearing as untracked files in main and in every worktree.
   Next offers no opt-out flag (`node_modules/next/dist/server/lib/generate-agent-files.js`),
   and the detector only ever answers "yes" — so the dev scripts in
-  `packages/web` and `apps/crowi-site` unset the variables it reads. Do not
-  drop that prefix; the files come straight back.
+  `packages/web` and `apps/crowi-site`, and `packages/e2e`'s `start:web`,
+  unset the variables it reads. Do not drop that prefix; the files come
+  straight back.
+- **Why `packages/e2e`'s `start:web` sets `WATCHPACK_POLLING=true`**: macOS
+  shares one small FSEvents stream pool (~320) across the whole machine, and
+  when it is exhausted libuv reports `EMFILE: too many open files, watch` to
+  every `fs.watch` in the loop — even to a process holding a handful of
+  descriptors, so raising `ulimit` does nothing. Next watches its `distDir`
+  through Watchpack, reads that error as "the directory was deleted", and
+  restarts itself, forever: the e2e run then dies on Playwright's 120s
+  `webServer` timeout instead of on anything to do with the tests. Polling
+  sidesteps the pool. Measured with fault injection: 63 restarts and no
+  response without it, one clean `Ready` and HTTP 200 with it.
 - **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
   build` to regenerate dts before api/web consumers pick them up (turbo `^build`
   handles this in `dev` / `build` / `test`).
