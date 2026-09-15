@@ -24,10 +24,10 @@
  *     human-readable strings the constructor stashes for a consolidated
  *     boot-time report.
  *
- * Deliberately NOT covered here (see the spec's "未確定事項" / out-of-scope
- * list): `WS_TOKEN_SECRET`'s placeholder-rejection logic (still owned by
- * `util/signed-token-factory.ts` — this module only adds a minimum-length
- * check on top, see {@link WS_TOKEN_SECRET_DESCRIPTOR}), `REDIS_URL`
+ * Deliberately NOT covered here: `SECRET_TOKEN`'s placeholder-rejection
+ * logic (owned by `util/signed-token-factory.ts` — this module adds the
+ * required-on-unset + minimum-length checks on top, see
+ * {@link SECRET_TOKEN_DESCRIPTOR}), `REDIS_URL`
  * connection-time failures (vs. format), `CROWI_ENCRYPTION_KEY`'s runtime
  * re-read in `util/crypto.ts` (`EnvKeyProvider.getKey()`), and module-level
  * constants that are evaluated at `import` time (`util/jwt.ts`,
@@ -59,15 +59,16 @@ export interface EnvVarDescriptor {
    */
   readonly check?: {
     /**
-     * Fixed for almost every descriptor. `WS_TOKEN_SECRET` is the one
-     * exception (its minimum-length check must fail boot in production but
-     * only warn elsewhere — see the feature-signed-token-secret-strength
-     * spec's "未確定事項"), so a descriptor may instead supply a function of
-     * the validated `env` that resolves to `'fail'` or `'warn'` at check
-     * time, read from the SAME `env` argument `validateEnv()` received (not
-     * ambient `process.env` — see `WS_TOKEN_SECRET_DESCRIPTOR`'s doc comment).
+     * Fixed for almost every descriptor. `SECRET_TOKEN` is the one exception
+     * (its minimum-length check must fail boot in production but only warn
+     * elsewhere, and its whitespace/placeholder reasons always fail
+     * regardless of `NODE_ENV`), so a descriptor may instead supply a
+     * function of the validated `env` AND the resolved `raw` value that
+     * resolves to `'fail'` or `'warn'` at check time. `env` is read from the
+     * SAME argument `validateEnv()` received (not ambient `process.env` —
+     * see `SECRET_TOKEN_DESCRIPTOR`'s doc comment).
      */
-    readonly severity: 'fail' | 'warn' | ((env: NodeJS.ProcessEnv) => 'fail' | 'warn');
+    readonly severity: 'fail' | 'warn' | ((env: NodeJS.ProcessEnv, raw: string) => 'fail' | 'warn');
     /** Returns a human-readable reason when `raw` is invalid, or `null` when valid. */
     readonly validate: (raw: string) => string | null;
   };
@@ -79,6 +80,17 @@ export interface EnvVarDescriptor {
    * "malformed", comes out of the one consolidated report — AC-12).
    */
   readonly warnWhenUnset?: string;
+  /**
+   * A boot-fail reason to surface when the variable (and every alias) is
+   * entirely unset — the required-variable counterpart to `warnWhenUnset`.
+   * Currently only `SECRET_TOKEN` uses this (feature-unified-signing-secret
+   * §D-2): every signing channel needs a real secret, so "never configured"
+   * must abort boot exactly like "configured but invalid" does, in every
+   * `NODE_ENV`. When both `failWhenUnset` and `warnWhenUnset` are (mistakenly)
+   * set on the same descriptor, `failWhenUnset` wins and `warnWhenUnset` is
+   * never consulted — see `validateEnv()`'s unset branch.
+   */
+  readonly failWhenUnset?: string;
 }
 
 function validatePort(raw: string): string | null {
@@ -151,33 +163,84 @@ function validateEncryptionKey(raw: string): string | null {
 }
 
 /**
- * Minimum length, in characters (not decoded bytes — the spec's open
- * question resolves this as a plain character count so a strong-but-not-
- * base64 secret is never incorrectly rejected), for `WS_TOKEN_SECRET`: the
- * shared secret `createSignedTokenUtil`'s `DEFAULT_SECRET_ENV_VAR` falls
- * back to (`util/signed-token-factory.ts`), and the only env var any of its
- * four current call sites (ws / presence / notifications / mail token) pass
- * to `secretEnvVar` — all four omit the option, so `WS_TOKEN_SECRET` is the
- * complete set. A value this short is trivially guessable as an HMAC-SHA256
- * signing key; `openssl rand -base64 32` (44 base64 characters) comfortably
- * clears this bar.
+ * Minimum length, in characters (not decoded bytes — a plain character count
+ * so a strong-but-not-base64 secret is never incorrectly rejected), for
+ * `SECRET_TOKEN`: the shared secret `createSignedTokenUtil`'s
+ * `DEFAULT_SECRET_ENV_VAR` resolves (`util/signed-token-factory.ts`), and the
+ * one `createJwtUtil` / `createFederatedAuthStateUtil` also resolve. A value
+ * this short is trivially guessable as an HMAC-SHA256 signing key; `openssl
+ * rand -base64 32` (44 base64 characters) comfortably clears this bar.
  */
 const MIN_SIGNED_TOKEN_SECRET_LENGTH = 32;
 
 /**
- * A known placeholder (`changeme` etc.) is exempt — `signed-token-factory.ts`
- * already treats it as "not configured" (random in-memory fallback + its own
- * warning), and this check must not change that classification, only tighten
- * what counts as a genuinely *configured* secret.
+ * How a trimmed `SECRET_TOKEN` (or its resolved `WS_TOKEN_SECRET` alias)
+ * value classifies against feature-unified-signing-secret §D-2's rules.
+ * `validate` and `severity` below both classify off this ONE function so
+ * they can never disagree about which reason applies to a given value.
  */
-function validateSignedTokenSecretLength(raw: string): string | null {
-  if (isKnownSignedTokenSecretPlaceholder(raw)) return null;
-  if (raw.length >= MIN_SIGNED_TOKEN_SECRET_LENGTH) return null;
-  return (
-    `must be at least ${MIN_SIGNED_TOKEN_SECRET_LENGTH} characters (got ${raw.length}) — it signs realtime ` +
-    'collab / presence / notifications / mail tokens as an HMAC-SHA256 key, and a value this short is easily ' +
-    'guessable. Generate a strong one with `openssl rand -base64 32`.'
-  );
+type SecretTokenClassification =
+  | { readonly kind: 'ok' }
+  | { readonly kind: 'whitespace' }
+  | { readonly kind: 'placeholder' }
+  | { readonly kind: 'short'; readonly length: number };
+
+/** `raw` here is always already trimmed (`resolveRaw()` trims before `check.validate`/`check.severity` ever see it). */
+function classifySignedTokenSecret(raw: string): SecretTokenClassification {
+  if (raw.length === 0) return { kind: 'whitespace' };
+  if (isKnownSignedTokenSecretPlaceholder(raw)) return { kind: 'placeholder' };
+  if (raw.length < MIN_SIGNED_TOKEN_SECRET_LENGTH) return { kind: 'short', length: raw.length };
+  return { kind: 'ok' };
+}
+
+/**
+ * Shared by the required/placeholder-style failure messages below — names
+ * the canonical variable, the openssl generation command, and the
+ * `WS_TOKEN_SECRET` → `SECRET_TOKEN` rename path, per §D-2. Never echoes a
+ * secret value, fragment, or fingerprint.
+ */
+const SECRET_TOKEN_GENERATE_AND_RENAME_HINT =
+  'set SECRET_TOKEN to a stable base64-encoded 32-byte value (`openssl rand -base64 32`) and use the exact same ' +
+  'value on every replica. If you currently set WS_TOKEN_SECRET, you can rename it to SECRET_TOKEN.';
+
+/**
+ * §D-2 — unifies the pre-existing 32-character minimum with placeholder
+ * rejection into one validator. Whitespace-only and placeholder values get
+ * the rich "required" message (generation command + rename guidance);
+ * non-placeholder short values get ONLY the character-count message,
+ * matching the pre-existing `feature-signed-token-secret-strength` wording.
+ * Never echoes the secret's value, a fragment of it, or a fingerprint.
+ */
+function validateSecretTokenValue(raw: string): string | null {
+  const classification = classifySignedTokenSecret(raw);
+  switch (classification.kind) {
+    case 'ok':
+      return null;
+    case 'whitespace':
+      return `must be set to a real secret, not just whitespace — ${SECRET_TOKEN_GENERATE_AND_RENAME_HINT}`;
+    case 'placeholder':
+      return `is a known placeholder value, not a real secret — ${SECRET_TOKEN_GENERATE_AND_RENAME_HINT}`;
+    case 'short':
+      return (
+        `must be at least ${MIN_SIGNED_TOKEN_SECRET_LENGTH} characters (got ${classification.length}) — it signs ` +
+        'Web session, OAuth, realtime collab, presence, notifications, and mail tokens as an HMAC-SHA256 key, and ' +
+        'a value this short is easily guessable.'
+      );
+  }
+}
+
+/**
+ * §D-2 — whitespace-only and placeholder values fail in EVERY `NODE_ENV`
+ * (they are not a genuinely configured secret at all); a non-placeholder
+ * short value only fails in production (matching the pre-existing
+ * `feature-signed-token-secret-strength` severity), otherwise it warns. `raw`
+ * is read from the argument `validateEnv()` was called with, never ambient
+ * `process.env` (see `SECRET_TOKEN_DESCRIPTOR`'s doc comment).
+ */
+function classifySecretTokenSeverity(env: NodeJS.ProcessEnv, raw: string): 'fail' | 'warn' {
+  const classification = classifySignedTokenSecret(raw);
+  if (classification.kind === 'whitespace' || classification.kind === 'placeholder') return 'fail';
+  return isProductionEnv(env) ? 'fail' : 'warn';
 }
 
 /** `NODE_ENV`'s fallback when unset — shared by {@link isProductionEnv} and `EnvValidationResult.values.nodeEnv` so the two can't drift apart. */
@@ -456,26 +519,79 @@ const IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS_DESCRIPTOR: EnvVarDescriptor = {
 };
 
 /**
- * Feature-signed-token-secret-strength: promoted out of
- * {@link TAXONOMY_ONLY_NAMES} to its own descriptor with a content check.
- * Severity is NOT a fixed `'fail'`/`'warn'` like every other descriptor —
- * `NODE_ENV=production` (including unset, which defaults to `'production'`,
- * matching `values.nodeEnv`'s own fallback) must boot-fail on a
- * short-but-set value, while every other `NODE_ENV` (dev / test / anything
- * else explicitly set) only warns. This reads `NODE_ENV` from the `env`
- * argument `validateEnv()` was called with, never ambient `process.env` —
- * the existing test suite (`env-schema.test.ts`) exercises `NODE_ENV`
- * entirely through synthetic `makeEnv()` objects that never touch the real
- * process env, and jest runs with the real `process.env.NODE_ENV` pinned to
- * `'test'` regardless of what a given test's synthetic env claims.
+ * feature-unified-signing-secret §D-2 — the sole descriptor for Crowi's
+ * unified signing secret. Replaces the old taxonomy-only `SECRET_TOKEN`
+ * entry and the old content-checked `WS_TOKEN_SECRET` descriptor: the two
+ * env vars are now one required value with `WS_TOKEN_SECRET` as a legacy
+ * alias (checked first, matching `resolveRaw()`'s alias-first precedence and
+ * `util/signed-token-factory.ts#resolveSignedTokenSecret`'s own runtime
+ * resolution order).
+ *
+ * `failWhenUnset` covers "neither is set at all" (or set to an empty
+ * string) — this must fail in EVERY `NODE_ENV`, unlike every other
+ * `failWhenUnset`-free descriptor, because every signing channel (Web
+ * session JWT, OAuth access/state, collab/presence/notifications/mail
+ * tokens) depends on a real secret existing. Once a value IS present,
+ * `severity` is NOT a fixed `'fail'`/`'warn'` like most descriptors: a
+ * whitespace-only or known-placeholder value fails in every `NODE_ENV`
+ * (it is not a genuinely configured secret at all), while a non-placeholder
+ * short value only fails under `NODE_ENV=production` (including unset,
+ * which defaults to `'production'`, matching `values.nodeEnv`'s own
+ * fallback) and warns elsewhere — see `classifySecretTokenSeverity`. Both
+ * `validate` and `severity` read from the `env`/`raw` `validateEnv()` was
+ * actually called with, never ambient `process.env` — the existing test
+ * suite (`env-schema.test.ts`) exercises `NODE_ENV` entirely through
+ * synthetic `makeEnv()` objects that never touch the real process env, and
+ * jest runs with the real `process.env.NODE_ENV` pinned to `'test'`
+ * regardless of what a given test's synthetic env claims.
  */
-const WS_TOKEN_SECRET_DESCRIPTOR: EnvVarDescriptor = {
-  name: 'WS_TOKEN_SECRET',
+const SECRET_TOKEN_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'SECRET_TOKEN',
+  aliases: ['WS_TOKEN_SECRET'],
+  failWhenUnset:
+    'must be set — it signs Web session access/refresh tokens, OAuth access tokens, OAuth sign-in state, and the ' +
+    `realtime collab / presence / notifications / mail tokens. ${SECRET_TOKEN_GENERATE_AND_RENAME_HINT}`,
   check: {
-    severity: (env) => (isProductionEnv(env) ? 'fail' : 'warn'),
-    validate: validateSignedTokenSecretLength,
+    severity: classifySecretTokenSeverity,
+    validate: validateSecretTokenValue,
   },
 };
+
+/**
+ * feature-unified-signing-secret §D-2 (AC-12) — warn (never fail) when both
+ * the canonical `SECRET_TOKEN` and its legacy `WS_TOKEN_SECRET` alias are
+ * set to DIFFERENT values: alias-first precedence (`resolveRaw()`) means
+ * `WS_TOKEN_SECRET` silently keeps winning even after an operator adds a
+ * fresh `SECRET_TOKEN` meant to rotate a leaked key — and since this
+ * change, that stale key signs every Web session / OAuth credential, not
+ * just realtime channels. Only fires when `resolved` is the alias (the
+ * canonical name losing to it is the only divergence that can hide a
+ * rotation-in-progress) AND the canonical name is ALSO set, to a raw
+ * (untrimmed) value that differs from the alias's raw value.
+ *
+ * Deliberately compares RAW strings, not the trimmed values `resolveRaw()`
+ * produces for the length/placeholder checks: `resolveSignedTokenSecret()`
+ * (§D-1) signs with the winning candidate's untrimmed raw value, so
+ * `SECRET_TOKEN=X` next to `WS_TOKEN_SECRET="  X  "` is a genuine
+ * divergence in what actually signs tokens even though the two values are
+ * equal after trimming — trimmed comparison would silently suppress the
+ * warning for exactly the "rotation didn't take" case this check exists
+ * to catch. Identical raw values mean the rename is simply mid-flight,
+ * which is not itself a problem. Never includes either value, a fragment,
+ * or a fingerprint.
+ */
+function detectSecretTokenAliasDivergence(env: NodeJS.ProcessEnv, resolved: ReturnType<typeof resolveRaw>): string | null {
+  if (!resolved || resolved.key === SECRET_TOKEN_DESCRIPTOR.name) return null;
+  const canonicalRaw = env[SECRET_TOKEN_DESCRIPTOR.name];
+  if (!canonicalRaw) return null;
+  const winningRaw = env[resolved.key];
+  if (winningRaw !== undefined && canonicalRaw === winningRaw) return null;
+  return (
+    `${SECRET_TOKEN_DESCRIPTOR.name}: both SECRET_TOKEN and its legacy alias ${resolved.key} are set to different ` +
+    `values — ${resolved.key} is currently used (legacy aliases take precedence). Remove ${resolved.key} once every ` +
+    'replica has picked up the new SECRET_TOKEN value, or set them to the same value.'
+  );
+}
 
 /**
  * Taxonomy-only variables: registered so typo-detection recognises them (and
@@ -486,7 +602,6 @@ const TAXONOMY_ONLY_NAMES = [
   'REDIS_REJECT_UNAUTHORIZED',
   'BASE_URL',
   'PASSWORD_SEED',
-  'SECRET_TOKEN',
   'ENABLE_DNSCACHE',
   'DEBUG',
   // `migration/helpers.ts:resolveActingUserId()` — the email of the user to
@@ -525,7 +640,7 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   JWT_REFRESH_TTL_DESCRIPTOR,
   COLLAB_MAX_EDITORS_DESCRIPTOR,
   MIGRATION_POLICY_DESCRIPTOR,
-  WS_TOKEN_SECRET_DESCRIPTOR,
+  SECRET_TOKEN_DESCRIPTOR,
   IMAGE_DERIVATIVE_MAX_PIXELS_DESCRIPTOR,
   IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY_DESCRIPTOR,
   IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS_DESCRIPTOR,
@@ -788,6 +903,13 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
     resolvedByDescriptor.set(descriptor, resolved);
 
     if (!resolved) {
+      // `failWhenUnset` is checked FIRST — a descriptor carrying both it and
+      // `warnWhenUnset` (which no current descriptor does) always fails,
+      // never falls through to also warn.
+      if (descriptor.failWhenUnset) {
+        failMessages.push(`${descriptor.name}: ${descriptor.failWhenUnset}`);
+        continue;
+      }
       if (descriptor.warnWhenUnset) {
         warnMessages.push(`${descriptor.name}: ${descriptor.warnWhenUnset}`);
       }
@@ -798,7 +920,7 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
     const reason = descriptor.check.validate(resolved.raw);
     if (reason == null) continue;
     const message = `${resolved.key}: ${reason}`;
-    const severity = typeof descriptor.check.severity === 'function' ? descriptor.check.severity(env) : descriptor.check.severity;
+    const severity = typeof descriptor.check.severity === 'function' ? descriptor.check.severity(env, resolved.raw) : descriptor.check.severity;
     if (severity === 'fail') {
       failMessages.push(message);
     } else {
@@ -808,6 +930,9 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
 
   const keyspaceFailure = detectUnresolvableRedisKeyspace(resolvedByDescriptor);
   if (keyspaceFailure) failMessages.push(keyspaceFailure);
+
+  const secretTokenDivergence = detectSecretTokenAliasDivergence(env, resolvedByDescriptor.get(SECRET_TOKEN_DESCRIPTOR) ?? null);
+  if (secretTokenDivergence) warnMessages.push(secretTokenDivergence);
 
   warnMessages.push(...detectTypoWarnings(env));
 
