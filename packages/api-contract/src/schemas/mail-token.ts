@@ -2,7 +2,7 @@
  * Schema for the stateless, signed tokens embedded in transactional
  * email links (invite acceptance, account activation, password reset).
  *
- * The token is a JWT signed with `WS_TOKEN_SECRET` under the
+ * The token is a JWT signed with `SECRET_TOKEN` under the
  * `crowi-mail-token` issuer (see `packages/api/src/util/mail-token.ts`),
  * so `exp` and signature are enforced by the JWT layer; the `purpose`
  * claim scopes a token to a single flow (an invite token can never be
