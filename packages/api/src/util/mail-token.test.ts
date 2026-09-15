@@ -1,14 +1,9 @@
-// Pin a stable WS_TOKEN_SECRET before any token util is constructed
-// below — the secret is resolved fresh on every `createXTokenUtil()`
-// call (see signed-token-factory.ts), not at module import time. The
-// "rejects an expired token" test signs directly with
-// `process.env.WS_TOKEN_SECRET`, so a stable value must be in place for
-// the whole file. Mirrors notifications-token.test.ts.
-process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
-
 import jwt from 'jsonwebtoken';
+import { withSecretTokenEnv } from 'src/test/secret-token-env';
+
 import { createMailTokenUtil } from './mail-token';
 import { createNotificationsTokenUtil } from './notifications-token';
+import { resolveSignedTokenSecret } from './signed-token-factory';
 
 describe('createMailTokenUtil', () => {
   const claims = { purpose: 'invite' as const, userId: 'user-1', email: 'a@example.com' };
@@ -60,7 +55,7 @@ describe('createMailTokenUtil', () => {
   it('rejects an expired token', () => {
     const util = createMailTokenUtil();
     const past = Math.floor(Date.now() / 1000) - 10;
-    const expired = jwt.sign({ ...claims, iat: past - 60, exp: past }, process.env.WS_TOKEN_SECRET as string, {
+    const expired = jwt.sign({ ...claims, iat: past - 60, exp: past }, resolveSignedTokenSecret(), {
       issuer: 'crowi-mail-token',
       algorithm: 'HS256',
     });
@@ -72,6 +67,24 @@ describe('createMailTokenUtil', () => {
     const notifUtil = createNotificationsTokenUtil();
     const { token } = notifUtil.signNotificationsToken({ selfUserId: 'user-1' });
     expect(mailUtil.verifyMailToken(token, 'invite')).toBeNull();
+  });
+
+  it('memoizes the random fallback secret when SECRET_TOKEN and WS_TOKEN_SECRET are BOTH unset, so a separate mint / verify util pair still agrees (AC-10, mirrors notifications-token.test.ts)', () => {
+    // `src/test/setup.ts` seeds a valid `SECRET_TOKEN` for every
+    // server-project test file, so deleting only `WS_TOKEN_SECRET` would
+    // resolve straight through to that valid canonical value — never
+    // touching the fallback path this test exists to exercise. Both keys
+    // must be unset to force resolution down to the random fallback.
+    withSecretTokenEnv({ SECRET_TOKEN: undefined, WS_TOKEN_SECRET: undefined }, () => {
+      const mintUtil = createMailTokenUtil();
+      const { token } = mintUtil.signMailToken(claims);
+
+      const verifyUtil = createMailTokenUtil();
+      const verified = verifyUtil.verifyMailToken(token, claims.purpose);
+
+      expect(verified).not.toBeNull();
+      expect(verified?.userId).toBe(claims.userId);
+    });
   });
 
   it('AC-5 (security-critical regression): a password-reset token is NOT signed with a placeholder WS_TOKEN_SECRET itself', () => {

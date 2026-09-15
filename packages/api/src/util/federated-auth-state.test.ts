@@ -28,17 +28,34 @@ import {
   verifySenderProof,
 } from 'src/util/federated-auth-state';
 
+/**
+ * feature-unified-signing-secret §D-2/D-5 — `validateEnv()` now requires
+ * `SECRET_TOKEN`; every `makeEnv()` call below needs a valid default so the
+ * trusted-origin cases further down (which call `validateEnv()` repeatedly)
+ * are not incidentally blocked by the unrelated signing-secret requirement.
+ */
+const VALID_SECRET_TOKEN = 'federated-auth-state-test-default-32c';
+
 /** Minimal `NodeJS.ProcessEnv`-shaped object, mirroring `env-schema.test.ts`'s `makeEnv`. */
 function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
-  return overrides as unknown as NodeJS.ProcessEnv;
+  return { SECRET_TOKEN: VALID_SECRET_TOKEN, ...overrides } as unknown as NodeJS.ProcessEnv;
 }
 
-/** Minimal fake `Crowi` for `createFederatedAuthStateUtil`'s `Pick<Crowi, 'getConfig' | 'node_env'>`. */
+/**
+ * Minimal fake `Crowi` for `createFederatedAuthStateUtil`'s
+ * `Pick<Crowi, 'node_env'>`. feature-unified-signing-secret §D-3 moved the
+ * signing secret off `getConfig()`/DB onto
+ * `util/signed-token-factory.ts#resolveSignedTokenSecret` (env) — this
+ * helper's `secret` param sets `process.env.SECRET_TOKEN` as a side effect
+ * (and clears the `WS_TOKEN_SECRET` alias so it never wins instead) before
+ * returning the getConfig-free fake, so every existing call site below
+ * keeps working unchanged. The outer `describe` block's `afterEach`
+ * restores both env vars so this never leaks into another test/file.
+ */
 function makeFakeCrowi(secret: string, nodeEnv: string = 'production') {
-  return {
-    getConfig: () => ({ crowi: { 'app:secret': secret } }),
-    node_env: nodeEnv,
-  };
+  delete process.env.WS_TOKEN_SECRET;
+  process.env.SECRET_TOKEN = secret;
+  return { node_env: nodeEnv };
 }
 
 /** Generate a P-256 key pair and sign `message` with the private key. Returns the JWK + base64url signature the real browser-side flow would produce. */
@@ -51,6 +68,20 @@ async function generateSenderProof(message: string): Promise<{ publicJwk: JsonWe
 }
 
 describe('util/federated-auth-state', () => {
+  // feature-unified-signing-secret §D-3 — `makeFakeCrowi` mutates the REAL
+  // `process.env.SECRET_TOKEN`/`WS_TOKEN_SECRET` as a side effect (see its
+  // doc comment); restore both after every test so this file never leaks a
+  // short/arbitrary test secret into a later test file sharing this jest
+  // worker.
+  const originalSecretToken = process.env.SECRET_TOKEN;
+  const originalWsTokenSecret = process.env.WS_TOKEN_SECRET;
+  afterEach(() => {
+    if (originalSecretToken === undefined) delete process.env.SECRET_TOKEN;
+    else process.env.SECRET_TOKEN = originalSecretToken;
+    if (originalWsTokenSecret === undefined) delete process.env.WS_TOKEN_SECRET;
+    else process.env.WS_TOKEN_SECRET = originalWsTokenSecret;
+  });
+
   describe('createFederatedAuthStateUtil — state cookie (AC-2)', () => {
     const basePayload = {
       state: 'state-value',
@@ -67,6 +98,15 @@ describe('util/federated-auth-state', () => {
       const decoded = util.verify(cookieValue, 'test-provider');
       expect(decoded).toMatchObject(basePayload);
       expect(decoded?.expiresAt).toBeGreaterThan(Date.now());
+    });
+
+    test('AC-1: resolves the signing secret from env — the fake Crowi passed here carries no getConfig/DB dependency at all', () => {
+      process.env.SECRET_TOKEN = 'env-only-secret-no-config-dependency-32c';
+      delete process.env.WS_TOKEN_SECRET;
+      const fakeCrowi: { node_env: string } = { node_env: 'production' };
+      const util = createFederatedAuthStateUtil(fakeCrowi);
+      const cookieValue = util.issue(basePayload);
+      expect(util.verify(cookieValue, 'test-provider')).toMatchObject(basePayload);
     });
 
     test('two issued states carry distinct state/nonce values (no accidental collapse across calls)', () => {

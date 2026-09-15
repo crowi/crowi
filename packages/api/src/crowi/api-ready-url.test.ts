@@ -17,9 +17,17 @@ import Crowi from 'src/crowi';
 
 const ROOT_DIR = resolve(join(__dirname, '..', '..'));
 
+/**
+ * feature-unified-signing-secret §D-2/D-5 — SECRET_TOKEN is a required boot
+ * var and this file constructs `Crowi` directly (no `src/test/setup.ts`
+ * import, so no ambient seeding).
+ */
+const VALID_SECRET_TOKEN = 'api-ready-url-test-secret-32-chars-min';
+
 describe('Crowi.getApiReadyUrl', () => {
   it('uses this.port, not getBaseUrl()', () => {
     const crowi = new Crowi(ROOT_DIR, {
+      SECRET_TOKEN: VALID_SECRET_TOKEN,
       PORT: '4301',
       // getBaseUrl() would return this (= the web app origin in dev).
       CLIENT_URL: 'http://localhost:4302',
@@ -31,6 +39,7 @@ describe('Crowi.getApiReadyUrl', () => {
 
   it('tracks a custom PORT', () => {
     const crowi = new Crowi(ROOT_DIR, {
+      SECRET_TOKEN: VALID_SECRET_TOKEN,
       PORT: '9999',
       CLIENT_URL: 'http://localhost:4302',
     } as unknown as NodeJS.ProcessEnv);
@@ -39,7 +48,7 @@ describe('Crowi.getApiReadyUrl', () => {
   });
 
   it('defaults to 4301 when PORT is unset', () => {
-    const crowi = new Crowi(ROOT_DIR, {} as unknown as NodeJS.ProcessEnv);
+    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: VALID_SECRET_TOKEN } as unknown as NodeJS.ProcessEnv);
     expect(crowi.getApiReadyUrl()).toBe('http://localhost:4301');
   });
 });
