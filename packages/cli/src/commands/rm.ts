@@ -1,9 +1,10 @@
 import type { Command } from 'commander';
 
 import { authedFetch, CliError, EXIT } from '../lib/http';
+import { newIdempotencyKey } from '../lib/idempotency';
 import { info, render } from '../lib/output';
 import { normalisePath } from '../lib/page-ref';
-import { fetchCurrentPage, isRevisionConflict } from '../lib/page-write';
+import { fetchCurrentPage } from '../lib/page-write';
 import { requireProfile } from './_shared';
 
 /** Lenient `DELETE /api/pages` response — the deleted/trashed page. */
@@ -25,22 +26,45 @@ interface DeletePageBody {
 }
 
 /**
+ * Whether a thrown error is specifically the `PAGE_REVISION_ERROR` (409)
+ * optimistic-lock conflict from `DELETE /pages` — the only 409 `--force`
+ * retries. `DELETE /pages` can also 409 with `PAGE_TRANSITION_IN_PROGRESS`
+ * or `IDEMPOTENCY_KEY_CONFLICT`; treating every 409 as a revision conflict
+ * (as the shared `isRevisionConflict` in `page-write.ts` does for `PUT`)
+ * would make `--force` re-fetch on those too, and a plain re-fetch of a page
+ * mid transition 404s — which this command already reports as "already
+ * gone", i.e. success, when the page has in fact NOT been deleted.
+ */
+function isPageRevisionError(err: unknown): boolean {
+  return err instanceof CliError && err.apiCode === 'PAGE_REVISION_ERROR';
+}
+
+/**
  * `crowi rm <path>` — delete a page via `DELETE /api/pages`
  * (`pages:write`). Soft-deletes to the trash by default (recoverable with
  * `crowi` restore); `--completely` hard-deletes irreversibly.
  *
  * The page's current `revision_id` is fetched first and sent for the
- * optimistic-lock check; a 409 means the page changed since it was read and
- * the delete ABORTS unless `--force` is given (re-fetch + retry).
+ * optimistic-lock check; a `PAGE_REVISION_ERROR` 409 means the page changed
+ * since it was read and the delete ABORTS unless `--force` is given
+ * (re-fetch + retry with the same Idempotency-Key). Any other 409
+ * (`PAGE_TRANSITION_IN_PROGRESS`, `IDEMPOTENCY_KEY_CONFLICT`) propagates as
+ * an error regardless of `--force` — see {@link isPageRevisionError}.
  */
 export function registerRm(program: Command): void {
   program
     .command('rm <path>')
     .description('Delete a page (soft-delete to trash by default; --completely to purge)')
     .option('--completely', 'permanently delete instead of moving to trash')
-    .option('--force', 'on a revision conflict, re-fetch and delete instead of aborting')
+    .option('--force', 'on a revision conflict, re-fetch and delete instead of aborting (only a revision conflict is retried)')
     .action(async (path: string, options: { completely?: boolean; force?: boolean }, command: Command) => {
       const { profile, globals } = requireProfile(command);
+
+      // One key for the whole invocation, including the --force retry: the
+      // server's soft-delete fingerprint is `{ page_id, completely }` (no
+      // `revision_id`), so a retry with a fresher revision is still the same
+      // logical operation and must reuse the key, not mint a new one.
+      const idempotencyKey = newIdempotencyKey();
 
       const current = await fetchCurrentPage(profile, path);
       if (current === null || current.pageId === undefined) {
@@ -49,7 +73,7 @@ export function registerRm(program: Command): void {
 
       const deletePage = async (pageId: string, revisionId?: string): Promise<DeletePageResponse> => {
         const body: DeletePageBody = { page_id: pageId, revision_id: revisionId, completely: options.completely === true };
-        return authedFetch<DeletePageResponse>(profile, 'DELETE', '/pages', { json: body });
+        return authedFetch<DeletePageResponse>(profile, 'DELETE', '/pages', { json: body, headers: { 'idempotency-key': idempotencyKey } });
       };
 
       try {
@@ -61,7 +85,7 @@ export function registerRm(program: Command): void {
           globals,
         );
       } catch (err) {
-        if (!isRevisionConflict(err)) {
+        if (!isPageRevisionError(err)) {
           throw err;
         }
         if (!options.force) {
