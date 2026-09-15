@@ -19,8 +19,7 @@ import { publishDraftPage } from 'src/service/page-history/commands/publish-draf
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { createPresenceCollabDeps } from 'src/service/presence';
 import { getEditorCapCounter } from 'src/util/collab-cap';
-import { isMultiInstanceDeclared } from 'src/util/env-schema';
-import { createWsTokenUtil, isWsTokenSecretFromEnv } from 'src/util/ws-token';
+import { createWsTokenUtil } from 'src/util/ws-token';
 import { attachWsNamespace } from 'src/ws/attach-namespace';
 import type { WebSocket as WsWebSocket } from 'ws';
 import { buildCollabRedisExtension } from './extension-redis';
@@ -91,61 +90,7 @@ export interface AttachedCollab {
  * save flow). The api's `Crowi.start` invokes this right before
  * `server.listen`.
  */
-/**
- * Explicit "I run more than one api replica" declaration. This is the
- * GENUINE multi-instance signal the WS_TOKEN_SECRET boot guard keys off —
- * NOT the mere presence of `REDIS_URL` (E1): Redis is configured in plenty
- * of single-replica deployments (sessions / Socket.IO), so failing on
- * `REDIS_URL` alone over-triggers. Any truthy value (`1`, `true`, a replica
- * count > 1) declares multi-instance. Truth table lives in
- * `src/util/env-schema.ts#isMultiInstanceDeclared` — also consumed by the
- * federated-link completion store's topology selection.
- */
-const MULTI_INSTANCE_ENV = 'CROWI_MULTI_INSTANCE';
-
-/**
- * editor-preview-reliability §4 / E1 — fail fast when a GENUINELY
- * multi-instance deployment is missing a stable `WS_TOKEN_SECRET`.
- *
- * A per-process random `WS_TOKEN_SECRET` is fatal across replicas: replica
- * B cannot verify a token minted by replica A, so half the connections
- * silently fail `onAuthenticate` and users see "WebSocket closed before the
- * connection was established".
- *
- * E1 fix — the multi-instance signal is the EXPLICIT `CROWI_MULTI_INSTANCE`
- * declaration, not `REDIS_URL` presence. So:
- *   - single-instance dev (no declaration) boots fine even with NO
- *     `WS_TOKEN_SECRET` — `.env.example` ships no secret; the per-process
- *     random fallback is harmless for one replica (`ws-token.ts` already
- *     logged the fallback warning).
- *   - a declared multi-instance deployment with no env secret → throw to
- *     abort boot.
- *
- * `isWsTokenSecretFromEnv()` is the single source of truth for "configured"
- * — `.env.example` ships no value, so a fresh copy that never set a real
- * secret reads as "not from env" and the guard only bites once the operator
- * declares multi-instance.
- */
-export function assertWsTokenSecretForMultiInstance(_crowi: Crowi): void {
-  if (isWsTokenSecretFromEnv()) return;
-  if (!isMultiInstanceDeclared(process.env)) return;
-
-  throw new Error(
-    `[crowi:collab] ${MULTI_INSTANCE_ENV} declares a multi-instance deployment but WS_TOKEN_SECRET is not set. ` +
-      'A per-process random secret cannot be cross-verified by other api replicas, so wsToken authentication ' +
-      'fails intermittently ("WebSocket closed before the connection was established"). Set WS_TOKEN_SECRET to a ' +
-      'stable base64-encoded 32-byte value (`openssl rand -base64 32`) shared across all replicas, or unset ' +
-      `${MULTI_INSTANCE_ENV} if you actually run a single replica.`,
-  );
-}
-
 export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): Promise<AttachedCollab> {
-  // editor-preview-reliability §4 — guard a multi-instance deployment
-  // against a non-shared (random) wsToken secret before we wire any
-  // sockets. Runs first so the failure is unambiguous at boot rather
-  // than as scattered onAuthenticate rejections later.
-  assertWsTokenSecretForMultiInstance(crowi);
-
   // Reach for the api-side models — they were already wired by
   // `setupModels` against the same Mongoose connection collab will
   // use, so save / load / compaction all operate on the same row
@@ -161,10 +106,9 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   // Independent `createWsTokenUtil()` call from the one
   // `hono/handlers/page-collab.ts` builds for signing — each resolves
   // its own secret via `util/signed-token-factory.ts`, but both agree
-  // on the same value (read `WS_TOKEN_SECRET` fresh from the same env,
-  // or share the same process-wide random fallback when it's unset), so
-  // sign / verify can never drift apart within one process. No env
-  // distribution drift either way.
+  // on the same mandatory `SECRET_TOKEN` (or its legacy `WS_TOKEN_SECRET`
+  // alias) read fresh from the same env, so sign / verify can never drift
+  // apart within one process. No env distribution drift either way.
   const wsTokenUtil: CollabWsTokenUtil = createWsTokenUtil();
 
   // Process-wide cap counter shared with the wsToken HTTP handler

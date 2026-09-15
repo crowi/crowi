@@ -108,15 +108,16 @@ mapping.
 
 ### `.env`
 
-Provide the environment variables the api reads at boot. At minimum set
-`MONGO_URI`; in production always set `CROWI_ENCRYPTION_KEY` and
-`WS_TOKEN_SECRET`.
+Provide the environment variables the api reads at boot. `MONGO_URI` and
+`SECRET_TOKEN` are required (the api refuses to boot if `SECRET_TOKEN` is
+unset, empty, whitespace-only, or a known placeholder). In production also
+always set `CROWI_ENCRYPTION_KEY`.
 
 ```bash title=".env"
 MONGO_URI=mongodb://mongodb:27017/crowi
 REDIS_URL=redis://redis:6379          # required for multi-replica deployments
 CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
-WS_TOKEN_SECRET=...
+SECRET_TOKEN=...                       # openssl rand -base64 32, same value on every replica
 ```
 
 See [Environment variables](../reference/env) for what each
@@ -173,7 +174,7 @@ CMD ["node", "node_modules/@crowi/api/dist/app.js"]
   setup does this too).
 </Callout>
 
-Keep secrets (`CROWI_ENCRYPTION_KEY` / `WS_TOKEN_SECRET`, etc.) **out of the
+Keep secrets (`CROWI_ENCRYPTION_KEY` / `SECRET_TOKEN`, etc.) **out of the
 image** — pass them via container env or `env_file` at deploy time.
 
 ## Wire up the web frontend
@@ -223,9 +224,13 @@ Start the api and confirm `/api/app/info` returns 200, then start the web app.
 </Steps>
 
 <Callout type="info">
-  Multi-replica deployments treat `REDIS_URL`, `CROWI_MULTI_INSTANCE` and
-  `WS_TOKEN_SECRET` differently. See the environment variable table in
-  [Environment variables](../reference/env) and
+  Multi-replica deployments treat `REDIS_URL` and `CROWI_MULTI_INSTANCE`
+  differently. `SECRET_TOKEN` is required either way, but with several
+  replicas it must be **exactly the same value on every one** of them. To
+  change (rotate) it, use a drain-first rollout — stop the old replicas,
+  then start new ones with the new value — never run old and new replicas
+  with different values at the same time. See the environment variable
+  table in [Environment variables](../reference/env) and
   [Operating realtime collaboration](./realtime-collab).
 </Callout>
 

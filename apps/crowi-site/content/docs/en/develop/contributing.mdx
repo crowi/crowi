@@ -105,7 +105,7 @@ Some verification is not part of `pnpm test` and has to be brought up by hand.
 
 ### Collaboration across two replicas
 
-Run two real replicas from the bundled compose setup. Two things need preparing: drop the api's fixed host port (replicas would collide on it) and put a shared `WS_TOKEN_SECRET` in `.env` so every replica reads the same one.
+Run two real replicas from the bundled compose setup. Two things need preparing: drop the api's fixed host port (replicas would collide on it) and put a shared `SECRET_TOKEN` in `.env` so every replica reads the same one (`SECRET_TOKEN` is required for ordinary single-replica development too).
 
 ```bash
 # 1. A scaling override: no host port, and a multi-replica declaration

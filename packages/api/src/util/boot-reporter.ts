@@ -102,6 +102,18 @@ export function formatFailMarker(service: string, reason: string): string {
 }
 
 /**
+ * Collapse an unknown thrown value into the short, single-line reason
+ * {@link formatFailMarker} expects: the first line of the message,
+ * length-capped to 200 characters. Shared by `crowi/index.ts`'s
+ * `exitOnError` (async boot failures) and `app.ts`'s construction-time
+ * guard (a failure inside `new Crowi(...)` itself, before `exitOnError`
+ * exists to catch it).
+ */
+export function formatBootFailureReason(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)).split('\n')[0].slice(0, 200);
+}
+
+/**
  * Parse a `@@crowi:fail <service> <reason…>` marker out of an arbitrary output
  * line (it may be prefixed by turbo's `api:dev: `). `service` is the first
  * token; `reason` is the remainder (may be empty). Returns null when the line

@@ -207,9 +207,10 @@ api / web のイメージは公式の `crowi/crowi` (full) / `crowi/crowi-web` �
 [環境変数](../reference/env) が一次情報です。ここでは Lightsail
 全のせ構成に固有の点だけ補足します。
 
-`CROWI_ENCRYPTION_KEY` と `WS_TOKEN_SECRET` は `compose.yml` と同じ場所の
+`CROWI_ENCRYPTION_KEY` と `SECRET_TOKEN` は `compose.yml` と同じ場所の
 `.env` に書きます。値はそれぞれ `openssl rand -base64 32` で生成し、
-`env_file` 経由でそのまま api コンテナに渡ります。
+`env_file` 経由でそのまま api コンテナに渡ります。`SECRET_TOKEN` は必須で、
+未設定のままだと api が起動しません。
 `MONGO_URI` / `REDIS_URL` / `CLIENT_URL` は上の compose の `environment` 側に
 書いてあり (こちらが `.env` を上書きします)、`CLIENT_URL` には §3 で用意した
 公開ドメインを入れます。`PASSWORD_SEED` も `.env` に書きますが、必要になるのは

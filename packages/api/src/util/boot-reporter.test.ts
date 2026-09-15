@@ -3,11 +3,12 @@ import {
   ANSI,
   type BootLayer,
   createBootReporter,
+  FAIL_MARKER_PREFIX,
+  formatBootFailureReason,
   formatDuration,
+  formatFailMarker,
   formatPlainLayerLine,
   formatPlainReadyLine,
-  FAIL_MARKER_PREFIX,
-  formatFailMarker,
   formatReadyMarker,
   parseFailMarker,
   parseReadyMarker,
@@ -95,6 +96,18 @@ describe('boot-reporter pure helpers', () => {
     it('returns null for non-marker / empty-body lines', () => {
       expect(parseFailMarker('some unrelated log line')).toBeNull();
       expect(parseFailMarker('@@crowi:fail')).toBeNull();
+    });
+  });
+
+  describe('formatBootFailureReason', () => {
+    it('takes the first line of an Error message', () => {
+      expect(formatBootFailureReason(new Error('boom\n  at foo\n  at bar'))).toBe('boom');
+    });
+    it('stringifies a non-Error thrown value', () => {
+      expect(formatBootFailureReason('plain string reason')).toBe('plain string reason');
+    });
+    it('caps the reason at 200 characters', () => {
+      expect(formatBootFailureReason(new Error('x'.repeat(250)))).toBe('x'.repeat(200));
     });
   });
 

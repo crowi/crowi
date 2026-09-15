@@ -96,11 +96,11 @@ The concrete Caddy / nginx / Traefik configuration, the WebSocket `Upgrade` pass
 MONGO_URI=mongodb://mongodb:27017/crowi
 REDIS_URL=redis://redis:6379
 CROWI_ENCRYPTION_KEY=...     # openssl rand -base64 32
-WS_TOKEN_SECRET=...
+SECRET_TOKEN=...             # openssl rand -base64 32 — required, api won't boot without it
 PASSWORD_SEED=...
 ```
 
-[Environment variables](../reference/env) explains each one. Without `CROWI_ENCRYPTION_KEY`, the credentials you enter in the admin panel are stored in plaintext ([Encrypting sensitive settings](./encryption)).
+[Environment variables](../reference/env) explains each one. `SECRET_TOKEN` is required — the api refuses to boot if it is unset, empty, whitespace-only, or a known placeholder. Without `CROWI_ENCRYPTION_KEY`, the credentials you enter in the admin panel are stored in plaintext ([Encrypting sensitive settings](./encryption)).
 
 </Step>
 

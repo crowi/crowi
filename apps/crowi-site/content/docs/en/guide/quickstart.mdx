@@ -19,6 +19,11 @@ Clone the repository, create the environment file, and bring the whole stack up.
 git clone https://github.com/crowi/crowi.git
 cd crowi
 cp .env.example .env
+```
+
+Open `.env` and paste the output of `openssl rand -base64 32` into `SECRET_TOKEN=`. The api refuses to boot without it.
+
+```bash
 docker compose --profile app up -d --build
 ```
 
