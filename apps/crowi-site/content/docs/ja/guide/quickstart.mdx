@@ -19,6 +19,11 @@ Crowi を手元で動かし、管理者アカウントを作って最初のペ�
 git clone https://github.com/crowi/crowi.git
 cd crowi
 cp .env.example .env
+```
+
+`.env` を開き、`SECRET_TOKEN=` に `openssl rand -base64 32` の出力を貼り付けてください。api はこの値が無いと起動に失敗します。
+
+```bash
 docker compose --profile app up -d --build
 ```
 

@@ -216,9 +216,10 @@ What every variable means, and which of them you have to set, is in the
 table in [Environment variables](../reference/env). Here we add
 only what is specific to the all-in-one Lightsail setup.
 
-Put `CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` in the `.env` next to
+Put `CROWI_ENCRYPTION_KEY` and `SECRET_TOKEN` in the `.env` next to
 `compose.yml`, generating each with `openssl rand -base64 32`; `env_file`
-passes them to the api container as they are. `MONGO_URI` / `REDIS_URL` /
+passes them to the api container as they are. `SECRET_TOKEN` is required —
+the api will not boot without it. `MONGO_URI` / `REDIS_URL` /
 `CLIENT_URL` are set on the compose `environment` side in the file above,
 which overrides `.env` — for `CLIENT_URL` use the public domain from §3.
 `PASSWORD_SEED` belongs in `.env` too, but only when you migrate from v1

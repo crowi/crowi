@@ -10,15 +10,15 @@ Realtime collaboration runs inside the api process. There is no separate process
 ## What it assumes
 
 - The WebSocket endpoint is `/collab` on the same host as the api. The reverse proxy in front has to pass the `Upgrade` header through (configuration examples are in [Deployment topologies](./deployment)).
-- Connections authenticate with a short-lived token. Across several replicas the token is minted on one replica and verified on another, so the signing key has to match everywhere.
+- Connections authenticate with a short-lived token, signed with `SECRET_TOKEN` — the same signing secret behind the api's Web session, external-account linking, and email tokens. **`SECRET_TOKEN` is required even on a single replica**; the api refuses to boot if it is unset, empty, whitespace-only, or a known placeholder. Across several replicas the token is minted on one replica and verified on another, so `SECRET_TOKEN` has to be the exact same value everywhere.
 - MongoDB is the source of truth for page content; Redis only carries live routing. Stopping every replica loses no edits — they are restored from MongoDB.
 - The per-page simultaneous-editor cap (20 by default) is counted in Redis, so it stays correct across replicas. Anyone past the cap joins read-only.
 
-The related environment variables (`WS_TOKEN_SECRET`, `CROWI_MULTI_INSTANCE`, `COLLAB_MAX_EDITORS_PER_PAGE`, `NEXT_PUBLIC_COLLAB_URL`, `REDIS_URL`, `REDIS_KEY_PREFIX`) are listed in [Environment variables](../reference/env).
+The related environment variables (`SECRET_TOKEN`, `CROWI_MULTI_INSTANCE`, `COLLAB_MAX_EDITORS_PER_PAGE`, `NEXT_PUBLIC_COLLAB_URL`, `REDIS_URL`, `REDIS_KEY_PREFIX`) are listed in [Environment variables](../reference/env).
 
 ## A single instance (recommended)
 
-The smallest deployment is api + web + MongoDB.
+The smallest deployment is api + web + MongoDB. `SECRET_TOKEN` cannot be skipped even here.
 
 ```yaml
 services:
@@ -26,7 +26,7 @@ services:
     image: crowi/crowi:2.0.0-alpha.17
     environment:
       MONGO_URI: mongodb://mongodb:27017/crowi
-      WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
+      SECRET_TOKEN: ${SECRET_TOKEN}
       CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
       REDIS_URL: redis://redis:6379   # optional on a single replica
   web:
@@ -43,11 +43,12 @@ services:
   **Running several replicas carries a known, rare risk of losing edits.** A replica that loaded an older state can write it back over a newer state written by another replica. Crowi mitigates this by checking the revision it advances from and by refusing to overwrite content with an empty document, but it cannot rule it out. **Unless you need to spread collaborative load, run a single replica.**
 </Callout>
 
-Three extra requirements apply.
+Four extra requirements apply.
 
 1. **Point every replica's `REDIS_URL` at the same Redis** so collaborative updates travel between them.
-2. **Set `CROWI_MULTI_INSTANCE` and `WS_TOKEN_SECRET` on every replica**, as described in their rows in [Environment variables](../reference/env).
-3. **Sticky sessions are not needed.** A client may connect to any replica.
+2. **Set `CROWI_MULTI_INSTANCE` on every replica**, as described in its row in [Environment variables](../reference/env).
+3. **Set `SECRET_TOKEN` to the exact same value on every replica.** Unlike a single instance, a mismatch here does not block boot — it fails connections instead, with a signature error. To rotate it, use a drain-first rollout: stop the old replicas, then start new ones with the new value. Never run old and new replicas with different values at the same time.
+4. **Sticky sessions are not needed.** A client may connect to any replica.
 
 ```yaml
 services:
@@ -59,7 +60,7 @@ services:
       MONGO_URI: mongodb://mongodb:27017/crowi
       REDIS_URL: redis://redis:6379           # required with several replicas
       CROWI_MULTI_INSTANCE: "2"
-      WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
+      SECRET_TOKEN: ${SECRET_TOKEN}
       CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
 ```
 
@@ -67,7 +68,7 @@ services:
 
 - **Redis goes down after boot.** Clients keep reconnecting. Editing still flows between people on the same replica, but not across replicas, and the editor cap fails open. Fan-out resumes by itself once Redis is back.
 - **Redis is unreachable at boot.** The api retries for a few seconds and then starts in a degraded, Redis-less mode. In that case cross-replica fan-out does **not** resume when Redis recovers — **restart the api**.
-- **Clients are disconnected right after connecting** and the editor stays on "could not connect". The signing key usually differs between replicas, so a token minted on one fails verification on another — check the `WS_TOKEN_SECRET` row in [Environment variables](../reference/env) and replace the replicas with the same value everywhere.
+- **Clients are disconnected right after connecting** and the editor stays on "could not connect". `SECRET_TOKEN` usually differs between replicas, so a token minted on one fails verification on another — check the `SECRET_TOKEN` row in [Environment variables](../reference/env) and replace the replicas with the same value everywhere (drain-first, so old and new replicas are never live with different values at once).
 - **The proxy strips `Upgrade`.** Connections to `/collab` fail with 400 or 426 — check the proxy configuration in [Deployment topologies](./deployment).
 - **A page being edited collaboratively is updated through another route** (the API, an AI tool, the CLI). Clients editing it are prompted to reload and continue from the saved content; unsaved local edits can be recovered from a local buffer. That prompt only reaches clients connected to the api process that handled the update, though. **With several replicas, an editor on another replica can keep editing stale content until someone reloads by hand.**
 - **A page being edited collaboratively is renamed, deleted or restored.** Saves from a session that started before the change are always rejected, whichever replica performed it — write safety holds across replicas. The reload prompt, again, stays within one replica, so an editor elsewhere may only notice when its save is rejected.

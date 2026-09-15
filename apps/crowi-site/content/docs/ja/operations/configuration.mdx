@@ -38,9 +38,13 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 出力されます(`CLIENT_URL` が未設定の場合も、送信メール内のリンクが相対
 パスになってしまう旨の warning が同じレポートに含まれます)。
 
-`WS_TOKEN_SECRET` は例外的に、**`NODE_ENV` の値によって重大度が変わる**
-唯一の変数です。要件は [環境変数](../reference/env) の該当行を参照して
-ください。
+`SECRET_TOKEN` は**必須**です。未設定・空文字・空白のみ・既知の
+placeholder 値のいずれかであれば、`NODE_ENV` や `CROWI_MULTI_INSTANCE` の
+値に関係なく起動が失敗します。加えて、**`NODE_ENV` の値によって重大度が
+変わる例外**でもあります — 32 文字未満の値は `NODE_ENV=production`
+(未設定時も含む) では起動失敗、それ以外の環境では警告に留まります。
+旧 `WS_TOKEN_SECRET` は非推奨の legacy alias として引き続き読みます。
+要件は [環境変数](../reference/env) の該当行を参照してください。
 
 `CROWI_` / `WS_TOKEN_` / `JWT_` / `COLLAB_` / `REDIS` / `MONGO` /
 `MIGRATION_` のいずれかの既知プレフィックスを持つものの、既知の変数名の
@@ -55,7 +59,7 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 
 変数名・既定値・意味の一覧は [環境変数](../reference/env) にあります。共同編集で使う変数の使い分けは [リアルタイム共同編集の運用](./realtime-collab)、構成ごとの `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_COLLAB_URL` の選び方は [デプロイ構成](./deployment) を参照してください。
 
-> **Tip**: `WS_TOKEN_SECRET` と `CROWI_ENCRYPTION_KEY` はどちらも
+> **Tip**: `SECRET_TOKEN` と `CROWI_ENCRYPTION_KEY` はどちらも
 > `openssl rand -base64 32` で生成できます。`CROWI_ENCRYPTION_KEY` は
 > `pnpm --filter @crowi/api crypto:gen-key` でも生成できます。
 
@@ -76,7 +80,7 @@ AI クライアント向けの MCP エンドポイント `/api/mcp` は常に有
 コンテナネットワーク向けの URI (`MONGO_URI` / `REDIS_URL` /
 `CLIENT_URL`) は `docker-compose.yml` 側の `environment` 指定が
 `.env` の値を上書きします。機密値 (`CROWI_ENCRYPTION_KEY` /
-`WS_TOKEN_SECRET` など) は `.env` に書いておけばそのまま渡ります。
+`SECRET_TOKEN` など) は `.env` に書いておけばそのまま渡ります。
 
 > **Tip**: Web アプリ (`@crowi/web`) はプラグイン依存ゼロの **独立した
 > デプロイ対象** です。api とは HTTP で通信し、どこにでもデプロイできます
