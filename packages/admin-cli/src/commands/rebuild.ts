@@ -163,15 +163,8 @@ async function withRebuildApi(fn: (api: RebuildCliApi) => Promise<number | void>
     process.exit(1);
   }
 
-  // `let` + `crowi?.teardownForCli()` below (not `const`): a missing/invalid
-  // signing secret (feature-unified-signing-secret §D-2) makes
-  // `new loaded.Crowi(...)` itself throw, synchronously, before
-  // `initForCli()` ever runs. Keeping construction inside this `try` means
-  // that failure ALSO reaches the "failed to initialise Crowi" message
-  // below instead of escaping as a raw uncaught exception — but a `const`
-  // binding assigned inside the `try` would leave the `catch` block's
-  // `crowi.teardownForCli()` reading a temporal-dead-zone `crowi`, throwing
-  // a `ReferenceError` that masks the real failure before it can print.
+  // `let`, not `const`: the constructor itself can throw (e.g. an invalid
+  // SECRET_TOKEN), and the catch below must not touch an uninitialised binding.
   let crowi: ApiCrowi | undefined;
   try {
     crowi = new loaded.Crowi(process.cwd(), process.env);

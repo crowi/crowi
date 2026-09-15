@@ -317,9 +317,8 @@ function parseRawCookieTokens(cookieHeader: string | undefined): string[] {
 }
 
 /**
- * feature-unified-signing-secret §D-3 — `crowi` is narrowed to
- * `Pick<Crowi, 'node_env'>`: the signing secret now comes from
- * `util/signed-token-factory.ts#resolveSignedTokenSecret` (env), not
+ * `crowi` is narrowed to `Pick<Crowi, 'node_env'>`: the signing secret comes
+ * from `util/signed-token-factory.ts#resolveSignedTokenSecret` (env), not
  * `crowi.getConfig()`/DB, so this module no longer needs `getConfig` at all.
  */
 export function createFederatedAuthStateUtil(crowi: Pick<Crowi, 'node_env'>): FederatedAuthStateUtil {

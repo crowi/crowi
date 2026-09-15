@@ -83,10 +83,10 @@ export interface EnvVarDescriptor {
   /**
    * A boot-fail reason to surface when the variable (and every alias) is
    * entirely unset — the required-variable counterpart to `warnWhenUnset`.
-   * Currently only `SECRET_TOKEN` uses this (feature-unified-signing-secret
-   * §D-2): every signing channel needs a real secret, so "never configured"
-   * must abort boot exactly like "configured but invalid" does, in every
-   * `NODE_ENV`. When both `failWhenUnset` and `warnWhenUnset` are (mistakenly)
+   * Currently only `SECRET_TOKEN` uses this: every signing channel needs a
+   * real secret, so "never configured" must abort boot exactly like
+   * "configured but invalid" does, in every `NODE_ENV`. When both
+   * `failWhenUnset` and `warnWhenUnset` are (mistakenly)
    * set on the same descriptor, `failWhenUnset` wins and `warnWhenUnset` is
    * never consulted — see `validateEnv()`'s unset branch.
    */
@@ -175,9 +175,9 @@ const MIN_SIGNED_TOKEN_SECRET_LENGTH = 32;
 
 /**
  * How a trimmed `SECRET_TOKEN` (or its resolved `WS_TOKEN_SECRET` alias)
- * value classifies against feature-unified-signing-secret §D-2's rules.
- * `validate` and `severity` below both classify off this ONE function so
- * they can never disagree about which reason applies to a given value.
+ * value classifies. `validate` and `severity` below both classify off this
+ * ONE function so they can never disagree about which reason applies to a
+ * given value.
  */
 type SecretTokenClassification =
   | { readonly kind: 'ok' }
@@ -196,15 +196,15 @@ function classifySignedTokenSecret(raw: string): SecretTokenClassification {
 /**
  * Shared by the required/placeholder-style failure messages below — names
  * the canonical variable, the openssl generation command, and the
- * `WS_TOKEN_SECRET` → `SECRET_TOKEN` rename path, per §D-2. Never echoes a
- * secret value, fragment, or fingerprint.
+ * `WS_TOKEN_SECRET` → `SECRET_TOKEN` rename path. Never echoes a secret
+ * value, fragment, or fingerprint.
  */
 const SECRET_TOKEN_GENERATE_AND_RENAME_HINT =
   'set SECRET_TOKEN to a stable base64-encoded 32-byte value (`openssl rand -base64 32`) and use the exact same ' +
   'value on every replica. If you currently set WS_TOKEN_SECRET, you can rename it to SECRET_TOKEN.';
 
 /**
- * §D-2 — unifies the pre-existing 32-character minimum with placeholder
+ * Unifies the pre-existing 32-character minimum with placeholder
  * rejection into one validator. Whitespace-only and placeholder values get
  * the rich "required" message (generation command + rename guidance);
  * non-placeholder short values get ONLY the character-count message,
@@ -230,7 +230,7 @@ function validateSecretTokenValue(raw: string): string | null {
 }
 
 /**
- * §D-2 — whitespace-only and placeholder values fail in EVERY `NODE_ENV`
+ * Whitespace-only and placeholder values fail in EVERY `NODE_ENV`
  * (they are not a genuinely configured secret at all); a non-placeholder
  * short value only fails in production (matching the pre-existing
  * `feature-signed-token-secret-strength` severity), otherwise it warns. `raw`
@@ -519,11 +519,11 @@ const IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS_DESCRIPTOR: EnvVarDescriptor = {
 };
 
 /**
- * feature-unified-signing-secret §D-2 — the sole descriptor for Crowi's
- * unified signing secret. Replaces the old taxonomy-only `SECRET_TOKEN`
- * entry and the old content-checked `WS_TOKEN_SECRET` descriptor: the two
- * env vars are now one required value with `WS_TOKEN_SECRET` as a legacy
- * alias (checked first, matching `resolveRaw()`'s alias-first precedence and
+ * The sole descriptor for Crowi's unified signing secret. Replaces the old
+ * taxonomy-only `SECRET_TOKEN` entry and the old content-checked
+ * `WS_TOKEN_SECRET` descriptor: the two env vars are now one required value
+ * with `WS_TOKEN_SECRET` as a legacy alias (checked first, matching
+ * `resolveRaw()`'s alias-first precedence and
  * `util/signed-token-factory.ts#resolveSignedTokenSecret`'s own runtime
  * resolution order).
  *
@@ -558,9 +558,9 @@ const SECRET_TOKEN_DESCRIPTOR: EnvVarDescriptor = {
 };
 
 /**
- * feature-unified-signing-secret §D-2 (AC-12) — warn (never fail) when both
- * the canonical `SECRET_TOKEN` and its legacy `WS_TOKEN_SECRET` alias are
- * set to DIFFERENT values: alias-first precedence (`resolveRaw()`) means
+ * AC-12 — warn (never fail) when both the canonical `SECRET_TOKEN` and its
+ * legacy `WS_TOKEN_SECRET` alias are set to DIFFERENT values: alias-first
+ * precedence (`resolveRaw()`) means
  * `WS_TOKEN_SECRET` silently keeps winning even after an operator adds a
  * fresh `SECRET_TOKEN` meant to rotate a leaked key — and since this
  * change, that stale key signs every Web session / OAuth credential, not
@@ -571,7 +571,7 @@ const SECRET_TOKEN_DESCRIPTOR: EnvVarDescriptor = {
  *
  * Deliberately compares RAW strings, not the trimmed values `resolveRaw()`
  * produces for the length/placeholder checks: `resolveSignedTokenSecret()`
- * (§D-1) signs with the winning candidate's untrimmed raw value, so
+ * signs with the winning candidate's untrimmed raw value, so
  * `SECRET_TOKEN=X` next to `WS_TOKEN_SECRET="  X  "` is a genuine
  * divergence in what actually signs tokens even though the two values are
  * equal after trimming — trimmed comparison would silently suppress the

@@ -27,14 +27,13 @@ import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 
 import { bootCrowiWithRetry } from './db-connect-retry';
 import { recordDispatchEnd, recordDispatchStart } from './op-ring-buffer';
+import { TEST_SECRET_TOKEN } from './secret-token-env';
 
-// feature-unified-signing-secret §D-5 — SECRET_TOKEN is now a required boot
-// var (`util/env-schema.ts`); every server-project test file boots a real
-// `Crowi` in `beforeAll` below, so it needs a valid, stable value in place
-// before that happens. `??=` never overwrites a value a test runner's own
-// environment already set. 35 non-placeholder characters clears the
-// 32-character minimum.
-process.env.SECRET_TOKEN ??= 'test-signing-secret-base64-32bytes=';
+// SECRET_TOKEN is a required boot var (`util/env-schema.ts`); every
+// server-project test file boots a real `Crowi` in `beforeAll` below, so it
+// needs a valid, stable value in place before that happens. `??=` never
+// overwrites a value a test runner's own environment already set.
+process.env.SECRET_TOKEN ??= TEST_SECRET_TOKEN;
 
 // Silence boot-time noise that fires once per test file and drowns
 // the actual ✓ / ✕ output in the jest report:

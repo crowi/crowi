@@ -1,8 +1,8 @@
 import { ENV_VAR_DESCRIPTORS, isMultiInstanceDeclared, validateEnv } from 'src/util/env-schema';
 
 /**
- * feature-unified-signing-secret §D-2/D-5 — the default `SECRET_TOKEN` every
- * `makeEnv()` call carries unless an override replaces/removes it (pass
+ * The default `SECRET_TOKEN` every `makeEnv()` call carries unless an
+ * override replaces/removes it (pass
  * `SECRET_TOKEN: undefined` to build an unset-secret case). Keeps every
  * PRE-EXISTING test in this file — which exercises some other var entirely —
  * from incidentally tripping the new required-secret validation.

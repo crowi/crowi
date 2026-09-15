@@ -187,12 +187,12 @@ describe('createNotificationsTokenUtil', () => {
     // never agreed and every handshake was rejected with 4401 — see
     // `signed-token-factory.ts`'s `fallbackSecretsByEnvVar`.
     //
-    // feature-unified-signing-secret §D-1 changed the default resolver to
-    // check `SECRET_TOKEN` (canonical) as well as `WS_TOKEN_SECRET` (legacy
-    // alias): `src/test/setup.ts` seeds a valid `SECRET_TOKEN` for every
-    // server-project test file, so deleting only `WS_TOKEN_SECRET` here
-    // would resolve straight through to that valid canonical value — never
-    // touching the fallback path this test exists to exercise. Both keys
+    // The default resolver checks `SECRET_TOKEN` (canonical) as well as
+    // `WS_TOKEN_SECRET` (legacy alias): `src/test/setup.ts` seeds a valid
+    // `SECRET_TOKEN` for every server-project test file, so deleting only
+    // `WS_TOKEN_SECRET` here would resolve straight through to that valid
+    // canonical value — never touching the fallback path this test exists
+    // to exercise. Both keys
     // must be unset to force resolution down to the random fallback.
     withSecretTokenEnv({ SECRET_TOKEN: undefined, WS_TOKEN_SECRET: undefined }, () => {
       const mintUtil = createNotificationsTokenUtil();

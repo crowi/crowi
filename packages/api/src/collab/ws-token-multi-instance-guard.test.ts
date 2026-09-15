@@ -1,10 +1,10 @@
 /**
- * feature-unified-signing-secret §D-4 — regression guard for the REMOVAL of
- * the multi-instance-only `WS_TOKEN_SECRET` boot guard
- * (`assertWsTokenSecretForMultiInstance` / `isWsTokenSecretFromEnv`, both
- * deleted from `collab/attach.ts` / `util/ws-token.ts`).
+ * Regression guard for the REMOVAL of the multi-instance-only
+ * `WS_TOKEN_SECRET` boot guard (`assertWsTokenSecretForMultiInstance` /
+ * `isWsTokenSecretFromEnv`, both deleted from `collab/attach.ts` /
+ * `util/ws-token.ts`).
  *
- * `SECRET_TOKEN`'s required validation (`util/env-schema.ts` §D-2) is now
+ * `SECRET_TOKEN`'s required validation (`util/env-schema.ts`) is now
  * unconditional: a single-instance deployment with no secret configured
  * boot-fails exactly like a declared multi-instance one used to (and still
  * does) — `CROWI_MULTI_INSTANCE` has no bearing on the outcome either way.

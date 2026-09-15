@@ -16,10 +16,10 @@ dotenv.config();
 
 /**
  * `new Crowi(...)` runs `validateEnv()` synchronously in the constructor
- * (e.g. a missing/invalid `SECRET_TOKEN` — feature-unified-signing-secret
- * §D-2) and throws before any instance exists — `crowi.exitOnError` below
- * (an arrow property bound to `this`) is unreachable for a construction-time
- * failure, since there is no `this` yet. Without this wrapper the process
+ * (e.g. a missing/invalid `SECRET_TOKEN`) and throws before any instance
+ * exists — `crowi.exitOnError` below (an arrow property bound to `this`) is
+ * unreachable for a construction-time failure, since there is no `this` yet.
+ * Without this wrapper the process
  * exits via Node's default uncaught-exception path, which prints a raw
  * stack but never the `@@crowi:fail` marker `scripts/dev.mjs` watches for
  * to tear the whole dev tree down — so a boot failure here would otherwise

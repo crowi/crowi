@@ -1,7 +1,7 @@
 /**
- * feature-unified-signing-secret — cross-channel integration coverage for
- * the unified `SECRET_TOKEN` resolver. Per-channel unit coverage lives in
- * each channel's own `*.test.ts` (jwt via `hono/middleware/auth.test.ts`,
+ * Cross-channel integration coverage for the unified `SECRET_TOKEN`
+ * resolver. Per-channel unit coverage lives in each channel's own
+ * `*.test.ts` (jwt via `hono/middleware/auth.test.ts`,
  * federated-auth-state via `federated-auth-state.test.ts`, ws/presence/
  * notifications/mail via `signed-token-factory.test.ts` and their own
  * files); this file is the cross-channel matrix (AC-4) plus the
@@ -24,11 +24,10 @@ import { createWsTokenUtil } from 'src/util/ws-token';
 
 /**
  * Minimal `Crowi` stub for `createJwtUtil`: carries neither `getConfig` nor
- * a usable `model` — feature-unified-signing-secret §D-3 removed
- * `createJwtUtil`'s DB config dependency for `generateTokens` /
- * `signOauthAccessToken` / `verifyToken`, so this stub existing (and being
- * enough) is itself the regression guard: a reintroduced `crowi.getConfig()`
- * call would throw `TypeError: crowi.getConfig is not a function` the
+ * a usable `model` — `createJwtUtil` has no DB config dependency for
+ * `generateTokens` / `signOauthAccessToken` / `verifyToken`, so this stub
+ * existing (and being enough) is itself the regression guard: a
+ * reintroduced `crowi.getConfig()` call would throw `TypeError: crowi.getConfig is not a function` the
  * moment any test below calls `createJwtUtil(makeConfigFreeCrowi())`.
  * `refreshAccessToken` (which DOES need `crowi.model`) is not exercised by
  * any test in this file.

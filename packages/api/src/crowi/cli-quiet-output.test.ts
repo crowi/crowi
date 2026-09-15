@@ -3,6 +3,7 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
 import Crowi from 'src/crowi';
 import type { PluginRegistries } from 'src/plugin';
 import { PluginManager } from 'src/plugin';
+import { TEST_SECRET_TOKEN } from 'src/test/secret-token-env';
 
 /**
  * feature-admin-cli-quiet-output: `setupPlugins()` runs under both boot
@@ -26,13 +27,6 @@ import { PluginManager } from 'src/plugin';
 
 const ROOT_DIR = resolve(join(__dirname, '..', '..'));
 
-/**
- * feature-unified-signing-secret §D-2/D-5 — SECRET_TOKEN is a required boot
- * var and this file constructs `Crowi` directly (no `src/test/setup.ts`
- * import, so no ambient seeding).
- */
-const VALID_SECRET_TOKEN = 'cli-quiet-output-test-secret-32-chars-x';
-
 function stubPlugin(): CrowiPlugin {
   return { name: 'test-plugin', version: '1.2.3' } as CrowiPlugin;
 }
@@ -45,7 +39,7 @@ function mockPluginManager(loaded: CrowiPlugin[]): void {
 describe('Crowi.setupPlugins (feature-admin-cli-quiet-output)', () => {
   it('server boot (cliContext=false) keeps logging the summary to stdout, unaffected by NODE_ENV', async () => {
     mockPluginManager([stubPlugin()]);
-    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: VALID_SECRET_TOKEN, NODE_ENV: 'production' } as unknown as NodeJS.ProcessEnv);
+    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: TEST_SECRET_TOKEN, NODE_ENV: 'production' } as unknown as NodeJS.ProcessEnv);
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -58,7 +52,7 @@ describe('Crowi.setupPlugins (feature-admin-cli-quiet-output)', () => {
 
   it('CLI + dev: the summary goes to stderr, never stdout', async () => {
     mockPluginManager([stubPlugin()]);
-    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: VALID_SECRET_TOKEN, NODE_ENV: 'development' } as unknown as NodeJS.ProcessEnv);
+    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: TEST_SECRET_TOKEN, NODE_ENV: 'development' } as unknown as NodeJS.ProcessEnv);
     crowi.cliContext = true;
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -71,7 +65,7 @@ describe('Crowi.setupPlugins (feature-admin-cli-quiet-output)', () => {
 
   it('CLI + prod (NODE_ENV=production): the summary is suppressed entirely', async () => {
     mockPluginManager([stubPlugin()]);
-    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: VALID_SECRET_TOKEN, NODE_ENV: 'production' } as unknown as NodeJS.ProcessEnv);
+    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: TEST_SECRET_TOKEN, NODE_ENV: 'production' } as unknown as NodeJS.ProcessEnv);
     crowi.cliContext = true;
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -86,7 +80,7 @@ describe('Crowi.setupPlugins (feature-admin-cli-quiet-output)', () => {
     // CLIENT_URL set so this env doesn't also produce the unrelated
     // "CLIENT_URL is not set" env-validation warning (see env-validation.test.ts).
     const crowi = new Crowi(ROOT_DIR, {
-      SECRET_TOKEN: VALID_SECRET_TOKEN,
+      SECRET_TOKEN: TEST_SECRET_TOKEN,
       NODE_ENV: 'development',
       CLIENT_URL: 'http://localhost:4301',
     } as unknown as NodeJS.ProcessEnv);

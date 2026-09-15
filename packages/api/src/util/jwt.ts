@@ -72,11 +72,10 @@ export function isCurrentAuthVersion(tokenAuthVersion: number | undefined, user:
 }
 
 export function createJwtUtil(crowi: Crowi) {
-  // feature-unified-signing-secret §D-3 — resolved once, at construction,
-  // from `util/signed-token-factory.ts`'s single runtime resolver (env, not
-  // `crowi.getConfig()`/DB). `crowi` is still accepted (rather than a
-  // narrower `Pick<...>`) because `refreshAccessToken` needs `crowi.model`
-  // for the user lookup.
+  // Resolved once, at construction, from `util/signed-token-factory.ts`'s
+  // single runtime resolver (env, not `crowi.getConfig()`/DB). `crowi` is
+  // still accepted (rather than a narrower `Pick<...>`) because
+  // `refreshAccessToken` needs `crowi.model` for the user lookup.
   const secret = resolveSignedTokenSecret();
 
   /**

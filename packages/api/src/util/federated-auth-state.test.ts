@@ -29,10 +29,10 @@ import {
 } from 'src/util/federated-auth-state';
 
 /**
- * feature-unified-signing-secret §D-2/D-5 — `validateEnv()` now requires
- * `SECRET_TOKEN`; every `makeEnv()` call below needs a valid default so the
- * trusted-origin cases further down (which call `validateEnv()` repeatedly)
- * are not incidentally blocked by the unrelated signing-secret requirement.
+ * `validateEnv()` requires `SECRET_TOKEN`; every `makeEnv()` call below
+ * needs a valid default so the trusted-origin cases further down (which
+ * call `validateEnv()` repeatedly) are not incidentally blocked by the
+ * unrelated signing-secret requirement.
  */
 const VALID_SECRET_TOKEN = 'federated-auth-state-test-default-32c';
 
@@ -43,11 +43,10 @@ function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.Pro
 
 /**
  * Minimal fake `Crowi` for `createFederatedAuthStateUtil`'s
- * `Pick<Crowi, 'node_env'>`. feature-unified-signing-secret §D-3 moved the
- * signing secret off `getConfig()`/DB onto
- * `util/signed-token-factory.ts#resolveSignedTokenSecret` (env) — this
- * helper's `secret` param sets `process.env.SECRET_TOKEN` as a side effect
- * (and clears the `WS_TOKEN_SECRET` alias so it never wins instead) before
+ * `Pick<Crowi, 'node_env'>`. The signing secret comes from
+ * `util/signed-token-factory.ts#resolveSignedTokenSecret` (env), not
+ * `getConfig()`/DB — this helper's `secret` param sets `process.env.SECRET_TOKEN`
+ * as a side effect (and clears the `WS_TOKEN_SECRET` alias so it never wins instead) before
  * returning the getConfig-free fake, so every existing call site below
  * keeps working unchanged. The outer `describe` block's `afterEach`
  * restores both env vars so this never leaks into another test/file.
@@ -68,8 +67,8 @@ async function generateSenderProof(message: string): Promise<{ publicJwk: JsonWe
 }
 
 describe('util/federated-auth-state', () => {
-  // feature-unified-signing-secret §D-3 — `makeFakeCrowi` mutates the REAL
-  // `process.env.SECRET_TOKEN`/`WS_TOKEN_SECRET` as a side effect (see its
+  // `makeFakeCrowi` mutates the REAL `process.env.SECRET_TOKEN`/`WS_TOKEN_SECRET`
+  // as a side effect (see its
   // doc comment); restore both after every test so this file never leaks a
   // short/arbitrary test secret into a later test file sharing this jest
   // worker.

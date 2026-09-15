@@ -227,24 +227,22 @@ describe('resolveSignedTokenSecret (AC-1 / AC-10 / AC-4) — default SECRET_TOKE
 
   it('the fallback warning for a never-before-used custom env key never echoes the generated secret value', () => {
     const KEY = 'SIGNED_TOKEN_FACTORY_TEST_WARN_REDACTION';
-    const originalNodeEnv = process.env.NODE_ENV;
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      delete process.env[KEY];
-      // The factory silences its warning under NODE_ENV=test (jest's own
-      // default), so this test must temporarily claim a different NODE_ENV
-      // to observe the warning at all.
-      process.env.NODE_ENV = 'development';
-      const resolved = resolveSignedTokenSecret(KEY);
-      expect(warnSpy).toHaveBeenCalled();
-      const loggedText = warnSpy.mock.calls.map((args) => args.join(' ')).join('\n');
-      expect(loggedText).toContain(KEY);
-      expect(loggedText).not.toContain(resolved);
+      withEnv(KEY, undefined, () => {
+        // The factory silences its warning under NODE_ENV=test (jest's own
+        // default), so this test must temporarily claim a different NODE_ENV
+        // to observe the warning at all.
+        withEnv('NODE_ENV', 'development', () => {
+          const resolved = resolveSignedTokenSecret(KEY);
+          expect(warnSpy).toHaveBeenCalled();
+          const loggedText = warnSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+          expect(loggedText).toContain(KEY);
+          expect(loggedText).not.toContain(resolved);
+        });
+      });
     } finally {
       warnSpy.mockRestore();
-      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = originalNodeEnv;
-      delete process.env[KEY];
     }
   });
 });
