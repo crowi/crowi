@@ -271,7 +271,6 @@ export function registerPageHistoryRepair(program: Command): void {
           process.exit(1);
         }
 
-        const crowi = new api.Crowi(process.cwd(), process.env);
         const runTransitions = Boolean(opts.transitions);
         const runOutbox = Boolean(opts.outbox) || (!opts.scan && !runTransitions);
         const runScan = Boolean(opts.scan);
@@ -279,11 +278,23 @@ export function registerPageHistoryRepair(program: Command): void {
           `[crowi-admin] page-history repair: starting (outbox=${runOutbox}, scan=${runScan}, transitions=${runTransitions}, batchSize=${batchSize})`,
         );
 
+        // `let` + `crowi?.teardownForCli()` below (not `const`): a
+        // missing/invalid signing secret (feature-unified-signing-secret
+        // §D-2) makes `new api.Crowi(...)` itself throw, synchronously,
+        // before `initForCli()` ever runs. Keeping construction inside this
+        // `try` means that failure ALSO reaches the "failed to initialise
+        // Crowi" message below instead of escaping as a raw uncaught
+        // exception — but a `const` binding assigned inside the `try` would
+        // leave the `catch` block's `crowi.teardownForCli()` reading a
+        // temporal-dead-zone `crowi`, throwing a `ReferenceError` that masks
+        // the real failure before it can print.
+        let crowi: ApiCrowi | undefined;
         try {
+          crowi = new api.Crowi(process.cwd(), process.env);
           await crowi.initForCli();
         } catch (err) {
           console.error(formatFatalErrorLine('crowi-admin: failed to initialise Crowi: ', err, api.redactErrorReason));
-          await crowi.teardownForCli().catch(() => undefined);
+          await crowi?.teardownForCli().catch(() => undefined);
           process.exit(1);
         }
 
