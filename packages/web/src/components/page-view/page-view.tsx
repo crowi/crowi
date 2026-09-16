@@ -803,11 +803,11 @@ export function PageView({ path, revisionId }: PageViewProps) {
             // RFC-0020 — the toc rail is empty (`toc` above
             // is `EMPTY_TOC`) but the rail COLUMN still occupies its width at
             // ≥1280px (`PageTocColumns` draws it unconditionally); this
-            // negative margin reclaims that width (14rem rail + 1.5rem gap)
-            // for the artifact instead of leaving it as dead space. Wrapping
-            // only this element — not `children` as a whole — keeps the
+            // negative margin reclaims that width (rail + gap) for the
+            // artifact instead of leaving it as dead space. Wrapping only
+            // this element — not `children` as a whole — keeps the
             // comment/backlink/attachment sections at the normal prose width.
-            <div className="min-[1280px]:-mr-[15.5rem]">
+            <div className="min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]">
               <ArtifactView page={renderedPage} />
             </div>
           ) : (

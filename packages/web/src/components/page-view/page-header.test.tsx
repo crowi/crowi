@@ -253,7 +253,7 @@ describe('PageHeader — compact state', () => {
   // unconditional on `toc.length`, so an artifact page's compact header
   // drifts identically to a Markdown page's.
   it('shifts the compact bar content by the same amount whether or not the page has a toc', () => {
-    const shiftClass = 'min-[1280px]:max-[1439px]:-translate-x-[7.75rem]';
+    const shiftClass = 'min-[1280px]:max-[1439px]:-translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]';
     const toc: TocEntryResponse[] = [
       { level: 1, text: 'A', anchorId: 'a' },
       { level: 1, text: 'B', anchorId: 'b' },

@@ -324,7 +324,7 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     expect(screen.queryByRole('button', { name: m['page.action_copy_markdown']() })).toBeNull();
 
     const artifactView = screen.getByTestId('artifact-view-stub');
-    expect(artifactView.parentElement?.className).toContain('min-[1280px]:-mr-[15.5rem]');
+    expect(artifactView.parentElement?.className).toContain('min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
     // W-1 — the wrapper holds ONLY ArtifactView: sibling sections (backlink /
     // attachment / comments) stay at the normal prose width, not widened
     // along with it.
@@ -350,7 +350,7 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     // AC-CH-1 — the W-1 wrapper is exclusive to artifact pages: a Markdown
     // page's `PageContent` never gets the negative-margin treatment.
     const pageContent = screen.getByTestId('page-content-stub');
-    expect(pageContent.parentElement?.className ?? '').not.toContain('min-[1280px]:-mr-[15.5rem]');
+    expect(pageContent.parentElement?.className ?? '').not.toContain('min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
   });
 
   // AC-CH-5 — the portalize banner is suppressed for an artifact page even
