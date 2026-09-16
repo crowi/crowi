@@ -20,10 +20,14 @@ let skipTarget: string | null = null;
 /**
  * Leave focus alone when the pathname next changes to `pagePath`. For a
  * `router.replace` that is part of arriving at a URL rather than a navigation
- * the reader made — `/<id>` → the page's own path. It lands before any input,
- * where the browser draws a programmatic focus as `:focus-visible`, so the
- * page would open with a ring around it; an ordinary page load gets no focus
- * move at all. The next pathname change uses the request up, whatever it is.
+ * the reader made. It lands before any input, where the browser draws a
+ * programmatic focus as `:focus-visible`, so the page would open with a ring
+ * around it; an ordinary page load gets no focus move at all. The next
+ * pathname change uses the request up, whatever it is.
+ *
+ * Every redirect that corrects the URL the reader opened belongs here:
+ * `/<id>` → the page's path (`IdRedirector`), a path a rename moved away
+ * from, and a link that arrived percent-encoded twice (both in `PageView`).
  */
 export function skipRouteFocusFor(pagePath: string): void {
   skipTarget = pagePath;
