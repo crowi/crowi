@@ -66,15 +66,16 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Lint must be errors=0** (warnings tolerated). pre-push lefthook enforces.
 - **Format**: Biome auto-runs on staged files (lefthook pre-commit). `pnpm
   format` only when bypassing hooks.
-- **Why the `next dev` scripts start with `env -u`**: `next dev` writes
-  `AGENTS.md` + `CLAUDE.md` into the Next app's directory whenever it detects
-  an AI coding agent in the environment, and re-creates them every start, so
-  they kept reappearing as untracked files in main and in every worktree.
-  Next offers no opt-out flag (`node_modules/next/dist/server/lib/generate-agent-files.js`),
-  and the detector only ever answers "yes" — so the dev scripts in
-  `packages/web` and `apps/crowi-site`, and `packages/e2e`'s `start:web`,
-  unset the variables it reads. Do not drop that prefix; the files come
-  straight back.
+- **Why `next dev` no longer writes `AGENTS.md` + `CLAUDE.md`**: it writes them
+  into the Next app's directory whenever it detects an AI coding agent in the
+  environment, and re-creates them every start, so they kept reappearing as
+  untracked files in main and in every worktree. The detector only ever answers
+  "yes". `packages/web/next.config.ts` turns the writing off at the source with
+  Next's `agentRules: false`. `apps/crowi-site` sets no such option, so its
+  `dev` script still starts with `env -u …` to unset the variables the detector
+  reads — do not drop that prefix, the files come straight back.
+  `packages/e2e`'s `start:web` carries the same prefix, now redundant since it
+  starts the web app, which the config option already covers.
 - **Why `packages/e2e`'s `start:web` sets `WATCHPACK_POLLING=true`**: macOS
   shares one small FSEvents stream pool (~320) across the whole machine, and
   when it is exhausted libuv reports `EMFILE: too many open files, watch` to
