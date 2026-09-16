@@ -147,28 +147,8 @@ explains what to set; artifact writes are rejected until one of them is
 active (reading pre-existing artifact pages still works, just without the
 executable preview).
 
-Regardless of mode, artifact delivery also requires a real application
-secret (config key `app:secret`). Signed artifact URLs are derived from
-this secret, and the built-in development default `your-secret-key` would
-let anyone forge them — with the default in place, delivery is disabled
-even if a mode above is configured. This is the same secret Crowi shares
-across the whole app to sign session JWTs.
-
-There is currently no admin screen or effective environment variable for
-this — set it directly in the `configs` collection:
-
-```js
-db.configs.updateOne(
-  { ns: "crowi", key: "app:secret" },
-  { $set: { ns: "crowi", key: "app:secret", value: JSON.stringify("<your own value>") } },
-  { upsert: true }
-)
-```
-
-Restart the api process afterward — it is only read at boot, not while
-running. Because this secret also signs every user's login session,
-changing it on an existing instance invalidates every JWT that instance
-has issued, forcing everyone to log in again.
+Signed artifact URLs are signed with a key derived from `SECRET_TOKEN`
+(required above). No dedicated configuration is needed.
 
 After setting `CROWI_ARTIFACT_ORIGIN`, confirm the origin actually reaches
 this Crowi instance:

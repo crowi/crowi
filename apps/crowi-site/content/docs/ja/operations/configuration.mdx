@@ -145,27 +145,8 @@ HTML artifact ページは、Crowi に到達できる security context では絶
 拒否されます(既存の artifact ページの閲覧は、実行可能なプレビューを
 除いて引き続き動作します)。
 
-モードに関わらず、artifact 配信には実際の application secret も必要です。
-署名付き artifact URL はこの secret(config key `app:secret`)から導出されるため、
-開発用の既定値 `your-secret-key` のままでは誰でも URL を forge できてしまいます —
-既定値のままでは、上記モードを設定していても配信は無効になります。この値には
-セッション JWT の署名にも使われる、Crowi 全体で共有の secret です。
-
-現時点でこれを設定する管理画面や有効な環境変数はなく、`configs` コレクションへ
-直接書き込む必要があります:
-
-```js
-db.configs.updateOne(
-  { ns: "crowi", key: "app:secret" },
-  { $set: { ns: "crowi", key: "app:secret", value: JSON.stringify("<自分で決めた値>") } },
-  { upsert: true }
-)
-```
-
-書き込み後、api プロセスを再起動してください(起動時に読み込むだけで、
-実行中のプロセスには反映されません)。この secret は全ユーザーのログイン
-セッションの署名鍵でもあるため、既存インスタンスで変更すると、そのインスタンスが
-発行済みの JWT はすべて無効になり全ユーザーが再ログインを求められます。
+署名付き artifact URL は `SECRET_TOKEN`(上記で必須)から導出される鍵で
+署名されます。専用の設定は不要です。
 
 `CROWI_ARTIFACT_ORIGIN` を設定したら、その origin が実際にこの Crowi
 instance へ到達しているか確認してください。
