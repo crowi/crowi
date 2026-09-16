@@ -5,7 +5,7 @@ import { renderHook } from '@testing-library/react';
 const { usePathname } = vi.hoisted(() => ({ usePathname: vi.fn() }));
 vi.mock('next/navigation', () => ({ usePathname }));
 
-import { MAIN_CONTENT_ID, useRouteFocus } from './use-route-focus';
+import { MAIN_CONTENT_ID, skipRouteFocusFor, useRouteFocus } from './use-route-focus';
 
 describe('useRouteFocus', () => {
   let main: HTMLElement;
@@ -93,6 +93,59 @@ describe('useRouteFocus', () => {
     // Same pathname value — the effect's dependency did not change.
     rerender();
     expect(focusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // `/<id>` → the page's own path is part of opening that URL, not a
+  // navigation the reader made. Focusing there happens before any input, so
+  // the browser draws it as :focus-visible — a ring around the page on arrival.
+  it('does not focus on a pathname change announced as part of arriving at a URL', () => {
+    const { rerender } = renderHook(() => useRouteFocus(), { wrapper: StrictMode });
+
+    skipRouteFocusFor('/page/path');
+    usePathname.mockReturnValue('/page/path');
+    rerender();
+    expect(focusSpy).not.toHaveBeenCalled();
+
+    // The skipped pathname is now the one to compare against, so merely
+    // rendering again on it is not a change either.
+    rerender();
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it('focuses on the navigation after a skipped one', () => {
+    const { rerender } = renderHook(() => useRouteFocus());
+
+    skipRouteFocusFor('/page/path');
+    usePathname.mockReturnValue('/page/path');
+    rerender();
+    usePathname.mockReturnValue('/another');
+    rerender();
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('still focuses a navigation that arrives instead of the announced redirect', () => {
+    // The redirect was superseded (the reader followed a link before it
+    // committed): the skip must not be spent on their navigation, nor linger
+    // for a later visit to the page it was meant for.
+    const { rerender } = renderHook(() => useRouteFocus());
+
+    skipRouteFocusFor('/page/path');
+    usePathname.mockReturnValue('/elsewhere');
+    rerender();
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+
+    usePathname.mockReturnValue('/page/path');
+    rerender();
+    expect(focusSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('recognises the redirect target in its URL-encoded form', () => {
+    const { rerender } = renderHook(() => useRouteFocus());
+
+    skipRouteFocusFor('/メモ/first draft');
+    usePathname.mockReturnValue('/%E3%83%A1%E3%83%A2/first+draft');
+    rerender();
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 
   it('is a no-op when #main-content is not in the document', () => {

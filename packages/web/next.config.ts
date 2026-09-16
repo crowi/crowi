@@ -101,6 +101,13 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
     // - Without trailing slash: page itself
     skipTrailingSlashRedirect: true,
 
+    // `next dev` otherwise writes AGENTS.md / CLAUDE.md into this package
+    // whenever an AI coding agent starts it (the e2e run, QA charters). That
+    // leaves every agent-driven worktree dirty, and CLAUDE.md is an
+    // instruction file agents load on their own — the repo's agent guidance
+    // is kept in the files it maintains, not in ones a dependency writes.
+    agentRules: false,
+
     // Proxy `/api/*` to the Crowi API server (`CROWI_API_URL`). In dev the
     // API runs on a different port (4301) than the web app (4302), so relative
     // URLs in markdown / `<img src>` would otherwise fail with cross-origin

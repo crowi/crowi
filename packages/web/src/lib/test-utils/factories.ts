@@ -6,7 +6,29 @@
  * principle and stay local — centralise on the 3rd copy.
  */
 
-import type { Attachment } from '@crowi/api-contract';
+import type { Attachment, Page } from '@crowi/api-contract';
+
+/**
+ * Build a minimal `Page` fixture (a list row: no revision, no grant).
+ * Centralised here because the same definition appeared in:
+ *   - page-list-item.test.tsx
+ *   - page-display-user.test.ts
+ *   - user-subpages.test.tsx
+ * Give rows that share a list distinct `_id`s — list components key on it.
+ */
+export function makePage(overrides: Partial<Page> = {}): Page {
+  return {
+    _id: 'page-1',
+    path: '/docs/example',
+    commentCount: 0,
+    createdAt: '2026-05-01T00:00:00.000Z',
+    updatedAt: '2026-05-01T00:00:00.000Z',
+    likerCount: 0,
+    seenUsersCount: 0,
+    isLiked: false,
+    ...overrides,
+  } as Page;
+}
 
 /**
  * Build a minimal `Attachment` fixture.  Centralised here because the same

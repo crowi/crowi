@@ -183,10 +183,16 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   // + one-click "revert to this version" button.
   const isStalePortalRevision = isStalePageRevision(portalPage);
 
-  // `hasChildren` implies `data` is present (the rows came from it), so the
-  // children section below can read `data.pager` without a guard.
-  const pages = data?.pages ?? [];
-  const hasChildren = !!data && pages.length > 0;
+  // The content page at the stripped path (`/foo`) is not under `/foo/`, but
+  // it is the page the folder is named after: left out, it is missing from
+  // the very list people open to find it. It is pinned to the top of the
+  // first page of results — where the sidebar lists it under `foo/` too.
+  //
+  // `hasRows` implies `data` is present (the rows came from it), so the
+  // rows section below can read `data.pager` without a guard.
+  const pinnedContentPage = contentPage && data?.pager.offset === 0 ? [contentPage] : [];
+  const pages = [...pinnedContentPage, ...(data?.pages ?? [])];
+  const hasRows = !!data && pages.length > 0;
 
   const body = (
     <div className="space-y-6">
@@ -253,7 +259,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
       {portalPage && <PortalMetaBar page={portalPage} />}
 
       {/* --- Children block (always rendered) --- */}
-      {hasChildren ? (
+      {hasRows ? (
         <section className="space-y-2">
           <PageListSectionHeader
             label={formatPageCount(pages.length, data.pager)}
