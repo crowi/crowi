@@ -244,11 +244,11 @@ Two properties make this exception safe where a general allowlist was not. **A b
 
 What remains is a disclosure rather than a vulnerability: Google observes the viewer's IP address and whatever the request carries. An artifact's author chooses the requested family name, so a low-bandwidth channel exists in principle, but its recipient is Google rather than the artifact's author. **The setting defaults to off** because Crowi is deployed inside organisations that deliberately close their network, and an artifact view silently reaching a third party is not a decision to make on an operator's behalf. When it is off, ingest rejects a font reference rather than letting it fail quietly at view time.
 
-### Execution is user-initiated
+### Execution starts when the page is opened
 
-Artifacts do not auto-execute on page load. The shell renders a placeholder with title and metadata, and the iframe is created on explicit user action. This bounds the damage from a runaway artifact — an accidental infinite loop or an unbounded allocation degrades one deliberately opened tab rather than every page view — and it means listing or linking an artifact never executes it.
+Opening an artifact page mints its signed delivery URL and renders the sandboxed frame immediately, once delivery is confirmed enabled — there is no separate confirmation step between opening the page and running its content. An earlier draft withheld the frame behind an explicit "Run" action, reasoning that this bounded a runaway artifact's damage to a deliberately opened tab; that reasoning does not survive the fact that opening the page tab is itself already the deliberate act guarding this, and a second click in front of every single view added friction without a second decision behind it. Listing or linking an artifact still never executes it — only the page's own body mounts the frame, so a list row, a search result, or a backlink stays inert. A "Stop" control tears the frame down once running, and resuming after a stop is an explicit action again, not automatic.
 
-The shell displays a persistent indicator that the frame contains sandboxed, agent-authored content, so that a user cannot mistake artifact-rendered chrome for Crowi's own interface.
+The shell displays a persistent indicator that the frame contains sandboxed, agent-authored content, so that a user cannot mistake artifact-rendered chrome for Crowi's own interface. The sandbox and CSP from *Delivery: embedding* bound what a runaway or hostile artifact can do regardless of how its frame came to exist.
 
 ## Resolved decisions
 
@@ -298,7 +298,7 @@ None outstanding. The six questions this RFC carried in draft — allowlist cont
 
 **Phase 3 — Delivery.** The artifact serving route, signed-URL minting and verification, response headers, and Mode A / Mode B configuration with the startup check that disables the feature when neither is configured.
 
-**Phase 4 — Shell.** The page-level rendering surface: placeholder, explicit execution control, sandboxed indicator, revision navigation. Also the surrounding chrome — the widened layout that drops the table-of-contents rail and the body width cap together, the menu with format-specific and undefined actions hidden, the HTML download served as an attachment, and the artifact icon in page lists.
+**Phase 4 — Shell.** The page-level rendering surface: placeholder, automatic execution on open with a stop/resume control, sandboxed indicator, revision navigation. Also the surrounding chrome — the widened layout that drops the table-of-contents rail and the body width cap together, the menu with format-specific and undefined actions hidden, the HTML download served as an attachment, and the artifact icon in page lists.
 
 **Phase 5 — RFC-0009 amendment.** Generalise the snapshot safety valve from a paste-size heuristic to a diff-to-body ratio test. Separable from the phases above and beneficial to Markdown independently.
 

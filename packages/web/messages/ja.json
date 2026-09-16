@@ -927,7 +927,7 @@
   "page.artifact.mint_failed_title": "実行を開始できませんでした",
   "page.artifact.origin_mismatch_body": "この server の HTML artifact 配信設定が api と web で一致していません。管理者に連絡してください。",
   "page.artifact.origin_mismatch_title": "配信設定が一致しません",
-  "page.artifact.placeholder_body": "本文は agent が生成した HTML です。実行ボタンを押すまでは何も実行されません。実行すると隔離された sandbox の中で描画されます。",
+  "page.artifact.placeholder_body": "本文は agent が生成した HTML です。Crowi の他の部分には到達できない、隔離された sandbox の中で実行されます。",
   "page.artifact.placeholder_title": "このページは sandbox 内で実行される HTML です",
   "page.artifact.retry_button": "再試行",
   "page.artifact.run_button": "実行",

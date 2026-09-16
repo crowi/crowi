@@ -148,24 +148,26 @@ afterEach(() => {
 });
 
 describe('ArtifactView', () => {
-  it('AC-SH-1: renders no iframe and never mints on initial render', () => {
+  it('AC-SH-1: auto-mints as soon as delivery is confirmed enabled, with no iframe until the mint resolves', () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
     const mutateAsync = mockMint();
     render(createElement(ArtifactView, { page: makePage() }));
 
+    // The mint call itself is synchronous (it happens before `handleRun`'s
+    // first `await`), so it has already fired by the time `render()`
+    // returns — but nothing renders the iframe until that call resolves.
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith({ pageId: 'page-1', revisionId: 'rev-1' });
     expect(document.querySelectorAll('iframe')).toHaveLength(0);
-    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it('AC-SH-2: running mints exactly once and creates one iframe pointed at the intermediate document', async () => {
+  it('AC-SH-2: auto-run mints exactly once and creates one iframe pointed at the intermediate document', async () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
     const mintedUrl = `${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`;
     const mutateAsync = mockMint(vi.fn().mockResolvedValue(mintSuccess(mintedUrl)));
     render(createElement(ArtifactView, { page: makePage() }));
 
-    await act(async () => {
-      fireEvent.click(runButton());
-    });
+    await flush();
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
     expect(mutateAsync).toHaveBeenCalledWith({ pageId: 'page-1', revisionId: 'rev-1' });
@@ -174,33 +176,18 @@ describe('ArtifactView', () => {
     expect(iframes[0]?.getAttribute('src')).toBe(`/_artifact-frame?src=${encodeURIComponent(mintedUrl)}`);
   });
 
-  it('AC-SH-2: rapid repeated clicks while the mint is pending fire the mint only once', async () => {
+  it('AC-SH-2: an unrelated re-render while the auto-triggered mint is pending does not fire a second mint', async () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
     const { promise, resolve } = deferred<{ url: string; expiresAt: string }>();
     const mutateAsync = mockMint(vi.fn().mockReturnValue(promise));
-    render(createElement(ArtifactView, { page: makePage() }));
-
-    const button = runButton();
-    // Bare `fireEvent.click` (not wrapped in an outer `act`) so each click is
-    // its own act-flush, matching real browser dispatch: the first click's
-    // synchronous `setPhase('minting')` commits and unmounts this button
-    // BEFORE the next line runs, same as it would between two real clicks a
-    // human fires a few ms apart.
-    fireEvent.click(button);
-    expect(button.isConnected).toBe(false);
-    // The button node is now detached — clicking it again cannot reach
-    // `handleRun` (React's delegated listener lives on the root, which no
-    // longer has this node in its tree). This is what actually prevents a
-    // second mint on a rapid double/triple click, not `mintMutation.isPending`
-    // (a static mock value here, and in production a query-cache read that
-    // doesn't gate `handleRun` either — see that function's own guard for
-    // why: the state transition itself is the fence).
-    fireEvent.click(button);
-    fireEvent.click(button);
-    await flush();
-
+    const { rerender } = render(createElement(ArtifactView, { page: makePage() }));
     expect(mutateAsync).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', { name: m['page.artifact.run_button']() })).toBeNull();
+
+    // Same revision, same props — a re-render a parent could trigger for
+    // reasons unrelated to this component (e.g. its own state changing)
+    // must not re-arm `autoRunAttemptedRef` or fire a second mint.
+    rerender(createElement(ArtifactView, { page: makePage() }));
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`));
@@ -214,9 +201,7 @@ describe('ArtifactView', () => {
     mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
     render(createElement(ArtifactView, { page: makePage() }));
 
-    await act(async () => {
-      fireEvent.click(runButton());
-    });
+    await flush();
 
     const iframe = document.querySelector('iframe');
     expect(iframe).not.toBeNull();
@@ -229,9 +214,7 @@ describe('ArtifactView', () => {
     mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
     render(createElement(ArtifactView, { page: makePage() }));
 
-    await act(async () => {
-      fireEvent.click(runButton());
-    });
+    await flush();
 
     const iframe = document.querySelector('iframe');
     const generated = screen.getByText(m['page.artifact.sandbox_notice_generated']());
@@ -260,7 +243,7 @@ describe('ArtifactView', () => {
     expect(inputNoteContainer?.parentElement).toBe(iframe?.parentElement);
   });
 
-  it('AC-SH-5: stop removes the iframe and returns to idle; running again mints a second time without reusing the URL', async () => {
+  it('AC-SH-5: stop removes the iframe and returns to a manual-resume idle state; the Run button mints a second time without reusing the URL', async () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
     const { mutateAsync, reset } = mockMintWithReset(
       vi
@@ -269,10 +252,7 @@ describe('ArtifactView', () => {
         .mockResolvedValueOnce(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok2`)),
     );
     render(createElement(ArtifactView, { page: makePage() }));
-
-    await act(async () => {
-      fireEvent.click(runButton());
-    });
+    await flush(); // the auto-triggered first mint
     expect(document.querySelectorAll('iframe')).toHaveLength(1);
     reset.mockClear(); // discard the mount-time no-op call; isolate stop's own call
 
@@ -282,6 +262,11 @@ describe('ArtifactView', () => {
     // component's own `runningUrl` state — otherwise a stale signed
     // URL/token would still be retrievable from the cache after stop.
     expect(reset).toHaveBeenCalledTimes(1);
+    // Stopping must NOT be immediately undone by auto-run re-firing — the
+    // component sits in `idle` with a manual Run button, not a second
+    // automatic mint.
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(runButton()).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(runButton());
@@ -291,79 +276,86 @@ describe('ArtifactView', () => {
   });
 
   describe('AC-SH-6: the displayed revision fences which mint response can apply', () => {
-    it('changing the displayed revision resets to idle, removes the iframe, and drops the mint from the MutationCache', async () => {
+    it('changing the displayed revision resets to idle, removes the iframe, drops the mint from the MutationCache, and auto-runs the NEW revision', async () => {
       mockAppInfo({ data: ENABLED_APP_INFO });
-      const { reset } = mockMintWithReset(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+      const { reset } = mockMintWithReset(
+        vi
+          .fn()
+          .mockResolvedValueOnce(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`))
+          .mockResolvedValueOnce(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r2?t=tok2`)),
+      );
       const { rerender } = render(createElement(ArtifactView, { page: pageWithRevisionId('rev-1') }));
-
-      await act(async () => {
-        fireEvent.click(runButton());
-      });
+      await flush();
       expect(document.querySelectorAll('iframe')).toHaveLength(1);
       reset.mockClear(); // discard the mount-time no-op call; isolate the revision-change call
 
       rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-2') }));
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
-      expect(runButton()).toBeTruthy();
       // Same invariant as the stop path: the displayed revision changing
       // out from under a running artifact must drop the MutationCache
       // entry, not just the component's own `runningUrl` state.
       expect(reset).toHaveBeenCalledTimes(1);
+
+      // Revision navigation re-arms auto-run: the new revision mints and
+      // runs on its own, no click required.
+      await flush();
+      expect(document.querySelector('iframe')?.getAttribute('src')).toContain('tok2');
     });
 
-    it('a mint pending when the revision changes is discarded once it resolves, and the next run mints for the NEW revision', async () => {
+    it('a mint pending when the revision changes is discarded once it resolves, while the NEW revision auto-mints on its own', async () => {
       mockAppInfo({ data: ENABLED_APP_INFO });
-      const { promise, resolve } = deferred<{ url: string; expiresAt: string }>();
-      const mutateAsync = mockMint(vi.fn().mockReturnValue(promise));
+      const stale = deferred<{ url: string; expiresAt: string }>();
+      const fresh = deferred<{ url: string; expiresAt: string }>();
+      const mutateAsync = mockMint(vi.fn().mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise));
       const { rerender } = render(createElement(ArtifactView, { page: pageWithRevisionId('rev-1') }));
-
-      fireEvent.click(runButton());
-      await flush();
+      expect(mutateAsync).toHaveBeenCalledTimes(1); // rev-1's own auto-mint, still pending
 
       rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-2') }));
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
-
-      await act(async () => {
-        resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=stale`));
-      });
-      expect(document.querySelectorAll('iframe')).toHaveLength(0);
-      expect(runButton()).toBeTruthy();
-
-      mutateAsync.mockReturnValue(Promise.resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r2?t=fresh`)));
-      await act(async () => {
-        fireEvent.click(runButton());
-      });
+      // rev-2's auto-run fires in the same commit as the revision change.
+      expect(mutateAsync).toHaveBeenCalledTimes(2);
       expect(mutateAsync).toHaveBeenLastCalledWith({ pageId: 'page-1', revisionId: 'rev-2' });
+
+      await act(async () => {
+        stale.resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=stale`));
+      });
+      // The stale rev-1 response must never render, even though it
+      // resolved after rev-2's own (unrelated) mint was already in flight.
+      expect(document.querySelectorAll('iframe')).toHaveLength(0);
+
+      await act(async () => {
+        fresh.resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r2?t=fresh`));
+      });
+      expect(document.querySelector('iframe')?.getAttribute('src')).toContain('fresh');
     });
 
     it('A → B → A discards a stale A-epoch mint even though the revision id matches again', async () => {
       mockAppInfo({ data: ENABLED_APP_INFO });
-      const { promise, resolve } = deferred<{ url: string; expiresAt: string }>();
-      mockMint(vi.fn().mockReturnValue(promise));
+      const staleA = deferred<{ url: string; expiresAt: string }>();
+      const neverResolves = new Promise<{ url: string; expiresAt: string }>(() => {});
+      // Only the FIRST (initial rev-A) auto-mint is observed by this test;
+      // the rev-B and second rev-A auto-mints are given a promise that
+      // never settles, since this test only cares whether the FIRST A's
+      // stale response can still leak through after A → B → A.
+      mockMint(vi.fn().mockReturnValueOnce(staleA.promise).mockReturnValue(neverResolves));
       const { rerender } = render(createElement(ArtifactView, { page: pageWithRevisionId('rev-A') }));
-
-      fireEvent.click(runButton());
-      await flush();
 
       rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-B') }));
       rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-A') }));
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
 
       await act(async () => {
-        resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/rA?t=stale`));
+        staleA.resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/rA?t=stale`));
       });
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
-      expect(runButton()).toBeTruthy();
     });
 
-    it('pressing stop while a mint is pending discards it once it resolves', async () => {
+    it('pressing stop while the auto-triggered mint is pending discards it once it resolves', async () => {
       mockAppInfo({ data: ENABLED_APP_INFO });
       const { promise, resolve } = deferred<{ url: string; expiresAt: string }>();
       mockMint(vi.fn().mockReturnValue(promise));
       render(createElement(ArtifactView, { page: makePage() }));
 
-      fireEvent.click(runButton());
-      await flush();
       fireEvent.click(screen.getByRole('button', { name: m['page.artifact.stop_button']() }));
       expect(runButton()).toBeTruthy();
 
@@ -374,8 +366,8 @@ describe('ArtifactView', () => {
     });
   });
 
-  describe('AC-SH-7: the run button only appears once delivery is positively confirmed enabled', () => {
-    it('withholds the run button while app info is loading, with no retry affordance yet', () => {
+  describe('AC-SH-7: auto-run only fires once delivery is positively confirmed enabled', () => {
+    it('does not auto-run while app info is loading, with no retry affordance yet', () => {
       mockAppInfo({ isLoading: true });
       const mutateAsync = mockMint();
       render(createElement(ArtifactView, { page: makePage() }));
@@ -385,7 +377,7 @@ describe('ArtifactView', () => {
       expect(mutateAsync).not.toHaveBeenCalled();
     });
 
-    it('withholds the run button when app info failed to load, offering only a way to check again (fail-closed)', () => {
+    it('does not auto-run when app info failed to load, offering only a way to check again (fail-closed)', () => {
       const refetch = vi.fn();
       mockAppInfo({ isError: true, refetch });
       const mutateAsync = mockMint();
@@ -398,7 +390,7 @@ describe('ArtifactView', () => {
       expect(refetch).toHaveBeenCalledTimes(1);
     });
 
-    it('withholds the run button and shows the disabled-delivery guidance when enabled === false', () => {
+    it('does not auto-run and shows the disabled-delivery guidance when enabled === false', () => {
       mockAppInfo({ data: makeAppInfo({ artifactDelivery: { enabled: false, origin: null } }) });
       const mutateAsync = mockMint();
       render(createElement(ArtifactView, { page: makePage() }));
@@ -408,12 +400,13 @@ describe('ArtifactView', () => {
       expect(mutateAsync).not.toHaveBeenCalled();
     });
 
-    it('shows the run button once enabled === true is confirmed', () => {
+    it('auto-runs, with the exact page/revision, once enabled === true is confirmed', () => {
       mockAppInfo({ data: ENABLED_APP_INFO });
-      mockMint();
+      const mutateAsync = mockMint();
       render(createElement(ArtifactView, { page: makePage() }));
 
-      expect(runButton()).toBeTruthy();
+      expect(mutateAsync).toHaveBeenCalledTimes(1);
+      expect(mutateAsync).toHaveBeenCalledWith({ pageId: 'page-1', revisionId: 'rev-1' });
     });
 
     it('a 422 (delivery not configured) mint failure shows the same disabled-delivery guidance as the enabled === false case', async () => {
@@ -421,9 +414,7 @@ describe('ArtifactView', () => {
       mockMint(vi.fn().mockRejectedValue(new ArtifactUrlUnavailableFailure('ARTIFACT_DELIVERY_NOT_CONFIGURED', 'fixed message')));
       render(createElement(ArtifactView, { page: makePage() }));
 
-      await act(async () => {
-        fireEvent.click(runButton());
-      });
+      await flush();
 
       expect(screen.getByText(m['page.artifact.delivery_unavailable_body']())).toBeTruthy();
     });
@@ -438,9 +429,7 @@ describe('ArtifactView', () => {
       render(createElement(ArtifactView, { page: makePage() }));
       reset.mockClear(); // discard the mount-time no-op call; isolate this failure path's own call
 
-      await act(async () => {
-        fireEvent.click(runButton());
-      });
+      await flush();
 
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
       expect(screen.getByText(m['page.artifact.origin_mismatch_title']())).toBeTruthy();
@@ -485,9 +474,7 @@ describe('ArtifactView', () => {
       client.getMutationCache().subscribe((event) => cacheEvents.push(event.type));
       render(createElement(QueryClientProvider, { client }, createElement(ArtifactView, { page: makePage() })));
 
-      await act(async () => {
-        fireEvent.click(runButton());
-      });
+      await flush();
       // Explicit extra tick in case this harness's own timer draining
       // didn't already cover `gcTime: 0`'s scheduled removal.
       await act(async () => {
@@ -500,7 +487,7 @@ describe('ArtifactView', () => {
       expect(client.getMutationCache().getAll()).toHaveLength(0);
     });
 
-    it("app info's own origin disagrees with this replica's configured web origin — never even offers to run, never mints, and offers no retry (nothing was attempted)", () => {
+    it("app info's own origin disagrees with this replica's configured web origin — never even attempts to auto-run, never mints, and offers no retry (nothing was attempted)", () => {
       const mismatchedOrigin = 'https://a-different-origin.example';
       mockAppInfo({ data: makeAppInfo({ artifactDelivery: { enabled: true, origin: mismatchedOrigin } }) });
       const mutateAsync = mockMint();

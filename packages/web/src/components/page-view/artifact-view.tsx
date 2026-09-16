@@ -3,7 +3,7 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Loader2 } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { env } from '@/lib/runtime-env';
@@ -16,9 +16,9 @@ interface ArtifactViewProps {
 
 /**
  * `unknown` covers both "app info hasn't resolved yet" and "app info failed
- * to load" — both must withhold the run button (fail-closed: showing it
- * before `enabled === true` is confirmed would let a brief loading flash
- * mint on a server where delivery is actually disabled).
+ * to load" — both must prevent auto-run (fail-closed: running before
+ * `enabled === true` is confirmed would let a brief loading flash mint on a
+ * server where delivery is actually disabled).
  */
 type ArtifactRunState = 'unknown' | 'idle' | 'minting' | 'running' | 'failed';
 
@@ -63,10 +63,11 @@ function FailureAlert({ reason, canRetry, onRetry }: { reason: FailureReason; ca
 }
 
 /**
- * The page-body renderer for an HTML artifact Revision. Never mints or runs
- * anything on mount — `PageView` is the only caller, and it chooses this
- * component over `PageContent` purely from the displayed Revision's
- * `contentType`.
+ * The page-body renderer for an HTML artifact Revision. Mints and runs
+ * automatically once artifact delivery is confirmed enabled for the
+ * displayed revision (see the auto-run effect below) — `PageView` is the
+ * only caller, and it chooses this component over `PageContent` purely from
+ * the displayed Revision's `contentType`.
  *
  * Renders an OUTER iframe pointed at `/_artifact-frame`, an unsandboxed
  * same-origin document whose own (sandboxed) inner iframe carries the
@@ -102,9 +103,16 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // caller that updates `page` from an async callback with an `await`
   // before the prop change should re-examine this.
   const epochRef = useRef(0);
+  // Guards the auto-run effect below so it fires at most once per revision
+  // — reset here, in the SAME effect that bumps the epoch, so a revision
+  // switch always re-arms auto-run before that effect's own dependency
+  // check runs in this commit (hook call order, not source order, is what
+  // makes this ordering guarantee hold — see the auto-run effect's comment).
+  const autoRunAttemptedRef = useRef(false);
   const resetMint = mintMutation.reset;
   useLayoutEffect(() => {
     epochRef.current += 1;
+    autoRunAttemptedRef.current = false;
     // Returning to idle must not leave a minted URL/token reachable from
     // TanStack Query's MutationCache. `reset()` detaches this component's
     // observer from the mutation, and paired with `useMintArtifactUrl`'s
@@ -141,7 +149,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // A purely static self-consistency check between what THIS replica's api
   // reported and what THIS replica's own web env is configured with —
   // independent of any mint call, so a deployment with a mismatched pair
-  // never even offers a run button that could only fail. (A different web
+  // never even auto-attempts a run that could only fail. (A different web
   // replica being configured differently is not detectable here — the
   // `/_artifact-frame` route's own `src` check is what closes that gap.)
   const configuredWebOrigin = env('NEXT_PUBLIC_ARTIFACT_ORIGIN') ?? (typeof window !== 'undefined' ? window.location.origin : null);
@@ -155,7 +163,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   const effectiveState: ArtifactRunState = !enabledKnown ? 'unknown' : phase === 'idle' && configMismatch ? 'failed' : phase;
   const effectiveReason: FailureReason = phase === 'failed' ? failureReason : 'origin-mismatch';
 
-  const handleRun = async () => {
+  const handleRun = useCallback(async () => {
     if (mintMutation.isPending) return;
     epochRef.current += 1;
     const epoch = epochRef.current;
@@ -182,7 +190,33 @@ export function ArtifactView({ page }: ArtifactViewProps) {
       setFailureReason(error instanceof ArtifactUrlUnavailableFailure && error.reason === 'ARTIFACT_DELIVERY_NOT_CONFIGURED' ? 'delivery-disabled' : 'generic');
       setPhase('failed');
     }
-  };
+  }, [mintMutation, resetMint, page._id, revisionId, deliveryOrigin]);
+
+  // Runs the revision automatically once delivery is confirmed enabled — see
+  // the `ArtifactRunState` doc comment above for why `enabledKnown` gates
+  // this fail-closed, and `configMismatch` for why a self-inconsistent
+  // deployment must not even attempt it. `effectiveState === 'idle'` is NOT
+  // used as the guard here: it stays `'idle'` even when `deliveryEnabled` is
+  // false (the render below then shows the disabled notice instead of
+  // running), so this checks `deliveryEnabled` directly. `autoRunAttemptedRef`
+  // limits this to once per revision — declared after the revision-change
+  // effect above so React flushes that effect's ref reset first on a
+  // revision switch, and read again after `handleStop` (which does not
+  // reset it) so stopping returns to a manual-resume `idle` rather than
+  // looping straight back into running.
+  useLayoutEffect(() => {
+    if (enabledKnown && deliveryEnabled && !configMismatch && phase === 'idle' && !autoRunAttemptedRef.current) {
+      autoRunAttemptedRef.current = true;
+      // `handleRun`'s synchronous `setPhase('minting')` (before its first
+      // `await`) is deliberate, not the derive-state-from-props anti-pattern
+      // this rule targets: it is what lets the placeholder skip straight to
+      // "minting" in the SAME commit as the layout effect, with no idle
+      // frame ever painted. The ref guard above already limits this to one
+      // call per revision.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void handleRun();
+    }
+  }, [enabledKnown, deliveryEnabled, configMismatch, phase, handleRun]);
 
   const handleStop = () => {
     epochRef.current += 1;
