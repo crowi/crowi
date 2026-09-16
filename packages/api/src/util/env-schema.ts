@@ -1034,7 +1034,10 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
   warnMessages.push(...detectTypoWarnings(env));
 
   if (failMessages.length > 0) {
-    throw new Error(`Invalid environment variable(s) — boot aborted:\n${failMessages.map((m) => `  - ${m}`).join('\n')}`);
+    throw new Error(
+      `Invalid environment variable(s) — boot aborted:\n${failMessages.map((m) => `  - ${m}`).join('\n')}\n` +
+        '  See https://crowi.wiki/en/docs/reference/env for the full environment variable reference.',
+    );
   }
 
   const port = resolvedByDescriptor.get(PORT_DESCRIPTOR)?.raw;

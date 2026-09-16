@@ -101,16 +101,23 @@ export function formatFailMarker(service: string, reason: string): string {
   return `${FAIL_MARKER_PREFIX} ${service} ${reason.replace(/\s+/g, ' ').trim()}`;
 }
 
+/** Length cap for {@link formatBootFailureReason} — generous enough for a multi-bullet `validateEnv()` message, still bounded against a runaway string. */
+const BOOT_FAILURE_REASON_MAX_LENGTH = 2000;
+
 /**
- * Collapse an unknown thrown value into the short, single-line reason
- * {@link formatFailMarker} expects: the first line of the message,
- * length-capped to 200 characters. Shared by `crowi/index.ts`'s
- * `exitOnError` (async boot failures) and `app.ts`'s construction-time
- * guard (a failure inside `new Crowi(...)` itself, before `exitOnError`
- * exists to catch it).
+ * Collapse an unknown thrown value into the reason {@link formatFailMarker}
+ * expects, length-capped to {@link BOOT_FAILURE_REASON_MAX_LENGTH}. Keeps
+ * every line of `err.message` — `util/env-schema.ts#validateEnv()` throws a
+ * deliberately multi-line message (one bullet per invalid variable, plus a
+ * docs link), and dropping everything after the first line hid exactly the
+ * detail an operator needs to fix the failure. `formatFailMarker` collapses
+ * the newlines into a single space-joined line for the marker itself. Shared
+ * by `crowi/index.ts`'s `exitOnError` (async boot failures) and `app.ts`'s
+ * construction-time guard (a failure inside `new Crowi(...)` itself, before
+ * `exitOnError` exists to catch it).
  */
 export function formatBootFailureReason(err: unknown): string {
-  return (err instanceof Error ? err.message : String(err)).split('\n')[0].slice(0, 200);
+  return (err instanceof Error ? err.message : String(err)).slice(0, BOOT_FAILURE_REASON_MAX_LENGTH);
 }
 
 /**
