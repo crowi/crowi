@@ -16,6 +16,9 @@ import { nextNavigationMockModule } from '@/lib/test-utils/mocks';
 const { push, replace, back } = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
 vi.mock('next/navigation', () => nextNavigationMockModule({ push, replace, back }));
 
+const { skipRouteFocusFor } = vi.hoisted(() => ({ skipRouteFocusFor: vi.fn() }));
+vi.mock('@/lib/use-route-focus', () => ({ skipRouteFocusFor }));
+
 const { claimLinkAccess } = vi.hoisted(() => ({ claimLinkAccess: vi.fn() }));
 vi.mock('@/lib/api-client', () => ({
   apiClient: { pages: { 'link-access': { $post: claimLinkAccess } } },
@@ -59,6 +62,21 @@ describe('IdRedirector — resolves via useClaimPageLinkAccess', () => {
     renderWithClient('p1');
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/shared/example'));
+  });
+
+  it('tells the route focus to sit out the redirect before making it', async () => {
+    // The replace is part of arriving at the id URL; the shell must not treat
+    // it as a navigation and pull focus onto the page before any input.
+    claimLinkAccess.mockResolvedValue({
+      status: 200,
+      json: async () => ({ page: { _id: 'p1', path: '/shared/example', grant: 2 }, granted: true }),
+    });
+
+    renderWithClient('p1');
+
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    expect(skipRouteFocusFor).toHaveBeenCalledWith('/shared/example');
+    expect(skipRouteFocusFor.mock.invocationCallOrder[0]).toBeLessThan(replace.mock.invocationCallOrder[0]);
   });
 
   it('renders AccessDeniedCard when the claim resolves as not granted (403)', async () => {

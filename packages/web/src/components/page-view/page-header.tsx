@@ -400,14 +400,15 @@ export function PageHeader({
               presence row are vertically centred inside it. */}
           <div
             // From 1280 the article is part of a centred `content + rail`
-            // pair and sits 7.75rem left of dead-centre until the 1440 left
-            // spacer balances it again (see `PageTocColumns`). This bar is a
+            // pair and sits half a rail-plus-gap left of dead-centre until the
+            // 1440 left spacer balances it again (see `PageTocColumns`, and
+            // the shell tokens in globals.css). This bar is a
             // `fixed inset-x-0` overlay centring its own `max-w-4xl`, so it
             // has to repeat that shift or its title drifts right of the
             // article it labels. The rail column is there for every page in
             // that band — it carries the page actions even where there are
             // too few headings for a TOC — so the shift is unconditional.
-            className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4 min-[1280px]:max-[1439px]:-translate-x-[7.75rem]"
+            className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4 min-[1280px]:max-[1439px]:-translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]"
           >
             <div className="relative flex items-center gap-2">
               {/* Leading icons, hung out past the content gutter so the

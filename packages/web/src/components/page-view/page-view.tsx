@@ -25,6 +25,7 @@ import { commentKeys } from '@/lib/use-page-comments';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { usePresence } from '@/lib/use-presence';
+import { skipRouteFocusFor } from '@/lib/use-route-focus';
 import { useMarkSeenOnView } from '@/lib/use-seen';
 import { AttachmentList } from './attachment-list';
 import { BacklinkList } from './backlink-list';
@@ -108,6 +109,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
   useEffect(() => {
     if (redirectTo) {
       const redirectUrl = `${redirectTo}?redirectFrom=${encodeURIComponent(path)}`;
+      // Correcting the URL the reader opened, not a move they made.
+      skipRouteFocusFor(redirectTo);
       router.replace(redirectUrl);
     }
   }, [redirectTo, path, router]);
@@ -136,6 +139,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // must land on that revision, not on the current one, or the recovery
     // quietly answers a different question than the one that was asked.
     const revisionQuery = revisionId ? `&revision_id=${encodeURIComponent(revisionId)}` : '';
+    // Correcting the URL the reader opened, not a move they made.
+    skipRouteFocusFor(overEncodedPage.path);
     router.replace(`${pagePathToHref(overEncodedPage.path)}?redirectFrom=${encodeURIComponent(path)}${revisionQuery}`);
   }, [overEncodedPage, path, revisionId, router]);
 

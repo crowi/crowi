@@ -74,6 +74,16 @@
 
   --radius: 0.375rem;
 
+  /* The reading shell: the article column, each rail beside it, and the gap
+     between them. The app header, the fixed nav rail, the TOC rail and the
+     compact page header are all placed against these, and the alignment only
+     holds while the four agree — so they are one definition, not four
+     hand-computed widths. `--shell-content` is `max-w-4xl` minus the `px-4`
+     gutters the header and `<main>` carry, i.e. the text column they run. */
+  --shell-content: 54rem;
+  --shell-rail: 14rem;
+  --shell-gap: 1.5rem;
+
   /* Crowi brand colors */
   /* Primary: #43676b - teal green */
   --primary: oklch(0.465 0.04 192);
