@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import request from 'supertest';
@@ -274,6 +275,76 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
           spy.mockRestore();
         }
       });
+
+      // RFC-0021 §5.1/§5.6, DC-5 — the compensating delete (`draft.ts`'s
+      // catch-block `Page.removePage`) routes through the same
+      // `deletePageWithMode` cascade as every other physical delete, so a
+      // WATCH/IGNORE or Backlink row seeded before the seed-revision failure
+      // is cleaned up too, not just the Page/Revision/PageHistoryEvent rows
+      // AC-13 already covers.
+      it('leaves no orphaned draft Page or relation rows when pushRevision throws and the compensating relation cleanup succeeds', async () => {
+        const path = `${PATH_PREFIX}orphan-relation-cleanup-success`;
+        const Page = crowi.model('Page');
+        const Watcher = crowi.model('Watcher');
+        const Backlink = crowi.model('Backlink');
+
+        let seededPageId: string | undefined;
+        const spy = jest.spyOn(Page, 'pushRevision').mockImplementationOnce(async (pageData) => {
+          seededPageId = pageData._id.toString();
+          await Watcher.upsertWatcher(aliceId, 'Page', pageData._id, Watcher.STATUS_WATCH);
+          await Backlink.create({ page: pageData._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+          await Backlink.create({ page: new Types.ObjectId(), fromPage: pageData._id, fromRevision: new Types.ObjectId() }); // outbound
+          throw new Error('pushRevision boom with relation residue');
+        });
+
+        try {
+          const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          expect(res.status).toBe(400);
+          expect(res.body.error).toBe('invalid_path');
+        } finally {
+          spy.mockRestore();
+        }
+
+        expect(seededPageId).toBeDefined();
+        const seededObjectId = new Types.ObjectId(seededPageId);
+        expect(await Page.findById(seededObjectId)).toBeNull();
+        expect(await Watcher.countDocuments({ targetModel: 'Page', target: seededObjectId })).toBe(0);
+        expect(await Backlink.countDocuments({ $or: [{ page: seededObjectId }, { fromPage: seededObjectId }] })).toBe(0);
+      });
+
+      it("still returns 400 invalid_path when pushRevision throws and the compensating delete's relation cleanup also rejects, leaving the draft Page deleted but its WATCH/IGNORE or Backlink rows as orphans", async () => {
+        const path = `${PATH_PREFIX}orphan-relation-cleanup-failure`;
+        const Page = crowi.model('Page');
+        const Watcher = crowi.model('Watcher');
+        const Backlink = crowi.model('Backlink');
+
+        let seededPageId: string | undefined;
+        const pushRevisionSpy = jest.spyOn(Page, 'pushRevision').mockImplementationOnce(async (pageData) => {
+          seededPageId = pageData._id.toString();
+          await Watcher.upsertWatcher(aliceId, 'Page', pageData._id, Watcher.STATUS_WATCH);
+          await Backlink.create({ page: pageData._id, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+          await Backlink.create({ page: new Types.ObjectId(), fromPage: pageData._id, fromRevision: new Types.ObjectId() }); // outbound
+          throw new Error('pushRevision boom with relation residue');
+        });
+        const backlinkSpy = jest.spyOn(Backlink, 'removeByPageIdForHardDelete').mockRejectedValueOnce(new Error('MARKER_BACKLINK_CLEANUP_FAILURE'));
+
+        try {
+          const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          expect(res.status).toBe(400);
+          expect(res.body.error).toBe('invalid_path');
+        } finally {
+          pushRevisionSpy.mockRestore();
+          backlinkSpy.mockRestore();
+        }
+
+        expect(seededPageId).toBeDefined();
+        const seededObjectId = new Types.ObjectId(seededPageId);
+        expect(await Page.findById(seededObjectId)).toBeNull();
+        // Backlink cleanup rejected — its rows are left as orphans.
+        expect(await Backlink.countDocuments({ $or: [{ page: seededObjectId }, { fromPage: seededObjectId }] })).toBe(2);
+        // Watcher cleanup still ran (best-effort, independent of Backlink).
+        expect(await Watcher.countDocuments({ targetModel: 'Page', target: seededObjectId })).toBe(0);
+      });
     });
   });
 
@@ -317,11 +388,24 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
       const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       const pageId = createRes.body.pageId as string;
 
+      // WATCH/IGNORE and inbound/outbound Backlink fixtures (AC-7), seeded
+      // after draining the draft create's own side effects (auto-watch).
+      await crowi.drainSideEffects();
+      const Watcher = crowi.model('Watcher');
+      const Backlink = crowi.model('Backlink');
+      const draftPageId = new Types.ObjectId(pageId);
+      const otherUserId = new Types.ObjectId();
+      await Watcher.upsertWatcher(otherUserId, 'Page', draftPageId, Watcher.STATUS_IGNORE);
+      await Backlink.create({ page: draftPageId, fromPage: new Types.ObjectId(), fromRevision: new Types.ObjectId() }); // inbound
+      await Backlink.create({ page: new Types.ObjectId(), fromPage: draftPageId, fromRevision: new Types.ObjectId() }); // outbound
+
       const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
       expect(delRes.status).toBe(200);
 
       const Page = crowi.model('Page');
       expect(await Page.findById(pageId)).toBeNull();
+      expect(await Watcher.countDocuments({ targetModel: 'Page', target: draftPageId })).toBe(0);
+      expect(await Backlink.countDocuments({ $or: [{ page: draftPageId }, { fromPage: draftPageId }] })).toBe(0);
 
       // Path is free: a fresh draft can be created at it again.
       const recreate = await request(app).post('/api/pages/drafts').set(authHeaders(bobToken)).send({ path });

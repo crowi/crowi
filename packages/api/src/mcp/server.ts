@@ -57,6 +57,17 @@ Choosing where to create a page:
   crowi_autocomplete_pages to see where similar pages already live, then place the
   new page to match that hierarchy instead of inventing a new top-level path.
 
+Linking to a page:
+- The stable link is the ID form, \`<wiki origin>/<page id>\` — the \`_id\`
+  crowi_get_page returns. It needs no encoding, survives renames, and is what
+  Crowi's own share button copies. Prefer it whenever you hand a link to a
+  person.
+- In a path URL, a space in a page path is written \`+\` (\`/notes/my page\` →
+  \`/notes/my+page\`). \`%20\` reads the same way, and a literal \`+\` cannot
+  occur in a path.
+- Do not percent-encode a URL that is already a URL. Encoding an encoded one
+  turns \`%20\` into \`%2520\`, which addresses a page name nobody saved.
+
 Editing:
 - Before crowi_update_page, call crowi_get_page to read the current revision_id
   (optimistic lock). A stale revision_id returns a 409 conflict — refetch and retry.

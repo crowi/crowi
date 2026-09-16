@@ -1,0 +1,47 @@
+---
+title: ファーストパーティプラグイン
+description: Crowi が配布しているプラグインとドライバ名の一覧
+---
+
+Crowi 本体と同じリポジトリでメンテナンスし、npm に公開しているプラグインの一覧です。導入手順は [プラグインの導入と設定](../operations/plugins) を参照してください。
+
+## ドライバを選ぶ拡張
+
+ストレージ・検索・メールは、読み込んだプラグインが登録した「ドライバ」を [crowi.config.json](./config-file) で 1 つ選ぶ形です。
+
+| 種類 | ドライバ名 | パッケージ | 設定 |
+| --- | --- | --- | --- |
+| ストレージ | `local` | `@crowi/plugin-storage-local` | [ストレージ設定](../operations/storage) |
+| ストレージ | `s3` | `@crowi/plugin-storage-aws-s3` | [ストレージ設定](../operations/storage) |
+| ストレージ | `gcs` | `@crowi/plugin-storage-gcs` | [GCS ストレージのセットアップ](../operations/storage-gcp) |
+| 検索 | `mongo` | `@crowi/plugin-search-mongo` | [検索バックエンドのセットアップ](../operations/search-setup) |
+| 検索 | `elasticsearch` | `@crowi/plugin-search-elasticsearch` | [検索バックエンドのセットアップ](../operations/search-setup) |
+| 検索 | `opensearch` | `@crowi/plugin-search-opensearch` | [検索バックエンドのセットアップ](../operations/search-setup) |
+| メール | `smtp` | `@crowi/plugin-mail-smtp` | [メール送信の設定](../operations/mail) |
+| メール | `ses` | `@crowi/plugin-mail-aws-ses` | [メール送信の設定](../operations/mail) |
+| メール | `resend` | `@crowi/plugin-mail-resend` | [メール送信の設定](../operations/mail) |
+
+`local` / `mongo` / `smtp` の 3 つは [crowi.config.json](./config-file) に列挙しなくても常に読み込まれます。
+
+## ドライバを選ばない拡張
+
+| 種類 | パッケージ | 内容 |
+| --- | --- | --- |
+| レンダラ | `@crowi/plugin-renderer-katex` | LaTeX 数式を描画する |
+| レンダラ | `@crowi/plugin-renderer-plantuml` | PlantUML の図を描画する |
+| レンダラ | `@crowi/plugin-renderer-mermaid` | Mermaid の図を描画する |
+| レンダラ | `@crowi/plugin-renderer-crowi-legacy` | v1 の書き癖を解釈する |
+| 認証 | `@crowi/plugin-google` | Google アカウントでのサインイン |
+| 連携 | `@crowi/plugin-slack` | Slack に貼られたページリンクをプレビューに展開する |
+| 共有ベース | `@crowi/plugin-aws` | AWS 系プラグインが読む資格情報を持つ。設定だけを提供する |
+| SDK | `@crowi/plugin-api` | プラグインを書くための型とインターフェース |
+
+レンダラプラグインの記法は [Markdown 記法](./markdown)、設定は [レンダラプラグイン](../operations/renderers) を参照してください。認証と連携の設定は [外部アカウントでのサインイン](../operations/federated-auth) と [Slack 連携](../operations/slack) にあります。
+
+`@crowi/plugin-aws` は、`@crowi/plugin-storage-aws-s3` や `@crowi/plugin-mail-aws-ses` が依存として宣言するため、[crowi.config.json](./config-file) に自分で列挙する必要はありません。
+
+## 関連ページ
+
+- [プラグインの導入と設定](../operations/plugins) — 追加と有効化の手順
+- [crowi.config.json](./config-file) — ドライバの宣言
+- [プラグイン SDK](../develop/plugin-api) — 自分でプラグインを書くときの参照

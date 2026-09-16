@@ -264,6 +264,89 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 });
 
+describe('createElasticsearchDriver rebuild() — per-flush-batch like counts (feature-page-relations-collections AC-9)', () => {
+  function fakePageStreamDoc(id: string): PageStreamDoc {
+    return {
+      _id: id,
+      path: `/${id}`,
+      redirectTo: null,
+      status: 'published',
+      grant: 1,
+      creator: { username: 'alice' },
+      revision: { body: 'body' },
+      commentCount: 0,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+  }
+
+  it("buffers docs to the 2000-doc flush boundary and calls getLikeCountsBulk once per batch, scoped to that batch's page ids — never a single upfront snapshot", async () => {
+    const TOTAL_DOCS = 2500;
+    const docs = Array.from({ length: TOTAL_DOCS }, (_, i) => fakePageStreamDoc(`p${i}`));
+
+    const getLikeCountsBulkCalls: string[][] = [];
+    const getLikeCountsBulk = jest.fn(async (pageIds: string[]) => {
+      getLikeCountsBulkCalls.push([...pageIds]);
+      return new Map(pageIds.map((id) => [id, 7]));
+    });
+
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)), {
+      iteratePages: async (handler) => {
+        for (const doc of docs) await handler(doc);
+      },
+      countAllPages: async () => TOTAL_DOCS,
+      getBookmarkCountsBulk: async () => new Map(),
+      getLikeCountsBulk,
+    });
+
+    const client = driver.client as unknown as {
+      indices: { create: jest.Mock; existsAlias: jest.Mock; updateAliases: jest.Mock; delete: jest.Mock };
+      cat: { aliases: jest.Mock; indices: jest.Mock };
+      bulk: jest.Mock;
+    };
+    client.indices.create = jest.fn().mockResolvedValue({});
+    client.indices.existsAlias = jest.fn().mockResolvedValue(false);
+    client.indices.updateAliases = jest.fn().mockResolvedValue({});
+    client.indices.delete = jest.fn().mockResolvedValue({});
+    client.cat.aliases = jest.fn().mockResolvedValue([]);
+    client.cat.indices = jest.fn().mockResolvedValue([]);
+    const bulkCalls: Array<Array<Record<string, unknown>>> = [];
+    client.bulk = jest.fn(async ({ operations }: { operations: Array<Record<string, unknown>> }) => {
+      bulkCalls.push(operations);
+      return { errors: false, took: 1 };
+    });
+
+    await driver.rebuild?.();
+
+    // 2500 docs at a 2000-doc flush boundary -> exactly 2 batches (2000 + 500),
+    // never one call covering the whole rebuild.
+    expect(getLikeCountsBulkCalls).toHaveLength(2);
+    expect(getLikeCountsBulkCalls[0]).toHaveLength(2000);
+    expect(getLikeCountsBulkCalls[1]).toHaveLength(500);
+    // No overlap / gap: the two batches partition the full doc set exactly.
+    const allRequestedIds = new Set([...getLikeCountsBulkCalls[0], ...getLikeCountsBulkCalls[1]]);
+    expect(allRequestedIds.size).toBe(TOTAL_DOCS);
+
+    // Each bulk() call carries 2 ops per doc (index meta + source).
+    expect(bulkCalls[0]).toHaveLength(4000);
+    expect(bulkCalls[1]).toHaveLength(1000);
+    // The projected source doc for the first indexed page carries the
+    // per-batch like count this test's stub returned.
+    const firstSource = bulkCalls[0][1] as { like_count?: number };
+    expect(firstSource.like_count).toBe(7);
+  });
+
+  it('throws when getLikeCountsBulk is not provided (dependency is required, not optional-with-fallback)', async () => {
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)), {
+      iteratePages: async () => {},
+      countAllPages: async () => 0,
+      getBookmarkCountsBulk: async () => new Map(),
+    });
+
+    await expect(driver.rebuild?.()).rejects.toThrow(/getLikeCountsBulk/);
+  });
+});
+
 describe('createElasticsearchDriver query() user-count caching', () => {
   it('caches countUsers() across query calls', async () => {
     const countUsers = jest.fn(async () => 42);

@@ -246,6 +246,7 @@ describe('createOpenSearchDriver rebuild()', () => {
       },
       countAllPages: async () => 1,
       getBookmarkCountsBulk: async () => new Map([['p1', 3]]),
+      getLikeCountsBulk: async (pageIds) => new Map(pageIds.map((id) => [id, 9])),
     });
 
     const fakeCreate = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
@@ -279,7 +280,7 @@ describe('createOpenSearchDriver rebuild()', () => {
     expect(Array.isArray(bulkCall.body)).toBe(true);
     expect(bulkCall.body.length).toBe(2); // 1 index op + 1 doc
     expect(bulkCall.body[0]).toMatchObject({ index: { _id: 'p1' } });
-    expect(bulkCall.body[1]).toMatchObject({ path: '/p1', body: 'hello world', username: 'alice', bookmark_count: 3 });
+    expect(bulkCall.body[1]).toMatchObject({ path: '/p1', body: 'hello world', username: 'alice', bookmark_count: 3, like_count: 9 });
     // Negative check: we are NOT using ES 9's `operations` key.
     expect(bulkCall.operations).toBeUndefined();
 
@@ -291,6 +292,78 @@ describe('createOpenSearchDriver rebuild()', () => {
     expect(fakeUpdateAliases).toHaveBeenCalledTimes(1);
     const updateCall = fakeUpdateAliases.mock.calls[0][0];
     expect(updateCall.body?.actions).toBeDefined();
+  });
+
+  // feature-page-relations-collections AC-9 — Like counts are fetched per
+  // 2000-doc flush batch (scoped to that batch's page ids), never as one
+  // upfront snapshot of the whole rebuild the way bookmark counts are.
+  it('buffers docs to the 2000-doc flush boundary and calls getLikeCountsBulk once per batch', async () => {
+    const TOTAL_DOCS = 2500;
+    const docs: PageStreamDoc[] = Array.from({ length: TOTAL_DOCS }, (_, i) => ({
+      _id: `p${i}`,
+      path: `/p${i}`,
+      redirectTo: null,
+      status: 'published',
+      grant: 1,
+      creator: { username: 'alice' },
+      revision: { body: 'body' },
+    }));
+
+    const getLikeCountsBulkCalls: string[][] = [];
+    const getLikeCountsBulk = jest.fn(async (pageIds: string[]) => {
+      getLikeCountsBulkCalls.push([...pageIds]);
+      return new Map(pageIds.map((id) => [id, 7]));
+    });
+
+    const driver = createOpenSearchDriver(applyConfig(CONFIG), {
+      iteratePages: async (handler) => {
+        for (const doc of docs) await handler(doc);
+      },
+      countAllPages: async () => TOTAL_DOCS,
+      getBookmarkCountsBulk: async () => new Map(),
+      getLikeCountsBulk,
+    });
+
+    const client = driver.client as unknown as {
+      indices: Record<string, jest.Mock>;
+      cat: Record<string, jest.Mock>;
+      bulk: jest.Mock;
+    };
+    client.indices.create = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
+    client.indices.existsAlias = jest.fn().mockResolvedValue({ body: false, statusCode: 404 });
+    client.indices.updateAliases = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
+    client.indices.delete = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
+    client.cat.aliases = jest.fn().mockResolvedValue({ body: [], statusCode: 200 });
+    client.cat.indices = jest.fn().mockResolvedValue({ body: [], statusCode: 200 });
+    const bulkCalls: Array<Array<Record<string, unknown>>> = [];
+    client.bulk = jest.fn(async ({ body }: { body: Array<Record<string, unknown>> }) => {
+      bulkCalls.push(body);
+      return { body: { errors: false, took: 1, items: [] }, statusCode: 200 };
+    });
+
+    await driver.rebuild?.();
+
+    // 2500 docs at a 2000-doc flush boundary -> exactly 2 batches (2000 + 500).
+    expect(getLikeCountsBulkCalls).toHaveLength(2);
+    expect(getLikeCountsBulkCalls[0]).toHaveLength(2000);
+    expect(getLikeCountsBulkCalls[1]).toHaveLength(500);
+    const allRequestedIds = new Set([...getLikeCountsBulkCalls[0], ...getLikeCountsBulkCalls[1]]);
+    expect(allRequestedIds.size).toBe(TOTAL_DOCS);
+
+    expect(bulkCalls[0]).toHaveLength(4000);
+    expect(bulkCalls[1]).toHaveLength(1000);
+    const firstSource = bulkCalls[0][1] as { like_count?: number };
+    expect(firstSource.like_count).toBe(7);
+  });
+
+  it('throws when getLikeCountsBulk is not provided (dependency is required, not optional-with-fallback)', async () => {
+    const driver = createOpenSearchDriver(applyConfig(CONFIG), {
+      iteratePages: async () => {},
+      countAllPages: async () => 0,
+      getBookmarkCountsBulk: async () => new Map(),
+    });
+
+    await expect(driver.rebuild?.()).rejects.toThrow(/getLikeCountsBulk/);
   });
 });
 

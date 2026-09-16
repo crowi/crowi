@@ -65,7 +65,7 @@
     "chapter": "Ch. 03",
     "kicker": "Where we are",
     "title": "現在の状況",
-    "description": "main ブランチで継続的に開発中です。コア機能・リアルタイム共同編集・編集 UX・管理画面まで新スタック (Hono + Next.js 16) に移行済み。残りは認証プロバイダのプラグイン化と Slack 連携、外部公開 Share、v2.0 安定版リリースに向けた最終調整です。",
+    "description": "main ブランチで継続的に開発中です。コア機能・リアルタイム共同編集・編集 UX・管理画面まで新スタック (Hono + Next.js 16) に移行済み。残りは GitHub でのサインイン、Slack への通知転送、外部公開 Share、v2.0 安定版リリースに向けた最終調整です。",
     "newLabel": "新機能 (v2 で追加)",
     "newFeatures": [
       "リアルタイム共同編集 + ライブプレゼンス",
@@ -88,8 +88,8 @@
     ],
     "upcomingLabel": "進行中・予定",
     "upcoming": [
-      "認証プロバイダのプラグイン化 (Google / GitHub OAuth)",
-      "Slack 連携 (通知 / unfurl)",
+      "GitHub でのサインイン (Google は出荷済み)",
+      "Slack への通知転送 (URL の unfurl は出荷済み)",
       "ページ共有 (Share、外部公開 link)",
       "v2.0 安定版リリース"
     ],

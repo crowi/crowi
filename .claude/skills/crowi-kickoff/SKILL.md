@@ -65,6 +65,7 @@ description: |
     `claude --remote-control '<repo>:<id>' --name '<repo>:<id>'` で起動し、RC 有効 +
     session/terminal title = `<repo>:<id>`(例 `crowi:live-page-sync-reconcile`)にする。
     kickoff 後に質問で止まった session を picker/title で見つけて remote で動かすため。
+    環境変数 `GW_CLAUDE_MODEL` が設定されていれば `--model <name>` も付ける(Step 4)。
     crowi の `.gwrc` だけの override で `~/.gwrc`(global)は触らない。
     **前提: gw が project-local `.gwrc` を読むビルドであること**(gw の
     `feature-project-local-config` 機能。未対応バイナリでは global の素 `claude` 起動に
@@ -146,9 +147,13 @@ planner fallback で実装できるが、安価なモデルへ設計判断を残
 ### Step 4: worktree 作成 + queue 初期化
 
 ```bash
-gw start <id>        # hook が .feature-state 配線 + tmux window + claude 起動までやる
+GW_CLAUDE_MODEL=sonnet gw start <id>   # hook が .feature-state 配線 + tmux window + claude 起動までやる
 ```
 
+- **モデルは起動フラグで渡す**。`GW_CLAUDE_MODEL` は `.gw/tmux-claude.sh` が
+  `claude --model <name>` に変換する。実装は sonnet で十分(spec が
+  implementation-ready であることは Step 2 で判定済み)。**セッション起動後に
+  `/model` を送ってはいけない** — 理由は Step 5 の 3。
 - **gw が無い環境では中止**(`git worktree add` 直呼びはしない — 既存規約)。
 - hook が seed した worktree 側 `queue.json` の `currentTask` を上書き。
   `queue.json` への直接 Write/Edit は PreToolUse hook が拒否するので、
@@ -178,17 +183,11 @@ bash "$WT/.claude/scripts/task-state.sh" queue set-current "<id>"
    send-keys は使わない**。`tmux list-panes -t <window> -F '#{pane_id}|#{pane_current_command}'`
    で `pane_current_command` がバージョン形式(`2.x.x`)の pane が現れるまで
    2 秒間隔で poll(上限 60 秒)し、その **pane_id** を投入先にする。
-3. **まず実装モデルへ切り替える**(hook の plain `claude` は既定モデル = 高価な
-   session model で起動するため。実装は sonnet で十分な設計 — spec が
-   implementation-ready であることは ready 判定済み):
-
-```bash
-tmux send-keys -t "<claude の pane_id>" "/model sonnet"
-sleep 1
-tmux send-keys -t "<claude の pane_id>" Enter
-sleep 2
-```
-
+3. **モデルの切り替えは送らない**。実装モデルは Step 4 の `GW_CLAUDE_MODEL=sonnet`
+   が起動フラグとして渡しているので、この段階での操作は不要。**`/model sonnet` を
+   send-keys してはいけない** — Claude Code はその選択を `~/.claude/settings.json` の
+   `model` に保存し、**全プロジェクトの新規セッション**がそのモデルで起動するようになる
+   (2026-09-16 に実測。kickoff 2 本目の worktree が Sonnet で起動して発覚した)。
 4. **agmsg の受信を自分宛だけに絞る**。`watch.sh` は role 名を渡さないと
    **そのプロジェクトに登録された全 (team, agent) ペア**を購読するので、既定のままだと
    worktree セッションに manager⇄planner のやり取りまで流れ込む(実測。impl セッションが

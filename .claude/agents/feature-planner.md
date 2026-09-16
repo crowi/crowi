@@ -81,7 +81,7 @@ context 完備の task 定義を作成する。
      `entries: []` にして docs 更新も commitPlan の `docs(site)` も作らない。
    - 対象探索: spec の機能領域に対応する既存 `.mdx` を探す。
      ```bash
-     ls apps/crowi-site/content/docs/ja/{guide,operations,plugins}
+     ls apps/crowi-site/content/docs/ja/{guide,operations,develop}
      grep -rl "<関連語>" apps/crowi-site/content/docs/ja
      ```
      - 既存ページがあれば `action: "edit"`、その ja / en パスを書く。
@@ -89,7 +89,7 @@ context 完備の task 定義を作成する。
        `metaUpdate: true` を立てる (implementer が meta.json に追記する目印)。
    - env / admin 設定が増えるなら `operations/configuration.mdx` 等の運用ページも entries に含める。
    - **ja / en は必ずペアで** entries に書く (二言語ミラー構成)。
-   - カテゴリの目安: `guide/`=利用者向け機能 / `operations/`=運用・管理者・env / `plugins/`=プラグイン。
+   - タブの目安 (読者で決める): `guide/`=利用者 / `operations/`=管理者・運用者 (プラグインの導入・設定も含む) / `develop/`=開発者・コントリビュータ。
 
 6. **E2E 影響の特定 (e2eTargets)**
    機能が**クリティカルフロー**に触れるかを判定し、`context.e2eTargets` を充填する。
@@ -153,8 +153,8 @@ packages/web/src/app/(auth|admin)/...
 packages/api-contract/src/contracts/{feature}.ts
 
 # ユーザー向けドキュメント (docsTargets の探索対象・二言語ミラー)
-apps/crowi-site/content/docs/ja/{guide,operations,plugins}/
-apps/crowi-site/content/docs/en/{guide,operations,plugins}/
+apps/crowi-site/content/docs/ja/{guide,operations,develop}/
+apps/crowi-site/content/docs/en/{guide,operations,develop}/
 ```
 
 ## task ファイルスキーマ (legacy)

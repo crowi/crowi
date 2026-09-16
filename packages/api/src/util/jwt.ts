@@ -2,6 +2,8 @@ import jwt from 'jsonwebtoken';
 import Crowi from 'src/crowi';
 import Debug from 'debug';
 
+import { resolveSignedTokenSecret } from './signed-token-factory';
+
 const debug = Debug('crowi:util:jwt');
 
 /**
@@ -70,8 +72,11 @@ export function isCurrentAuthVersion(tokenAuthVersion: number | undefined, user:
 }
 
 export function createJwtUtil(crowi: Crowi) {
-  const config = crowi.getConfig();
-  const secret = config.crowi['app:secret'] || config.crowi['SECRET_TOKEN'] || 'your-secret-key';
+  // Resolved once, at construction, from `util/signed-token-factory.ts`'s
+  // single runtime resolver (env, not `crowi.getConfig()`/DB). `crowi` is
+  // still accepted (rather than a narrower `Pick<...>`) because
+  // `refreshAccessToken` needs `crowi.model` for the user lookup.
+  const secret = resolveSignedTokenSecret();
 
   /**
    * Generate access and refresh tokens for a user

@@ -1,5 +1,5 @@
 ---
-title: Setting up the search backend
+title: Search backend setup
 description: Setting up the Crowi full-text search backend (Elasticsearch) and building the index
 ---
 
@@ -16,15 +16,9 @@ better for large corpora and supports Japanese analysis
 up the Elasticsearch driver and build its index. For the user-facing
 search feature, see [Search](../guide/search).
 
-> **Note**: Crowi 2.0 (Reignite) is under active alpha development, and
-> the Elasticsearch backend is still being refined (an ES version bump and
-> the search driver having become a plugin). The steps on this page are
-> based on the current dev environment, but details may change. See the
-> [release notes](https://github.com/crowi/crowi/releases) for the latest status.
-
 ## Architecture overview
 
-- A search driver is registered with the `SearchRegistry` via a plugin.
+- A search driver is loaded as a plugin.
 - Which driver is used is specified by `search.driver` in
   `crowi.config.json` (default `mongo`).
 - The Elasticsearch driver's connection settings are stored in the Mongo
@@ -52,24 +46,15 @@ set `search.driver` to `elasticsearch`.
 
 Restart the api after editing, and the plugin is loaded and the search
 driver is registered. For installing plugins in general, see
-[Managing plugins](../plugins/managing).
+[Installing and configuring plugins](./plugins).
 
-## Starting Elasticsearch
+## Providing Elasticsearch
 
-In the development environment, `docker-compose.yml` includes an
-Elasticsearch service.
+You provide the Elasticsearch (or OpenSearch) cluster. To search Japanese
+pages, it needs the `analysis-kuromoji` morphological analysis plugin
+installed — that is what the `kuromoji` analyzer below uses.
 
-```bash
-docker compose up -d
-```
-
-The dev Elasticsearch image (`elasticsearch.Dockerfile`) is a custom image
-that preinstalls the `analysis-kuromoji` plugin on top of stock
-Elasticsearch. This lets the `kuromoji` analyzer (described below) work
-without any extra setup.
-
-> **Caution**: The dev image does **not** include the `analysis-sudachi`
-> Japanese morphological analysis plugin. To use the `sudachi` analyzer
+> **Caution**: To use the `sudachi` analyzer
 > you must build your own derived image with the `analysis-sudachi` plugin
 > and a dictionary bundled in.
 
@@ -95,12 +80,12 @@ The `analyzer` setting picks the tokenization method for full-text search.
 | Analyzer | Cluster requirement |
 | -------- | ------------------- |
 | `default` | No extra ES plugin needed. |
-| `kuromoji` | Requires the `analysis-kuromoji` plugin. Preinstalled in the dev image. |
-| `sudachi` | Requires the third-party `analysis-sudachi` plugin + a dictionary. Not in the dev image, so a derived image must be built. |
+| `kuromoji` | Requires the `analysis-kuromoji` plugin. |
+| `sudachi` | Requires the third-party `analysis-sudachi` plugin and a dictionary. |
 
 For a wiki with mostly Japanese content, `kuromoji` is a safe choice.
 If you pick `kuromoji` / `sudachi` on a cluster without the plugin, the
-index rebuild (`rebuild()`) described below will fail.
+index rebuild described below will fail.
 
 ## Building the index
 
@@ -116,21 +101,22 @@ This command:
 
 1. Loads `.env` and resolves `MONGO_URI` and so on through the same path
    Crowi uses at boot.
-2. Resolves the active search driver and calls its `rebuild()`.
+2. Resolves the active search driver and asks it to rebuild its index.
 3. For the Elasticsearch driver, creates a new timestamped index, bulk
    indexes all pages, and then switches the `<indexName>-current` alias to
    the new index. Old indices are deleted.
 
 `crowi-admin` is an operator-side CLI that connects directly to MongoDB.
 Run it from a directory where `@crowi/api` is installed (usually the
-runner package).
+runner project). Its options and exit codes are listed in
+[crowi-admin](../reference/admin-cli).
 
 > **Tip**: Thanks to the alias scheme, searches against the existing index
 > continue with no downtime during a rebuild. The alias is switched over
 > in one step once the new index is fully built.
 
-If a driver has no persistent index (does not implement `rebuild()`), the
-Search section of the admin panel shows no rebuild hint.
+If a driver has no persistent index to rebuild, the Search section of the
+admin panel shows no rebuild hint.
 
 ## Checking the search driver status
 
@@ -144,8 +130,8 @@ general, see [Admin panel](./admin).
 
 - **Driver disabled because `url` is empty**: The connection settings are
   not configured. Set `url` from the plugin settings page in the admin
-  panel. When `url` is empty, `query()` throws an error and `index()`
-  becomes a no-op.
+  panel. While it is empty, searching reports an error and nothing is
+  indexed.
 - **`rebuild` fails**: You may have picked `kuromoji` / `sudachi` without
   the matching ES plugin installed on the cluster. `crowi-admin rebuild
   search` prints the ES cluster's response body on failure, so check its

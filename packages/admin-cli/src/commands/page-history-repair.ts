@@ -271,7 +271,6 @@ export function registerPageHistoryRepair(program: Command): void {
           process.exit(1);
         }
 
-        const crowi = new api.Crowi(process.cwd(), process.env);
         const runTransitions = Boolean(opts.transitions);
         const runOutbox = Boolean(opts.outbox) || (!opts.scan && !runTransitions);
         const runScan = Boolean(opts.scan);
@@ -279,11 +278,15 @@ export function registerPageHistoryRepair(program: Command): void {
           `[crowi-admin] page-history repair: starting (outbox=${runOutbox}, scan=${runScan}, transitions=${runTransitions}, batchSize=${batchSize})`,
         );
 
+        // `let`, not `const`: the constructor itself can throw (e.g. an invalid
+        // SECRET_TOKEN), and the catch below must not touch an uninitialised binding.
+        let crowi: ApiCrowi | undefined;
         try {
+          crowi = new api.Crowi(process.cwd(), process.env);
           await crowi.initForCli();
         } catch (err) {
           console.error(formatFatalErrorLine('crowi-admin: failed to initialise Crowi: ', err, api.redactErrorReason));
-          await crowi.teardownForCli().catch(() => undefined);
+          await crowi?.teardownForCli().catch(() => undefined);
           process.exit(1);
         }
 

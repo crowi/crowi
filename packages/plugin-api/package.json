@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-api",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.11",
   "description": "Type-only contract for Crowi 2.0 plugins. See docs/rfcs/0001-plugin-architecture.md.",
   "repository": {
     "type": "git",
@@ -31,7 +31,7 @@
     "test": "jest --passWithNoTests"
   },
   "peerDependencies": {
-    "hono": "^4.12.34",
+    "hono": "^4.13.5",
     "zod": "^4"
   },
   "devDependencies": {
@@ -39,7 +39,7 @@
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
-    "hono": "^4.12.34",
+    "hono": "^4.13.5",
     "jest": "catalog:",
     "ts-jest": "catalog:",
     "tsup": "catalog:",
@@ -47,7 +47,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@xmldom/xmldom": "^0.9.10",
+    "@xmldom/xmldom": "^0.9.12",
     "openid-client": "^6.8.4"
   }
 }

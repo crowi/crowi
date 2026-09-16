@@ -779,7 +779,7 @@ pub/sub layer; the Redis counter for the user cap still applies
 > time; operators only need to point every api replica at the same
 > Redis instance. Sticky sessions remain unnecessary as originally
 > designed. See `apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx`
-> for the deployment recipe and `WS_TOKEN_SECRET` clustering rule.
+> for the deployment recipe and `SECRET_TOKEN` clustering rule.
 
 ## v2.1 release scope
 

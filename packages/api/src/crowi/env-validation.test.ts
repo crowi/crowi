@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path';
 import Crowi from 'src/crowi';
+import { TEST_SECRET_TOKEN } from 'src/test/secret-token-env';
 
 /**
  * Constructor-level wiring for `validateEnv()` (feature-boot-env-validation,
@@ -18,6 +19,7 @@ const ROOT_DIR = resolve(join(__dirname, '..', '..'));
 describe('Crowi constructor env validation wiring', () => {
   it('derives baseUrl/node_env/port/redisUrl/mongoUri from validateEnv() (AC-2)', () => {
     const crowi = new Crowi(ROOT_DIR, {
+      SECRET_TOKEN: TEST_SECRET_TOKEN,
       BASE_URL: 'http://localhost:4301',
       NODE_ENV: 'development',
       PORT: '4301',
@@ -40,7 +42,7 @@ describe('Crowi constructor env validation wiring', () => {
   });
 
   it('falls back to the documented defaults when unset', () => {
-    const crowi = new Crowi(ROOT_DIR, {} as unknown as NodeJS.ProcessEnv);
+    const crowi = new Crowi(ROOT_DIR, { SECRET_TOKEN: TEST_SECRET_TOKEN } as unknown as NodeJS.ProcessEnv);
 
     expect(crowi.baseUrl).toBeNull();
     expect(crowi.node_env).toBe('production');
@@ -57,6 +59,7 @@ describe('Crowi constructor env validation wiring', () => {
     expect(
       () =>
         new Crowi(ROOT_DIR, {
+          SECRET_TOKEN: TEST_SECRET_TOKEN,
           PORT: 'not-a-number',
           MONGO_URI: 'postgres://localhost/crowi',
         } as unknown as NodeJS.ProcessEnv),
@@ -65,6 +68,7 @@ describe('Crowi constructor env validation wiring', () => {
 
   it('stashes warn-severity findings on the instance instead of throwing (AC-7/8/9)', () => {
     const crowi = new Crowi(ROOT_DIR, {
+      SECRET_TOKEN: TEST_SECRET_TOKEN,
       CLIENT_URL: 'not-an-absolute-url',
       NODE_ENV: 'staging',
     } as unknown as NodeJS.ProcessEnv);
@@ -77,14 +81,35 @@ describe('Crowi constructor env validation wiring', () => {
     expect(
       () =>
         new Crowi(ROOT_DIR, {
+          SECRET_TOKEN: TEST_SECRET_TOKEN,
           CROWI_ENCRYPTION_KEY: '   ',
           CLIENT_URL: 'https://wiki.example.com',
         } as unknown as NodeJS.ProcessEnv),
     ).toThrow(/CROWI_ENCRYPTION_KEY/);
   });
 
+  it('feature-unified-signing-secret AC-2: a missing SECRET_TOKEN/WS_TOKEN_SECRET throws before any other boot layer runs', () => {
+    expect(
+      () =>
+        new Crowi(ROOT_DIR, {
+          MONGO_URI: 'mongodb://localhost/crowi_test',
+        } as unknown as NodeJS.ProcessEnv),
+    ).toThrow(/SECRET_TOKEN/);
+  });
+
+  it('feature-unified-signing-secret AC-2: a known placeholder SECRET_TOKEN throws regardless of NODE_ENV', () => {
+    expect(
+      () =>
+        new Crowi(ROOT_DIR, {
+          SECRET_TOKEN: 'changeme',
+          NODE_ENV: 'development',
+        } as unknown as NodeJS.ProcessEnv),
+    ).toThrow(/SECRET_TOKEN/);
+  });
+
   it('AC-16: initForCli() flushes the constructor-computed warnings (no second validateEnv() pass)', async () => {
     const crowi = new Crowi(ROOT_DIR, {
+      SECRET_TOKEN: TEST_SECRET_TOKEN,
       NODE_ENV: 'staging', // recognised var, invalid value → warn-severity
       CLIENT_URL: 'http://localhost:4301', // set so this env only produces the one NODE_ENV warning below
     } as unknown as NodeJS.ProcessEnv);

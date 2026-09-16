@@ -1,0 +1,337 @@
+---
+title: Release runbook
+description: How to release Crowi 2.0 — changesets + npm Trusted Publishing (OIDC) + Docker (full/slim/web) + an Elasticsearch custom image, all published from CI
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This is the release runbook for Crowi 2.0 maintainers. The release machinery is
+**already implemented**, but actually publishing requires a **one-time external
+setup (by hand)**. This page covers that external setup, the normal release flow,
+channel switching (alpha→beta→stable), and how to cut the Docker / Elasticsearch
+images.
+
+<Callout type="info">
+  Releases are automated with [changesets](https://github.com/changesets/changesets)
+  + npm Trusted Publishing (OIDC) + Docker buildx. **The only human decision is the
+  "GO gate" — merging the Version PR on main.** On `push: main`,
+  `changesets/action` automatically opens / updates a Version PR; merging it makes
+  `release.yml` publish to npm and then build+push the Docker images.
+</Callout>
+
+## The big picture
+
+| Phase | Trigger | Owner |
+| --- | --- | --- |
+| Accumulate changesets | Each time a feature merges to main | Developer |
+| Open / update Version PR | `push: main` (`changesets/action`) | CI (automatic) |
+| **GO gate** | **Merge the Version PR** | **Human** |
+| npm publish (OIDC, with provenance) | After the Version PR merges | CI (`release.yml`) |
+| Create + push distribution tag `v<dist-version>` | Only on a successful publish | CI (`release.yml`) |
+| Aggregate GitHub Release on the distribution tag | Only on a successful publish | CI (`release.yml`) |
+| Build+push Docker full / slim / web (multi-arch) | Completion of a publishing Release run | CI (`docker.yml`, `workflow_run`) |
+| Elasticsearch custom image | Manual (`workflow_dispatch`) | Human (independent of Crowi core) |
+
+## One-time manual setup (external, by hand)
+
+The following cannot be done from CI. Set them up by hand **once before the first
+release**.
+
+### 1. npm Trusted Publisher (every published package)
+
+On npmjs.com, register a Trusted Publisher for **each published package** (repo `crowi/crowi` + workflow `release.yml`, and an environment if you use one). This enables OIDC publishing with no long-lived `NPM_TOKEN` and with provenance.
+
+The workspace is the source of truth (any package without `private: true`), so generate the list rather than trusting the one below:
+
+```bash
+for d in packages/*/package.json apps/*/package.json; do
+  node -e "const p=require('./$d'); if (!p.private) console.log(p.name)" 2>/dev/null
+done | sort
+```
+
+As of 2026-08 that is 22 packages:
+
+```
+@crowi/admin-cli
+@crowi/api
+@crowi/api-contract
+@crowi/cli
+@crowi/plugin-api
+@crowi/plugin-aws
+@crowi/plugin-google
+@crowi/plugin-mail-aws-ses
+@crowi/plugin-mail-resend
+@crowi/plugin-mail-smtp
+@crowi/plugin-renderer-crowi-legacy
+@crowi/plugin-renderer-katex
+@crowi/plugin-renderer-mermaid
+@crowi/plugin-renderer-plantuml
+@crowi/plugin-search-elasticsearch
+@crowi/plugin-search-mongo
+@crowi/plugin-search-opensearch
+@crowi/plugin-slack
+@crowi/plugin-storage-aws-s3
+@crowi/plugin-storage-gcs
+@crowi/plugin-storage-local
+@crowi/runner
+```
+
+**When you add a new published package, publish that one package by hand once.** npm only lets you configure a Trusted Publisher on a package that **already exists on the registry**, so a name that has never been published cannot be registered. The order is: run `npm publish` once locally → register the Trusted Publisher for it on npmjs.com → every release after that goes through CI's OIDC publish. Release before registering and that package's publish is the one step that fails to authenticate.
+
+### 2. GitHub: allow Actions to create PRs
+
+In repo Settings → Actions → General → Workflow permissions, turn
+**"Allow GitHub Actions to create and approve pull requests" ON**. With it OFF,
+`changesets/action` cannot open the Version PR.
+
+### 3. GitHub secrets (Docker Hub)
+
+Docker Hub does not support OIDC, so register two secrets for the Docker push.
+
+| Secret | Purpose |
+| --- | --- |
+| `DOCKERHUB_USERNAME` | Docker Hub account |
+| `DOCKERHUB_TOKEN` | Docker Hub access token |
+
+### 4. Toolchain (repo side, already configured)
+
+OIDC publishing relies on the following combination (already set in CI, for
+reference).
+
+- **pnpm 10.x** (supports OIDC trusted publishing; `pnpm publish` delegates to the
+  npm CLI under the hood)
+- **pnpm/action-setup@v6** (≥ 6.0.6, to avoid the OIDC regression in pnpm v11.0.x)
+- **Node 24** (its bundled npm CLI ≥ 11.5.1 is required for OIDC publishing)
+
+## Normal release (alpha.N) flow
+
+1. **Accumulate changesets.** Each time a feature merges to main, add one
+   `.changeset/*.md` per unit of user value (`pnpm changeset add`). Internal
+   refactors / docs / chores do not need a changeset.
+2. **A Version PR is opened automatically.** On `push: main`, `changesets/action`
+   consumes the accumulated changesets and opens / updates a **Version PR** that
+   bumps the versions (in alpha pre mode it produces `-alpha.N`).
+3. **GO = merge the Version PR.** Reviewing the PR diff (versions + CHANGELOG) and
+   merging it is the GO decision for the release.
+4. **npm publish (automatic).** The merge runs `release.yml`, and
+   `pnpm changeset publish` publishes each package via **OIDC trusted publishing**
+   (no `NPM_TOKEN`, with provenance).
+5. **Distribution tag (automatic).** Only on a successful publish, CI creates and
+   pushes the independent distribution tag `v2.0.0-alpha.N` (= max existing
+   `v2.0.0-alpha.*` + 1) and uploads a `dist-version` artifact.
+6. **Aggregate GitHub Release (automatic).** `scripts/aggregate-release-notes.mjs`
+   pulls the section that matches the just-published version out of every
+   `@crowi/*` `CHANGELOG.md` that moved this release and groups them by category
+   (core / SDK / plugins / tooling). The distribution tag gets a single
+   `gh release create` with that aggregate body (prerelease vs. latest is
+   decided by whether the version core contains a `-`). The per-package
+   releases that `changesets/action` opens (`@crowi/api@<v>` etc.) stay around
+   for bisecting individual packages; the umbrella distribution release is the
+   operator-facing "what is in this alpha.N?" view.
+7. **Docker images (automatic).** On completion of the Release run, `docker.yml`
+   fires via `workflow_run` and builds+pushes full / slim multi-arch
+   (amd64 + arm64).
+
+<Callout type="warn">
+  A tag pushed by `GITHUB_TOKEN` **does not trigger another workflow's
+  `on: push: tags`** (GitHub's loop-prevention rule). That is why `docker.yml`
+  fires on **`workflow_run` (Release completion)**, not on the distribution-tag
+  push, and decides "was this a publishing run?" by whether the Release run
+  uploaded a `dist-version` artifact. A run that only opened a Version PR (no
+  publish) does not build images.
+</Callout>
+
+<Callout type="warn">
+  **While in alpha / beta, `@crowi/plugin-slack` needs its `latest` moved by hand after any release that publishes it.**
+
+  In pre mode changesets picks the dist tag per package: a package whose every published
+  version is a prerelease carrying the pre tag (`alpha`) goes to `latest`; one with even a
+  single version outside that counts as having had a regular release and goes to the pre tag
+  instead. Twenty-one of the twenty-two are the former. `@crowi/plugin-slack` is not, because a
+  `0.1.0-dev` was published by hand before its alphas — so **its `latest` stays frozen at its
+  first published version**, and `npm i @crowi/plugin-slack` installs months-old code.
+
+  After a release that publishes it:
+
+  ```bash
+  npm dist-tag add @crowi/plugin-slack@<the version just released> latest
+  ```
+
+  **Adding `--tag` to the publish command is not a workaround** — in pre mode
+  `changeset publish` rejects an explicit tag and exits 1, so nothing publishes at all and the
+  distribution tag, GitHub Release and Docker steps never run. The `0.1.0-dev` cannot be
+  unpublished either (`@crowi/api` lists it in its published devDependencies, which npm counts
+  as a dependent), and `npm deprecate` does not change the check. **Leaving pre mode resolves
+  it.**
+</Callout>
+
+## Distribution version model
+
+The Docker image carries a **"Crowi distribution version" that is independent** of
+each npm package's version.
+
+- **It increments by +1 every release.** Even a plugin-only patch release cuts a
+  new distribution version and a new image, to avoid the immutable-tag violation
+  of "the same tag, different contents".
+- **It is numbered as max existing `v2.0.0-alpha.*` git tag + 1.** It advances
+  regardless of whether any npm package bumped.
+- **Tag rules**:
+  - Immutable: `crowi/crowi:2.0.0-alpha.N` (full) / `:2.0.0-alpha.N-slim` (slim)
+  - Moving: `:alpha` / `:alpha-slim` (point to the latest of that channel)
+  - **Web image**: `crowi/crowi-web:2.0.0-alpha.N` (immutable) + the moving `:alpha`
+    tag. This is the Next.js renderer image — a **single image** with no full/slim
+    split — built multi-arch from `packages/web/Dockerfile` by `docker.yml`'s
+    `build-web` job, in parallel with the api images.
+  - **Prereleases do not take `latest`.** `latest` / `latest-slim` point to v2 only
+    from stable onward (see channel switching below).
+- **Self-describing.** The image embeds the version of each bundled `@crowi/*`
+  package in the OCI label `org.crowi.bundle`, so "which `@crowi/api` is in this
+  alpha.N?" is answerable with `docker buildx imagetools inspect`.
+
+## Per-plugin patch release
+
+To fix just one plugin (for example a dependency security update):
+
+1. **Write a changeset for that plugin only** (pick the package in
+   `pnpm changeset add`).
+2. Internal dependencies are bumped in consumers via
+   `updateInternalDependencies: patch` (e.g. an `@crowi/plugin-aws` update →
+   `@crowi/plugin-storage-aws-s3` / `@crowi/plugin-mail-aws-ses` get a patch too).
+3. **The distribution version increments by +1, and the full / slim images are
+   rebuilt.** Because the full image bundles every plugin, a plugin-only fix only
+   reaches users if the image is rebuilt — the always-+1 distribution version
+   guarantees that.
+
+<Callout type="info">
+  Operating policy: **accumulate** per-plugin changesets and ship them **together at
+  GO time**. Rather than releasing on every fix, publish + cut a new image in a
+  batch at the next Version PR merge.
+</Callout>
+
+## Channel switching (entering / exiting pre-mode, manual)
+
+Only the alpha → beta → stable transitions are manual, each done in **one PR**.
+
+### alpha → beta
+
+```bash
+pnpm changeset pre exit
+pnpm changeset pre enter beta
+```
+
+Merging this change (`.changeset/pre.json`) as a PR makes subsequent Version PRs
+start at `2.0.0-beta.0`.
+
+### beta → stable
+
+Merging
+
+```bash
+pnpm changeset pre exit
+```
+
+as a PR exits pre mode and produces stable versions.
+
+<Callout type="warn">
+  **`latest` points to v2 only at stable** (prereleases do not take `latest`).
+  Flipping the bare npm `crowi` package and Docker `latest` / `latest-slim` to v2
+  happens together with the bare-package cleanup at the stable release.
+</Callout>
+
+<Callout type="info">
+  **Distribution tag shape**: prereleases use `v2.0.0-alpha.N`; stable uses the
+  4-segment `v2.0.0.0` (the last segment is the dist counter). Once the channel has
+  no pre identifier, the distribution version takes the
+  `v<major.minor.patch>.<counter>` form — this is expected.
+</Callout>
+
+## Docker rebuild policy
+
+- **Whatever package bumps, the distribution version increments by +1 and the full /
+  slim / web images are rebuilt + retagged.** The principle is "one Crowi release =
+  one monorepo snapshot = one image set".
+- For a **manual rebuild**, use `docker.yml`'s `workflow_dispatch` (pass the
+  distribution tag name in the `version` input) to rebuild an existing distribution
+  version. To apply a build-only Dockerfile/CI fix **without moving the release
+  tag**, also pass a `ref` input with the tree to build from (e.g. `main`) — `version`
+  controls the image tag, `ref` controls the tree checked out.
+
+## Cutting the Elasticsearch custom image
+
+The Japanese-analyzer Elasticsearch image for the search plugin
+(`crowi/docker-elasticsearch`) is **completely independent of the Crowi core
+release**. Run `docker-elasticsearch.yml` via **`workflow_dispatch`** (primary) or
+an `es-v*` tag push (auxiliary).
+
+- **inputs**: `es_version` / `sudachi_plugin_version` / `dict_version` / `variant`
+  (`both` / `kuromoji` / `sudachi`).
+- **Variants and tags**:
+  - `:<es>` (kuromoji, default; lightweight)
+  - `:<es>-sudachi` (kuromoji + `analysis-sudachi` + SudachiDict core)
+  - moving tags `:9` (kuromoji) / `:9-sudachi`
+- Built+pushed multi-arch (amd64 + arm64).
+
+<Callout type="warn">
+  **Version pinning is required.** `analysis-sudachi` must match the ES **patch
+  version exactly**. With `analysis-sudachi` v3.6.0 the supported ES 9.x patches are
+  `9.0.8` / `9.1.10` / `9.2.8` / `9.3.4` / **`9.4.1`**. SudachiDict defaults to
+  **core** (release date `20260428`).
+</Callout>
+
+<Callout type="warn">
+  When bumping ES, update **both** the env defaults in `docker-elasticsearch.yml`
+  **and** the ARG defaults in `elasticsearch/Dockerfile.sudachi` (at runtime CI
+  passes explicit `--build-arg` so CI is authoritative, but the Dockerfile defaults
+  are a local-build convenience; updating only one of them causes drift).
+</Callout>
+
+- **SudachiDict is fetched over HTTP** (the S3 website endpoint has no HTTPS). To
+  harden a redistributable image, pass a known-good sha256 of the default
+  dictionary version in the `DICT_SHA256` build-arg to verify the download integrity
+  (empty by default = no check).
+- **License / trademark**: ES is offered under ELv2, which permits redistributing a
+  self-host custom image (do not offer it as a managed service to third parties, do
+  not circumvent the license key, do not remove Elastic's notices). The trademark is
+  used nominatively (not to imply Elastic endorsement). The upstream LICENSE /
+  NOTICE and an aggregated NOTICE are bundled in the image. See the repo's
+  `elasticsearch/README.md` / `elasticsearch/NOTICE` for details.
+
+## Troubleshooting
+
+- **OIDC publish fails (e.g. E404)**: first check the toolchain (pnpm 10.x +
+  `pnpm/action-setup@v6.0.6+` + Node 24) and the Trusted Publisher settings on
+  npmjs.com (repo / workflow filename match). If it still fails, the fallback is to
+  replace the publish step in `release.yml` from `pnpm changeset publish` with a
+  script that runs **`npm publish`** instead.
+- **No Version PR is created**: check that "Allow GitHub Actions to create and
+  approve pull requests" is ON and that there are accumulated changesets.
+- **No Docker image appears**: check that `docker.yml` fired on `workflow_run` and
+  that the triggering Release run uploaded a `dist-version` artifact (i.e. it was an
+  actual publishing run). A Version-PR-only run with no publish does not build
+  images.
+- **npm publish fails with E422 (provenance / `repository.url` is "")**: publishing
+  with provenance (`NPM_CONFIG_PROVENANCE=true`) requires every published `@crowi/*`
+  `package.json` to declare a `repository` field (with the monorepo `directory`
+  subpath); without it npm rejects the upload with `E422 ... "repository.url" is "".`
+  All packages already have one — **a newly added published package must include a
+  `repository` field** or its publish step fails.
+- **Docker (api) build fails with `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`**: pnpm 10
+  changed `pnpm deploy` to refuse non-injected workspaces; `packages/api/Dockerfile`
+  passes `pnpm deploy --legacy` to keep the pre-v10 behaviour.
+- **`.changeset/*.md` files pile up instead of being deleted after each version bump
+  (not a bug)**: while in prerelease (`pre` mode), `@changesets/cli`'s `version`
+  command only appends the consumed changeset ids to `.changeset/pre.json`'s
+  `changesets` array on every run — it does not delete the corresponding `.md`
+  files. That's upstream, intentional behavior (the deletion code path only runs
+  when `preState.mode === "exit"`). The files get consumed and deleted in one
+  batch, along with `pre.json` itself, the moment "beta → stable" runs
+  `changeset pre exit` followed by `changeset version` for the 2.0.0 release. Do
+  not delete them by hand during the alpha period — the stable release's
+  aggregated CHANGELOG generation and version computation re-consumes every
+  on-disk `.md` file at that point, so removing them early would leave gaps.
+
+## Related
+
+- [Deployment topologies](../operations/deployment) — wiring the images to the api
+- [Self-hosting (your own runner project)](../operations/self-hosting) — building the images from your own runner
+- [Search backend setup](../operations/search-setup) — configuring search that uses the ES image

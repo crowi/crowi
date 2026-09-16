@@ -21,6 +21,7 @@ import {
   AddBookmarkRequestSchema,
   BookmarkResponseSchema,
   GetBookmarkRequestSchema,
+  GetBookmarkResponseSchema,
   ListMyBookmarksResponseSchema,
   RemoveBookmarkRequestSchema,
   RemoveBookmarkResponseSchema,
@@ -38,8 +39,9 @@ export const getBookmarkRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Bookmark for the page (or null when not bookmarked)',
-      content: { 'application/json': { schema: BookmarkResponseSchema } },
+      description:
+        'Bookmark for the page (or null when not bookmarked). `page` is a bare page id — this route never populates the page (feature-page-relations-collections D-2).',
+      content: { 'application/json': { schema: GetBookmarkResponseSchema } },
     },
     400: {
       description: 'Invalid page_id',

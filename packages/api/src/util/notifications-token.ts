@@ -10,7 +10,7 @@ import { createSignedTokenUtil } from './signed-token-factory';
  * `util/ws-token.ts`), the presence token issuer (`'crowi-presence'`,
  * see `util/presence-token.ts`), and the HTTP access/refresh token
  * issuer (`'crowi'`). The three WebSocket issuers all share the same
- * `WS_TOKEN_SECRET` key material but verify against different `iss`
+ * `SECRET_TOKEN` key material but verify against different `iss`
  * claims, so a leaked token for one channel is never replayable
  * against the others — `/collab` carries write access to the Y.Doc,
  * `/presence` is per-page viewer tracking, `/notifications` is the

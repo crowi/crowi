@@ -9,6 +9,7 @@ import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { useClaimPageLinkAccess } from '@/lib/use-claim-page-link-access';
 import { pagePathToHref } from '@/lib/page-path';
+import { skipRouteFocusFor } from '@/lib/use-route-focus';
 import { m } from '@paraglide/messages.js';
 
 interface IdRedirectorProps {
@@ -24,9 +25,12 @@ export function IdRedirector({ pageId }: IdRedirectorProps) {
   // its first visitor into `grantedUsers`.
   const { page, isLoading, isError, error, notFound, notGranted } = useClaimPageLinkAccess(pageId);
 
-  // Use replace (not push) so the id URL stays out of browser history.
+  // Use replace (not push) so the id URL stays out of browser history. The
+  // replace is still part of opening the id URL, so the shell must not move
+  // focus for it (see `skipRouteFocusFor`).
   useEffect(() => {
     if (page?.path) {
+      skipRouteFocusFor(page.path);
       router.replace(pagePathToHref(page.path));
     }
   }, [page?.path, router]);

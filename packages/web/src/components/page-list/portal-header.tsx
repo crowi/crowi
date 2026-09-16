@@ -40,13 +40,13 @@ interface PortalHeaderProps {
  *   - a single muted provenance line (updater + relative update time)
  */
 export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   // Light the header accent strip for a non-public portal, exactly as the
   // single-page view does — a portal can be restricted/private too.
   usePageGrantAccent(page.grant);
 
-  const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
+  const isLiked = page.isLiked;
 
   const displayUser = resolveDisplayUser(page);
 

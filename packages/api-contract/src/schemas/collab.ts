@@ -74,7 +74,7 @@ export type WsTokenResponse = z.infer<typeof WsTokenResponseSchema>;
 
 /**
  * Decoded payload of the short-lived wsToken JWT. The server signs
- * this with `WS_TOKEN_SECRET` (Phase 2) and Hocuspocus verifies it on
+ * this with `SECRET_TOKEN` (Phase 2) and Hocuspocus verifies it on
  * `onAuthenticate` (Phase 3). Phase 1 exports the schema so both
  * ends can validate the payload shape with the same source of truth.
  *

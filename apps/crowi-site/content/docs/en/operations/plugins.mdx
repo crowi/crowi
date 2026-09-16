@@ -1,0 +1,189 @@
+---
+title: Installing and configuring plugins
+description: Installing, enabling, and configuring plugins from the admin UI
+---
+
+This page explains how to add plugins to Crowi 2.0 and configure them
+from the admin screen. We recommend reading
+[Plugin architecture](../develop/plugins-overview) first for how plugins work overall.
+
+## A plugin is enabled in two stages
+
+Crowi plugins are enabled in two stages: "loading" and "configuring".
+
+1. **Loading** — declare which plugins to load in `crowi.config.json`.
+   This is an operator configuration change, not a code change.
+2. **Configuring** — enter each plugin's config values (S3 bucket name,
+   OAuth client ID, etc.) from the admin screen at `/admin/plugins`.
+   Config values are stored in the MongoDB Config collection under the
+   `plugin:<name>:*` namespace.
+
+`crowi.config.json` only records "which plugins to load" and "which
+driver to use". The **config values themselves**, such as bucket names
+and secrets, are not written in this file.
+
+## Installation steps
+
+### 1. Add to the runner project's dependencies
+
+Plugins are ordinary npm packages. Add the plugin to the `package.json`
+dependencies of the runner project (the project that boots the api).
+
+```bash
+pnpm add @crowi/plugin-storage-aws-s3
+```
+
+In the development repository, first-party plugins already exist inside
+the workspace, so they resolve through pnpm's hoisted `node_modules/`
+and need no extra install.
+
+### 2. List it in crowi.config.json
+
+Add the plugin's npm package name to the `plugins` array in the runner
+project's `crowi.config.json`.
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": {
+    "driver": "s3"
+  },
+  "search": {
+    "driver": "elasticsearch"
+  }
+}
+```
+
+For plugins that select a "driver" — storage, search, and mail —
+specify the driver name to use via `storage.driver` / `search.driver` /
+`mail.driver`. If omitted, the implicit-default plugins provide `local`
+/ `mongo` / `smtp` (search defaults to MongoDB, not Elasticsearch).
+
+> **Tip**: If a plugin you list in `crowi.config.json` needs another
+> plugin via `requires`, the transitive dependency is loaded
+> automatically. For example `@crowi/plugin-storage-aws-s3` requires
+> `@crowi/plugin-aws`, so the latter loads even without listing it
+> explicitly.
+
+### 3. Restart the api
+
+Plugins are loaded exactly once at boot. After changing
+`crowi.config.json`, restart the api. Adding or removing a plugin does
+not require rebuilding the api image.
+
+In the official Docker images the runner project's `crowi.config.json`
+is baked in (it only selects active drivers — no secrets). To change
+which plugins/drivers are active, mount your own file over it at
+`/app/crowi.config.json`.
+
+## Configuring from the admin screen
+
+Once the api boots, loaded plugins are listed on the admin screen at
+`/admin/plugins`. Each row shows the npm name, version, and registered
+extension points, and clicking it navigates to the config form at
+`/admin/plugins/edit?name=<name>`.
+
+### Configuration readiness warning
+
+When the selected storage, search, or mail sender driver is missing
+configuration it needs — an S3 bucket name, an Elasticsearch / OpenSearch
+cluster URL, an SMTP host, or a Resend API key, for example — a warning
+banner is shown to **administrators only**. It appears on every wiki page
+and on `/admin/plugins`, with a direct link to the affected config screen.
+It clears on the next refetch after the missing value is saved.
+
+Some readiness issues come from core settings rather than a plugin — the
+mail sender address (`mail:from`) is one. In that case the banner links to
+the mail settings screen (`/admin/mail`) instead, and it never shows up as
+a row on `/admin/plugins` (only a plugin's own configuration gap appears
+there).
+
+Non-admins never see the banner and never make the request behind it. The
+check only ever reports **which settings are missing** — never configuration
+values, URLs, or secrets.
+
+For declaring readiness requirements in a plugin, see
+[Developing plugins](../develop/plugins-developing).
+
+### Schema-driven config form
+
+The config form is **generated automatically** from the settings a plugin
+declares. The plugin does not need to ship a screen of its own.
+
+Each plugin also adds its own entry to the admin sidebar. The plugin decides
+where that entry goes, and the section (storage / mail / notification / auth …)
+follows from the kind of extension it provides.
+
+**Anything that does not resolve to a section defaults to the Settings
+group.** Config-only base plugins that provide no driver of their own (such as
+`@crowi/plugin-aws`) can opt into Shared services — not to become visible;
+without that they would still appear, under Settings. A plugin naming a section
+the sidebar has no heading for falls back the same way, so getting the section
+wrong can never make a plugin's config page unreachable.
+
+### Sensitive settings and action buttons
+
+A setting a plugin declares as sensitive is encrypted on write and decrypted
+on read with the same key as core's own sensitive settings, and rendered in
+the admin UI as a secret input (saved badge / clear pending / undo). For
+`CROWI_ENCRYPTION_KEY`, the prerequisite for encryption, see
+[Encrypting sensitive settings](./encryption).
+
+Action buttons like "Test connection" or "Authorise with Google" also appear
+when a plugin declares them on a setting. For how a plugin declares either,
+see [Plugin SDK](../develop/plugin-api).
+
+## Clearing the render cache
+
+Renderer plugins (such as PlantUML) cache their rendering results. The
+`/admin/plugins` screen has a button to clear all render cache at once.
+Use it after a plugin's output shape changes, for example.
+
+## A single plugin's activation failure does not stop the boot
+
+Activating a plugin and registering the HTTP routes it provides are
+isolated per plugin. If one plugin throws during boot, other plugins still
+load and the server still starts.
+
+- **When activation fails**: that plugin is excluded from the "loaded"
+  set — it has no config form and none of its drivers get registered. The
+  server log gets a line reading `[crowi:plugin:<name>] activation
+  failed; plugin disabled: <error message>`. The plugin still shows up in
+  the `/admin/plugins` list, with an "Activation failed" badge on its
+  row; hover the badge to see the failure reason.
+- **When route registration fails**: the plugin itself activated
+  successfully, so it appears in the list as usual, but none of the
+  endpoints it would have mounted under `/api/plugins/<name>/...` are
+  registered. The log gets a line reading `[crowi:plugin:<name>]
+  registerRoutes failed; this plugin's HTTP routes are not mounted:
+  <error message>`.
+
+In either case, check the server log for the actual error first, then —
+if needed — remove the plugin from the `plugins` array in
+`crowi.config.json` and restart the api.
+
+> **Note**: Even if a plugin that provides an implicit-default driver
+> (such as `storage.driver` / `search.driver`) fails to activate, the
+> current implementation still lets the boot continue — that driver is
+> treated as "not registered" and legacy in-core handling takes over.
+
+## Removing a plugin
+
+To remove a plugin, drop its name from the `plugins` array in
+`crowi.config.json` and restart the api. Config rows
+(`plugin:<name>:*`) are **kept by default**, in case the operator
+reinstalls later. To discard config rows too, perform an explicit purge
+on removal.
+
+## Related pages
+
+- How plugins work → [Plugin architecture](../develop/plugins-overview)
+- The list of renderer plugins → [Renderer plugins](./renderers)
+- Choosing storage → [Storage](./storage)
+- Configuring the search backend → [Search backend setup](./search-setup)
+- The list of published plugins → [First-party plugins](../reference/plugins)

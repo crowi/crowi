@@ -6,6 +6,7 @@ import type { PageHistoryOperationModel } from 'src/models/page-history-operatio
 import type { RevisionModel } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
 import * as contentSequenceModule from 'src/service/page-history/content-sequence';
+import * as materializeModule from 'src/service/page-history/materialize';
 import { readPageHistory } from 'src/service/page-history/read';
 import { crowi, Fixture } from 'src/test/setup';
 import { runPageHistoryRepair } from 'src/util/page-history-repair';
@@ -449,6 +450,74 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     expect(await PageHistoryEvent.countDocuments({ page: { $in: [root._id, child._id] }, kind: 'page_renamed' })).toBe(2);
     expect(await PageHistoryOperation.countDocuments({ command: 'subtree_rename_member', 'result.status': 'succeeded' })).toBe(2);
     expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean()).result.status).toBe('succeeded');
+  });
+
+  test('a delivery landing between the exit CAS and the event materialize settles the member from the staged outbox entry', async () => {
+    const root = await createReadyPage('/subtree/outbox-window');
+    const destination = '/subtree/outbox-window-moved';
+    const key = nextKey();
+    const materialize = materializeModule.materializePendingEntry;
+    let calls = 0;
+    let reachedGate: (() => void) | undefined;
+    const atGate = new Promise<void>((resolve) => {
+      reachedGate = resolve;
+    });
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Hold only the exit-CAS winner's own materialize. Holding later calls
+    // (the other delivery's drain-assist) would deadlock instead of
+    // reproducing the window.
+    const spy = jest.spyOn(materializeModule, 'materializePendingEntry').mockImplementation(async (crowiArg, pageIdArg) => {
+      calls += 1;
+      if (calls === 1) {
+        reachedGate?.();
+        await gate;
+      }
+      return materialize(crowiArg, pageIdArg);
+    });
+
+    const firstDelivery = run(root, destination, key);
+    await atGate;
+    // Inside the window: the move is durable (path moved, transition
+    // released, event staged in the outbox) but no event row exists yet.
+    const inWindow = await Page.findById(root._id).lean();
+    expect(inWindow).toMatchObject({ path: destination, historyTransition: null });
+    expect(inWindow?.pendingHistoryEntry?.type).toBe('page_event');
+    expect(await PageHistoryEvent.countDocuments({ page: root._id, kind: 'page_renamed' })).toBe(0);
+
+    const secondOutcome = await run(root, destination, key);
+    release?.();
+    const firstOutcome = await firstDelivery;
+    spy.mockRestore();
+
+    expect(firstOutcome.status === 'completed' && firstOutcome.failures).toEqual([]);
+    expect(secondOutcome.status === 'completed' && secondOutcome.failures).toEqual([]);
+    expect(await Page.findById(root._id).lean()).toMatchObject({ path: destination });
+    expect(await PageHistoryEvent.countDocuments({ page: root._id, kind: 'page_renamed' })).toBe(1);
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: root._id }).lean())?.result?.status).toBe('succeeded');
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean())?.result?.status).toBe('succeeded');
+  });
+
+  test('a member whose event materialize threw after the exit CAS is still settled from the staged outbox entry', async () => {
+    const root = await createReadyPage('/subtree/materialize-throws');
+    const destination = '/subtree/materialize-throws-moved';
+    const key = nextKey();
+    const spy = jest.spyOn(materializeModule, 'materializePendingEntry').mockRejectedValueOnce(new Error('transient materialize failure'));
+    let outcome: Awaited<ReturnType<typeof run>>;
+    try {
+      outcome = await run(root, destination, key);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+    const moved = await Page.findById(root._id).lean();
+    expect(moved).toMatchObject({ path: destination });
+    expect(moved?.pendingHistoryEntry ?? null).toBeNull();
+    expect(await PageHistoryEvent.countDocuments({ page: root._id, kind: 'page_renamed' })).toBe(1);
+    expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: root._id }).lean())?.result?.status).toBe('succeeded');
   });
 
   test('AC-1: a stale member-operation miss for the root member does not derive a moved-to-moved path pair', async () => {

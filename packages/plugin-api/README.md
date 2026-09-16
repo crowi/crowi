@@ -7,7 +7,7 @@ import('<plugin-name>')` at boot and calls each `register*` callback it
 implements. See
 [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)
 for the full design and the
-[plugin development guide](https://crowi.wiki/docs/plugins/developing)
+[plugin development guide](https://crowi.wiki/en/docs/develop/plugins-developing)
 for a walkthrough.
 
 > **Alpha notice**: Crowi v2 is under active alpha development and this
@@ -145,7 +145,7 @@ A few things make this different from every other `register*` / `reconfigure` ca
 
 ## See also
 
-- [Plugin development guide](https://crowi.wiki/docs/plugins/developing) —
+- [Plugin development guide](https://crowi.wiki/en/docs/develop/plugins-developing) —
   the full walkthrough (markers, `adminPlacement`, `configI18n`,
   `PluginContext`, dependency plugins, renderer plugins).
 - [RFC-0001: Plugin architecture](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)

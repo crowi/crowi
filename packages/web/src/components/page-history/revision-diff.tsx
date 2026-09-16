@@ -9,6 +9,7 @@ import { DiffMethod } from 'react-diff-viewer-continued';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useRevisionPair } from '@/lib/use-page-revisions';
+import { useWideViewport } from '@/lib/use-wide-viewport';
 
 // react-diff-viewer-continued depends on @emotion which uses browser-only APIs
 // at module load time, so we render it client-side only.
@@ -32,7 +33,16 @@ interface RevisionDiffProps {
 
 export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { revisions, displayedFromId, displayedToId, isLoading, isFetching, isError, error, refetch } = useRevisionPair(fromId, toId);
-  const [splitView, setSplitView] = useState(true);
+  // On a phone the two side-by-side code columns are narrower than any
+  // markdown line, so the narrow viewport is unified-only and drops the
+  // control entirely rather than offering a mode nobody can read. This needs
+  // the JS hook rather than a `md:` utility because the viewer builds
+  // different DOM per mode — CSS cannot switch it.
+  const isWide = useWideViewport();
+  // Held separately from `splitView` so a wide-viewport user who chose
+  // unified, then narrowed and widened again, gets their choice back.
+  const [splitViewOnWide, setSplitViewOnWide] = useState(true);
+  const splitView = isWide && splitViewOnWide;
   // GitHub-style fold: by default only the changed lines (+3 lines of
   // surrounding context) render, and unchanged regions collapse behind a
   // click-to-expand indicator. This toggle switches to showing every line.
@@ -108,7 +118,7 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-muted-foreground">
           <span className="font-medium">{m['page_history.diff_from']()}</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{fromLabel}</code>
           <span className="mx-2">→</span>
@@ -128,9 +138,11 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
               {showAllLines ? m['page_history.diff_show_changes_only']() : m['page_history.diff_show_all_lines']()}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setSplitView((v) => !v)} type="button">
-            {splitView ? m['page_history.diff_unified_view']() : m['page_history.diff_split_view']()}
-          </Button>
+          {isWide && (
+            <Button variant="outline" size="sm" onClick={() => setSplitViewOnWide((v) => !v)} type="button">
+              {splitView ? m['page_history.diff_unified_view']() : m['page_history.diff_split_view']()}
+            </Button>
+          )}
         </div>
       </div>
       {hasNoChanges ? (

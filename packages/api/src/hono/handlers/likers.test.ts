@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
@@ -127,5 +128,99 @@ describe('Routes /api/pages/:id/likers (Hono getLikers)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalCount).toBe(1);
+  });
+
+  // D-1/D-3 — Activity fallback / tie-break / stable order.
+  describe('AC-6: D-3 timestamp source, null fallback, and stable order', () => {
+    it('a live Like (non-null createdAt) uses its own row timestamp, never an Activity fallback', async () => {
+      const pageId = await createPage('live-timestamp');
+      await likePage(pageId, liker1.accessToken);
+
+      const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.users[0].likedAt).not.toBeNull();
+    });
+
+    it('a migrated Like row (createdAt: null) with a matching ACTION_LIKE Activity resolves likedAt from that Activity', async () => {
+      const pageId = await createPage('null-with-activity');
+      const Like = crowi.model('Like');
+      const Activity = crowi.model('Activity');
+      const activityTime = new Date('2026-01-15T00:00:00.000Z');
+
+      await Like.collection.insertOne({ page: new Types.ObjectId(pageId), user: liker1.user._id, createdAt: null });
+      await Activity.create({
+        user: liker1.user._id,
+        targetModel: 'Page',
+        target: new Types.ObjectId(pageId),
+        action: 'LIKE',
+        createdAt: activityTime,
+      });
+
+      const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.totalCount).toBe(1);
+      expect(res.body.users[0].likedAt).toBe(activityTime.toISOString());
+    });
+
+    it('a migrated Like row (createdAt: null) with NO matching Activity keeps likedAt null', async () => {
+      const pageId = await createPage('null-no-activity');
+      const Like = crowi.model('Like');
+      await Like.collection.insertOne({ page: new Types.ObjectId(pageId), user: liker1.user._id, createdAt: null });
+
+      const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.totalCount).toBe(1);
+      expect(res.body.users[0].likedAt).toBeNull();
+    });
+
+    it('sorts newest-liked first and applies limit AFTER sorting (not before)', async () => {
+      const pageId = await createPage('sort-then-limit');
+      const Like = crowi.model('Like');
+      const pageObjectId = new Types.ObjectId(pageId);
+      // liker1 liked earlier, liker2 liked later — liker2 must sort first.
+      await Like.collection.insertOne({ page: pageObjectId, user: liker1.user._id, createdAt: new Date('2026-01-01T00:00:00.000Z') });
+      await Like.collection.insertOne({ page: pageObjectId, user: liker2.user._id, createdAt: new Date('2026-02-01T00:00:00.000Z') });
+
+      const res = await request(app).get(`/api/pages/${pageId}/likers`).query({ limit: 1 }).set(authHeaders(owner.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.totalCount).toBe(2); // full relation count, unaffected by limit
+      expect(res.body.users).toHaveLength(1);
+      expect(res.body.users[0].id).toBe(liker2.user._id.toString()); // newest-liked wins the single slot
+    });
+
+    it('breaks ties (equal likedAt) by ascending user id for a stable order', async () => {
+      const pageId = await createPage('tie-break');
+      const Like = crowi.model('Like');
+      const pageObjectId = new Types.ObjectId(pageId);
+      const tiedAt = new Date('2026-03-01T00:00:00.000Z');
+      await Like.collection.insertOne({ page: pageObjectId, user: liker1.user._id, createdAt: tiedAt });
+      await Like.collection.insertOne({ page: pageObjectId, user: liker2.user._id, createdAt: tiedAt });
+
+      const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.totalCount).toBe(2);
+      expect(res.body.users).toHaveLength(2);
+
+      const [firstId, secondId] = [liker1.user._id.toString(), liker2.user._id.toString()].sort();
+      expect(res.body.users[0].id).toBe(firstId);
+      expect(res.body.users[1].id).toBe(secondId);
+      expect(res.body.users[0].likedAt).toBe(tiedAt.toISOString());
+      expect(res.body.users[1].likedAt).toBe(tiedAt.toISOString());
+    });
+
+    it('returns every liker (no server-side cap) when `limit` is omitted, even well past a small page size', async () => {
+      const pageId = await createPage('unbounded');
+      const many = await Promise.all(
+        Array.from({ length: 12 }, (_, i) => createTestUser({ name: `Likers Bulk ${i}`, username: `likersBulk${i}`, email: `likers-bulk-${i}@example.com` })),
+      );
+      for (const u of many) {
+        await likePage(pageId, u.accessToken);
+      }
+
+      const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body.totalCount).toBe(12);
+      expect(res.body.users).toHaveLength(12);
+    });
   });
 });

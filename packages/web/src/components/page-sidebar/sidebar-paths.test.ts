@@ -1,6 +1,6 @@
 import type { PageChildSegment } from '@crowi/api-contract';
 import { describe, expect, it } from 'vitest';
-import { pageSidebarLayout, resolveSidebarSelfLink } from './sidebar-paths';
+import { dateMonthPath, deepChildRowsOf, pageSidebarLayout, resolveSidebarSelfLinks } from './sidebar-paths';
 
 describe('pageSidebarLayout', () => {
   // The defining invariant of the unified tree (feature-update-pages-list-ux
@@ -140,10 +140,10 @@ describe('pageSidebarLayout', () => {
   });
 });
 
-describe('resolveSidebarSelfLink', () => {
-  const seg = (over: Partial<PageChildSegment>): PageChildSegment => ({
-    segment: 'c',
-    path: '/a/b/c/',
+describe('resolveSidebarSelfLinks', () => {
+  const seg = (path: string, over: Partial<PageChildSegment> = {}): PageChildSegment => ({
+    segment: path.replace(/\/$/, '').split('/').pop() as string,
+    path,
     isPage: false,
     hasPortal: false,
     count: 0,
@@ -154,26 +154,113 @@ describe('resolveSidebarSelfLink', () => {
   // node `c` is listed at level 1 (children of /a/b/).
   const layout = pageSidebarLayout('/a/b/c');
 
-  it('surfaces the content page as a self-link when the node is a page WITH children', () => {
-    const levels: PageChildSegment[][] = [[], [seg({ isPage: true, count: 3 })], []];
+  it("surfaces the current node's content page at the top of its own listing when it is a page WITH children", () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { isPage: true, count: 3 })], []];
     // On the content page itself → the self-link is the current node.
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toEqual({ contentPath: '/a/b/c', isCurrent: true });
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: true }]);
     // On the portal listing → same link, but the folder node stays current.
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c/')).toEqual({ contentPath: '/a/b/c', isCurrent: false });
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c/')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: false }]);
   });
 
-  it('returns null for a pure directory (no content page at the node)', () => {
-    const levels: PageChildSegment[][] = [[], [seg({ isPage: false, count: 3 })], []];
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toBeNull();
+  it('surfaces an opened ANCESTOR folder that is also a page, never as the current node', () => {
+    // /xxx/yyy/aa/bb → levels ['/xxx/yyy/', '/xxx/yyy/aa/', '/xxx/yyy/aa/bb/'].
+    // `aa` is rendered as the folder `aa/` holding `bb`, so its content page
+    // at `/xxx/yyy/aa` would otherwise vanish from the tree while `bb` is open.
+    const deep = pageSidebarLayout('/xxx/yyy/aa/bb');
+    const levels: PageChildSegment[][] = [
+      [seg('/xxx/yyy/aa/', { isPage: true, count: 1 }), seg('/xxx/yyy/zz/', { isPage: true })],
+      [seg('/xxx/yyy/aa/bb/', { isPage: true })],
+      [],
+    ];
+    expect(resolveSidebarSelfLinks(deep, levels, '/xxx/yyy/aa/bb')).toEqual([null, { contentPath: '/xxx/yyy/aa', label: 'aa', isCurrent: false }, null]);
   });
 
-  it('returns null for a childless leaf page (the node already links to /a/b/c)', () => {
-    const levels: PageChildSegment[][] = [[], [seg({ isPage: true, count: 0 })], []];
-    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toBeNull();
+  it('surfaces nothing for a folder-page that is NOT on the open branch', () => {
+    // On a sibling (`zz`), `aa/` stays a collapsed folder row.
+    const sibling = pageSidebarLayout('/xxx/yyy/zz');
+    const levels: PageChildSegment[][] = [
+      [seg('/xxx/yyy/', { count: 3 })],
+      [seg('/xxx/yyy/aa/', { isPage: true, count: 1 }), seg('/xxx/yyy/zz/', { isPage: true })],
+      [],
+    ];
+    expect(resolveSidebarSelfLinks(sibling, levels, '/xxx/yyy/zz')).toEqual([null, null, null]);
   });
 
-  it('returns null at the (un-rendered) root where there is no current node', () => {
-    const rootLayout = pageSidebarLayout('/');
-    expect(resolveSidebarSelfLink(rootLayout, [[]], '/')).toBeNull();
+  it('surfaces nothing for a pure directory (no content page at the node)', () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { count: 3 })], []];
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, null]);
+  });
+
+  it('surfaces nothing for a childless leaf page (the node already links to /a/b/c)', () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { isPage: true })], []];
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, null]);
+  });
+
+  it('surfaces nothing at the (un-rendered) root, which the ⤴ / user home stands for', () => {
+    expect(resolveSidebarSelfLinks(pageSidebarLayout('/'), [[]], '/')).toEqual([null]);
+  });
+});
+
+describe('dateMonthPath', () => {
+  it('returns the month portal for a path inside a date hierarchy', () => {
+    expect(dateMonthPath('/almoha/specs/2026/08/07/AIレポート実験基盤')).toBe('/almoha/specs/2026/08/');
+    expect(dateMonthPath('/almoha/specs/2026/08/07/')).toBe('/almoha/specs/2026/08/');
+    expect(dateMonthPath('/almoha/specs/2026/08')).toBe('/almoha/specs/2026/08/');
+    expect(dateMonthPath('/user/alice/diary/2026/05/23')).toBe('/user/alice/diary/2026/05/');
+  });
+
+  it('returns null at the year level — there is no month to expand yet', () => {
+    expect(dateMonthPath('/almoha/specs/2026')).toBeNull();
+    expect(dateMonthPath('/almoha/specs/2026/')).toBeNull();
+  });
+
+  it('returns null for a path with no date run', () => {
+    expect(dateMonthPath('/crowi/rfc/0002-renderer')).toBeNull();
+    expect(dateMonthPath('/crowi/project/hoge/xxx/yyy')).toBeNull();
+    expect(dateMonthPath('/')).toBeNull();
+  });
+
+  it('anchors on the FIRST numeric run, so a deeper numeric page cannot move the month', () => {
+    // `12` here is a page under the day, not a second date hierarchy.
+    expect(dateMonthPath('/log/2026/08/07/12')).toBe('/log/2026/08/');
+  });
+
+  it('skips a lone numeric segment and finds the real date run behind it', () => {
+    // A numerically-named space/notebook is not a date hierarchy on its own —
+    // it takes two adjacent numeric segments to make a year and a month.
+    expect(dateMonthPath('/123/project/2026/08/07/note')).toBe('/123/project/2026/08/');
+    expect(dateMonthPath('/2026/notes/2027/05/01/x')).toBe('/2026/notes/2027/05/');
+  });
+
+  it('is identical for a path and its trailing-slash twin', () => {
+    for (const p of ['/almoha/specs/2026/08/07/AIレポート', '/almoha/specs/2026/08', '/almoha/specs/2026', '/crowi/rfc/0002-renderer']) {
+      expect(dateMonthPath(p)).toBe(dateMonthPath(`${p}/`));
+    }
+  });
+});
+
+describe('deepChildRowsOf', () => {
+  const row = (path: string): PageChildSegment => ({
+    segment: path.replace(/\/$/, '').split('/').pop() as string,
+    path,
+    isPage: true,
+    hasPortal: false,
+    count: 0,
+  });
+
+  // A depth=2 fetch of `/s/2026/08/`: the day directories AND the pages under them.
+  const rows = [row('/s/2026/08/03/'), row('/s/2026/08/03/仕様メモ/'), row('/s/2026/08/07/'), row('/s/2026/08/07/AIレポート/'), row('/s/2026/08/09/')];
+
+  it('returns only the direct children of the given parent', () => {
+    expect(deepChildRowsOf(rows, '/s/2026/08/03/').map((r) => r.segment)).toEqual(['仕様メモ']);
+    expect(deepChildRowsOf(rows, '/s/2026/08/07/').map((r) => r.segment)).toEqual(['AIレポート']);
+  });
+
+  it('returns an empty list for a day with no pages', () => {
+    expect(deepChildRowsOf(rows, '/s/2026/08/09/')).toEqual([]);
+  });
+
+  it('does not treat grandchildren as children of the fetch root', () => {
+    expect(deepChildRowsOf(rows, '/s/2026/08/').map((r) => r.segment)).toEqual(['03', '07', '09']);
   });
 });

@@ -21,6 +21,12 @@ pre-commit:
     - name: kebab-filenames
       glob: "**/*.{ts,tsx}"
       run: node scripts/check-kebab-filenames.mjs
+    # A changeset naming an ignored package next to a published one fails
+    # `changeset version` — the first step of the release job — so the push
+    # succeeds, CI goes green, and only the release workflow goes red.
+    - name: changeset-ignored-mix
+      glob: ".changeset/*.md"
+      run: node scripts/check-changeset-ignored-mix.mjs
 
 pre-push:
   jobs:
@@ -35,6 +41,12 @@ pre-push:
     - name: openapi-fresh
       glob: "packages/api-contract/**"
       run: pnpm check:openapi
+    # Re-checked here without a glob because the pre-commit job only fires when
+    # a changeset file is staged. Adding a package to `.changeset/config.json`
+    # `ignore` can turn an existing, untouched changeset into a mixed one, and
+    # that edit alone would never trip the staged-file check.
+    - name: changeset-ignored-mix
+      run: node scripts/check-changeset-ignored-mix.mjs
     # Second net for .claude/scripts + .claude/skills/*/tests: ci.yml skips a
     # .claude/*.md-only push (see its paths-ignore comment), so claude-md-drift.
     # test.mjs would otherwise never run on such a push. This job is not

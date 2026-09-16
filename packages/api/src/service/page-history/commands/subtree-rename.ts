@@ -98,11 +98,15 @@ async function settleMemberFailureFromDurableState(
   oldPath: string,
   operation: PageHistoryOperationDocument,
 ): Promise<MemberOutcome> {
-  if (await hasOperationCompletionEvidence(crowi, operation)) {
+  // One read, shared by both decisions below. Reading the page separately for
+  // each would reopen the window this function exists to close: the evidence
+  // read could land before the exit CAS and the classification read after it,
+  // and the member would be called failed on a move that had just committed.
+  const page = (await crowi.model('Page').findById(pageId).read('primary').exec()) as PageDocument | null;
+  if (await hasOperationCompletionEvidence(crowi, operation, { page })) {
     const settled = await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
     return outcomeFromSettledMember(crowi, pageId, oldPath, settled);
   }
-  const page = (await crowi.model('Page').findById(pageId).exec()) as PageDocument | null;
   const decision = classifyResume(page, expectationFromMember(operation));
 
   switch (decision.decision) {
@@ -216,7 +220,7 @@ async function executeMember(
   });
   if (
     (outcome.status === 'committed' || outcome.status === 'already-settled') &&
-    (await hasOperationCompletionEvidence(crowi, operation, { eventOperationId: root.groupOperationId }))
+    (await hasOperationCompletionEvidence(crowi, operation, { eventOperationId: root.groupOperationId, page: outcome.page ?? undefined }))
   ) {
     const settled = await completeOperation(crowi, operation.operationId, { status: 'succeeded' });
     return outcomeFromSettledMember(crowi, pageId, durableFromPath, settled, outcome.page);

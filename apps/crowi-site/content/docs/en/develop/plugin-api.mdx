@@ -1,0 +1,89 @@
+---
+title: Plugin SDK
+description: Reference for CrowiPlugin, PluginContext, the extension points and the schema markers
+---
+
+The reference for the types `@crowi/plugin-api` exposes. For a tutorial, see [Developing plugins](./plugins-developing); for the list of plugins, [First-party plugins](../reference/plugins).
+
+## `CrowiPlugin`
+
+Every plugin **default-exports** an object satisfying `CrowiPlugin`. The runtime dynamic-imports it by npm package name at boot.
+
+| Field | What it declares |
+| ----- | ---------------- |
+| `name` | The npm package name. Also namespaces the config rows (`plugin:<name>:*`) and the page metadata |
+| `version` | The plugin's own version (the npm package semver) |
+| `requires` | npm names of other plugins needed at runtime; the dependency graph is resolved and they load first |
+| `modelAccess` | Allow-list of core model names this plugin may touch. Anything undeclared is unreachable |
+| `exposesConfigToDependents` | Whether plugins that depend on this one may read its config |
+| `configSchema` | A Zod schema for the global config. The admin UI generates the settings form from it |
+| `configAtomicGroups` | Groups of config fields saved and verified together (`name` / `keys` / `sensitive`) |
+| `pageMetadataSchema` | A per-page metadata schema. Declaring it adds inputs to the page editor |
+| `adminPlacement` | Where the plugin appears in the admin sidebar (`section` / `label` / `icon`) |
+| `readiness` | Declares the warning the admin panel shows while required config is missing |
+| `onInstall` / `onUninstall` | Hooks for first activation and removal |
+| `reconfigure` | Called when an admin saves new config; rebuilds whatever the plugin holds |
+| `verifyConfig` | Checks that the saved config really connects. The result surfaces in the admin UI |
+
+## Extension points
+
+Every `register*` is optional. Only the ones you implement are registered.
+
+| Field | What it registers |
+| --- | --- |
+| `registerStorage` | A driver for where attachments are stored |
+| `registerSearch` | A driver for full-text search |
+| `registerMailSender` | A driver for sending mail |
+| `registerRenderer` | A renderer that adds body syntax |
+| `registerAuth` | A provider for signing in with an external account |
+| `registerNotifier` | A destination for notifications |
+| `registerHooks` | Listeners on the core event bus |
+| `registerRoutes` | HTTP routes under `/api/plugins/<name>/...` |
+
+With `adminPlacement.section` omitted, the section is derived from the kind of extension registered. When nothing resolves, the plugin lands in the "settings" group.
+
+The accepted values for `adminPlacement.section` are `settings`, `shared`, `storage`, `mail`, `notification`, `auth`, `search`, `renderer` and `platform`.
+
+## `PluginContext`
+
+Each `register*` and each lifecycle hook receives a `PluginContext`. It is the only window onto core state — a plugin never imports the core directly.
+
+| Member | What it does |
+| --- | --- |
+| `config<T>()` | Read this plugin's config, parsed and typed through `configSchema` |
+| `dependencyConfig<T>(name)` | Read the config of a plugin declared in `requires` |
+| `setConfig(key, value)` | Write one config field |
+| `pageMetadata` | Read and write page metadata inside this plugin's namespace (`get` / `set`) |
+| `model(name)` | Reach a core model allowed by `modelAccess` |
+| `state<T>(initial)` | Return a `StateCell` holding whatever the driver owns |
+| `log` | A structured logger auto-prefixed with the plugin name |
+
+`model()` is closed by the `modelAccess` allow-list. Credential-holding models fail boot if listed and are refused at call time anyway. There is deliberately no symmetric encryption API on this context.
+
+`dependencyConfig` exists for base plugins that share credentials: `@crowi/plugin-aws` holds the region and access keys, and the AWS plugins depending on it read those without redeclaring them in their own schema.
+
+### `StateCell`
+
+A box holding the resource `reconfigure` rebuilds — a storage client, a mail transport, a search client. `state()` with the same argument returns the same cell, so a cell created in `register*` can be swapped from `reconfigure`.
+
+| Member | What it does |
+| --- | --- |
+| `withValue(fn)` | Take the current value and hand it to `fn`, without racing a swap |
+
+## Schema markers
+
+A marker at the start of a config field's Zod `describe()` changes how the admin UI treats it.
+
+| Marker | How to write it | Effect |
+| --- | --- | --- |
+| `@sensitive` | `@sensitive <description>` | Encrypted on save and decrypted on read; rendered as a secret input in the admin UI |
+| `@action` | `@action "<label>" <METHOD> <path>` | Puts a button next to the field that calls one of this plugin's routes |
+
+`@sensitive` encryption depends on `CROWI_ENCRYPTION_KEY` ([Encrypting sensitive settings](../operations/encryption)). An `@action` target is a route registered through `registerRoutes`.
+
+## Related pages
+
+- [Developing plugins](./plugins-developing) — from a minimal plugin to config schemas and drivers
+- [Plugin architecture](./plugins-overview) — the design principles and how resolution works
+- [First-party plugins](../reference/plugins) — the list of published plugins
+- [Installing and configuring plugins](../operations/plugins) — the operator-side procedure

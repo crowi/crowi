@@ -1,0 +1,65 @@
+---
+title: Renderer plugins
+description: Enabling and configuring the plugins that add maths, diagrams and v1-compatible syntax
+---
+
+Renderer plugins add maths and diagrams to page bodies. For the notation authors write, see [Markdown syntax](../guide/markdown); for how the pipeline works, see [The renderer pipeline](../develop/renderer-pipeline).
+
+Enabling one works like any other plugin: add it to the runner project's dependencies and list it in `plugins` in `crowi.config.json` ([Installing and configuring plugins](./plugins)).
+
+## The bundled renderer plugins
+
+| Plugin | What it renders | External dependency | Settings |
+| ------ | --------------- | ------------------- | -------- |
+| `@crowi/plugin-renderer-katex` | `$inline$` and `$$display$$` maths | None | None |
+| `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` blocks, via a PlantUML server | A PlantUML server | Server URL, output format |
+| `@crowi/plugin-renderer-mermaid` | ` ```mermaid ` blocks, rendered in-process | None | None |
+| `@crowi/plugin-renderer-crowi-legacy` | Crowi v1 syntax quirks (off by default) | None | None |
+
+## PlantUML
+
+This plugin needs an external PlantUML server, and you provide it: Crowi's compose file does not bundle one.
+
+Set the **server URL** and the **output format (`svg` or `png`)** in the plugin's settings in the admin panel. The default URL points at a compose-internal hostname and will not resolve as-is. If you run `plantuml/plantuml-server` on your development machine, it is `http://localhost:8080`.
+
+Rendered diagrams are cached for an hour and failures for five minutes. When a diagram rendered successfully before, it keeps showing even while the PlantUML server is down.
+
+## Mermaid
+
+There is nothing to configure — enabling the plugin is enough. Diagrams render on the server rather than in the browser and are embedded as a sanitised image.
+
+The limits are:
+
+- 20KB of diagram source, and 60KB for the generated SVG
+- At most 50 diagrams per page save or preview
+- Four concurrent renders per api process and two per user within one process (more replicas raise the total proportionally)
+- 600 preview requests per user per 60 seconds while editing
+
+A diagram with a syntax error shows a fixed error graphic. A diagram that could not be rendered because the server was busy is retried automatically the next time the page is opened.
+
+Existing ` ```mermaid ` fences keep displaying as code blocks until an author saves the page again; enabling the plugin does not re-render past pages in bulk.
+
+> **Note**: Rendering already happens in an isolated child process with no way out to the network, but consider container- or OS-level egress control as defence in depth.
+
+## crowi-legacy
+
+A compatibility plugin that reproduces Crowi v1's non-standard syntax quirks — treating `##hoge` with no space after the hashes as a heading, for instance. It is bundled but **off by default**; an instance migrated from v1 enables it in the admin panel.
+
+## Rendering features that are not plugins
+
+Emoji shortcodes and link cards are part of Crowi itself: always on, nothing to install, and never listed in `crowi.config.json`.
+
+Link cards (`@[card](url)`) are the one with operator-facing settings.
+
+- **They are on by default.** To stop Crowi fetching OGP metadata from external sites, turn off "Allow link cards for external links" under Security in the admin panel. From that moment, new renders perform no DNS resolution and no HTTP request at all.
+- **When disabled, when a fetch fails, and in an air-gapped network, the same fallback card is shown.** It carries no OGP title, description or image — just the URL as its title — and still works as a link.
+- **`og:image` is embedded as a direct link** to the source site; Crowi neither proxies nor caches it.
+- **Fetches run behind an SSRF guard.** A host that resolves to a private, loopback or metadata address is refused.
+- **Toggling does not rebuild existing pages.** After turning the setting back on, an existing page picks the cards up the next time it is saved or re-rendered.
+- There is no per-domain allow or deny list.
+
+## Related pages
+
+- [Markdown syntax](../guide/markdown) — the notation authors write
+- [Installing and configuring plugins](./plugins) — how to enable a plugin
+- [The renderer pipeline](../develop/renderer-pipeline) — how rendering works and where it extends

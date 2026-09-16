@@ -1,5 +1,17 @@
 # @crowi/plugin-api
 
+## 1.0.0-alpha.11
+
+### Patch Changes
+
+- 35aa704: Close 20 security advisories, including a critical one. Next.js moves to 16.3.3, which fixes unauthenticated remote code execution through the image optimization API when it handles AVIF files, and a second unauthenticated path that only affects Windows-hosted servers. Hono moves to 4.13.5 or later, nodemailer to 9.1.1, sharp to 0.35.4, and js-yaml to 4.3.2 on the 4.x line and 3.15.2 on the 3.x one. Three dependencies Crowi does not declare itself — svgo, baseline-browser-mapping and the 3.x js-yaml — are pinned to their patched versions, because no parent of theirs offers a version that already resolves there.
+
+## 1.0.0-alpha.10
+
+### Patch Changes
+
+- 518640a: Update `@xmldom/xmldom` to 0.9.12, which fixes an XML fragment injection through an invalid `EntityReference.nodeName` during well-formed serialisation. Crowi reaches this parser from the SVG sanitiser bundled into these packages and from the Mermaid renderer, both of which process content that users author, so the fix closes a path that untrusted input could otherwise take.
+
 ## 1.0.0-alpha.9
 
 ### Patch Changes

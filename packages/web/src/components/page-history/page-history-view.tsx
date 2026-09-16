@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, FilePlus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
@@ -66,20 +65,23 @@ export function PageHistoryView({ path }: PageHistoryViewProps) {
     return null;
   }
 
+  // No card frame around the screen body: the history view is full-bleed
+  // (`_history/layout.tsx` escapes the centred column), so a card's border +
+  // px-6 only shrink the diff's usable width. The gutters come from the
+  // layout instead, and the table / diff keep their own borders as the
+  // frames that actually delimit content.
   return (
-    <Card>
-      <CardContent className="pt-6 space-y-4">
-        <div>
-          <Breadcrumb path={page.path} />
-          <div className="mt-2">
-            <Button variant="ghost" size="sm" onClick={() => router.push(pagePathToHref(page.path))} type="button" className="-ml-2">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              {m['page_history.back_to_page']()}
-            </Button>
-          </div>
+    <div className="space-y-4">
+      <div>
+        <Breadcrumb path={page.path} />
+        <div className="mt-2">
+          <Button variant="ghost" size="sm" onClick={() => router.push(pagePathToHref(page.path))} type="button" className="-ml-2">
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            {m['page_history.back_to_page']()}
+          </Button>
         </div>
-        <PageHistory pageId={page._id} pagePath={page.path} />
-      </CardContent>
-    </Card>
+      </div>
+      <PageHistory pageId={page._id} pagePath={page.path} />
+    </div>
   );
 }

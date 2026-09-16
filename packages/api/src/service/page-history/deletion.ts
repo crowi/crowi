@@ -10,6 +10,19 @@ const debug = Debug('crowi:service:page-history:deletion');
 
 export type PageDeletionMode = 'user_hard_delete' | 'creation_cancel' | 'redirect_stub_cleanup' | 'internal_cleanup';
 
+/**
+ * Runs a single post-delete cleanup step, logging (not throwing) on failure.
+ * The Page row is already gone by the time any caller uses this, so a failed
+ * step is orphan-row hygiene, not a condition that can undo the deletion.
+ */
+async function runBestEffortCleanup(label: string, pageId: Types.ObjectId, task: () => Promise<unknown>): Promise<void> {
+  try {
+    await task();
+  } catch (err) {
+    debug('%s failed for page %s: %s', label, String(pageId), (err as Error)?.message ?? err);
+  }
+}
+
 export interface PageDeletionInput {
   pageId: Types.ObjectId;
   path: string;
@@ -43,6 +56,10 @@ export async function deletePageWithMode(crowi: Crowi, input: PageDeletionInput,
   const PageDeletionRecord = crowi.model('PageDeletionRecord');
   const PageYjsUpdate = crowi.model('PageYjsUpdate');
   const Revision = crowi.model('Revision');
+  const Backlink = crowi.model('Backlink');
+  const Watcher = crowi.model('Watcher');
+  const Like = crowi.model('Like');
+  const Seen = crowi.model('Seen');
 
   if (input.mode === 'user_hard_delete') {
     // Losing the Page without its evidence is irreversible. The opposite
@@ -64,13 +81,20 @@ export async function deletePageWithMode(crowi: Crowi, input: PageDeletionInput,
     throw err;
   }
   onPageDeleted?.();
-  // The Page row is already gone, so append-log cleanup is storage/privacy
-  // hygiene rather than a condition that can make the deletion un-happen.
-  try {
-    await PageYjsUpdate.deleteMany({ pageId: input.pageId }).exec();
-  } catch (err) {
-    debug('PageYjsUpdate.deleteMany failed for page %s: %s', String(input.pageId), (err as Error)?.message ?? err);
-  }
+  // These three are kept out of the steps[]/causes[] aggregation below on
+  // purpose — a fail-fast placement before Page.deleteOne would risk leaving
+  // a still-live Page with half its relations gone (e.g. Backlink succeeds,
+  // Watcher fails), which is strictly worse than an orphan row pointing at
+  // an already-deleted Page.
+  await runBestEffortCleanup('PageYjsUpdate.deleteMany', input.pageId, () => PageYjsUpdate.deleteMany({ pageId: input.pageId }).exec());
+  await runBestEffortCleanup('Backlink.removeByPageIdForHardDelete', input.pageId, () => Backlink.removeByPageIdForHardDelete(input.pageId));
+  await runBestEffortCleanup('Watcher.removeByPageId', input.pageId, () => Watcher.removeByPageId(input.pageId));
+  // feature-page-relations-collections D-6 — same best-effort sibling
+  // treatment: a failure here leaves an orphan `likes`/`seens` row, never
+  // a terminal error (there is no undo-the-delete recovery path — see
+  // this function's `steps[]` comment above and D-6's discussion of why).
+  await runBestEffortCleanup('Like.removeByPageId', input.pageId, () => Like.removeByPageId(input.pageId));
+  await runBestEffortCleanup('Seen.removeByPageId', input.pageId, () => Seen.removeByPageId(input.pageId));
 
   // A failed cleanup never skips its sibling. The Page is already gone, so
   // callers need one terminal error containing every incomplete step.

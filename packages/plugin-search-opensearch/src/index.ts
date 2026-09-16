@@ -94,7 +94,7 @@ const plugin: CrowiPlugin = {
   // Read-only: driver.ts / index.ts read Page/Bookmark/User via
   // ctx.model() to build search documents and resolve grants; no
   // writes.
-  modelAccess: ['Page', 'Bookmark', 'User'],
+  modelAccess: ['Page', 'Bookmark', 'User', 'Like'],
   adminPlacement: {
     label: 'OpenSearch',
     icon: 'search',
@@ -177,10 +177,22 @@ interface UserModelLike {
   countDocuments: (q?: unknown) => { exec: () => Promise<number> };
 }
 
+/**
+ * feature-page-relations-collections D-1/AC-9 — `Like.getCountsByPageIds`
+ * (`packages/api/src/models/like.ts`), typed narrowly to what this driver
+ * calls. See the sibling ES plugin's `LikeModelLike` for the full
+ * rationale (id-set scoping / `string -> ObjectId` cast belongs to the
+ * model static, not this plugin, which has no mongoose dependency).
+ */
+interface LikeModelLike {
+  getCountsByPageIds: (pageIds: string[]) => Promise<Map<string, number>>;
+}
+
 function buildDriver(driverState: OSDriverState, ctx: PluginContext): OpenSearchDriver {
   const Page = ctx.model('Page') as PageModelLike;
   const Bookmark = ctx.model('Bookmark') as BookmarkModelLike;
   const User = ctx.model('User') as UserModelLike;
+  const Like = ctx.model('Like') as LikeModelLike;
 
   return createOpenSearchDriver(driverState, {
     log: ctx.log,
@@ -202,6 +214,7 @@ function buildDriver(driverState: OSDriverState, ctx: PluginContext): OpenSearch
       }
       return map;
     },
+    getLikeCountsBulk: (pageIds) => Like.getCountsByPageIds(pageIds),
     countUsers: () => User.countDocuments({}).exec(),
   });
 }

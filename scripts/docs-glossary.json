@@ -1,0 +1,122 @@
+{
+  "$comment": [
+    "The canonical name of every concept the docs had started calling two things, and the spellings that must not come back.",
+    "check-docs-vocabulary.mjs turns each entry into one lint rule per locale, so this file — not the script — is where the vocabulary is decided.",
+    "`canonical` is a literal and has to appear on that locale's reference/glossary page; a test asserts it, so data and page cannot drift apart.",
+    "`variants` are regular-expression sources, because a wrong spelling is often a substring of the right one or of an ordinary sentence.",
+    "A page-name concept therefore matches the link-text form (`\\[…\\]\\(`): 「プラグインの管理方法」 is a fine sentence, while a link labelled 「プラグインの管理」 disagrees with the title of the page it opens.",
+    "A term concept matches bare prose instead, since a second name for a term is wrong wherever it sits."
+  ],
+  "concepts": [
+    {
+      "concept": "plugin-admin-page",
+      "ja": {
+        "canonical": "プラグインの導入と設定",
+        "variants": ["\\[プラグインの管理\\]\\("]
+      },
+      "en": {
+        "canonical": "Installing and configuring plugins",
+        "variants": ["\\[Managing plugins\\]\\("]
+      }
+    },
+    {
+      "concept": "sensitive-config-encryption",
+      "ja": {
+        "canonical": "機密設定の暗号化",
+        "variants": ["\\[設定の暗号化\\]\\(", "\\[設定値の暗号化\\]\\(", "\\[暗号化\\]\\("]
+      },
+      "en": {
+        "canonical": "Encrypting sensitive settings",
+        "variants": ["\\[Config(?:uration)? encryption\\]\\(", "\\[Encryption\\]\\("]
+      }
+    },
+    {
+      "concept": "storage-settings",
+      "ja": {
+        "canonical": "ストレージ設定",
+        "variants": ["\\[ストレージ(?:ドライバ)?\\]\\("]
+      },
+      "en": {
+        "canonical": "Storage",
+        "variants": ["\\[Storage drivers?\\]\\("]
+      }
+    },
+    {
+      "concept": "search-backend-setup",
+      "ja": {
+        "canonical": "検索バックエンドのセットアップ",
+        "variants": ["\\[検索バックエンドの設定\\]\\(", "\\[検索のセットアップ\\]\\(", "\\[検索の設定\\]\\("]
+      },
+      "en": {
+        "canonical": "Search backend setup",
+        "variants": ["\\[Search backend configuration\\]\\(", "\\[Search setup\\]\\("]
+      }
+    },
+    {
+      "concept": "personal-access-token",
+      "ja": {
+        "canonical": "個人アクセストークン",
+        "variants": ["パーソナルアクセストークン", "API トークン"]
+      },
+      "en": {
+        "canonical": "personal access token",
+        "variants": []
+      }
+    },
+    {
+      "concept": "runner-project",
+      "ja": {
+        "canonical": "runner プロジェクト",
+        "variants": ["ランナープロジェクト", "runner パッケージ"]
+      },
+      "en": {
+        "canonical": "runner project",
+        "variants": ["runner package"]
+      }
+    },
+    {
+      "concept": "revision",
+      "ja": {
+        "canonical": "リビジョン",
+        "variants": []
+      },
+      "en": {
+        "canonical": "revision",
+        "variants": []
+      }
+    },
+    {
+      "concept": "account-settings-tabs",
+      "ja": {
+        "canonical": "パスワード/APIトークン/アカウント連携",
+        "variants": ["パスワード\\s*/\\s*API\\s*トークン\\s*/\\s*MCP", "パスワード\\s+/\\s+API"]
+      },
+      "en": {
+        "canonical": "Password / API tokens / Linked accounts",
+        "variants": ["Password / API tokens / MCP"]
+      }
+    },
+    {
+      "concept": "notifier-plugin",
+      "ja": {
+        "canonical": "通知プラグイン",
+        "variants": ["通知シンク"]
+      },
+      "en": {
+        "canonical": "notifier plugin",
+        "variants": []
+      }
+    },
+    {
+      "concept": "mail-delivery",
+      "ja": {
+        "canonical": "メール送信の設定",
+        "variants": ["メール\\s*/\\s*SMTP\\s*設定"]
+      },
+      "en": {
+        "canonical": "Mail delivery",
+        "variants": ["Mail / SMTP settings"]
+      }
+    }
+  ]
+}

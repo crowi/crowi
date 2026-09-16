@@ -25,6 +25,8 @@
 
 import type { PageChildSegment } from '@crowi/api-contract';
 
+import { isNumericSegment, pageDirname } from '@/lib/page-path';
+
 // `/space/group/` — the directory depth at which the inline tree roots.
 export const ROOT_DEPTH = 2;
 
@@ -138,41 +140,116 @@ export function pageSidebarLayout(path: string): PageSidebarLayout {
   return { levelPaths, activeSegments, currentSegment, currentLevelIndex, upPath, userHome };
 }
 
+export interface SidebarSelfLink {
+  contentPath: string;
+  label: string;
+  isCurrent: boolean;
+}
+
 /**
- * The content-page self-link shown at the TOP of the current directory's
- * expanded children.
+ * The content-page self-links, one slot per tree level (aligned with
+ * `layout.levelPaths`): the link shown at the TOP of level `k`'s listing, or
+ * `null` when that level gets none.
  *
- * When the current node is BOTH a content page (`isPage`) AND a directory
- * with descendants (`count > 0`), the tree renders it as the folder `x/`
- * (which links to the portal-path listing `/…/x/`), so the actual content
- * page at `/…/x` (no trailing slash) is otherwise unreachable from the
- * sidebar. We surface it as the first child under `x/` — a leaf row linking
- * to `/…/x`.
+ * A node that is BOTH a content page (`isPage`) AND a directory with
+ * descendants (`count > 0`) is drawn as the folder `x/`, which links to the
+ * portal-path listing `/…/x/` — so the content page at `/…/x` (no trailing
+ * slash) would be unreachable from the sidebar. Wherever such a folder is
+ * OPEN — the current node, or any ancestor on the branch leading to it — its
+ * content page is surfaced as the first child under `x/`, a leaf row linking
+ * to `/…/x`. Otherwise it would vanish as soon as you step into one of its
+ * children, while that child's siblings stay listed. A collapsed folder off
+ * the open branch shows no children at all, so it gets nothing (the month
+ * expansion's off-branch days are the exception — see `folderPageSelfLink`,
+ * which the tree applies to them directly). Level 0
+ * lists the display root's children, and the root itself is stood for by the
+ * ⤴ / user home, so that slot is always `null`.
  *
  * Pure so it can be unit-tested without rendering. `levels` is the fetched
  * child data positionally aligned with `layout.levelPaths`; `path` is the
- * raw current path (its trailing slash decides whether this self-link is the
- * "current" node — you are on `/…/x` vs the portal listing `/…/x/`).
- *
- * Returns `null` when the current node is not a page-with-children (a plain
- * leaf page links to `/…/x` directly and needs no self-link; a pure
- * directory has no content page to surface).
+ * raw current path (its trailing slash decides whether the current node's
+ * self-link is the "current" row — you are on `/…/x` vs the listing `/…/x/`).
+ * An ancestor's self-link is never current.
  */
-export function resolveSidebarSelfLink(
-  layout: PageSidebarLayout,
-  levels: PageChildSegment[][],
-  path: string,
-): { contentPath: string; isCurrent: boolean } | null {
-  const ci = layout.currentLevelIndex;
-  if (ci < 0) return null;
-  const entry = (levels[ci] ?? []).find((c) => c.segment === layout.currentSegment);
+export function resolveSidebarSelfLinks(layout: PageSidebarLayout, levels: PageChildSegment[][], path: string): (SidebarSelfLink | null)[] {
+  return layout.levelPaths.map((_, k) => {
+    if (k === 0) return null;
+    const opened = layout.activeSegments[k - 1];
+    const entry = (levels[k - 1] ?? []).find((c) => c.segment === opened);
+    return folderPageSelfLink(entry, k - 1 === layout.currentLevelIndex && !path.endsWith('/'));
+  });
+}
+
+/**
+ * The self-link for one folder row whose children are shown, or `null` when
+ * the row is not a folder that is also a content page. Also used for the
+ * month expansion's off-branch days, which open without being on the branch.
+ */
+export function folderPageSelfLink(entry: PageChildSegment | undefined, isCurrent = false): SidebarSelfLink | null {
   if (!entry || !entry.isPage || entry.count <= 0) return null;
   return {
     // `entry.path` is the trailing-slashed portal path; the content page
     // sits at the same path without the slash.
     contentPath: entry.path.replace(/\/$/, ''),
-    // Highlighted as the current node only when the viewer opened the
-    // content page itself (no trailing slash), not its portal listing.
-    isCurrent: !path.endsWith('/'),
+    label: entry.segment,
+    isCurrent,
   };
+}
+
+/**
+ * The `YYYY/MM/` portal whose whole month the sidebar expands, or `null`
+ * when `path` is not inside a date hierarchy deep enough to have one.
+ *
+ * Crowi's flow-note idiom puts one or two pages under each `YYYY/MM/DD/`,
+ * so the plain ancestry tree shows a column of bare day numbers and only
+ * ever opens the day you are on. Expanding the whole month instead turns
+ * that column into a readable month log — the day rows keep their place,
+ * but every day shows what is actually in it.
+ *
+ * A "date hierarchy" is the same notion the list view and default-title
+ * rules use: a run of consecutive all-digit segments (`isNumericSegment`).
+ * The month is the run's SECOND segment, so:
+ *
+ *   /s/2026                    → null   (a year has no month to expand yet)
+ *   /s/2026/08                 → '/s/2026/08/'
+ *   /s/2026/08/07/             → '/s/2026/08/'
+ *   /s/2026/08/07/AIレポート    → '/s/2026/08/'
+ *   /crowi/rfc/0002-renderer   → null   (not all-digit — not a date run)
+ *
+ * The anchor is the first ADJACENT PAIR of numeric segments, which is where
+ * the first run of length two or more begins. Both halves matter: a lone
+ * numeric segment ahead of the real hierarchy (`/123/project/2026/08/07/x`)
+ * must not end the search, and a numerically-named page under a day
+ * (`/log/2026/08/07/12`) must not shift the month to `08/07/`.
+ *
+ * A path and its trailing-slash twin always agree (the empty trailing
+ * segment is filtered out), preserving `pageSidebarLayout`'s invariant.
+ */
+export function dateMonthPath(path: string): string | null {
+  const segs = path.split('/').filter(Boolean);
+  const runStart = segs.findIndex((seg, index) => isNumericSegment(seg) && isNumericSegment(segs[index + 1] ?? ''));
+  if (runStart === -1) return null;
+  return `/${segs.slice(0, runStart + 2).join('/')}/`;
+}
+
+/**
+ * Index into `layout.levelPaths` of the month level `dateMonthPath` names,
+ * or `-1` when the path has no month. The level the tree fetches two deep
+ * and opens whole.
+ */
+export function monthLevelIndex(layout: PageSidebarLayout, path: string): number {
+  return layout.levelPaths.indexOf(dateMonthPath(path) ?? '');
+}
+
+/**
+ * The rows of a `depth > 1` children fetch that are DIRECT children of
+ * `parentPath`.
+ *
+ * A deep fetch returns one flat array spanning several levels (each row
+ * carries its own full portal `path`), so the tree rebuilds the nesting by
+ * matching each row's parent. Kept pure — the sidebar's month expansion is
+ * otherwise only reachable through the network.
+ */
+export function deepChildRowsOf(rows: PageChildSegment[], parentPath: string): PageChildSegment[] {
+  return rows.filter((row) => pageDirname(row.path) === parentPath);
 }

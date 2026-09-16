@@ -1,0 +1,377 @@
+---
+title: Developing plugins
+description: Building your own plugin with @crowi/plugin-api
+---
+
+This page explains how to build your own Crowi plugin using
+`@crowi/plugin-api`. For how plugins work overall see
+[Plugin architecture](./plugins-overview), and for the design background see
+[RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md).
+
+> **Caution**: `@crowi/plugin-api` is currently at version `0.x`. The API
+> stability guarantee — working across every v2 minor — takes effect once it
+> reaches `2.x`; until then the contract may change.
+
+## What a plugin really is
+
+A Crowi plugin is not a bespoke format — it is an **ordinary npm
+package**. The requirements are roughly just these two:
+
+- It (peer-)depends on `@crowi/plugin-api`
+- It **default-exports** an object satisfying the `CrowiPlugin` type
+
+At boot the runtime loads this default export via
+`await import('<plugin-name>')` and calls each `register*` callback.
+
+## A minimal plugin skeleton
+
+Here is a minimal plugin that provides a single storage driver. Since
+`@crowi/plugin-api` is a type-only package, you import only types from
+it.
+
+```ts
+import type { CrowiPlugin } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  name: '@example/crowi-plugin-mystorage',
+  version: '0.1.0',
+
+  registerStorage: (registry, ctx) => {
+    ctx.log.info('registering mystorage driver');
+    registry.register('mystorage', {
+      put: async (key, body, meta) => {
+        // ... upload logic
+        return { key };
+      },
+      get: async (key) => {
+        // ... download logic
+        throw new Error('not implemented');
+      },
+      delete: async (key) => {
+        // ... delete logic
+      },
+    });
+  },
+};
+
+export default myPlugin;
+```
+
+`name` must match the npm package name. It also doubles as the
+namespace for config rows (`plugin:<name>:*`) and page metadata.
+
+## Adding a config schema
+
+To give the plugin config values, declare a Zod schema in
+`configSchema`. The admin screen at `/admin/plugins` walks this schema
+to auto-generate a config form.
+
+> **Caution**: Import `configSchema` from the `zod/v3` compat subpath —
+> `import { z } from 'zod/v3'` — never from the top-level (v4-native)
+> `zod` package. `@crowi/plugin-api`'s `peerDependencies: { zod: "^4" }`
+> is about which npm package to install; the config-schema introspection
+> (`@sensitive` / `@action` marker detection, admin form field
+> serialization) depends on the internal shape of the `zod/v3` compat
+> shim that the v4 package ships. A schema built from the top-level
+> `zod` (v4) API fails boot with an explicit error (see the
+> `@crowi/plugin-api` README for details).
+
+```ts
+import { z } from 'zod/v3';
+import type { CrowiPlugin } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  name: '@example/crowi-plugin-mystorage',
+  version: '0.1.0',
+
+  configSchema: z.object({
+    endpoint: z.string().url().describe('Storage endpoint URL'),
+    bucket: z.string().describe('Bucket name'),
+    accessKey: z.string().describe('@sensitive Access key'),
+  }),
+
+  registerStorage: (registry, ctx) => {
+    const config = ctx.config<{ endpoint: string; bucket: string; accessKey: string }>();
+    // config.accessKey is the decrypted value
+    // ... build the driver using config
+  },
+};
+
+export default myPlugin;
+```
+
+Two markers placed in a schema field's description — `@sensitive` and
+`@action` — change the admin UI behaviour. Their format and effect are
+listed in [Plugin SDK](./plugin-api).
+
+
+### Sidebar placement (`adminPlacement`)
+
+A plugin's settings link is shown in the admin sidebar. Where it lands is
+derived from the **extension hook** the plugin registers — `registerStorage`
+→ Storage, `registerSearch` → Search, `registerRenderer` → Renderers,
+`registerNotifier` → Notification, `registerMailSender` → Mail. A config-only
+base plugin (no hook) must declare `adminPlacement: { section: 'shared' }` to
+appear under "Shared services". You can override the derived placement and set
+the label/icon explicitly:
+
+```ts
+adminPlacement: {
+  section: 'renderer', // settings | shared | storage | mail | notification | auth | search | renderer
+  label: 'PlantUML diagrams',
+  icon: 'diagram-3',
+},
+```
+
+Only plugins that declare a `configSchema` appear in the sidebar (there must be
+something to configure).
+
+### Localizing field labels (`configI18n`)
+
+Field labels and descriptions default to the Zod `.describe()` text (English).
+To localize them, ship a `configI18n` catalog keyed by locale, then field name.
+The admin API overlays the entry matching the admin's UI language; missing
+locales or fields fall back to `.describe()`:
+
+```ts
+configSchema: z.object({
+  serverUrl: z.string().url().describe('Base URL of the PlantUML server.'),
+}),
+configI18n: {
+  ja: {
+    serverUrl: { label: 'サーバー URL', description: 'PlantUML サーバーのベース URL。' },
+  },
+},
+```
+
+## What you can do with PluginContext
+
+The second argument of each `register*` callback, `PluginContext`, is
+the only conduit for a plugin to interact with the core safely. Do not
+import `@crowi/server` directly.
+
+Trust boundary: a plugin only reaches what it explicitly declares, and a
+plugin cannot reach another plugin's or core's secrets through
+`PluginContext`:
+
+- `model(name)` is gated by a `CrowiPlugin.modelAccess` allow-list (see
+  below) — there is no ambient "any core model" access. Credential-vault
+  models (`Config`, `PersonalAccessToken`, the OAuth client/token/grant
+  models, `Share`, `ShareAccess`) can never be declared in `modelAccess`
+  at all — doing so fails boot (see "Core model access" below).
+- There is also intentionally no symmetric encrypt/decrypt capability:
+  the only legitimate way to read your own plugin's secrets is
+  `config<T>()`, which already returns `@sensitive` fields transparently
+  decrypted.
+- `dependencyConfig<T>(name)` only returns a dependency's decrypted
+  config (`@sensitive` fields included) when that plugin explicitly
+  declares `CrowiPlugin.exposesConfigToDependents: true`. Listing it in
+  `requires` alone is not enough (see "Dependency plugins" below).
+
+One honest caveat remains: a plugin granted `modelAccess: ['User']` gets
+the raw Mongoose document, password hash included — there is no field
+projection today. Field-level read/write proxying is deferred to a
+post-2.0 repository/HTTP layer separation; only grant `User`
+`modelAccess` to a plugin you trust with the whole document.
+
+- `config<T>()` — read this plugin's typed config
+- `dependencyConfig<T>(name)` — read a dependency plugin declared in
+  `requires`, provided that dependency also declares
+  `exposesConfigToDependents: true`
+- `setConfig(key, value)` — write a single config field
+- `pageMetadata` — read / write page metadata in this plugin's namespace
+- `model(name)` — access a core Mongoose model (Page / User / Comment …), only
+  when it is declared in `modelAccess` — throws otherwise
+- `log` — a structured logger auto-prefixed with the plugin name
+- `state<T>(initial)` — returns a hot-reload `StateCell<T>` (see "Writing a
+  hot-reload driver (state-cell)" below)
+
+## Extension points
+
+All `register*` callbacks of `CrowiPlugin` are optional. Implement only
+what the plugin contributes. All eight are listed in
+[Plugin SDK](./plugin-api).
+
+Routes registered through `registerRoutes` are mounted at
+`/api/plugins/<plugin>/<path>`, and each one picks its authentication with
+`auth: 'user' | 'admin' | 'public'` (`public` is for webhooks that
+authenticate themselves, such as Slack's request signing). `registerHooks`
+is internal-only in v2.0 and not yet a stable extension point.
+
+
+You can also declare lifecycle hooks:
+
+- `onInstall` — runs once on first activation (used for migrating v1 config, etc.; idempotent)
+- `onUninstall` — runs on removal (config kept by default, dropped only with purge)
+- `reconfigure` — called when config changes via the admin UI, to refresh cached connections
+
+If you do not implement `reconfigure`, the plugin is treated as
+"config changes require a server restart".
+
+### Writing a hot-reload driver (state-cell)
+
+A driver plugin that implements `reconfigure` (storage / search / mail
+sending, …) holds a swappable resource — an S3 client, an SMTP
+transport, a search client. Instead of hand-rolling that as a
+module-scope `let` / `const`, use the `StateCell<T>` returned by
+`ctx.state<T>(initial)`.
+
+```ts
+interface DriverState {
+  client: SomeClient;
+}
+
+registerStorage: (registry, ctx) => {
+  const cell = ctx.state<DriverState>(buildState(ctx));
+  registry.register('my-driver', createDriver(cell));
+},
+
+reconfigure: (ctx) => {
+  const next = buildState(ctx);
+  const cell = ctx.state<DriverState>(next);
+  cell.set(next, { dispose: (prev) => prev.client.destroy() });
+},
+```
+
+`StateCell<T>` has three methods:
+
+- `get()` — a synchronous snapshot of the current value
+- `withValue(fn)` — marks the current value "in use" for the duration of
+  `fn`. This is how a driver's methods should normally read the state
+  (`cell.withValue(async ({ client }) => { ... })`)
+- `set(next, { dispose })` — swaps in a new value. `dispose(prev)` does
+  not run until every `withValue()` call that was in flight at the
+  moment of the swap has settled (immediately, on the next microtask, if
+  none were in flight) — so a resource that is still in use is never
+  torn down out from under a caller. A rejected `dispose` is never
+  propagated anywhere (the runtime swallows it), so catch and log your
+  own errors inside `dispose` rather than letting it throw
+
+For the same plugin, `state()` called from the activation-time `ctx`
+(`registerStorage`/`registerSearch`/`registerMailSender`, …) and from a
+later `reconfigure`'s `ctx` (a different instance) return the **same**
+`StateCell` — `initial` is ignored on every call after the first.
+`packages/plugin-storage-aws-s3`, `packages/plugin-mail-smtp`, and
+`packages/plugin-search-elasticsearch` are reference implementations of
+this pattern.
+
+## Dependency plugins
+
+If you depend on another plugin at runtime, list its npm name in
+`requires`. The PluginManager resolves the dependency graph and loads
+`requires` first (cycles fail boot).
+
+Credential sharing is the typical case. `@crowi/plugin-storage-aws-s3`
+declares `@crowi/plugin-aws` in `requires` and reads `region` /
+`accessKeyId` / `secretAccessKey` via `ctx.dependencyConfig()`. There is
+no need to duplicate the fields in its own schema.
+
+Listing a dependency in `requires` is not, by itself, enough to read its
+config — `ctx.dependencyConfig(name)` only returns decrypted config when
+the target plugin declares `CrowiPlugin.exposesConfigToDependents:
+boolean` as `true`. Without that opt-in, the call throws, naming both the
+calling plugin and the dependency and stating that `did not declare
+'exposesConfigToDependents'`. This is an explicit opt-in on the
+dependency's side:
+
+```ts
+// @crowi/plugin-aws (the dependency): sharing credentials with other
+// plugins is this plugin's entire purpose, so it opts in.
+const plugin: CrowiPlugin = {
+  name: '@crowi/plugin-aws',
+  configSchema: AwsConfigSchema,
+  exposesConfigToDependents: true,
+};
+```
+
+A plugin that does not declare `exposesConfigToDependents` keeps its
+config private no matter how many other plugins list it in `requires`.
+`@crowi/plugin-aws` is the only in-repo plugin that declares
+`exposesConfigToDependents: true`. The opt-in is a single all-or-nothing
+flag on the whole plugin, not per config field.
+
+## Core model access (modelAccess)
+
+A plugin that touches a core Mongoose model via `ctx.model(name)`
+declares which model names it needs in `modelAccess?: string[]`, the
+same shape as `requires`.
+
+```ts
+modelAccess: ['Page', 'Bookmark'],
+```
+
+- Calling `ctx.model()` for a name not listed in `modelAccess` throws
+  `Plugin '<name>' called model('<requested>') but did not declare it in
+  'modelAccess'.`
+- Every declared name is validated against the registered core models at
+  boot (`PluginManager.activate()`) — an unknown name fails boot with a
+  descriptive error, isolating just that plugin (the same isolation
+  policy as the `configSchema` zod v3/v4 guard).
+- A declared model gets full (unrestricted) read/write access — there is
+  no read-only mode today.
+- `GET /admin/plugins` includes each plugin's `modelAccess` in its
+  response, so an admin can see at a glance which plugins touch which
+  core collections.
+
+In-repo examples: `@crowi/plugin-search-elasticsearch` and
+`@crowi/plugin-search-opensearch` declare `['Page', 'Bookmark', 'User']`,
+`@crowi/plugin-search-mongo` declares `['Page', 'Revision']`, and
+`@crowi/plugin-slack` declares `['Page']` — all four are read-only users.
+
+### Credential-vault model deny-list
+
+The following credential-bearing core models can never be listed in
+`modelAccess`, even though they are real, registered core models.
+Declaring one fails boot: `assertValidModelAccess()` throws (e.g.
+`Plugin '<name>' declares modelAccess including '<model>', but
+credential-bearing core models cannot be granted to plugins.`).
+
+- `Config` — holds core's and every plugin's decrypted `@sensitive` values
+- `PersonalAccessToken`
+- `OAuthClient` / `OAuthAuthorizationCode` / `OAuthDeviceCode` / `OAuthRefreshToken`
+- `Share` / `ShareAccess` — page-share tokens (a quasi-credential)
+
+There is no legitimate plugin use case for touching these collections
+directly. `ctx.model()` also re-checks the same deny-list at call time
+(defense-in-depth), so a credential-vault model is never returned even
+if some path around the boot check existed.
+
+## Building a renderer plugin
+
+`registerRenderer` lets you extend the Markdown renderer. The registry
+provides methods to add unified plugins, mdast node renderers, code-block
+renderers, embed-tag renderers, and URL inline-expansion rules. A
+code-block renderer is an object with `cacheVersion`, an optional
+`reservation` (placeholder shape), and `render`, and it is cached via
+`PluginRenderCache`.
+
+For concrete examples, the in-repo plugins
+`packages/plugin-renderer-plantuml` (code block + cache + external I/O),
+`packages/plugin-renderer-katex` (unified plugin + node transform), and
+`packages/plugin-renderer-crowi-legacy` (a minimal no-I/O example — a plain
+mdast rewrite) are good references.
+
+## Reference implementations
+
+The first-party plugins bundled in the repository can be read directly
+as reference implementations.
+
+| Package | What it demonstrates |
+| ------- | -------------------- |
+| `packages/plugin-storage-local` | A minimal `registerStorage` example |
+| `packages/plugin-storage-aws-s3` | Credential sharing via `requires` + `@sensitive` |
+| `packages/plugin-aws` | A config-only base plugin with no `register*` |
+| `packages/plugin-search-elasticsearch` | `registerSearch` |
+| `packages/plugin-renderer-*` | Variations of `registerRenderer` |
+
+Also, `packages/plugin-api/src/__fixtures__/example-plugin.ts` is a
+sanity fixture that exercises every extension point in one file (not for
+runtime use, but a good sample of how the contract is used).
+
+## Related pages
+
+- How plugins work → [Plugin architecture](./plugins-overview)
+- Installing the plugin you built → [Installing and configuring plugins](../operations/plugins)
+- The list of renderer plugins → [Renderer plugins](../operations/renderers)
+- The SDK types and markers → [Plugin SDK](./plugin-api)
+- The list of design proposals → [RFC index](./rfcs)

@@ -56,7 +56,7 @@ import Debug from 'debug';
 import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
-import { pageToResponse } from 'src/util/page-response';
+import { pageToResponse, populatePageRelationData } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -159,7 +159,7 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
         pageById.set(p._id.toString(), p);
       }
 
-      const data: SearchHitResponse[] = [];
+      const authorizedHits: { hit: (typeof hits)[number]; page: PageDocument }[] = [];
       for (const hit of hits) {
         const populated = pageById.get(hit.id);
         // Drop hits whose Page document didn't come back from
@@ -180,15 +180,27 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
         // results even if a reindex gap left them in the index.
         const isVisibleByStatus = populated.isPublished() || (populated.isDraft() && populated.isCreator(user));
         if (!isVisibleByStatus) continue;
-        data.push({
-          pageId: hit.id,
-          path: hit.path,
-          score: hit.score,
-          snippet: hit.snippet,
-          bookmarkCount: bookmarkCounts.get(hit.id) ?? 0,
-          page: pageToResponse(populated),
-        });
+        authorizedHits.push({ hit, page: populated });
       }
+
+      // F-2/D-2 — one batched enrichment call for the fully authorized set,
+      // AFTER grant/status re-filtering, never per-hit. `enrichedPages`
+      // mirrors `authorizedHits` 1:1 in order (populatePageRelationData's
+      // contract), so a positional zip here is safe — it is the SAME array
+      // re-derived, not two independently sourced arrays being paired up.
+      const enrichedPages = await populatePageRelationData(
+        crowi,
+        authorizedHits.map(({ page }) => page),
+        user,
+      );
+      const data: SearchHitResponse[] = authorizedHits.map(({ hit }, i) => ({
+        pageId: hit.id,
+        path: hit.path,
+        score: hit.score,
+        snippet: hit.snippet,
+        bookmarkCount: bookmarkCounts.get(hit.id) ?? 0,
+        page: pageToResponse(enrichedPages[i]),
+      }));
 
       // Subtract the hits we dropped (not-granted / no backing doc) from
       // the driver's raw total (CROWI-SEC-REVIEW-003): reporting the raw

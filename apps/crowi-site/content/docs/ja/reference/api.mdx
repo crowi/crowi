@@ -1,0 +1,68 @@
+---
+title: HTTP API
+description: API ドキュメントの入口・OAuth スコープ・MCP ツールの一覧
+---
+
+Crowi の HTTP API は稼働中のサーバ自身がドキュメントを配信します。
+
+| 入口 | 内容 |
+| --- | --- |
+| `/api/docs` | 全エンドポイントを引ける API リファレンス。ブラウザで開く |
+| `/api/openapi.json` | 同じ内容の OpenAPI 3.1 ドキュメント |
+| `/api/mcp` | AI クライアント向けのエンドポイント。[AI ツールから使う (MCP)](../guide/mcp) 参照 |
+
+`/api/docs` は稼働中のサーバに登録されているエンドポイントから組み立てられるため、そのサーバで実際に使える形が出ます。
+
+## OAuth スコープ
+
+トークンに付けられるスコープの全一覧です。`write` は同じ対象の `read` を含み、アンブレラの `read` / `write` はすべての `*:read` / `*:write` を含みます。
+
+| スコープ | 対象 | 個人アクセストークンに付けられるか |
+| --- | --- | --- |
+| `read` | アンブレラ — すべての読み取り | はい |
+| `write` | アンブレラ — すべての書き込み (読み取りを含む) | はい |
+| `pages:read` | ページ・リビジョン・下書き・被リンク・検索・パス補完の読み取り | はい |
+| `pages:write` | 同じ対象の作成・更新・移動・削除 | はい |
+| `comments:read` | コメントの読み取り | はい |
+| `comments:write` | コメントの投稿・編集・削除 | はい |
+| `bookmarks:read` | ブックマークの読み取り | はい |
+| `bookmarks:write` | ブックマークの追加・削除 | はい |
+| `attachments:read` | 添付ファイルの一覧と取得 | はい |
+| `attachments:write` | 添付ファイルのアップロードと削除 | はい |
+| `notifications:read` | 通知の読み取り | はい |
+| `notifications:write` | 通知の既読化と購読の変更 | はい |
+| `profile:read` | 自分と他ユーザーのプロフィールの読み取り | はい |
+| `profile:write` | 自分のプロフィールの更新 | はい |
+| `admin:read` | 管理 API の読み取り | いいえ (予約) |
+| `admin:write` | 管理 API の書き込み | いいえ (予約) |
+
+`admin:read` / `admin:write` は予約済みで、トークンには発行できません。管理 API はブラウザのセッションからのみ使えます。したがって個人アクセストークンに付けられるのは残りの 14 個です。
+
+トークンの発行手順は [アカウントとセキュリティ](../guide/account-security) を参照してください。
+
+## MCP ツール
+
+`/api/mcp` に接続したクライアントに現れるツールの一覧です。
+
+| ツール | 用途 | 必要なスコープ |
+| --- | --- | --- |
+| `crowi_search_pages` | 全文検索 | `pages:read` |
+| `crowi_get_page` | パスや id でページ本文を読む | `pages:read` |
+| `crowi_list_pages` | パス配下 / ユーザー別のページ一覧 | `pages:read` |
+| `crowi_list_child_pages` | 子ページの一覧 | `pages:read` |
+| `crowi_get_page_history` | ページのリビジョン一覧 | `pages:read` |
+| `crowi_get_revision` | 特定のリビジョンの本文を読む | `pages:read` |
+| `crowi_get_backlinks` | そのページへのリンク元一覧 | `pages:read` |
+| `crowi_autocomplete_pages` | ページパスの補完候補 | `pages:read` |
+| `crowi_create_page` | ページを作成 | `pages:write` |
+| `crowi_update_page` | ページを更新 | `pages:write` |
+| `crowi_rename_page` | ページをリネーム / 移動 | `pages:write` |
+| `crowi_delete_page` | ゴミ箱へ削除 (または完全削除) | `pages:write` |
+| `crowi_revert_page` | ゴミ箱のページを復元 | `pages:write` |
+| `crowi_revert_to_revision` | 過去のリビジョンの内容に戻す | `pages:write` |
+
+## 関連ページ
+
+- [AI ツールから使う (MCP)](../guide/mcp) — トークンの発行とクライアントの接続
+- [crowi CLI](./cli) — 同じ API を叩くコマンドライン
+- [アカウントとセキュリティ](../guide/account-security) — 個人アクセストークンの発行と失効

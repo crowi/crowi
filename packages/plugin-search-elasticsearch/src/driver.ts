@@ -45,6 +45,17 @@ export interface ElasticsearchDriverDeps {
    * (caller defaults to 0).
    */
   getBookmarkCountsBulk?: () => Promise<Map<string, number>>;
+  /**
+   * feature-page-relations-collections D-1/AC-9 — bulk-fetch Like counts
+   * for a GIVEN set of page ids, unlike `getBookmarkCountsBulk` above
+   * (which takes no arguments and returns every page's count up front).
+   * `rebuild()` calls this once per 2000-document flush batch, with that
+   * batch's page ids, rather than snapshotting the whole collection
+   * before streaming starts — a like/unlike during a long rebuild must
+   * not sit stale for the rebuild's entire remaining duration once the
+   * alias switches (see this dependency's call site in `indexAllPages`).
+   */
+  getLikeCountsBulk?: (pageIds: string[]) => Promise<Map<string, number>>;
   /** Total user count, used to scale the bookmark-count factor. */
   countUsers?: () => Promise<number>;
 }
@@ -59,7 +70,6 @@ export interface PageStreamDoc {
   grantedUsers?: Array<{ toString: () => string } | string>;
   creator?: { username?: string };
   revision?: { body?: string };
-  liker?: unknown[];
   commentCount?: number;
   bookmarkCount?: number;
   createdAt?: Date;
@@ -271,8 +281,10 @@ export function createElasticsearchDriver(cell: StateCell<ESDriverState>, deps: 
         // whole duration, the old client's `dispose` — if the operator
         // reconfigures mid-rebuild — waits until the rebuild finishes).
         const { client, aliasName, baseIndexName, analyzer } = snapshot(state);
-        if (!deps.iteratePages || !deps.countAllPages || !deps.getBookmarkCountsBulk) {
-          throw new Error('@crowi/plugin-search-elasticsearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk deps.');
+        if (!deps.iteratePages || !deps.countAllPages || !deps.getBookmarkCountsBulk || !deps.getLikeCountsBulk) {
+          throw new Error(
+            '@crowi/plugin-search-elasticsearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk / getLikeCountsBulk deps.',
+          );
         }
 
         const newIndexName = createTimestampedIndexName(baseIndexName);
@@ -291,6 +303,7 @@ export function createElasticsearchDriver(cell: StateCell<ESDriverState>, deps: 
           iteratePages: deps.iteratePages,
           countAllPages: deps.countAllPages,
           bookmarkCounts,
+          getLikeCountsBulk: deps.getLikeCountsBulk,
           log,
         });
 
@@ -429,17 +442,44 @@ interface PageRebuildContext {
   iteratePages: NonNullable<ElasticsearchDriverDeps['iteratePages']>;
   countAllPages: NonNullable<ElasticsearchDriverDeps['countAllPages']>;
   bookmarkCounts: Map<string, number>;
+  getLikeCountsBulk: NonNullable<ElasticsearchDriverDeps['getLikeCountsBulk']>;
   log?: PluginLogger;
 }
 
+/**
+ * Docs buffered per flush batch (feature-page-relations-collections
+ * AC-9). `bookmark_count` stays a whole-rebuild upfront snapshot
+ * (`bookmarkCounts`, unchanged); `like_count` is fetched fresh from
+ * `getLikeCountsBulk` at EACH flush, scoped to only this batch's page
+ * ids — a like/unlike during the rebuild is stale for at most one batch,
+ * not the whole rebuild's duration.
+ */
+const REBUILD_FLUSH_BATCH_SIZE = 2000;
+
 async function indexAllPages(ctx: PageRebuildContext): Promise<void> {
   const allPageCount = await ctx.countAllPages();
-  let operations: Array<BulkOp | Record<string, unknown>> = [];
+  let buffered: PageStreamDoc[] = [];
   let total = 0;
   let skipped = 0;
 
   const flush = async (): Promise<void> => {
-    if (operations.length === 0) return;
+    if (buffered.length === 0) return;
+    const batch = buffered;
+    buffered = [];
+
+    const pageIds = batch.map((doc) => (typeof doc._id === 'string' ? doc._id : doc._id.toString()));
+    const likeCounts = await ctx.getLikeCountsBulk(pageIds);
+
+    const operations: Array<BulkOp | Record<string, unknown>> = [];
+    for (const doc of batch) {
+      const id = typeof doc._id === 'string' ? doc._id : doc._id.toString();
+      const bookmarkCount = ctx.bookmarkCounts.get(id) ?? 0;
+      const likeCount = likeCounts.get(id) ?? 0;
+      const source = pageStreamDocToEsSource(doc, bookmarkCount, likeCount);
+      operations.push({ index: { _index: ctx.indexTarget, _id: id } });
+      operations.push(source as unknown as Record<string, unknown>);
+    }
+
     try {
       const response = await ctx.client.bulk({
         operations,
@@ -451,7 +491,6 @@ async function indexAllPages(ctx: PageRebuildContext): Promise<void> {
     } catch (err) {
       ctx.log?.error('rebuild: bulk failed: %o', err);
     }
-    operations = [];
   };
 
   await ctx.iteratePages(async (doc: PageStreamDoc) => {
@@ -460,16 +499,9 @@ async function indexAllPages(ctx: PageRebuildContext): Promise<void> {
       return;
     }
     total++;
+    buffered.push(doc);
 
-    const id = typeof doc._id === 'string' ? doc._id : doc._id.toString();
-    const bookmarkCount = ctx.bookmarkCounts.get(id) ?? 0;
-    const source = pageStreamDocToEsSource(doc, bookmarkCount);
-
-    operations.push({ index: { _index: ctx.indexTarget, _id: id } });
-    operations.push(source as unknown as Record<string, unknown>);
-
-    // Flush every 2000 documents (each doc = 2 operations).
-    if (operations.length >= 4000) {
+    if (buffered.length >= REBUILD_FLUSH_BATCH_SIZE) {
       await flush();
     }
   });
@@ -608,9 +640,12 @@ export function docToEsSource(doc: SearchableDoc): EsPageSource {
 /**
  * Project a `PageStreamDoc` (Mongo lean shape) into a `SearchableDoc`
  * and route through the canonical `docToEsSource`. Centralises
- * the meta key vocabulary so we have one place to evolve.
+ * the meta key vocabulary so we have one place to evolve. `likeCount`
+ * comes from the caller's per-flush-batch `getLikeCountsBulk` fetch
+ * (feature-page-relations-collections D-1/AC-9) — the `Like` collection
+ * is the sole source now, there is no `doc.liker` fallback.
  */
-function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number): EsPageSource {
+function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number, likeCount: number): EsPageSource {
   const grantedUsers = (doc.grantedUsers ?? []).map((u) => (typeof u === 'string' ? u : u.toString()));
   const searchable: SearchableDoc = {
     id: typeof doc._id === 'string' ? doc._id : doc._id.toString(),
@@ -622,7 +657,7 @@ function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number): EsP
       granted_users: grantedUsers,
       comment_count: doc.commentCount ?? 0,
       bookmark_count: bookmarkCount,
-      like_count: doc.liker?.length ?? 0,
+      like_count: likeCount,
       created_at: doc.createdAt,
       updated_at: doc.updatedAt,
     },

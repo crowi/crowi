@@ -23,6 +23,9 @@ function makePage(overrides: Partial<Page> = {}): Page {
     path: '/docs/example',
     commentCount: 0,
     createdAt: '2026-05-01T00:00:00.000Z',
+    likerCount: 0,
+    seenUsersCount: 0,
+    isLiked: false,
     ...overrides,
   };
 }
@@ -64,6 +67,9 @@ describe('resolveDisplayUser', () => {
       path: '/docs/example',
       commentCount: 0,
       createdAt: '2026-05-01T00:00:00.000Z',
+      likerCount: 0,
+      seenUsersCount: 0,
+      isLiked: false,
       creator: null,
       lastUpdateUser: null,
       revision: makeRevision({ author: CAROL }),

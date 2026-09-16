@@ -49,6 +49,9 @@ afterEach(() => {
 const makePage = (overrides: Partial<Page> & { _id: string; path: string }): Page => ({
   commentCount: 0,
   createdAt: new Date(0).toISOString(),
+  likerCount: 0,
+  seenUsersCount: 0,
+  isLiked: false,
   ...overrides,
 });
 

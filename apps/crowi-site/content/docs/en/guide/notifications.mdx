@@ -9,42 +9,25 @@ the subjects of notifications.
 
 ## How notifications are generated
 
-When some action happens on a page, an **activity** is recorded first, and
-from that activity a notification is created for the notification target
-users.
+Three things create a notification.
 
-Crowi currently treats the following three actions as notification subjects.
-
-| Action | Description |
-| ------ | ----------- |
-| COMMENT | A comment was posted on the page |
-| LIKE | The page was liked |
-| MENTION | You were mentioned with `@username` in the body |
-
-- COMMENT / LIKE notifications reach users involved with the page (the
-  creator, past comment authors, past revision authors, and so on).
-- A MENTION notification reaches the person who was mentioned with
-  `@username`.
+| What happened | Who is notified |
+| ------------- | --------------- |
+| Someone commented on a page | Everyone involved with the page (its creator, earlier commenters, earlier editors) |
+| Someone liked a page | The same people |
+| Someone mentioned you with `@username` in a body | You |
 - Notifications for the same page and the same action are merged into a
   single notification within the last week, and when several people perform
   the same action they are aggregated as "action users".
 
 ## Notification states
 
-Each notification has one of three states.
+A notification is unread, read, or opened.
 
-| State | Meaning |
-| ----- | ------- |
-| UNREAD | Unread (the notification list has not been opened yet) |
-| UNOPENED | Read but not opened (seen in the list, but not opened individually) |
-| OPENED | Opened (the individual notification was opened) |
-
-- The **unread badge** on the notification bell shows the count of UNREAD
-  notifications.
-- Running "Mark all as read" in the notification list changes UNREAD
-  notifications to UNOPENED and clears the unread badge.
-- Clicking and opening an individual notification makes that notification
-  OPENED.
+- The **unread badge** on the notification bell counts the unread ones.
+- "Mark all as read" in the notification list marks the unread ones read and
+  clears the badge.
+- Opening an individual notification marks that one as opened.
 
 ## The notification bell
 
@@ -58,8 +41,8 @@ A **notification bell** is shown in the screen header.
   notification list is loaded when the dropdown is opened.
 - "Mark all as read" at the top of the dropdown marks unread notifications as
   read in bulk.
-- Clicking an individual notification makes it OPENED and navigates to the
-  target page.
+- Clicking an individual notification marks it opened and takes you to the
+  page.
 
 ## The notification list page
 
@@ -68,22 +51,9 @@ All notifications can be viewed on the notification list page at
 dropdown shows, and clicking a notification here also navigates to the target
 page.
 
-## Forwarding notifications to external services
-
-Notifications do not just arrive in the notification list inside Crowi — if a
-**notifier plugin** is installed, they are also forwarded to external
-services such as Slack or a webhook.
-
-- When a notification is created, it is forwarded to each active notifier
-  plugin.
-- Sending to each plugin is independent, so even if one plugin fails, the
-  other plugins and the notification processing itself do not stop.
-
-See [Managing plugins](../plugins/managing) for configuring notifier plugins.
-
 ## Related pages
 
 - [Comments](./comments) — notifications from comments
-- [Bookmarks, likes and watching](./reactions) — likes, watching, and notifications
+- [Bookmarks, likes, watching and seen-by](./reactions) — likes, watching, and notifications
 - [Markdown syntax](./markdown) — the `@username` mention syntax
-- [Managing plugins](../plugins/managing) — configuring notifier plugins
+- [Installing and configuring plugins](../operations/plugins) — configuring notifier plugins

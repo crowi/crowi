@@ -1,0 +1,46 @@
+---
+title: RFC index
+description: Index of Crowi 2.0 design proposals (RFCs)
+---
+
+Major design decisions for Crowi 2.0 are documented as **RFCs (Request for Comments)**. The documents themselves live under `docs/rfcs/` in the repository, and the numbers in the table below open them on GitHub.
+
+This page is the index only. Summaries and implementation status belong to each RFC, so they are not repeated here.
+
+## RFC list
+
+| Number | Title | Related documentation |
+| ------ | ----- | --------------------- |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | Plugin Architecture | [Plugin architecture](./plugins-overview) |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | [The renderer pipeline](./renderer-pipeline) / [Renderer plugins](../operations/renderers) |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | [Realtime collaborative editing](../guide/realtime-editing) / [Operating realtime collaboration](../operations/realtime-collab) |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | Page Presence & Header UI | [Pages](../guide/pages) |
+| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API Framework Migration — ts-rest to Hono | [Architecture](./architecture) |
+| [RFC-0008](https://github.com/crowi/crowi/blob/main/docs/rfcs/0008-migration-framework.md) | Migration Framework | [Migrating from v1](../operations/upgrading-from-v1) |
+| [RFC-0009](https://github.com/crowi/crowi/blob/main/docs/rfcs/0009-revision-storage-compaction.md) | Revision Storage Compaction | |
+| [RFC-0010](https://github.com/crowi/crowi/blob/main/docs/rfcs/0010-oauth-and-api-access.md) | OAuth 2.0 Foundation & Scoped API Access | [Account and security](../guide/account-security) |
+| [RFC-0011](https://github.com/crowi/crowi/blob/main/docs/rfcs/0011-crowi-mcp.md) | Crowi MCP Server (built-in remote MCP over Streamable HTTP) | [Using Crowi from AI tools (MCP)](../guide/mcp) |
+| [RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md) | Crowi CLI (`@crowi/cli`) — end-user command-line client | [CLI (command line)](../guide/cli) |
+| [RFC-0013](https://github.com/crowi/crowi/blob/main/docs/rfcs/0013-slack-plugin.md) | Slack Plugin (integrated) + plugin HTTP routes on Hono | [Slack integration](../operations/slack) |
+| [RFC-0014](https://github.com/crowi/crowi/blob/main/docs/rfcs/0014-auth-provider-plugins.md) | Auth Provider Plugins (federated sign-in via vendor plugins) | [Signing in with an external account](../operations/federated-auth) |
+| [RFC-0015](https://github.com/crowi/crowi/blob/main/docs/rfcs/0015-image-display-attributes.md) | Image Display Attributes and Editor Affordance | [Markdown syntax](../guide/markdown) |
+| [RFC-0016](https://github.com/crowi/crowi/blob/main/docs/rfcs/0016-ios-native-app.md) | Native Apple app for Crowi (multi-workspace; iPhone/iPad v1, macOS-ready) | |
+| [RFC-0017](https://github.com/crowi/crowi/blob/main/docs/rfcs/0017-collab-invalidate-on-rename-delete.md) | Live collab editor invalidation on rename and delete | |
+| [RFC-0018](https://github.com/crowi/crowi/blob/main/docs/rfcs/0018-quoted-page-comments.md) | Revision-aware quoted page comments | |
+| [RFC-0019](https://github.com/crowi/crowi/blob/main/docs/rfcs/0019-totp-two-factor-auth.md) | TOTP two-factor authentication | |
+| [RFC-0020](https://github.com/crowi/crowi/blob/main/docs/rfcs/0020-html-artifact-pages.md) | HTML Artifact Pages | |
+| [RFC-0021](https://github.com/crowi/crowi/blob/main/docs/rfcs/0021-page-metadata-change-history.md) | Page history for non-content changes | |
+| [RFC-0022](https://github.com/crowi/crowi/blob/main/docs/rfcs/0022-mcp-oauth-connector.md) | OAuth integration for external MCP connectors | |
+| [RFC-0023](https://github.com/crowi/crowi/blob/main/docs/rfcs/0023-client-agnostic-rendered-ast.md) | Client-agnostic renderedAst (typed rendering AST for web, iOS, and future clients) | |
+| [RFC-0024](https://github.com/crowi/crowi/blob/main/docs/rfcs/0024-workspace-branding.md) | Workspace branding for multi-workspace identity | |
+
+## How to read the RFCs
+
+Each RFC opens with a metadata block stating its status, target release and dependent RFCs, followed by Summary / Goals / Non-goals / detailed design. That metadata block, not this index, is the authority on how far the implementation has got.
+
+## Related pages
+
+- The overall architecture → [Architecture](./architecture)
+- How plugins work → [Plugin architecture](./plugins-overview)
+- Getting involved in development → [Contributing](./contributing)

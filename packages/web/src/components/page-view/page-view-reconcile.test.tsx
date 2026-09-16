@@ -85,13 +85,13 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
     latestRevision: 'rev-1',
     creator: null,
     lastUpdateUser: { _id: 'u-alice', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
-    liker: [],
     commentCount: 0,
     extended: undefined,
     createdAt: '2026-05-01T00:00:00.000Z',
     updatedAt: '2026-05-01T00:00:00.000Z',
     likerCount: 0,
     seenUsersCount: 0,
+    isLiked: false,
     ...overrides,
   } as PageWithRevision;
   // `isStalePageRevision` compares `latestRevision` against `revision._id` —
@@ -563,6 +563,25 @@ describe('page-level field merge (AC17) + self/other silencing (AC18-19)', () =>
     const cached = queryClient.getQueryData(pageKeys.detail({ path: page.path, revision_id: undefined })) as { page: PageWithRevision };
     expect(cached.page.grant).toBe(PageGrantEnum.RESTRICTED);
     expect(cached.page.grantedUsers).toEqual(['u1']);
+  });
+
+  // AC-11/D-2 — isLiked/likerCount are page-level merged fields too (same
+  // branch as grant-only above): a like/unlike from ANOTHER tab/session
+  // must reconcile into the cache on the next head-GET, without a body swap.
+  it('merges an isLiked/likerCount change (revision unchanged) without touching body/banner/scroll', async () => {
+    const page = makePage({ isLiked: false, likerCount: 1 });
+    const { queryClient } = renderPageView(page);
+    const liked = makePage({ isLiked: true, likerCount: 2 }); // same revision
+    getPage.mockResolvedValueOnce(okResponse({ page: liked }));
+
+    emitReconnected();
+    await flush();
+
+    expect(bannerKind()).toBeNull();
+    expect(screen.getByTestId('page-content-stub').textContent).toBe(page.revision.body);
+    const cached = queryClient.getQueryData(pageKeys.detail({ path: page.path, revision_id: undefined })) as { page: PageWithRevision };
+    expect(cached.page.isLiked).toBe(true);
+    expect(cached.page.likerCount).toBe(2);
   });
 
   it('swaps silently (no banner) via reconcile when lastUpdateUser is the viewer themself', async () => {

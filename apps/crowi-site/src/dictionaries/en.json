@@ -65,7 +65,7 @@
     "chapter": "Ch. 03",
     "kicker": "Where we are",
     "title": "Where we are",
-    "description": "Active development on main. Core features, realtime collab, editor UX, and the admin section have all migrated to the new stack (Hono + Next.js 16). What's left is pluggable auth providers, Slack integration, the external Share link, and the v2.0 stable release.",
+    "description": "Active development on main. Core features, realtime collab, editor UX, and the admin section have all migrated to the new stack (Hono + Next.js 16). What's left is GitHub sign-in, forwarding notifications to Slack, the external Share link, and the v2.0 stable release.",
     "newLabel": "New in v2",
     "newFeatures": [
       "Realtime collab + live presence",
@@ -88,8 +88,8 @@
     ],
     "upcomingLabel": "In progress",
     "upcoming": [
-      "Pluggable auth providers (Google / GitHub OAuth)",
-      "Slack integration (notifications / unfurl)",
+      "Sign in with GitHub (Google already ships)",
+      "Forwarding notifications to Slack (URL unfurling already ships)",
       "External page share link",
       "v2.0 stable release"
     ],

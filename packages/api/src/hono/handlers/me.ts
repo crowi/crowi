@@ -56,7 +56,7 @@ import FileUploader from 'src/util/file-uploader';
 import { createJwtUtil } from 'src/util/jwt';
 import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 import { createMailTokenUtil } from 'src/util/mail-token';
-import { pageToResponse } from 'src/util/page-response';
+import { pageToResponse, populatePageRelationData } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -577,7 +577,10 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
           if (ordered.length >= 5) break;
         }
 
-        return c.json({ pages: ordered.map((p) => pageToResponse(p)) }, 200);
+        // D-2 — one batched enrichment call for the final (already
+        // ordered / capped at 5) set, not one call per LRU id.
+        const enrichedPages = await populatePageRelationData(crowi, ordered, user);
+        return c.json({ pages: enrichedPages.map((p) => pageToResponse(p)) }, 200);
       } catch (err) {
         debug('recentlyViewedPages: lru / populate failed: %s', (err as Error).message);
         // Legacy parity: surface lru/populate errors as an empty list

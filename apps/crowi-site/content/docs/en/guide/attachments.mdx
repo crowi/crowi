@@ -13,10 +13,8 @@ Attachments are stored **bound to an existing page**. When you open a page,
 an "Attachments" section appears in the page body footer and lists every
 attachment linked to that page.
 
-> **Note**: Attachments require the page to exist first. Crowi 1.x had a
-> behaviour where uploading an attachment could implicitly create an empty
-> page (`page_id=0`); this was removed in v2. To attach a file to a new
-> page, create and save the page first, then add the attachment.
+> **Note**: Attachments require the page to exist first. To attach a file to
+> a new page, create and save the page first, then add the attachment.
 
 ## Adding a file
 
@@ -24,13 +22,9 @@ Use the Attachments section in the page footer to pick a file and upload
 it. Once the upload finishes, the file is added to the list right away,
 along with a record of who uploaded it and when.
 
-Internally, an attachment is sent to `POST /api/pages/:pageId/attachments`
-as `multipart/form-data`. The uploaded file is stored via the configured
-storage driver (local disk / S3, depending on the operator's setup) and a
-single `Attachment` document is created.
-
-For choosing a storage backend, see
-[Storage configuration](../operations/storage).
+The uploaded file is stored wherever the operator configured — local disk,
+S3 and so on. For choosing a storage backend, see
+[Storage](../operations/storage).
 
 ### What file types can be uploaded
 
@@ -40,12 +34,6 @@ whether to accept it uses **the same criteria**:
 - Uploading from the Attachments section in the page footer
 - **Pasting** into the editor
 - **Dragging and dropping** into the editor
-
-These used to be checked against separate, per-route allow-lists — for
-example, the same HTML file could upload fine from the Attachments button
-while being rejected by drag-and-drop. All three routes now consult the
-same allow-list, so whether a file is accepted no longer depends on which
-one you used.
 
 The main categories accepted:
 
@@ -64,9 +52,9 @@ criteria and the wording are identical across every route.
 
 > **Note**: This allow-list only decides "may this be saved at all".
 > Whether an attachment is displayed inline in the browser or downloaded
-> when opened directly is a separate decision — see "Content types on
-> delivery" below. Office documents and archives, the types newly
-> accepted here, are downloaded when opened directly.
+> when opened directly is a separate decision — see "What happens when you
+> open one" below. Office documents and archives are downloaded when opened
+> directly.
 
 ## The attachment grid
 
@@ -91,23 +79,14 @@ so the grid never breaks on an unrecognised type.
 Each attachment is assigned a URL of the form `/api/attachments/<id>`.
 Hitting that URL delivers the actual file.
 
-### Content types on delivery
+### What happens when you open one
 
-An attachment's MIME type is recorded from what the client declared at
-upload time. **When nothing was declared, or `application/octet-stream` was
-declared explicitly** — the two are treated identically, as "type unknown" —
-the server fills the type in from the filename's extension. MCP, curl,
-and hand-written scripts routinely omit the `Content-Type`, which otherwise
-stored and served even an image like `pixel.png` as a generic file. An
-unknown extension, or no extension at all, stays
-`application/octet-stream`. A declared type other than
-`application/octet-stream` is **never overridden**, even when it contradicts
-the extension — the declaration is the caller's stated intent.
+Opening an attachment's URL directly either displays it in the browser or
+downloads it, depending on the file type. The decision comes from a
+server-side allow-list rather than from whatever was declared at upload time,
+so the same rule applies to attachments that are already stored.
 
-Delivery does not trust the recorded value either way: the outgoing
-`Content-Type` is **pinned to a server-side allow-list**.
-
-| Type as delivered | Behaviour |
+| File type | Behaviour |
 | ----------------- | --------- |
 | PNG / JPEG / GIF / WebP / BMP / AVIF / APNG / ICO | Displayed inline in the browser |
 | SVG (`image/svg+xml`) | Displayed inline (with the sandbox described below) |
@@ -115,34 +94,16 @@ Delivery does not trust the recorded value either way: the outgoing
 | `text/plain` / `text/markdown` / `text/csv` | Displayed inline as plain text |
 | Everything else | Replaced with `application/octet-stream` and downloaded (`Content-Disposition: attachment`) |
 
-A type that is not on the allow-list is downloaded regardless of what was
-declared when it was uploaded. Attaching an HTML file and opening its
-URL, for example, never renders as HTML in the browser. The decision is
-made **on every delivery**, so the same rule applies to attachments that
-are already stored.
+A type that is not on the allow-list — an HTML file, for example — is
+downloaded rather than rendered. A scriptable format such as SVG is displayed
+inline, but its script never runs.
 
-Two response headers go with this:
+Embedding an SVG through image syntax in the body or an `<img>` tag looks
+exactly as before; only opening an SVG directly behaves differently. Mermaid
+and PlantUML diagrams are drawn straight into the body and are unaffected.
 
-- `X-Content-Type-Options: nosniff` — set on every API response. It stops
-  a browser from disregarding the declared `Content-Type` and guessing
-  the type from the bytes (MIME sniffing), which would otherwise route
-  around the pinned type.
-- `Content-Security-Policy: sandbox` — set on attachment deliveries that
-  the table above renders inline, PDF excepted. It ensures that even a
-  document format that can carry script, such as SVG, is only ever
-  rendered without script execution and without an origin.
-
-> **Note**: Embedding an SVG through image syntax in the body or an
-> `<img>` tag looks exactly as before (the sandbox does not apply on the
-> path where it is processed as an image). What changes is opening an SVG
-> directly, or loading it through `<object>` / `<embed>` / `<iframe>`.
-> Mermaid and PlantUML diagrams are unaffected: their SVG is embedded
-> straight into the body and never goes through attachment delivery.
-
-> **Note**: If you run behind a reverse proxy, do not rewrite or strip
-> these headers (`Content-Type` / `Content-Disposition` /
-> `X-Content-Type-Options` / `Content-Security-Policy`). Attachment
-> delivery relies on them reaching the browser intact.
+The response headers involved, and what to watch for when running behind a
+reverse proxy, are covered in [Deployment topologies](../operations/deployment).
 
 ### Display-optimized images
 
@@ -208,7 +169,7 @@ syntax for you.
 > **Note**: Paste and drag-and-drop always insert a plain, attribute-less
 > `![filename](url)` by default. Add a `{width= height= align= float=}`
 > attribute block by hand afterward if you want to set the image's size,
-> alignment, or text-wrap float (see [Writing Markdown](./markdown)'s
+> alignment, or text-wrap float (see [Markdown syntax](./markdown)'s
 > "Image display attributes" section). Hovering over — or placing the
 > cursor inside — an image's Markdown span in the editor also shows a
 > tooltip with `width` / `align` / `float` controls.
@@ -243,7 +204,7 @@ from your OS file manager uploads it automatically.
 - Pasting the same image twice creates two separate attachments (there
   is no client-side de-duplication). Delete the extra one from the
   attachment list if you don't need it.
-- The size cap for paste is **10 MB**.
+- The per-file size cap is **50 MB** by default (an operator may lower it).
 
 Which files paste accepts is the **same unified allow-list** described in
 "What file types can be uploaded" above — a `.docx` or an HTML file
@@ -259,7 +220,7 @@ by the file's type, independently of that allow-list: only images become
 > **Tip**: Copied *text* — including rich text carrying HTML formatting —
 > is not a file, so it is pasted as text, not uploaded. For what happens
 > when you paste text or a bare URL, see
-> [Writing Markdown](./markdown) — pasting a URL is automatically
+> [Markdown syntax](./markdown) — pasting a URL is automatically
 > converted into link syntax.
 
 ### Dragging and dropping files
@@ -272,17 +233,14 @@ starts the upload at the cursor position.
 - The progress-placeholder behaviour is the same as pasting.
 - Dropping multiple files at once processes them **serially**, in the
   order the OS reports them, with one placeholder per file.
-- The per-file limit is **50 MB**, and a single drop can carry at most
-  **5 files**. Exceeding either limit shows a toast notification.
+- The per-file limit is **50 MB** by default (an operator may lower it), and
+  a single drop can carry at most **5 files**. Exceeding either limit shows a
+  toast notification.
 
 Drag-and-drop accepts the **same unified allow-list** described in "What
 file types can be uploaded" above (images / PDF and text formats / Word,
 Excel, PowerPoint and other office documents / archives / audio and
-video). Drag-and-drop used to have its own narrower allow-list — images
-plus PDF/txt/md/csv and zip — which rejected everyday business files like
-`.docx`; it now applies the exact same check as the Attachments button. In
-the current release this allow-list is fixed — there is no per-instance
-setting for it.
+video). The allow-list is fixed — there is no per-instance setting for it.
 
 Dropping a type not on the allow-list shows a toast: `Files of type <MIME
 type> cannot be uploaded.` — the same wording the server returns for the
@@ -295,8 +253,8 @@ route rejected the file.
 > same normalisation the server applies — and therefore accepted too.
 > What gets **stored** is not necessarily `application/octet-stream`
 > though: a file that arrives with no usable type has its type filled in
-> from the filename extension by the server (see "Content types on
-> delivery" above).
+> from the filename extension by the server (see "What happens when you
+> open one" above).
 
 > **Note**: When the edit screen is in **read-only mode** (the
 > simultaneous-editor cap was reached, or you lack edit permission —
@@ -314,8 +272,8 @@ simply paste / drop again.
 
 Removal happens from inside the **detail modal** — there is no inline
 delete button on each tile. Click an attachment to open its modal, then
-remove it from there. Removing an attachment deletes both the
-`Attachment` document and the actual file in storage.
+remove it from there. Removing an attachment also deletes the
+stored file itself.
 
 **Any user who can view the owning page** can remove an attachment. Like
 the page body, attachments are treated as collectively editable by the
@@ -327,10 +285,8 @@ existence).
 
 ## Compatibility with legacy URLs
 
-Crowi 1.x URLs of the form `/files/:id` are 302-redirected to the new
-delivery endpoint `/api/attachments/:id`. Attachment URLs embedded into
-page bodies before the migration keep working, so there is no need to
-rewrite older pages.
+Crowi 1.x URLs of the form `/files/:id` redirect to the current delivery URL,
+so there is no need to rewrite older pages.
 
 ## When a page is permanently deleted
 
@@ -340,6 +296,6 @@ to that page are deleted as well, including their storage objects. See
 
 ## Related pages
 
-- [Working with pages](./pages) — creating and editing pages
-- [Writing Markdown](./markdown) — image syntax in the body
-- [Storage configuration](../operations/storage) — where attachments are stored (local / S3)
+- [Pages](./pages) — creating and editing pages
+- [Markdown syntax](./markdown) — image syntax in the body
+- [Storage](../operations/storage) — where attachments are stored (local / S3)

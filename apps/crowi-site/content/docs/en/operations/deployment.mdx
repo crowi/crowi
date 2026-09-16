@@ -21,19 +21,19 @@ on one origin:
 | Auth mode | Who | URL | Cross-origin? |
 | --- | --- | --- | --- |
 | **Bearer token** | CLI / MCP / OAuth clients, **and the browser itself** for the page API and JSON mutations (the access token lives in `localStorage` and is sent via `Authorization`) | `https://wiki.example.com/api/...` with `Authorization: Bearer …` | **Yes** — tokens travel across origins |
-| **WebSocket `wsToken`** | the browser, for the three realtime namespaces (`/collab`, `/presence`, `/notifications`) — a short-lived, single-purpose token minted over an authenticated Bearer call (e.g. `GET /api/pages/{id}/yjs-token`) and passed as a `?token=` query-string parameter when opening the WebSocket, because a browser cannot set an `Authorization` header on a WS handshake (see [Realtime collaboration](./realtime-collab) and RFC-0003) | `wss://wiki.example.com/collab?token=…` | **Yes** — the token travels in the URL, not a header |
+| **WebSocket token** | the browser, for the three realtime namespaces (`/collab`, `/presence`, `/notifications`) — a short-lived, single-purpose token minted over an authenticated Bearer call and passed as a `?token=` query-string parameter when opening the WebSocket, because a browser cannot set an `Authorization` header on a WS handshake (see [Operating realtime collaboration](./realtime-collab)) | `wss://wiki.example.com/collab?token=…` | **Yes** — the token travels in the URL, not a header |
 | **Cookie / relative** | the browser, ONLY for the three headerless attachment delivery routes (`GET /api/attachments/{id}[/original]`, `GET /api/attachments/by-key/*`) — an `<img src>` / direct-navigation request the browser builds with no JS hook and therefore no `Authorization` header | same origin as the page | **No** — relies on a first-party cookie |
 
 So there is **one public api surface** (`<origin>/api`, exposed by the proxy).
 The browser authenticates almost everything the same way any other client
 does — a Bearer token, read from `localStorage`, or, for the three realtime
-WebSocket namespaces, a short-lived `wsToken` minted over that same
+WebSocket namespaces, a short-lived WebSocket token minted over that same
 Bearer-authenticated connection and passed as a query-string parameter (a
 browser cannot set custom headers on a WS handshake). Only inline `<img>`
 attachments and file downloads, which the browser fetches itself with no
 opportunity to set a header, fall back to the first-party
-`crowi.accessToken` cookie — and, as of feature-auth-cookie-fallback-scope,
-that fallback is scoped to exactly those three delivery routes; every other
+`crowi.accessToken` cookie — and that fallback is scoped to exactly those
+three delivery routes; every other
 route (including the rest of the attachment API — upload / meta / delete)
 requires the Bearer header, cookie or not. The proxy is what lets a CLI hit
 `wiki.example.com/api` with a Bearer token while the browser reaches the very
@@ -48,12 +48,12 @@ URLs are at play — keep them separate:
 
 - **Browser → api (HTTP)**: the browser calls **relative** paths (`/api/...`,
   `/files/...`) on its **own origin** by default. The front proxy routes them to
-  the api. (If you expose the Next server directly without a front proxy, its
-  `rewrites()` can also proxy `/api` + `/files` — but only in dev or when the
+  the api. (If you expose the web server directly without a front proxy, its
+  built-in proxy can also forward `/api` + `/files` — but only in dev or when the
   target is baked; see (D) and the Vercel note.)
 - **Browser → api (WebSocket)**: realtime (`/collab`, `/presence`,
-  `/notifications`) **cannot** go through Next `rewrites()` — they are HTTP-only
-  and drop the `upgrade`. The browser derives the WS URL from
+  `/notifications`) **cannot** go through the web server's built-in proxy — it is
+  HTTP-only and drops the `upgrade`. The browser derives the WS URL from
   **`window.location`** by default; the front proxy routes those paths to the
   api.
 - **Overrides for cross-origin**: `NEXT_PUBLIC_API_URL` (browser HTTP) and
@@ -103,7 +103,7 @@ wiki.example.com {
 	# `oauth-authorization-server`) so future OAuth metadata (e.g. RFC 9728
 	# oauth-protected-resource) is covered without another Caddyfile edit.
 	# web CANNOT proxy this itself in a standalone production build
-	# (rewrites() is frozen at build time), so the front proxy routing it
+	# (the built-in proxy target is frozen at build time), so the front proxy routing it
 	# to api directly is required. ACME challenges
 	# (`/.well-known/acme-challenge/*`) are unaffected — Caddy's TLS
 	# automation handles those in an internal handler that runs before
@@ -149,20 +149,14 @@ location / { proxy_pass http://web:3000; }
   the app still works). In addition, the collaboration client connects to the
   **bare `/collab`** (no trailing segment), so the matcher must include
   **bare `/collab`**, not only `/collab/*` (both examples above already do).
-  See [Realtime collaboration](./realtime-collab).
-</Callout>
-
-<Callout type="info">
-  A ready-made compose + front proxy bundle that wires all of this up is tracked
-  separately (the quickstart package). Until then, supply your own proxy with
-  the routing above.
+  See [Operating realtime collaboration](./realtime-collab).
 </Callout>
 
 ### Upload body size limit
 
 The attachment upload limit defaults to 50 MB (lowerable via
 `CROWI_UPLOAD_MAX_BYTES` — see the environment variables table in
-[Configuration](./configuration)). That limit is only ever enforced inside the
+[Environment variables](../reference/env)). That limit is only ever enforced inside the
 api process, though. When you put a reverse proxy in front, **the proxy's own
 body size limit must be set a margin above crowi's limit**, not merely equal
 to it (see below for why).
@@ -202,6 +196,21 @@ change — uploads up to crowi's own limit already pass through.
   limit to a margin above crowi's own (see "Upload body size limit" above —
   an exact match can still 413 a request crowi would accept).
 </Callout>
+
+## Attachment delivery and headers
+
+The api makes attachment delivery safe through its response headers. **Do not rewrite or strip these** in the reverse proxy in front.
+
+| Header | Role |
+| --- | --- |
+| `Content-Type` | Pinned by the api to a server-side allow list. Anything not displayable inline is replaced with `application/octet-stream` |
+| `Content-Disposition` | Makes a non-inline attachment download instead of rendering |
+| `X-Content-Type-Options: nosniff` | Stops the browser from guessing a type from the bytes and bypassing the pinned `Content-Type` |
+| `Content-Security-Policy: sandbox` | Sent with attachments displayed inline (except PDFs), so a scriptable format such as SVG only ever renders without scripts and without an origin |
+
+[Attachments](../guide/attachments) lists which types render inline. The design assumes these headers reach the browser, so if your proxy normalises response headers, exclude the delivery routes (`/api/attachments/*`, `/files/*`).
+
+Attachment URLs require authentication. Only the routes the browser fetches itself — `<img>` and file downloads — fall back to a first-party cookie, because the browser cannot set a header there. Do not strip that cookie in the proxy.
 
 ## (B) web and api on separate hosts (cross-origin) — limited
 
@@ -249,14 +258,14 @@ the web app to Vercel. The clean pattern keeps the browser **same-origin** by
 letting Vercel's edge be the proxy:
 
 - Set **`CROWI_API_URL=https://api.example.com`** as a Vercel **build/runtime
-  env**. Vercel evaluates `rewrites()` at build and its edge proxies
+  env**. Vercel resolves the rewrite at build time and its edge proxies
   `/api/*` + `/files/*` to that target **per request**, so the browser stays on
   the Vercel origin (relative URLs) — inline images, file downloads and the
   first-party cookie all keep working.
 - **WebSocket is the exception**: Vercel's edge does **not** proxy WS. Point the
   realtime namespaces straight at the api with
   **`NEXT_PUBLIC_COLLAB_URL=wss://api.example.com`**. (WS has no cookie/image
-  problem — the api authenticates the upgrade with a short-lived `wsToken`.)
+  problem — the api authenticates the upgrade with a short-lived token.)
 - Set `CLIENT_URL` on the api to the Vercel web origin (CORS, exact match) — it
   applies to the WS origin check.
 
@@ -271,8 +280,8 @@ letting Vercel's edge be the proxy:
 
 <Callout type="info">
   Unlike a self-hosted standalone server, Vercel re-runs the build per deploy and
-  its edge proxies `rewrites()` at request time, so the build-time `rewrites()`
-  target is not a limitation here. A plain build-time
+  its edge applies the rewrite at request time, so the build-time proxy target is
+  not a limitation here. A plain build-time
   `NEXT_PUBLIC_API_URL=https://api.example.com` (cross-origin, baked) also works,
   but inherits the inline-image / cookie limits of (B).
 </Callout>
@@ -290,40 +299,10 @@ front proxy. **`:4304` is the canonical dev entry point**:
   the same `:4304` origin — the resolver derives the URL from
   `window.location` by default, so no extra configuration is needed. Opening
   the raw web port `:4302` directly skips the proxy, and realtime features
-  will not connect there (Next's `rewrites()` is HTTP-only and cannot forward
-  a WS upgrade).
+  will not connect there (the web server's built-in proxy is HTTP-only and
+  cannot forward a WS upgrade).
 
 No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
-
-## Updating to this version — coordinated replica swap required
-
-<Callout type="warn">
-  **Updating to the account-linking release requires draining and replacing
-  every api replica together — never a one-at-a-time rolling restart.** A
-  new-version replica issues a flow-specific link-state cookie for the
-  account-linking flow (`crowi.oauthLinkState.<state>`); an old-version
-  replica's callback handler does not recognize that cookie namespace and
-  falls back to reading the
-  fixed sign-in state cookie (`crowi.oauthState`) — which it then deletes
-  before validating it. In a mixed fleet, a callback that happens to land on
-  an old-version replica breaks not only the in-flight account link, but any
-  **unrelated, concurrent ordinary sign-in** whose fixed state cookie that
-  request wipes out. Stop every api replica together, deploy the new version
-  to all of them, and restart them together — or stand up a fresh fleet on
-  the new version and cut traffic over to it all at once (blue/green). There
-  is no compatibility route or fallback cookie bridging the two versions.
-  Single-instance deployments, including local dev, automatically satisfy
-  this — with only one replica, old-version / new-version mixing cannot
-  happen.
-</Callout>
-
-**The same coordinated swap is required for page history.** Renaming a page, moving it to the trash and restoring it now pass through a new "moving" state. A replica running the older version does not know that state, treats a page mid-move as an ordinary page, and can start a second move on top of it. Neither move then finishes, and the page is left stranded mid-move.
-
-If you have already mixed versions, replace every replica and then run:
-
-```bash
-crowi-admin page-history repair --transitions
-```
 
 ## Summary
 
@@ -336,6 +315,8 @@ crowi-admin page-history repair --transitions
 
 ## Next steps
 
-- [Self-hosting](./self-hosting) — build api + web images from your own runner project
-- [Realtime collaboration](./realtime-collab) — WS requirements and multi-replica notes
-- [Configuration](./configuration) — full env var reference
+- [Self-hosting (your own runner project)](./self-hosting) — build api + web images from your own runner project
+- [Operating realtime collaboration](./realtime-collab) — WS requirements and multi-replica notes
+- [Upgrading](./upgrade) — replacing every replica together, and version-specific notes
+- [Configuration](./configuration) — the configuration layers and how plugins are resolved
+- [Environment variables](../reference/env) — names, defaults and meanings

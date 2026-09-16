@@ -116,7 +116,7 @@ import { emailChangeRoutes } from './contracts/email-change';
 import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { GetBacklinksResponseSchema } from './schemas/backlink';
-import type { BookmarkResponseSchema, ListMyBookmarksResponseSchema, RemoveBookmarkResponseSchema } from './schemas/bookmark';
+import type { BookmarkResponseSchema, GetBookmarkResponseSchema, ListMyBookmarksResponseSchema, RemoveBookmarkResponseSchema } from './schemas/bookmark';
 import type { AddCommentResponseSchema, DeleteCommentResponseSchema, ListCommentsResponseSchema } from './schemas/comment';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 import type {
@@ -228,6 +228,7 @@ type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
 type UserPagesResponse = z.infer<typeof UserPagesResponseSchema>;
 type ListUsersResponse = z.infer<typeof ListUsersResponseSchema>;
 type BookmarkResponse = z.infer<typeof BookmarkResponseSchema>;
+type GetBookmarkResponse = z.infer<typeof GetBookmarkResponseSchema>;
 type ListMyBookmarksResponse = z.infer<typeof ListMyBookmarksResponseSchema>;
 type RemoveBookmarkResponse = z.infer<typeof RemoveBookmarkResponseSchema>;
 type GetBacklinksResponse = z.infer<typeof GetBacklinksResponseSchema>;
@@ -428,6 +429,10 @@ const stubListUsers: ListUsersResponse = {
 };
 
 const stubBookmarkResponse: BookmarkResponse = { bookmark: null };
+// feature-page-relations-collections D-2 — `getBookmarkRoute` has its own
+// response schema now (`bookmark.page` is a bare id string, never
+// populated); `addBookmarkRoute` keeps using `stubBookmarkResponse` above.
+const stubGetBookmarkResponse: GetBookmarkResponse = { bookmark: null };
 const stubListMyBookmarks: ListMyBookmarksResponse = { bookmarks: [], pager: stubPager, total: 0 };
 const stubRemoveBookmark: RemoveBookmarkResponse = { ok: true };
 const stubBacklinks: GetBacklinksResponse = { backlinks: [], hasNext: false };
@@ -483,6 +488,9 @@ const stubPage: Page = {
   path: '',
   commentCount: 0,
   createdAt: '',
+  likerCount: 0,
+  seenUsersCount: 0,
+  isLiked: false,
 };
 
 const stubPageWithRevision: GetPageResponse = {
@@ -498,6 +506,9 @@ const stubPageWithRevision: GetPageResponse = {
     },
     commentCount: 0,
     createdAt: '',
+    likerCount: 0,
+    seenUsersCount: 0,
+    isLiked: false,
   },
 };
 
@@ -681,7 +692,7 @@ const appAuthMeUserChain = new OpenAPIHono()
 // list-by-ids endpoint registers before the by-id endpoint to mirror
 // the runtime chain (first-match-wins on the Hono router).
 const bookmarkBacklinkCommentRevisionChain = new OpenAPIHono()
-  .openapi(bookmarkRoutes.getBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
+  .openapi(bookmarkRoutes.getBookmarkRoute, (c) => c.json(stubGetBookmarkResponse, 200))
   .openapi(bookmarkRoutes.listMyBookmarksRoute, (c) => c.json(stubListMyBookmarks, 200))
   .openapi(bookmarkRoutes.addBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
   .openapi(bookmarkRoutes.removeBookmarkRoute, (c) => c.json(stubRemoveBookmark, 200))

@@ -1,0 +1,73 @@
+---
+title: Account and security
+description: Changing your password, personal access tokens, authorized apps and linked accounts
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Everything about how you sign in lives under **Settings → Password / API tokens / Linked accounts**.
+
+## Changing your password
+
+You can change your login password here. On an account that has no password yet — one that only signs in through an external account, for example — there is no "current password" field; you simply choose a new one.
+
+Changing your password **signs out every other login session on the account**. If you suspect someone else has a session, changing your password is how you evict them.
+
+- The tab you made the change in stays signed in. Other browsers, other devices and other tabs return to the login screen on their next action.
+- **Personal access tokens and authorized apps are unaffected.** They are separate credentials and are revoked individually from the sections below.
+- Any password-reset link already in someone's inbox stops working.
+- A pending email-address change is cancelled (request it again if you still want it).
+
+If you forget your password, the login screen can email you a reset link. A reset link expires after **one hour** and works **only once**. It is also bound to the address it was sent to, so if your account's email address changes after the link was sent, the old link stops working — request a new one.
+
+The same applies when an administrator resets your password from the admin panel: every session is signed out and any outstanding reset link is invalidated.
+
+## Personal access tokens
+
+A **personal access token (PAT)** lets an external tool use the Crowi API as you. The [CLI (command line)](./cli) and [Using Crowi from AI tools (MCP)](./mcp) both authenticate with one.
+
+- You can hold **several tokens**. Each has its own name, scopes (what it may do) and expiry (30 / 90 / 365 days, or never).
+- The token itself (`crowi_pat_…`) is shown **once, at creation**. The server stores only a hash, so it can never be shown again — copy it before closing the dialog.
+- The list shows each token's scopes, expiry and last use, so you can spot one nothing uses and revoke it. Revoking one token does not affect the others.
+- Admin-only scopes cannot be attached to a token.
+
+<Callout type="warn">
+  A token is as powerful as your password. If one might have leaked, revoke it and issue a new one. **Changing your password does not revoke tokens** — and revoking a token does not touch your login sessions.
+</Callout>
+
+## Authorized apps
+
+External apps you connected over OAuth — the CLI, the mobile app — are listed here and can be revoked. **Web login sessions do not appear in this list**; they are a separate kind of credential.
+
+Each row shows the app name, its scopes, when it was authorized, when it last refreshed, and when it expires. **"Last refreshed" is when the app renewed its credentials, not when it last called the API.**
+
+Revoking a row stops that app from renewing its credentials. **An access token it already holds keeps working until it expires (one hour by default).** To lock an app out immediately, wait out that hour or change your password and sign in again.
+
+- Right after a refresh, the same app may briefly show two rows. Reloading the page collapses it back to one.
+- If the same app refreshed from two places at nearly the same time, both rows can persist. Revoking one leaves the other, so revoke both when you notice.
+
+## Linking an external account
+
+When your administrator has enabled external sign-in (Google, for example), you can attach an external account to your Crowi account from the same screen.
+
+1. Press **Link** and you are taken to the provider's sign-in screen.
+2. After authenticating you come back to Crowi and a confirmation dialog appears.
+3. Press **Link** once more to finish.
+
+If you leave the flow part-way it expires within a few minutes; start again from the beginning. Linking never overwrites the email address on your Crowi account.
+
+<Callout type="info">
+  **Once any external account is linked, your email address becomes read-only.** Your way in now lives outside Crowi, so someone who could swap the address would also capture the confirmation mail — and with it your only way back into the account.
+</Callout>
+
+### Unlinking
+
+To unlink, you must be able to sign in with a password. Unlinking is refused when you have no password set, or when password sign-in is disabled for the whole instance. Only the presence of a password counts: having another provider linked does not qualify.
+
+If you cannot unlink because you have no password, ask an administrator. For an account with no password, an administrator can issue one and then unlink.
+
+## Related pages
+
+- [User pages and profile](./profile) — display name, email address, profile picture
+- [CLI (command line)](./cli) — driving the wiki from a terminal
+- [Using Crowi from AI tools (MCP)](./mcp) — driving the wiki from an AI client

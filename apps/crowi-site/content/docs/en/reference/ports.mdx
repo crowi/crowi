@@ -1,0 +1,52 @@
+---
+title: Ports and URLs
+description: The ports used in development and in production
+---
+
+## Development
+
+`pnpm dev` allocates four consecutive ports per working tree. **The proxy is the only entry point** — opening the bare web port leaves the realtime collaboration, presence and notification WebSockets unconnected.
+
+| Role | Default port | What it is |
+| --- | --- | --- |
+| dev proxy | `4304` | The real entry point. Puts api, web and the WebSockets on one origin |
+| api | `4301` | The API server (bare) |
+| web | `4302` | The frontend (bare, with no realtime connection) |
+| site | `4303` | The crowi.wiki landing page and docs (optional) |
+| dev portal | `4300` | A list of the working trees currently running |
+
+`4300`-`4999` is a band reserved for development. Each extra working tree gets a block of four ports starting ten higher (`4310`, `4320`, …), so any tool with a fixed port must stay outside the band. For the procedure, see [Set up a development environment](../develop/dev-setup).
+
+## Development middleware
+
+The host ports `docker compose up -d` publishes.
+
+| Service | Host port | What it is for |
+| --- | --- | --- |
+| MongoDB | `27017` | The development database |
+| MongoDB (test) | `27018` | The disposable database the test suite uses |
+| Redis | `6379` | The development Redis |
+| Redis (test) | `6380` | The Redis the test suite uses |
+| Redis (TLS test) | `6381` | The Redis used to exercise TLS connections |
+| Elasticsearch | `9200` | Full-text search, on an image bundling Japanese morphological analysis |
+| Mailpit (SMTP) | `1025` | Where outgoing mail is delivered |
+| Mailpit (web UI) | `8025` | Reading that mail in a browser |
+| GCS emulator (test) | `4443` | Used by the storage tests |
+
+## Production
+
+The defaults when the official images run under compose. For the procedure, see [Run the official images](../operations/install-docker).
+
+| Role | Port | What it is |
+| --- | --- | --- |
+| Reverse proxy | `4302` (host) → `80` (container) | The only origin the browser opens. Forwards `/api` and the WebSockets to the api |
+| api | `4301` (host) → `3000` (container) | The API server. Change it with `PORT` |
+
+The browser only ever sees the reverse proxy's origin. The configuration that forwards `/api` and the `/collab` WebSockets from that proxy to the api is in [Deployment topologies](../operations/deployment).
+
+## Related pages
+
+- [Set up a development environment](../develop/dev-setup) — bringing the dev stack up
+- [Run the official images](../operations/install-docker) — bringing production up
+- [Deployment topologies](../operations/deployment) — reverse proxy configuration
+- [Environment variables](./env) — `PORT` and the rest

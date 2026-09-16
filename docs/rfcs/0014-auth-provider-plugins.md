@@ -332,9 +332,10 @@ Stateless, no extra infra, survives multi-instance without sticky sessions.
 - **Cookie signing key is HKDF-derived, not the raw JWT secret** (B-3): derive
   a labelled subkey, e.g. `HKDF(jwtSecret, info="oauth-state-hmac")`, so the
   state HMAC and the session-JWT signature never share a raw key (clean key
-  rotation, no cross-purpose reuse). *Caveat:* the JWT secret source itself
-  still has a weak dev fallback (`'your-secret-key'`); hardening that is
-  existing posture, out of scope for this RFC.
+  rotation, no cross-purpose reuse). The JWT secret source is the mandatory
+  `SECRET_TOKEN` env var (a legacy `WS_TOKEN_SECRET` alias is also accepted);
+  boot aborts if it is unset, empty, whitespace-only, or a known placeholder
+  value — there is no weak dev fallback.
 - **One-time consumption**: the callback **clears the state cookie
   unconditionally** (success or failure) once it has read it. The IdP code is
   single-use anyway, so this is hygiene, not the primary defence — but it

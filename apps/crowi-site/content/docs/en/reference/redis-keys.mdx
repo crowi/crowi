@@ -1,0 +1,30 @@
+---
+title: Redis keys and ACL
+description: The Redis keys and channels Crowi uses, and the commands they need
+---
+
+Every key and channel Crowi creates sits under the per-instance namespace `crowi:<slug>:`. The `<slug>` resolves from `REDIS_KEY_PREFIX`, or from the hostname in `CLIENT_URL` when that is unset ([Environment variables](./env)). For the operational procedures, see [Redis operations](../operations/redis).
+
+## Keys and channels
+
+| Purpose | Commands needed | Keys / channels |
+| --- | --- | --- |
+| Collaboration fan-out | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:<slug>:collab:<documentName>` — one channel per document |
+| Collaborative save lock | `EVAL`, `EVALSHA` (plus `SELECT`, `EXISTS`, `SET`, `GET`, `DEL` inside the script) | `crowi:<slug>:collab:<documentName>:lock` |
+| Editor cap counter | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:<slug>:collab:editors:<pageId>` |
+| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:presence:viewers:<pageId>`, `crowi:<slug>:presence:editing:<pageId>`, `crowi:<slug>:presence:feed` |
+| Notifications | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:<slug>:notifications:user:<userId>` |
+| Config sync | `PUBLISH`, `SUBSCRIBE` | `crowi:<slug>:config` |
+| Rate limiting | `INCR`, `PEXPIRE` | `crowi:<slug>:ratelimit:<name>:<userId>:<window>` |
+| Recently viewed pages | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` | `crowi:<slug>:lru:<namespace>` |
+| Account linking (confirmation code) | `GET`, `SET`, `EVAL`, `TIME` | `crowi:<slug>:link-completion-state:<hash>`, `crowi:<slug>:link-completion-record:<hash>`, `crowi:<slug>:link-completion-consumed:<hash>` |
+| External sign-in handoff | `GET`, `SET`, `EVAL` | `crowi:<slug>:federated-handoff:<hash>`, `crowi:<slug>:federated-handoff-consumed:<hash>` |
+| Connection establishment | `CLIENT SETINFO`, `INFO` | None — sent per connection by the client library |
+
+`<hash>` is a hash: no confirmation code or state ever reaches Redis in plaintext.
+
+## Related pages
+
+- [Redis operations](../operations/redis) — supported versions, connection counts, the permissions a restricted ACL needs, replacing the endpoint
+- [Environment variables](./env) — `REDIS_URL` and `REDIS_KEY_PREFIX`, and what each feature does without Redis
+- [Operating realtime collaboration](../operations/realtime-collab) — collaboration topology and running several replicas

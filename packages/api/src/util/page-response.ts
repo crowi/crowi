@@ -6,6 +6,7 @@ import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
+import type { UserDocument } from 'src/models/user';
 import { coreLogger } from 'src/renderer';
 import { hasPendingRenderMarker, redispatchPendingCodeBlocks } from 'src/renderer/core';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
@@ -50,15 +51,78 @@ export interface PageLike {
   grantedUsers?: (Types.ObjectId | string)[];
   creator?: PopulatedUser | Types.ObjectId | null;
   lastUpdateUser?: PopulatedUser | Types.ObjectId | null;
-  liker?: (Types.ObjectId | string)[];
   commentCount?: number;
   extended?: Record<string, unknown>;
   createdAt?: Date;
   updatedAt?: Date;
   latestRevision?: Types.ObjectId | string;
-  likerCount?: number;
-  seenUsersCount?: number;
   toObject?: () => PageLike;
+}
+
+/**
+ * D-2 — the 3 fields `populatePageRelationData` resolves per request
+ * viewer, required (not optional) so `pageToResponse` can read them
+ * without a `?? 0` / `?? false` default. That absence of a default is the
+ * enforcement: a `PageDocument | PageLike` that never went through the
+ * helper cannot satisfy this intersection, so passing it to
+ * `pageToResponse` fails type-check instead of silently emitting 0/false.
+ */
+export interface PageRelationCounts {
+  likerCount: number;
+  seenUsersCount: number;
+  isLiked: boolean;
+}
+
+export type EnrichedPage = (PageDocument | PageLike) & PageRelationCounts;
+
+/**
+ * Response-boundary helper (spec D-2) — resolves `likerCount` /
+ * `seenUsersCount` / viewer `isLiked` for every Page object in `pages` from
+ * a FIXED bulk-query budget (3 with an authenticated viewer, 2 without),
+ * independent of how many Page objects are passed — including duplicate
+ * objects that reference the same page id (e.g. the same page appearing in
+ * both `recentPages` and `recentBookmarks[].page` on a profile response).
+ *
+ * De-duplication happens ONLY to shrink the bulk-query `$in` input; the
+ * returned array mirrors `pages` in length, order, and identity — every
+ * element (including duplicates) is mutated in place and returned, never
+ * just a "first occurrence". Callers must rebind their local variable from
+ * the return value (`pages = await populatePageRelationData(...)`); the
+ * static type of the original binding does not change from this mutation
+ * alone (`as EnrichedPage` on the old binding is banned — it would strip
+ * the type-check enforcement described on `PageRelationCounts` above).
+ *
+ * Every bulk query here is pinned to primary (`readPreference: 'primary'`)
+ * — a like/unlike response reflects THIS request's own just-completed
+ * write, and a stale secondary read would show it reverted (spec D-2).
+ */
+export async function populatePageRelationData(crowi: Crowi, pages: Array<PageDocument | PageLike>, requestUser: UserDocument | null): Promise<EnrichedPage[]> {
+  if (pages.length === 0) return [];
+
+  const Like = crowi.model('Like');
+  const Seen = crowi.model('Seen');
+
+  const idSet = new Set<string>();
+  for (const page of pages) idSet.add(toStringId(page._id));
+  const ids = Array.from(idSet);
+
+  const [likeCounts, seenCounts, likedPageIds] = await Promise.all([
+    Like.getCountsByPageIds(ids, { readPreference: 'primary' }),
+    Seen.getCountsByPageIds(ids, { readPreference: 'primary' }),
+    requestUser != null ? Like.getLikedPageIdsByUser(ids, requestUser._id, { readPreference: 'primary' }) : Promise.resolve(new Set<string>()),
+  ]);
+
+  for (const page of pages) {
+    const id = toStringId(page._id);
+    const target = page as PageLike & Partial<PageRelationCounts>;
+    // Absent from the bulk-query result map means "0 rows for this page",
+    // not "not queried" — every id in `pages` is in `ids` above.
+    target.likerCount = likeCounts.get(id) ?? 0;
+    target.seenUsersCount = seenCounts.get(id) ?? 0;
+    target.isLiked = likedPageIds.has(id);
+  }
+
+  return pages as EnrichedPage[];
 }
 
 /**
@@ -287,15 +351,23 @@ export type PageToResponseOptions = RevisionResponseOptions;
  *   - revision: ObjectId-ref → undefined
  *   - creator / lastUpdateUser: ObjectId-ref → null
  *
+ * `page` must already be `EnrichedPage` (spec D-2) — the caller has run it
+ * through `populatePageRelationData` first. `likerCount` / `seenUsersCount`
+ * / `isLiked` are read directly off `page` with no `?? 0` / `?? false`
+ * fallback; a Page that never went through the helper fails type-check
+ * here rather than silently emitting zeroed-out counts.
+ *
  * Returns `any` because the runtime shape satisfies either `Page` or
  * `PageWithRevision` depending on whether revision was populated; ts-rest
  * contracts pin one or the other and each handler narrows at its return.
  */
 // biome-ignore lint/suspicious/noExplicitAny: see jsdoc
-export const pageToResponse = (page: PageDocument | PageLike, options: PageToResponseOptions = {}): any => {
+export const pageToResponse = (page: EnrichedPage, options: PageToResponseOptions = {}): any => {
   const pageObj: PageLike = typeof (page as PageDocument).toObject === 'function' ? (page as PageDocument).toObject() : (page as PageLike);
-  // likerCount / seenUsersCount are dynamic properties set by populatePageData
-  // on the Mongoose document; toObject() drops them, so read off the original.
+  // latestRevision / likerCount / seenUsersCount / isLiked are dynamic
+  // properties assigned onto the Mongoose document (populatePageData,
+  // populatePageRelationData) rather than schema fields — toObject() drops
+  // them, so they must be read off the original `page`, not `pageObj`.
   const dynamic = page as PageLike;
 
   return {
@@ -311,7 +383,6 @@ export const pageToResponse = (page: PageDocument | PageLike, options: PageToRes
     grantedUsers: pageObj.grantedUsers?.map(toStringId) || [],
     creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
     lastUpdateUser: pageObj.lastUpdateUser && isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
-    liker: pageObj.liker?.map(toStringId) || [],
     commentCount: pageObj.commentCount || 0,
     extended: pageObj.extended,
     createdAt: toISOStringOrNull(pageObj.createdAt) || EPOCH_ISO,
@@ -323,7 +394,8 @@ export const pageToResponse = (page: PageDocument | PageLike, options: PageToRes
     // stale-revision banner (`latestRevision !== revision._id`) never fire when
     // viewing a page at `?revision_id=` a past version.
     latestRevision: dynamic.latestRevision ? toStringId(dynamic.latestRevision) : undefined,
-    likerCount: dynamic.likerCount,
-    seenUsersCount: dynamic.seenUsersCount,
+    likerCount: page.likerCount,
+    seenUsersCount: page.seenUsersCount,
+    isLiked: page.isLiked,
   };
 };

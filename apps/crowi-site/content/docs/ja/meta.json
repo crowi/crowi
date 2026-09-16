@@ -1,4 +1,10 @@
 {
   "title": "Crowi Docs",
-  "pages": ["index", "getting-started", "guide", "operations", "plugins", "reference"]
+  "pages": [
+    "index",
+    "guide",
+    "operations",
+    "develop",
+    "reference"
+  ]
 }

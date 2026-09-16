@@ -17,7 +17,10 @@ import { useMediaQuery } from '@/lib/use-media-query';
  *     rhythm's sibling chain, and its mobile-irrelevant children would
  *     still mount, run effects and hold state);
  *   - the editor's wide two-pane layout, where mounting both the wide and
- *     the narrow editor would mean two live editor instances.
+ *     the narrow editor would mean two live editor instances;
+ *   - the revision diff's split view, where the viewer builds different DOM
+ *     per mode and the control that switches them must not exist at a width
+ *     where its other mode is unreadable.
  *
  * SSR/first-hydration snapshot is `false` (narrow) — see `useMediaQuery`.
  * React re-renders with the real value immediately after hydration, so a

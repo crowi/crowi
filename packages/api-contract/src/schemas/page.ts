@@ -150,7 +150,6 @@ export const PageSchema = z.object({
   grantedUsers: z.array(z.string()).optional(),
   creator: z.union([z.string(), PageUserSchema]).nullable().optional(),
   lastUpdateUser: z.union([z.string(), PageUserSchema]).nullable().optional(),
-  liker: z.array(z.string()).optional(),
   commentCount: z.number().default(0),
   extended: PageExtendedSchema,
   createdAt: z.string(),
@@ -166,8 +165,15 @@ export const PageSchema = z.object({
   yjsCheckpointAt: z.string().nullable().optional(),
   // dynamic fields
   latestRevision: z.string().optional(),
-  likerCount: z.number().optional(),
-  seenUsersCount: z.number().optional(),
+  // feature-page-relations-collections D-2 — Like / Seen are independent
+  // relation collections now; the wire no longer carries the full liker
+  // ID array (removed above), only these derived, viewer-scoped fields.
+  // Required (not optional): every response path routes through
+  // `populatePageRelationData` before serialising a Page, so these are
+  // always present.
+  likerCount: z.number().int().nonnegative(),
+  seenUsersCount: z.number().int().nonnegative(),
+  isLiked: z.boolean(),
 });
 export type Page = z.infer<typeof PageSchema>;
 
@@ -309,12 +315,22 @@ export const ListPageChildrenRequestSchema = z.object({
   // Portal path to list children of. Trailing slash optional — the
   // handler normalises it. '/' lists the top-level segments.
   path: z.string(),
+  // How many levels below `path` to return (default 1 — immediate children
+  // only, the original behaviour). The server scans the whole subtree
+  // either way, so a deeper request costs no extra query; it only widens
+  // what is grouped into the response. The sidebar asks for 2 at a
+  // `YYYY/MM/` node so it can open every day of the month at once.
+  depth: z.coerce.number().int().min(1).max(2).optional(),
 });
 export type ListPageChildrenRequest = z.infer<typeof ListPageChildrenRequestSchema>;
 
 // List page children response schema
 export const ListPageChildrenResponseSchema = z.object({
-  // Sorted alphabetically by segment.
+  // Depth-first, siblings sorted alphabetically by segment — so a node is
+  // immediately followed by its own subtree. With the default `depth` of 1
+  // this is simply the alphabetical first-level listing. Deeper levels are
+  // NOT nested: every row sits in this one flat array and carries its full
+  // `path`, which is what places it in the tree.
   children: z.array(PageChildSegmentSchema),
 });
 export type ListPageChildrenResponse = z.infer<typeof ListPageChildrenResponseSchema>;

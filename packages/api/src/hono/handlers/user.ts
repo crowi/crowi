@@ -33,14 +33,15 @@ import type { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { BookmarkDocument } from 'src/models/bookmark';
 import { creatorPageListMatch, type PageDocument } from 'src/models/page';
-import { type PageLike, pageToResponse } from 'src/util/page-response';
+import { type EnrichedPage, pageToResponse, populatePageRelationData } from 'src/util/page-response';
 import { escapeRegExp } from 'src/util/regex';
-import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
+import { toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { applyScope } from '../middleware/require-scope';
 
+import { bookmarkToResponse, bookmarksToResponseList } from './_helpers/bookmark-response';
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:user');
@@ -49,34 +50,12 @@ const USER_NOT_FOUND_BODY = {
   error: { code: 'USER_NOT_FOUND' as const, message: 'User not found' as const },
 };
 
-/**
- * Shape the ts-rest handler accepted for bookmark documents. Mirrors
- * `routes/ts-rest/user.ts` so the response shape is byte-identical.
- */
-interface BookmarkLike {
-  _id: Types.ObjectId | string;
-  page?: PageLike | null;
-  user: PopulatedUser | Types.ObjectId | string;
-  createdAt?: Date;
-  toObject?: () => BookmarkLike;
-}
-
-const bookmarkToResponse = (bookmark: BookmarkDocument | BookmarkLike) => {
-  const obj: BookmarkLike =
-    typeof (bookmark as BookmarkDocument).toObject === 'function' ? (bookmark as BookmarkDocument).toObject() : (bookmark as BookmarkLike);
-  return {
-    _id: toStringId(obj._id),
-    page: obj.page ? pageToResponse(obj.page) : null,
-    user: isPopulatedUser(obj.user) ? toPageUser(obj.user) : toStringId(obj.user as Types.ObjectId | string),
-    createdAt: toISOStringOrNull(obj.createdAt) || new Date().toISOString(),
-  };
-};
-
 export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const User = crowi.model('User');
   const Page = crowi.model('Page');
   const Bookmark = crowi.model('Bookmark');
   const Comment = crowi.model('Comment');
+  const Like = crowi.model('Like');
 
   // A user page stays reachable for ACTIVE and SUSPENDED accounts. A suspended
   // user is gone, but the pages they authored remain visible (they show up in
@@ -133,10 +112,14 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         // user's OWN actions (pages they liked, comments they wrote) —
         // NOT activity their own pages received — so neither is filtered
         // by the current viewer's grants (see spec §プロフィール統計の主語).
+        // D-6 — `likesCount` counts `likes` relation rows whose Page still
+        // exists (existence-filtered aggregate), not a raw row count: a
+        // best-effort post-delete Like cleanup failure must not inflate
+        // this number with an orphaned row.
         const [createdPagesCount, bookmarksCount, likesCount, commentsCount] = await Promise.all([
           Page.countDocuments(creatorPageListMatch(targetUser._id, currentUser._id)),
           Bookmark.countDocuments({ user: targetUser._id }),
-          Page.countDocuments({ liker: targetUser._id }),
+          Like.countByUserId(targetUser._id),
           Comment.countDocuments({ creator: targetUser._id }),
         ]);
 
@@ -144,7 +127,20 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         const recentPages = (await Page.populate(recentPagesRaw, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
 
         const bookmarkResult = await Bookmark.findByUserId(targetUser._id, { limit: 10, offset: 0 });
-        const recentBookmarks = bookmarkResult.data as BookmarkDocument[];
+        const recentBookmarks = (bookmarkResult.data as BookmarkDocument[]).filter((bookmark) => bookmark.page);
+
+        // D-2/F-2 — `recentPages` and `recentBookmarks[].page` can each
+        // hold a DIFFERENT object for the SAME underlying page (populated
+        // independently by `findListByCreator` vs `Bookmark.findByUserId`).
+        // Both arrays are concatenated into ONE enrichment call — the
+        // viewer here is `currentUser` (the profile VIEWER), never
+        // `targetUser` (the profile OWNER) — and every element (including
+        // both objects for a shared page) is enriched, then matched back
+        // by page id via a Map (never by array position/zip — see D-2).
+        const recentBookmarkPages = recentBookmarks.map((bookmark) => bookmark.page as PageDocument);
+        const enrichedTargets = await populatePageRelationData(crowi, [...recentPages, ...recentBookmarkPages], currentUser);
+        const enrichedRecentPages = enrichedTargets.slice(0, recentPages.length);
+        const enrichedByPageId = new Map<string, EnrichedPage>(enrichedTargets.map((page) => [toStringId(page._id), page]));
 
         return c.json(
           {
@@ -153,8 +149,10 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             bookmarksCount,
             likesCount,
             commentsCount,
-            recentPages: recentPages.map((page) => pageToResponse(page)),
-            recentBookmarks: recentBookmarks.filter((bookmark) => bookmark.page).map((bookmark) => bookmarkToResponse(bookmark)),
+            recentPages: enrichedRecentPages.map((page) => pageToResponse(page)),
+            recentBookmarks: recentBookmarks.map((bookmark) =>
+              bookmarkToResponse(bookmark, enrichedByPageId.get(toStringId((bookmark.page as PageDocument)._id)) ?? null),
+            ),
           },
           200,
         );
@@ -178,7 +176,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         }
 
         const bookmarkResult = await Bookmark.findByUserId(targetUser._id, { limit, offset });
-        const bookmarks = bookmarkResult.data as BookmarkDocument[];
+        const bookmarks = (bookmarkResult.data as BookmarkDocument[]).filter((bookmark) => bookmark.page);
         const total = bookmarkResult.meta.total;
 
         const prev = offset > 0 ? Math.max(0, offset - limit) : null;
@@ -186,7 +184,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
         return c.json(
           {
-            bookmarks: bookmarks.filter((bookmark) => bookmark.page).map((bookmark) => bookmarkToResponse(bookmark)),
+            bookmarks: await bookmarksToResponseList(crowi, bookmarks, currentUser),
             pager: { prev, next, offset },
             total,
           },
@@ -222,9 +220,11 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         const prev = offset > 0 ? Math.max(0, offset - limit) : null;
         const next = offset + limit < total ? offset + limit : null;
 
+        const enrichedPages = await populatePageRelationData(crowi, pages, currentUser);
+
         return c.json(
           {
-            pages: pages.map((page) => pageToResponse(page)),
+            pages: enrichedPages.map((page) => pageToResponse(page)),
             pager: { prev, next, offset },
             total,
           },
@@ -259,9 +259,11 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         const prev = offset > 0 ? Math.max(0, offset - limit) : null;
         const next = offset + limit < total ? offset + limit : null;
 
+        const enrichedPages = await populatePageRelationData(crowi, pages, currentUser);
+
         return c.json(
           {
-            pages: pages.map((page) => pageToResponse(page)),
+            pages: enrichedPages.map((page) => pageToResponse(page)),
             pager: { prev, next, offset },
             total,
           },

@@ -18,6 +18,10 @@ globs:
 **spec**(コードレベルの判断まで完了した実装指示書・commit しない / 日本語)に落とすワークフロー。
 spec は `.claude/skills/_shared/spec-contract.md` の implementation-ready contract v2 に従い、
 実装時にアーキテクチャ・配置・契約・テスト観点を再発見させない。
+**RFC も spec も wiki で読まれる。**主体をまたぐ順序や実体をまたぐ多重度など、散文にすると
+読み手が頭の中で組み直すことになる箇所には mermaid の図を置く — 使いどころ・図と散文の
+分担・`erDiagram` に差分を書かせる書き方は spec-contract の「図(mermaid)」節が正本で、
+RFC の執筆にも同じ規則を適用する。
 重い調査・設計・レビュー・執筆を **subagent に散らして main を軽く** 保つのが目的。
 実装は `crowi-feature`、その **設計版** がこれ。
 

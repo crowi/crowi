@@ -169,13 +169,14 @@ export const listPageChildrenRoute = createRoute({
   path: '/pages/children',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'List immediate child segments under a portal path (sidebar tree)',
+  summary: 'List child segments under a portal path, up to `depth` levels (sidebar tree)',
   request: {
     query: ListPageChildrenRequestSchema,
   },
   responses: {
     200: {
-      description: 'First-level child segments (alphabetical) under the path',
+      description:
+        "Child segments under the path, depth-first with siblings alphabetical, spanning `depth` levels (default 1). Flat — a row's own `path` places it in the tree.",
       content: { 'application/json': { schema: ListPageChildrenResponseSchema } },
     },
     401: {
@@ -343,7 +344,7 @@ export const likePageRoute = createRoute({
   path: '/pages/like',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'Add the current user to the page liker list',
+  summary: 'Add the current user to the page like relation',
   request: {
     body: {
       content: { 'application/json': { schema: PageIdBodySchema } },
@@ -351,7 +352,8 @@ export const likePageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'The page with the updated liker list',
+      description:
+        "The page, viewer-scoped: `likerCount` / `seenUsersCount` are the current relation counts (not a liker ID array — feature-page-relations-collections D-2), `isLiked` reflects the caller's own membership as of this response.",
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
@@ -374,7 +376,7 @@ export const unlikePageRoute = createRoute({
   path: '/pages/unlike',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'Remove the current user from the page liker list',
+  summary: 'Remove the current user from the page like relation',
   request: {
     body: {
       content: { 'application/json': { schema: PageIdBodySchema } },
@@ -382,7 +384,8 @@ export const unlikePageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'The page with the updated liker list',
+      description:
+        "The page, viewer-scoped: `likerCount` / `seenUsersCount` are the current relation counts (not a liker ID array — feature-page-relations-collections D-2), `isLiked` reflects the caller's own membership as of this response.",
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {

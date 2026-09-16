@@ -28,41 +28,17 @@ import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { BookmarkDocument } from 'src/models/bookmark';
 import type { PageDocument } from 'src/models/page';
-import { type PageLike, pageToResponse } from 'src/util/page-response';
-import { type PopulatedUser, isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
+import { populatePageRelationData } from 'src/util/page-response';
+import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { applyScope } from '../middleware/require-scope';
 
+import { type BookmarkLike, bookmarkToResponse, bookmarksToResponseList } from './_helpers/bookmark-response';
 import { INTERNAL_ERROR_BODY, INVALID_PAGE_ID_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:bookmark');
-
-interface BookmarkLike {
-  _id: Types.ObjectId | string;
-  page?: PageLike | null;
-  user: PopulatedUser | Types.ObjectId | string;
-  createdAt?: Date;
-  toObject?: () => BookmarkLike;
-}
-
-/**
- * Serialize a Bookmark document into the wire shape. Mirrors the ts-rest
- * handler so the JSON payload is byte-identical: page populated via
- * `pageToResponse`, user lifted to `PageUser` when populated otherwise
- * left as a string id, createdAt always emitted as ISO string.
- */
-const bookmarkToResponse = (bookmark: BookmarkDocument | BookmarkLike) => {
-  const obj: BookmarkLike =
-    typeof (bookmark as BookmarkDocument).toObject === 'function' ? (bookmark as BookmarkDocument).toObject() : (bookmark as BookmarkLike);
-  return {
-    _id: toStringId(obj._id),
-    page: obj.page ? pageToResponse(obj.page) : null,
-    user: isPopulatedUser(obj.user) ? toPageUser(obj.user) : toStringId(obj.user as Types.ObjectId | string),
-    createdAt: toISOStringOrNull(obj.createdAt) || new Date().toISOString(),
-  };
-};
 
 export const registerBookmarkRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');
@@ -95,8 +71,26 @@ export const registerBookmarkRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
       try {
         const pageObjectId = new Types.ObjectId(page_id);
         const bookmark = (await Bookmark.findByPageIdAndUserId(pageObjectId, user._id)) as BookmarkDocument | null;
+        if (!bookmark) {
+          return c.json({ bookmark: null }, 200);
+        }
 
-        return c.json({ bookmark: bookmark ? bookmarkToResponse(bookmark) : null }, 200);
+        // D-2 — `Bookmark.findByPageIdAndUserId` never populates `page`, so
+        // this route has its own response schema (`GetBookmarkResponseSchema`)
+        // with `page` as a bare id string; it does not go through
+        // `bookmarkToResponse` (which requires an `EnrichedPage`).
+        const obj = bookmark.toObject();
+        return c.json(
+          {
+            bookmark: {
+              _id: toStringId(obj._id),
+              page: obj.page ? toStringId(obj.page as Types.ObjectId) : null,
+              user: isPopulatedUser(obj.user) ? toPageUser(obj.user) : toStringId(obj.user as Types.ObjectId | string),
+              createdAt: toISOStringOrNull(obj.createdAt) || new Date().toISOString(),
+            },
+          },
+          200,
+        );
       } catch (err) {
         debug('Error fetching bookmark:', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
@@ -110,15 +104,19 @@ export const registerBookmarkRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
 
       try {
         const result = await Bookmark.findByUserId(user._id, { limit, offset });
-        const bookmarks = result.data as BookmarkDocument[];
+        const bookmarks = (result.data as BookmarkDocument[]).filter((bookmark) => bookmark.page);
         const total: number = result.meta.total;
 
         const prev = offset > 0 ? Math.max(0, offset - limit) : null;
         const next = offset + limit < total ? offset + limit : null;
 
+        // D-2 — one batched enrichment call for every populated Page in
+        // this response, then match each bookmark to its page by id (never
+        // by array position — see the spec's D-2 note on why a zip is
+        // unsafe here).
         return c.json(
           {
-            bookmarks: bookmarks.filter((bookmark) => bookmark.page).map((bookmark) => bookmarkToResponse(bookmark)),
+            bookmarks: await bookmarksToResponseList(crowi, bookmarks, user),
             pager: { prev, next, offset },
             total,
           },
@@ -168,9 +166,13 @@ export const registerBookmarkRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
         created.depopulate('page');
         created.depopulate('user');
         const bookmarkObj = created.toObject() as BookmarkLike;
-        bookmarkObj.page = pageData as unknown as PageLike;
 
-        return c.json({ bookmark: bookmarkToResponse(bookmarkObj) }, 200);
+        // D-2 — singleton enrichment (fixed 3-query batch of size 1); the
+        // enriched Page is passed straight to `bookmarkToResponse`'s second
+        // argument rather than assigned onto `bookmarkObj.page` (which
+        // would only be lost again on the next `toObject()`).
+        const [enrichedPage] = await populatePageRelationData(crowi, [pageData], user);
+        return c.json({ bookmark: bookmarkToResponse(bookmarkObj, enrichedPage) }, 200);
       } catch (err) {
         debug('Error adding bookmark:', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);

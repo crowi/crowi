@@ -1,5 +1,5 @@
-import { createAdaptorServer } from '@hono/node-server';
 import type { Http2Bindings, HttpBindings } from '@hono/node-server';
+import { createAdaptorServer } from '@hono/node-server';
 import Debug from 'debug';
 import http from 'http';
 import mongoose from 'mongoose';
@@ -19,7 +19,7 @@ import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type AttachedPresence, attachPresenceServer } from 'src/presence/attach';
 import { createRenderer, type Renderer } from 'src/renderer';
 import { MailService } from 'src/service/mail';
-import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
+import { type BootLayer, type BootReporter, createBootReporter, formatBootFailureReason, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
 import { validateEnv } from 'src/util/env-schema';
 import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
@@ -321,13 +321,13 @@ class Crowi {
     this.emitEnvValidationWarnings();
     // `CLI_SKIP_STEPS` (boot-steps.ts) is the single, named place that
     // records what the CLI omits — redis / bootMigrations / seedOAuthClients
-    // / mailer / lru. The remaining steps (encryption, database, models,
-    // config, renderer, plugins) run in the same order `runInitLayers()`
-    // would run them, minus the skipped ones; the `renderer` step itself
-    // reads `ctx.mode === 'cli'` to skip the page-save side-effect listeners
-    // (mention dispatch / render-cache invalidation) — a migration's
-    // `updatePage` writes must not @-ping users or race the teardown
-    // connection close.
+    // / mailer / lru / relationUniqueIndexes. The remaining steps
+    // (encryption, database, models, config, renderer, plugins) run in the
+    // same order `runInitLayers()` would run them, minus the skipped ones;
+    // the `renderer` step itself reads `ctx.mode === 'cli'` to skip the
+    // page-save side-effect listeners (mention dispatch / render-cache
+    // invalidation) — a migration's `updatePage` writes must not @-ping
+    // users or race the teardown connection close.
     const ordered = resolveBootOrder(ALL_BOOT_STEPS, { skip: CLI_SKIP_STEPS });
     for (const bootStep of ordered) {
       await bootStep.run(this, { mode: 'cli' });
@@ -719,6 +719,22 @@ class Crowi {
     });
   }
 
+  /**
+   * Build the `Like` / `Seen` `{page,user}` unique index. Both models
+   * register with `autoIndex: false` specifically so nothing builds this
+   * index before the cutover migration's data is safe to enforce
+   * uniqueness against. This method is the ONLY caller of both
+   * statics outside that migration's own `prepare-target-index` stage; it
+   * is invoked from the `relationUniqueIndexes` boot step
+   * (`boot-steps.ts`), placed immediately after `bootMigrations` so it is
+   * only reached once every blocking preflight migration — including this
+   * one — has been confirmed clean.
+   */
+  async ensureRelationUniqueIndexes(): Promise<void> {
+    await this.model('Like').ensureUniqueIndex();
+    await this.model('Seen').ensureUniqueIndex();
+  }
+
   setupEvents() {
     return Object.entries(events).forEach(([key, Event]: any[]) => {
       this.event(key, new Event(this));
@@ -905,8 +921,7 @@ class Crowi {
     // (api · web · deps) down — otherwise `tsx watch` survives the crash and
     // web keeps serving against a dead api. Harmless in prod (a grep-able line
     // before exit). Reason is the first line of the error, length-capped.
-    const reason = (err instanceof Error ? err.message : String(err)).split('\n')[0].slice(0, 200);
-    process.stdout.write(`${formatFailMarker('api', reason)}\n`);
+    process.stdout.write(`${formatFailMarker('api', formatBootFailureReason(err))}\n`);
     console.error(err);
     console.error(err.stack);
     process.exit(1);

@@ -4,8 +4,9 @@ import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import type { RevisionMetaContent } from 'src/models/revision';
 import { renderFallbackCard } from 'src/renderer/core/link-card/render-card';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import type { UserDocument } from 'src/models/user';
 import { crowi } from 'src/test/setup';
-import { computeRevisionRenderArtifactsAsync } from './page-response';
+import { type EnrichedPage, type PageLike, computeRevisionRenderArtifactsAsync, pageToResponse, populatePageRelationData } from './page-response';
 
 const TEST_ACTOR: RenderActor = { kind: 'system' };
 const silentLogger: PluginLogger = {
@@ -626,5 +627,152 @@ describe('computeRevisionRenderArtifactsAsync — renderedAstArtifactKey (RFC-00
     const result = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, undefined, '', TEST_ACTOR);
     expect(result.renderedAst).toBeUndefined();
     expect(result.renderedAstArtifactKey).toBeUndefined();
+  });
+});
+
+/**
+ * feature-page-relations-collections D-2/AC-2/AC-4 — `pageToResponse`
+ * projection and the `populatePageRelationData` response-boundary helper.
+ */
+describe('pageToResponse — D-2 projection always emits 3 required relation fields, never liker', () => {
+  it('reads likerCount / seenUsersCount / isLiked directly off the EnrichedPage argument', () => {
+    const page = {
+      _id: new Types.ObjectId(),
+      path: '/x',
+      commentCount: 0,
+      createdAt: new Date(),
+      likerCount: 3,
+      seenUsersCount: 2,
+      isLiked: true,
+    } as unknown as EnrichedPage;
+
+    const response = pageToResponse(page);
+    expect(response.likerCount).toBe(3);
+    expect(response.seenUsersCount).toBe(2);
+    expect(response.isLiked).toBe(true);
+    expect('liker' in response).toBe(false);
+  });
+
+  it('emits 0 / 0 / false as real (queried) zero values, not a `?? 0` fallback default', () => {
+    const page = {
+      _id: new Types.ObjectId(),
+      path: '/y',
+      commentCount: 0,
+      createdAt: new Date(),
+      likerCount: 0,
+      seenUsersCount: 0,
+      isLiked: false,
+    } as unknown as EnrichedPage;
+
+    const response = pageToResponse(page);
+    expect(response.likerCount).toBe(0);
+    expect(response.seenUsersCount).toBe(0);
+    expect(response.isLiked).toBe(false);
+  });
+});
+
+describe('populatePageRelationData — C-PERF fixed bulk-query budget + D-2 in-place enrichment', () => {
+  let Page: ReturnType<typeof crowi.model<'Page'>>;
+  let Like: ReturnType<typeof crowi.model<'Like'>>;
+  let Seen: ReturnType<typeof crowi.model<'Seen'>>;
+
+  beforeAll(() => {
+    Page = crowi.model('Page');
+    Like = crowi.model('Like');
+    Seen = crowi.model('Seen');
+  });
+
+  const fakeUser = (): UserDocument => ({ _id: new Types.ObjectId() }) as unknown as UserDocument;
+
+  it('0 pages -> 0 queries, returns []', async () => {
+    const likeSpy = jest.spyOn(Like, 'getCountsByPageIds');
+    const seenSpy = jest.spyOn(Seen, 'getCountsByPageIds');
+    const likedSpy = jest.spyOn(Like, 'getLikedPageIdsByUser');
+
+    const result = await populatePageRelationData(crowi, [], fakeUser());
+
+    expect(result).toEqual([]);
+    expect(likeSpy).not.toHaveBeenCalled();
+    expect(seenSpy).not.toHaveBeenCalled();
+    expect(likedSpy).not.toHaveBeenCalled();
+    likeSpy.mockRestore();
+    seenSpy.mockRestore();
+    likedSpy.mockRestore();
+  });
+
+  it('an authenticated viewer issues exactly 3 bulk queries (like counts, seen counts, viewer membership); no viewer issues exactly 2', async () => {
+    const page = await Page.create({ path: `/page-response-test-${new Types.ObjectId()}` });
+    try {
+      const likeSpy = jest.spyOn(Like, 'getCountsByPageIds');
+      const seenSpy = jest.spyOn(Seen, 'getCountsByPageIds');
+      const likedSpy = jest.spyOn(Like, 'getLikedPageIdsByUser');
+
+      await populatePageRelationData(crowi, [page], fakeUser());
+      expect(likeSpy).toHaveBeenCalledTimes(1);
+      expect(seenSpy).toHaveBeenCalledTimes(1);
+      expect(likedSpy).toHaveBeenCalledTimes(1);
+
+      likeSpy.mockClear();
+      seenSpy.mockClear();
+      likedSpy.mockClear();
+
+      await populatePageRelationData(crowi, [page], null);
+      expect(likeSpy).toHaveBeenCalledTimes(1);
+      expect(seenSpy).toHaveBeenCalledTimes(1);
+      expect(likedSpy).not.toHaveBeenCalled();
+
+      likeSpy.mockRestore();
+      seenSpy.mockRestore();
+      likedSpy.mockRestore();
+    } finally {
+      await Page.deleteOne({ _id: page._id });
+    }
+  });
+
+  it('bulk-query input is deduped by page id, but EVERY input element (including duplicate objects for the same page) is individually enriched', async () => {
+    const page = await Page.create({ path: `/page-response-test-dup-${new Types.ObjectId()}` });
+    try {
+      const dup1: PageLike = { _id: page._id, path: page.path };
+      const dup2: PageLike = { _id: page._id, path: page.path };
+      const likeSpy = jest.spyOn(Like, 'getCountsByPageIds');
+
+      const [enrichedDup1, enrichedDup2] = await populatePageRelationData(crowi, [dup1, dup2], null);
+
+      expect(likeSpy.mock.calls[0][0]).toEqual([page._id.toString()]); // deduped to 1 id
+      expect(enrichedDup1).not.toBe(enrichedDup2); // distinct objects
+      expect(enrichedDup1.likerCount).toBe(0);
+      expect(enrichedDup2.likerCount).toBe(0); // BOTH mutated, not just the first occurrence
+
+      likeSpy.mockRestore();
+    } finally {
+      await Page.deleteOne({ _id: page._id });
+    }
+  });
+
+  it("resolves real like/seen counts and the requesting viewer's own isLiked membership", async () => {
+    const page = await Page.create({ path: `/page-response-test-real-${new Types.ObjectId()}` });
+    const viewer = fakeUser();
+    const otherUser = fakeUser();
+    try {
+      await Like.add(page._id, viewer._id);
+      await Like.add(page._id, otherUser._id);
+      await Seen.add(page._id, viewer._id);
+
+      const [enrichedForViewer] = await populatePageRelationData(crowi, [page], viewer);
+      expect(enrichedForViewer.likerCount).toBe(2);
+      expect(enrichedForViewer.seenUsersCount).toBe(1);
+      expect(enrichedForViewer.isLiked).toBe(true);
+
+      const [enrichedForOther] = await populatePageRelationData(crowi, [page], otherUser);
+      expect(enrichedForOther.likerCount).toBe(2);
+      expect(enrichedForOther.isLiked).toBe(true);
+
+      const [enrichedForStranger] = await populatePageRelationData(crowi, [page], fakeUser());
+      expect(enrichedForStranger.isLiked).toBe(false);
+    } finally {
+      await Like.removeByPageId(page._id);
+      await Seen.removeByPageId(page._id);
+      await Page.deleteOne({ _id: page._id });
+    }
   });
 });

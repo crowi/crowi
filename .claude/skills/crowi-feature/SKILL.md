@@ -488,22 +488,26 @@ committer が `docs(site)` commit に分割)、
 ```
 apps/crowi-site/content/docs/
 ├── ja/                       # 日本語 (正本)
-│   ├── getting-started.mdx
-│   ├── guide/                # 利用者向け機能ガイド (pages / markdown / search / ...)
-│   ├── operations/           # 運用・管理者向け (installation / configuration / env / admin / mcp / ...)
-│   ├── plugins/              # プラグイン (overview / managing / developing / renderers)
-│   ├── reference/            # 設計資料 (architecture / rfcs / contributing)
-│   └── {category}/meta.json  # カテゴリ内のページ順 + タイトル
+│   ├── index.mdx
+│   ├── guide/                # 利用者 (pages / markdown / search / ...)
+│   ├── operations/           # 管理者・運用者 (installation / configuration / admin / plugins / ...)
+│   ├── develop/              # 開発者・コントリビュータ (architecture / plugins-developing / rfcs / ...)
+│   └── {tab}/meta.json       # タブ内のページ順 + タイトル
 └── en/                       # 英語 (ja とミラー構成・同じファイル名)
 ```
 
+- **読者で置き場所を決める**: `guide/` `operations/` `develop/` は Fumadocs の root フォルダ
+  (= サイドバーのタブ) で、分割の軸は読者。置き場所と書いてよい内容の規約は
+  crowi-docs-refresh skill が正本。
 - **二言語ミラー構成**: `ja/` と `en/` は同じファイル名・同じ構成。**必ず両方を更新**する
   (片方だけだと乖離する)。ja を正本として書き、en はその英訳を当てる。
 - **frontmatter 必須**: 各 `.mdx` は先頭に `title` と `description` を持つ
   (`--- title: ... / description: ... ---`)。新規ページにも必ず付ける。
-- **meta.json**: 新規 `.mdx` を **追加** したときは、そのカテゴリの `meta.json` の
+- **meta.json**: 新規 `.mdx` を **追加** したときは、そのタブの `meta.json` の
   `pages` 配列に **ja / en 両方とも** ファイル名 (拡張子なし) を追記して順序に組み込む。
-  既存ページの編集だけなら meta.json は触らなくてよい。
+  未登録のページはサイドバーに出ない。既存ページの編集だけなら meta.json は触らなくてよい。
+- **移動・改名したとき**: `apps/crowi-site/public/_redirects` に 301 を足し、リンク元の
+  相対リンクを張り替える (`pnpm --filter @crowi/site check:links` が検知する)。
 
 ### 要否の判定 (v2 は design writer、legacy は planner が行う)
 
@@ -513,7 +517,7 @@ legacy は `context.docsTargets.assessment` に判定を記録する:
 | assessment | 例 | docs 更新 |
 |---|---|---|
 | `user-visible` | 新しいページ機能 / 編集挙動 / 検索 / 通知 / 添付 等、エンドユーザーが触る変化 | `guide/` を更新 |
-| `operator-visible` | 新 env / 新 admin 設定 / インストール手順 / プラグイン運用の変化 | `operations/` or `plugins/` を更新 |
+| `operator-visible` | 新 env / 新 admin 設定 / インストール手順 / プラグイン運用の変化 | `operations/` を更新 |
 | `internal-only` | 内部 refactor / 内部 API / テスト / 観測できない最適化 | **skip** (`entries: []`) |
 
 `internal-only` のときは docs 更新も `docs(site)` commit も作らない。
@@ -521,7 +525,7 @@ legacy は `context.docsTargets.assessment` に判定を記録する:
 ### 対象ファイルの探し方 (v2 は design writer、legacy は planner)
 
 1. spec の機能領域に対応する既存 `.mdx` を探す
-   (`ls apps/crowi-site/content/docs/ja/{guide,operations,plugins}` + grep で関連語を検索)。
+   (`ls apps/crowi-site/content/docs/ja/{guide,operations,develop}` + grep で関連語を検索)。
    - 既存ページがあれば `action: "edit"`、その ja / en パスを `docsTargets.entries[]` に書く。
    - 該当が無く新規トピックなら `action: "create"`、適切なカテゴリに新ファイル名を決め、
      `metaUpdate: true` を立てる (implementer が meta.json に追記する目印)。

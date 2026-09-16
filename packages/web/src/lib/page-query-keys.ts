@@ -39,7 +39,10 @@ export const pageListKeys = {
  */
 export const pageChildrenKeys = {
   all: [...PAGE_LIST_FAMILY_ROOT, 'children'] as const,
-  detail: (path: string) => [...PAGE_LIST_FAMILY_ROOT, 'children', path] as const,
+  // `depth` is part of the key: a depth-2 fetch of a path returns a superset
+  // of the depth-1 one, so sharing a key would let the sidebar's month
+  // expansion serve its extra rows to callers that asked for children only.
+  detail: (path: string, depth = 1) => [...PAGE_LIST_FAMILY_ROOT, 'children', path, depth] as const,
 };
 
 /**

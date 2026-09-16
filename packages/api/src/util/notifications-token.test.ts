@@ -1,14 +1,9 @@
-// Pin a stable WS_TOKEN_SECRET before any token util is constructed
-// below. The secret is resolved fresh on every
-// `createNotificationsTokenUtil()` call (no cached singleton — see
-// signed-token-factory.ts), not at module import time; two tests below
-// sign directly with `process.env.WS_TOKEN_SECRET`, so a stable value
-// must be in place for the whole file.
-process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
-
 import jwt from 'jsonwebtoken';
+import { withSecretTokenEnv } from 'src/test/secret-token-env';
+
 import { createNotificationsTokenUtil } from './notifications-token';
 import { createPresenceTokenUtil } from './presence-token';
+import { resolveSignedTokenSecret } from './signed-token-factory';
 import { createWsTokenUtil } from './ws-token';
 
 /**
@@ -84,7 +79,7 @@ describe('createNotificationsTokenUtil', () => {
   it('rejects a token whose payload fails schema validation (missing selfUserId)', () => {
     // Sign a payload that the issuer + secret accept but the
     // `NotificationsTokenPayloadSchema` rejects (no `selfUserId`).
-    const malformed = jwt.sign({ iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }, process.env.WS_TOKEN_SECRET as string, {
+    const malformed = jwt.sign({ iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }, resolveSignedTokenSecret(), {
       issuer: 'crowi-notifications',
       algorithm: 'HS256',
     });
@@ -99,7 +94,7 @@ describe('createNotificationsTokenUtil', () => {
     // wait 60 seconds — the verifier delegates expiry to jsonwebtoken.
     const expired = jwt.sign(
       { selfUserId: 'user-1', jti: '11111111-1111-4111-8111-111111111111', iat: Math.floor(Date.now() / 1000) - 120, exp: Math.floor(Date.now() / 1000) - 60 },
-      process.env.WS_TOKEN_SECRET as string,
+      resolveSignedTokenSecret(),
       {
         issuer: 'crowi-notifications',
         algorithm: 'HS256',
@@ -145,7 +140,7 @@ describe('createNotificationsTokenUtil', () => {
     expect(a).not.toBe(b);
 
     // Crucially, tokens minted by one must still verify against the
-    // other (because both resolve `WS_TOKEN_SECRET` from the same env).
+    // other (because both resolve the same secret via `resolveSignedTokenSecret()`).
     const { token } = a.signNotificationsToken({ selfUserId: 'user-roundtrip' });
     expect(b.verifyNotificationsToken(token)?.selfUserId).toBe('user-roundtrip');
   });
@@ -184,17 +179,22 @@ describe('createNotificationsTokenUtil', () => {
     }
   });
 
-  it('memoizes the random fallback secret when WS_TOKEN_SECRET is unset, so a separate mint / verify util pair still agrees (regression: unthrottled notifications WS reconnect storm)', () => {
+  it('memoizes the random fallback secret when SECRET_TOKEN and WS_TOKEN_SECRET are BOTH unset, so a separate mint / verify util pair still agrees (regression: unthrottled notifications WS reconnect storm)', () => {
     // Mirrors the real mint (HTTP `GET /notifications/token`) / verify (WS
     // upgrade) split: each side builds its own util instance. Without a
-    // memoized fallback, `resolveNotificationsTokenSecret()` minted a fresh
+    // memoized fallback, `resolveSignedTokenSecret()` would mint a fresh
     // `crypto.randomBytes` secret on every call, so mint and verify (almost)
     // never agreed and every handshake was rejected with 4401 — see
-    // notifications-token.ts's `fallbackSecret` (same pattern as
-    // mail-token.ts's `resolveMailTokenSecret`).
-    const original = process.env.WS_TOKEN_SECRET;
-    delete process.env.WS_TOKEN_SECRET;
-    try {
+    // `signed-token-factory.ts`'s `fallbackSecretsByEnvVar`.
+    //
+    // The default resolver checks `SECRET_TOKEN` (canonical) as well as
+    // `WS_TOKEN_SECRET` (legacy alias): `src/test/setup.ts` seeds a valid
+    // `SECRET_TOKEN` for every server-project test file, so deleting only
+    // `WS_TOKEN_SECRET` here would resolve straight through to that valid
+    // canonical value — never touching the fallback path this test exists
+    // to exercise. Both keys
+    // must be unset to force resolution down to the random fallback.
+    withSecretTokenEnv({ SECRET_TOKEN: undefined, WS_TOKEN_SECRET: undefined }, () => {
       const mintUtil = createNotificationsTokenUtil();
       const { token } = mintUtil.signNotificationsToken({ selfUserId: 'user-1' });
 
@@ -203,9 +203,6 @@ describe('createNotificationsTokenUtil', () => {
 
       expect(verified).not.toBeNull();
       expect(verified?.selfUserId).toBe('user-1');
-    } finally {
-      if (original === undefined) delete process.env.WS_TOKEN_SECRET;
-      else process.env.WS_TOKEN_SECRET = original;
-    }
+    });
   });
 });

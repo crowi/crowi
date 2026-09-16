@@ -2619,7 +2619,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -2630,8 +2629,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             }[];
                         };
                     };
@@ -3906,7 +3906,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -3917,8 +3916,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             }[];
                             recentBookmarks?: {
                                 _id: string;
@@ -4014,7 +4014,6 @@ export interface paths {
                                         image?: string | null;
                                         createdAt: string;
                                     } | null;
-                                    liker?: string[];
                                     /** @default 0 */
                                     commentCount: number;
                                     extended?: {
@@ -4025,8 +4024,9 @@ export interface paths {
                                     currentRevision?: string | null;
                                     yjsCheckpointAt?: string | null;
                                     latestRevision?: string;
-                                    likerCount?: number;
-                                    seenUsersCount?: number;
+                                    likerCount: number;
+                                    seenUsersCount: number;
+                                    isLiked: boolean;
                                 };
                                 user: string | {
                                     _id: string;
@@ -4229,7 +4229,6 @@ export interface paths {
                                         image?: string | null;
                                         createdAt: string;
                                     } | null;
-                                    liker?: string[];
                                     /** @default 0 */
                                     commentCount: number;
                                     extended?: {
@@ -4240,8 +4239,9 @@ export interface paths {
                                     currentRevision?: string | null;
                                     yjsCheckpointAt?: string | null;
                                     latestRevision?: string;
-                                    likerCount?: number;
-                                    seenUsersCount?: number;
+                                    likerCount: number;
+                                    seenUsersCount: number;
+                                    isLiked: boolean;
                                 };
                                 user: string | {
                                     _id: string;
@@ -4448,7 +4448,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -4459,8 +4458,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             }[];
                             pager: {
                                 prev: number | null;
@@ -4651,7 +4651,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -4662,8 +4661,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             }[];
                             pager: {
                                 prev: number | null;
@@ -4877,7 +4877,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Bookmark for the page (or null when not bookmarked) */
+                /** @description Bookmark for the page (or null when not bookmarked). `page` is a bare page id — this route never populates the page (feature-page-relations-collections D-2). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -4886,112 +4886,7 @@ export interface paths {
                         "application/json": {
                             bookmark: {
                                 _id: string;
-                                page: {
-                                    _id: string;
-                                    path: string;
-                                    revision?: string | {
-                                        _id: string;
-                                        path: string;
-                                        body: string;
-                                        /** @default markdown */
-                                        format: string;
-                                        author?: {
-                                            _id: string;
-                                            id?: string;
-                                            username: string;
-                                            name: string;
-                                            /** Format: email */
-                                            email: string;
-                                            image?: string | null;
-                                            createdAt: string;
-                                        } | null;
-                                        createdAt: string;
-                                        meta?: {
-                                            toc?: {
-                                                level: number;
-                                                text: string;
-                                                anchorId: string;
-                                            }[];
-                                            wikiLinks?: {
-                                                raw: string;
-                                                target: string;
-                                                displayText?: string;
-                                            }[];
-                                            mentions?: {
-                                                username: string;
-                                            }[];
-                                            codeBlockLanguages?: string[];
-                                            rawSpaceLinks?: string[];
-                                        };
-                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                        renderedAstArtifactKey?: string;
-                                        rendererVersion?: string;
-                                        parentRevisionId?: string | null;
-                                        /** @enum {string} */
-                                        type?: "snapshot" | "incremental";
-                                        savedBy?: string | {
-                                            _id: string;
-                                            id?: string;
-                                            username: string;
-                                            name: string;
-                                            /** Format: email */
-                                            email: string;
-                                            image?: string | null;
-                                            createdAt: string;
-                                        } | null;
-                                        contributors?: (string | {
-                                            _id: string;
-                                            id?: string;
-                                            username: string;
-                                            name: string;
-                                            /** Format: email */
-                                            email: string;
-                                            image?: string | null;
-                                            createdAt: string;
-                                        })[];
-                                        message?: string;
-                                        /** @enum {string} */
-                                        editVia?: "web" | "oauth" | "pat";
-                                    };
-                                    redirectTo?: string | null;
-                                    /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
-                                    grant?: number;
-                                    grantedUsers?: string[];
-                                    creator?: string | {
-                                        _id: string;
-                                        id?: string;
-                                        username: string;
-                                        name: string;
-                                        /** Format: email */
-                                        email: string;
-                                        image?: string | null;
-                                        createdAt: string;
-                                    } | null;
-                                    lastUpdateUser?: string | {
-                                        _id: string;
-                                        id?: string;
-                                        username: string;
-                                        name: string;
-                                        /** Format: email */
-                                        email: string;
-                                        image?: string | null;
-                                        createdAt: string;
-                                    } | null;
-                                    liker?: string[];
-                                    /** @default 0 */
-                                    commentCount: number;
-                                    extended?: {
-                                        [key: string]: unknown;
-                                    };
-                                    createdAt: string;
-                                    updatedAt?: string;
-                                    currentRevision?: string | null;
-                                    yjsCheckpointAt?: string | null;
-                                    latestRevision?: string;
-                                    likerCount?: number;
-                                    seenUsersCount?: number;
-                                };
+                                page: string | null;
                                 user: string | {
                                     _id: string;
                                     id?: string;
@@ -5179,7 +5074,6 @@ export interface paths {
                                         image?: string | null;
                                         createdAt: string;
                                     } | null;
-                                    liker?: string[];
                                     /** @default 0 */
                                     commentCount: number;
                                     extended?: {
@@ -5190,8 +5084,9 @@ export interface paths {
                                     currentRevision?: string | null;
                                     yjsCheckpointAt?: string | null;
                                     latestRevision?: string;
-                                    likerCount?: number;
-                                    seenUsersCount?: number;
+                                    likerCount: number;
+                                    seenUsersCount: number;
+                                    isLiked: boolean;
                                 };
                                 user: string | {
                                     _id: string;
@@ -5466,7 +5361,6 @@ export interface paths {
                                         image?: string | null;
                                         createdAt: string;
                                     } | null;
-                                    liker?: string[];
                                     /** @default 0 */
                                     commentCount: number;
                                     extended?: {
@@ -5477,8 +5371,9 @@ export interface paths {
                                     currentRevision?: string | null;
                                     yjsCheckpointAt?: string | null;
                                     latestRevision?: string;
-                                    likerCount?: number;
-                                    seenUsersCount?: number;
+                                    likerCount: number;
+                                    seenUsersCount: number;
+                                    isLiked: boolean;
                                 };
                                 user: string | {
                                     _id: string;
@@ -6638,7 +6533,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -6649,8 +6543,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -6840,7 +6735,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -6851,8 +6745,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -7038,7 +6933,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -7049,8 +6943,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -7207,7 +7102,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -7218,8 +7112,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -7442,7 +7337,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -7453,8 +7347,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             }[];
                             pager: {
                                 prev: number | null;
@@ -7553,7 +7448,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -7564,8 +7458,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             } | null;
                             contentPage?: {
                                 _id: string;
@@ -7659,7 +7554,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -7670,8 +7564,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             } | null;
                             total: number;
                         };
@@ -7711,11 +7606,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List immediate child segments under a portal path (sidebar tree) */
+        /** List child segments under a portal path, up to `depth` levels (sidebar tree) */
         get: {
             parameters: {
                 query: {
                     path: string;
+                    depth?: number;
                 };
                 header?: never;
                 path?: never;
@@ -7723,7 +7619,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description First-level child segments (alphabetical) under the path */
+                /** @description Child segments under the path, depth-first with siblings alphabetical, spanning `depth` levels (default 1). Flat — a row's own `path` places it in the tree. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -7902,7 +7798,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -7913,8 +7808,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -8193,7 +8089,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add the current user to the page liker list */
+        /** Add the current user to the page like relation */
         post: {
             parameters: {
                 query?: never;
@@ -8209,7 +8105,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description The page with the updated liker list */
+                /** @description The page, viewer-scoped: `likerCount` / `seenUsersCount` are the current relation counts (not a liker ID array — feature-page-relations-collections D-2), `isLiked` reflects the caller's own membership as of this response. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -8308,7 +8204,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -8319,8 +8214,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -8390,7 +8286,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Remove the current user from the page liker list */
+        /** Remove the current user from the page like relation */
         post: {
             parameters: {
                 query?: never;
@@ -8406,7 +8302,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description The page with the updated liker list */
+                /** @description The page, viewer-scoped: `likerCount` / `seenUsersCount` are the current relation counts (not a liker ID array — feature-page-relations-collections D-2), `isLiked` reflects the caller's own membership as of this response. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -8505,7 +8401,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -8516,8 +8411,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -8702,7 +8598,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -8713,8 +8608,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                             granted: boolean;
                         };
@@ -9106,7 +9002,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -9117,8 +9012,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -9336,7 +9232,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -9347,8 +9242,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                         };
                     };
@@ -9538,7 +9434,6 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 } | null;
-                                liker?: string[];
                                 /** @default 0 */
                                 commentCount: number;
                                 extended?: {
@@ -9549,8 +9444,9 @@ export interface paths {
                                 currentRevision?: string | null;
                                 yjsCheckpointAt?: string | null;
                                 latestRevision?: string;
-                                likerCount?: number;
-                                seenUsersCount?: number;
+                                likerCount: number;
+                                seenUsersCount: number;
+                                isLiked: boolean;
                             };
                             renamed_count: number;
                         };
@@ -10102,7 +9998,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Liker list (newest-liked first when known) with full totalCount */
+                /** @description Liker list (newest-liked first when known) with full totalCount. Sourced from the `likes` relation collection; `likedAt` falls back to a best-effort `ACTION_LIKE` Activity join only for a migrated row with a null relation timestamp (feature-page-relations-collections D-1/D-3). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -11669,7 +11565,6 @@ export interface paths {
                                         image?: string | null;
                                         createdAt: string;
                                     } | null;
-                                    liker?: string[];
                                     /** @default 0 */
                                     commentCount: number;
                                     extended?: {
@@ -11680,8 +11575,9 @@ export interface paths {
                                     currentRevision?: string | null;
                                     yjsCheckpointAt?: string | null;
                                     latestRevision?: string;
-                                    likerCount?: number;
-                                    seenUsersCount?: number;
+                                    likerCount: number;
+                                    seenUsersCount: number;
+                                    isLiked: boolean;
                                 };
                             }[];
                         };
@@ -16680,7 +16576,6 @@ export interface components {
                 image?: string | null;
                 createdAt: string;
             } | null;
-            liker?: string[];
             /** @default 0 */
             commentCount: number;
             extended?: {
@@ -16691,8 +16586,9 @@ export interface components {
             currentRevision?: string | null;
             yjsCheckpointAt?: string | null;
             latestRevision?: string;
-            likerCount?: number;
-            seenUsersCount?: number;
+            likerCount: number;
+            seenUsersCount: number;
+            isLiked: boolean;
         };
         RenderedAstEnvelope: {
             /** @enum {number} */
@@ -16796,7 +16692,6 @@ export interface components {
                 image?: string | null;
                 createdAt: string;
             } | null;
-            liker?: string[];
             /** @default 0 */
             commentCount: number;
             extended?: {
@@ -16807,8 +16702,9 @@ export interface components {
             currentRevision?: string | null;
             yjsCheckpointAt?: string | null;
             latestRevision?: string;
-            likerCount?: number;
-            seenUsersCount?: number;
+            likerCount: number;
+            seenUsersCount: number;
+            isLiked: boolean;
         };
         Revision: {
             _id: string;
@@ -17023,7 +16919,6 @@ export interface components {
                     image?: string | null;
                     createdAt: string;
                 } | null;
-                liker?: string[];
                 /** @default 0 */
                 commentCount: number;
                 extended?: {
@@ -17034,8 +16929,9 @@ export interface components {
                 currentRevision?: string | null;
                 yjsCheckpointAt?: string | null;
                 latestRevision?: string;
-                likerCount?: number;
-                seenUsersCount?: number;
+                likerCount: number;
+                seenUsersCount: number;
+                isLiked: boolean;
             }[];
             pager: {
                 prev: number | null;
@@ -17134,7 +17030,6 @@ export interface components {
                     image?: string | null;
                     createdAt: string;
                 } | null;
-                liker?: string[];
                 /** @default 0 */
                 commentCount: number;
                 extended?: {
@@ -17145,8 +17040,9 @@ export interface components {
                 currentRevision?: string | null;
                 yjsCheckpointAt?: string | null;
                 latestRevision?: string;
-                likerCount?: number;
-                seenUsersCount?: number;
+                likerCount: number;
+                seenUsersCount: number;
+                isLiked: boolean;
             } | null;
             contentPage?: {
                 _id: string;
@@ -17240,7 +17136,6 @@ export interface components {
                     image?: string | null;
                     createdAt: string;
                 } | null;
-                liker?: string[];
                 /** @default 0 */
                 commentCount: number;
                 extended?: {
@@ -17251,8 +17146,9 @@ export interface components {
                 currentRevision?: string | null;
                 yjsCheckpointAt?: string | null;
                 latestRevision?: string;
-                likerCount?: number;
-                seenUsersCount?: number;
+                likerCount: number;
+                seenUsersCount: number;
+                isLiked: boolean;
             } | null;
             total: number;
         };
@@ -17349,7 +17245,6 @@ export interface components {
                     image?: string | null;
                     createdAt: string;
                 } | null;
-                liker?: string[];
                 /** @default 0 */
                 commentCount: number;
                 extended?: {
@@ -17360,8 +17255,9 @@ export interface components {
                 currentRevision?: string | null;
                 yjsCheckpointAt?: string | null;
                 latestRevision?: string;
-                likerCount?: number;
-                seenUsersCount?: number;
+                likerCount: number;
+                seenUsersCount: number;
+                isLiked: boolean;
             };
         };
         UpdatePageRequest: {
@@ -17507,7 +17403,6 @@ export interface components {
                     image?: string | null;
                     createdAt: string;
                 } | null;
-                liker?: string[];
                 /** @default 0 */
                 commentCount: number;
                 extended?: {
@@ -17518,8 +17413,9 @@ export interface components {
                 currentRevision?: string | null;
                 yjsCheckpointAt?: string | null;
                 latestRevision?: string;
-                likerCount?: number;
-                seenUsersCount?: number;
+                likerCount: number;
+                seenUsersCount: number;
+                isLiked: boolean;
             }[];
         };
         Attachment: {

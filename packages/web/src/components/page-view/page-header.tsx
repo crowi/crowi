@@ -13,6 +13,7 @@ import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { UsePresenceResult } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
+import { SidebarFlyoutTrigger } from '@/components/page-sidebar/sidebar-flyout';
 import { useWideViewport } from '@/lib/use-wide-viewport';
 import { cn } from '@/lib/utils';
 import { BookmarkButton } from './bookmark-button';
@@ -92,7 +93,7 @@ export function PageHeader({
   activeTocId = null,
   presence,
 }: PageHeaderProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   // feature-mobile-presence-card — the header's mobile and desktop
   // presence surfaces are DIFFERENT DOM (not one tree styled two ways),
@@ -156,7 +157,7 @@ export function PageHeader({
   // omit it; the `LivePresenceRow` / `MobilePresenceCard` gates below
   // narrow it before use.
 
-  const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
+  const isLiked = page.isLiked;
   // Separate "link-only" (RESTRICTED — anyone with the URL can view)
   // from "private" (SPECIFIED / OWNER — listed users only) so the
   // header reflects the actual sharing posture instead of collapsing
@@ -169,16 +170,6 @@ export function PageHeader({
   // the draft.
   const isDraft = page.status === PageStatusEnum.DRAFT;
   const pageTitle = getPageTitle(page.path);
-
-  // When a TOC rail is shown (≥1280, ≥2 entries), the article is part of
-  // a centred `content + TOC` pair and sits 7.75rem left of dead-centre
-  // in the [1280, 1440) band (see PageView). The compact header is a
-  // `fixed inset-x-0` overlay that centres its own `max-w-4xl` content,
-  // so without matching that shift its title would drift right of the
-  // article in that band. Apply the same shift, gated to the same band +
-  // TOC condition. At ≥1440 (spacer balances) and < 1280 (no rail) the
-  // article is dead-centre, so no shift.
-  const hasTocRail = toc.length >= 2;
 
   const editButton = onEdit && (
     <Button variant="ghost" size="sm" onClick={onEdit} className="shrink-0 text-muted-foreground hover:text-foreground">
@@ -408,20 +399,39 @@ export function PageHeader({
               is a fixed 60px tall; the title row and the (shrunken)
               presence row are vertically centred inside it. */}
           <div
-            className={cn('mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4', hasTocRail && 'min-[1280px]:max-[1439px]:-translate-x-[7.75rem]')}
+            // From 1280 the article is part of a centred `content + rail`
+            // pair and sits half a rail-plus-gap left of dead-centre until the
+            // 1440 left spacer balances it again (see `PageTocColumns`, and
+            // the shell tokens in globals.css). This bar is a
+            // `fixed inset-x-0` overlay centring its own `max-w-4xl`, so it
+            // has to repeat that shift or its title drifts right of the
+            // article it labels. The rail column is there for every page in
+            // that band — it carries the page actions even where there are
+            // too few headings for a TOC — so the shift is unconditional.
+            className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4 min-[1280px]:max-[1439px]:-translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]"
           >
-            <div className="flex items-center gap-2">
-              {/* Scroll-to-top — sits to the left of the title, hanging
-                  out past the content gutter (`-ml-9`). */}
-              <button
-                ref={scrollTopButtonRef}
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                aria-label={m['page.scroll_to_top']()}
-                className="-ml-9 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ArrowUp className="h-4 w-4" />
-              </button>
+            <div className="relative flex items-center gap-2">
+              {/* Leading icons, hung out past the content gutter so the
+                  title stays aligned with the article column. Positioned
+                  rather than pulled by a negative margin so the hang sizes
+                  itself: the group is one icon wider under 1440px, where
+                  the sidebar control shows because the app header carrying
+                  the other copy has scrolled away. Under `lg` the gutter is
+                  too narrow to hang anything in without pushing it off the
+                  left edge, so the group rejoins the flow and the title
+                  gives up the width instead. */}
+              <div className="flex shrink-0 items-center lg:absolute lg:top-1/2 lg:right-full lg:mr-2 lg:-translate-y-1/2">
+                <SidebarFlyoutTrigger compact />
+                <button
+                  ref={scrollTopButtonRef}
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  aria-label={m['page.scroll_to_top']()}
+                  className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+              </div>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
               <div className="flex items-center gap-1 shrink-0">
                 {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}

@@ -1,0 +1,17 @@
+{
+  "title": "Development",
+  "root": true,
+  "pages": [
+    "dev-setup",
+    "architecture",
+    "contributing",
+    "---Plugins---",
+    "plugins-overview",
+    "plugins-developing",
+    "plugin-api",
+    "renderer-pipeline",
+    "---Design & release---",
+    "rfcs",
+    "release-runbook"
+  ]
+}

@@ -80,8 +80,27 @@ describe('Routes /api/bookmarks (Hono)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.bookmark).not.toBeNull();
-      expect(res.body.bookmark.page._id).toBe(page._id);
+      // feature-page-relations-collections D-2 — `Bookmark.findByPageIdAndUserId`
+      // never populates `page`, so GET /api/bookmarks returns it as a bare id
+      // string (its own response schema), unlike POST /api/bookmarks / GET
+      // /api/bookmarks/me which return a populated `PageSchema` object.
+      expect(res.body.bookmark.page).toBe(page._id);
       expect(res.body.bookmark.user).toBe(userId);
+    });
+
+    // AC-4 — GET /api/bookmarks (unpopulated) never carries likerCount /
+    // seenUsersCount / isLiked; it does not route through `pageToResponse`.
+    it('AC-4: does not include likerCount / seenUsersCount / isLiked (page is a bare id, D-2)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}bare-id-shape`, '# bare');
+      await request(app).post('/api/bookmarks').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      const res = await request(app).get('/api/bookmarks').set(authHeaders(accessToken)).query({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.bookmark.page).toBe('string');
+      expect(res.body.bookmark.likerCount).toBeUndefined();
+      expect(res.body.bookmark.seenUsersCount).toBeUndefined();
+      expect(res.body.bookmark.isLiked).toBeUndefined();
     });
   });
 
@@ -120,6 +139,24 @@ describe('Routes /api/bookmarks (Hono)', () => {
       const Bookmark = crowi.model('Bookmark');
       const stored = await Bookmark.findOne({ page: page._id, user: userId });
       expect(stored).not.toBeNull();
+    });
+
+    // AC-4/D-2 — the enriched Page (likerCount/seenUsersCount/isLiked) must
+    // survive into the response through `bookmarkToResponse`'s second
+    // argument, not `bookmark.toObject().page` (which re-serializes the
+    // populated Page sub-document by schema and drops the in-place
+    // Object.assign-mutated enrichment fields).
+    it('AC-4: the created bookmark carries the enriched Page (likerCount/seenUsersCount/isLiked), not a re-serialized bare page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}enriched-add`, '# add');
+      const Like = crowi.model('Like');
+      await Like.add(new Types.ObjectId(page._id), new Types.ObjectId(userId));
+
+      const res = await request(app).post('/api/bookmarks').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.bookmark.page.likerCount).toBe(1);
+      expect(res.body.bookmark.page.isLiked).toBe(true);
+      expect(res.body.bookmark.page.seenUsersCount).toBe(0);
     });
 
     it('returns { bookmark: null } when user has no grant on the page', async () => {
@@ -198,6 +235,29 @@ describe('Routes /api/bookmarks (Hono)', () => {
       expect(paths).toContain(pageA.path);
       expect(paths).toContain(pageB.path);
       expect(res.body.pager).toEqual({ prev: null, next: null, offset: 0 });
+    });
+
+    // AC-4/D-2 — same as the POST /api/bookmarks case: the batch-enriched
+    // Page for each bookmark row must carry real likerCount/seenUsersCount/
+    // isLiked, resolved via the id-keyed Map (never `bookmark.toObject().page`).
+    it('AC-4: each listed bookmark carries its OWN enriched Page (likerCount/seenUsersCount/isLiked)', async () => {
+      const likedPage = await createPageViaApi(accessToken, `${PATH_PREFIX}me-enriched-liked`, '# liked');
+      const plainPage = await createPageViaApi(accessToken, `${PATH_PREFIX}me-enriched-plain`, '# plain');
+      const Like = crowi.model('Like');
+      await Like.add(new Types.ObjectId(likedPage._id), new Types.ObjectId(userId));
+      await request(app).post('/api/bookmarks').set(authHeaders(accessToken)).send({ page_id: likedPage._id });
+      await request(app).post('/api/bookmarks').set(authHeaders(accessToken)).send({ page_id: plainPage._id });
+
+      const res = await request(app).get('/api/bookmarks/me').set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      const byPath = new Map<string, { likerCount: number; isLiked: boolean }>(
+        res.body.bookmarks.map((b: { page: { path: string; likerCount: number; isLiked: boolean } }) => [b.page.path, b.page]),
+      );
+      expect(byPath.get(likedPage.path)?.likerCount).toBe(1);
+      expect(byPath.get(likedPage.path)?.isLiked).toBe(true);
+      expect(byPath.get(plainPage.path)?.likerCount).toBe(0);
+      expect(byPath.get(plainPage.path)?.isLiked).toBe(false);
     });
 
     it('honors limit / offset and computes pager.next correctly', async () => {

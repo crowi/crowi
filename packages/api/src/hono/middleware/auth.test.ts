@@ -7,6 +7,7 @@ import { makePluginRouterScope } from 'src/plugin/registries';
 import { crowi, app as prodApp } from 'src/test/setup';
 import { authHeaders, cookieAuthHeaders, createTestUser } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
+import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 import request from 'supertest';
 
 import { createHonoApp } from '../app';
@@ -16,16 +17,16 @@ import { honoOnError } from './error-handler';
 
 /**
  * Mint an ALREADY-EXPIRED `access` JWT directly with `jsonwebtoken`, using
- * the exact same secret-resolution formula `createJwtUtil` uses
- * (`packages/api/src/util/jwt.ts`). `generateTokens`'s TTL is a
- * module-level constant read once from `process.env` at import time, so it
- * cannot be overridden per-test — this is the only way to get a genuinely
- * expired (not merely malformed) token for the AC-1 regression below.
- * Test-only; production code never constructs a token this way.
+ * the exact same secret resolver `createJwtUtil` uses
+ * (`packages/api/src/util/jwt.ts` -> `util/signed-token-factory.ts`).
+ * `generateTokens`'s TTL is a module-level constant read once from
+ * `process.env` at import time, so it cannot be overridden per-test — this
+ * is the only way to get a genuinely expired (not merely malformed) token
+ * for the AC-1 regression below. Test-only; production code never
+ * constructs a token this way.
  */
 const signExpiredAccessToken = (u: Pick<UserDocument, 'email' | 'authVersion'> & { _id: { toString(): string } }): string => {
-  const config = crowi.getConfig();
-  const secret: string = config.crowi['app:secret'] || config.crowi['SECRET_TOKEN'] || 'your-secret-key';
+  const secret = resolveSignedTokenSecret();
   return jwt.sign({ userId: u._id.toString(), email: u.email, type: 'access', av: u.authVersion ?? 0 }, secret, { expiresIn: -10, issuer: 'crowi' });
 };
 

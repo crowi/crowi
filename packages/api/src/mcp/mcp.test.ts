@@ -162,6 +162,24 @@ describe('MCP server (/api/mcp)', () => {
     expect(result.instructions).toContain('/parent/YYYY/MM/DD/title');
   });
 
+  it('tells the model how to write a link to a page, so it does not invent an encoding', async () => {
+    const res = await callMcp(fullPatToken, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } },
+    });
+    const instructions = (parseRpc(res).result as { instructions?: string }).instructions ?? '';
+
+    // A model that hands someone a wiki link has to choose a URL form. Left
+    // to guess it percent-encodes a path it was given, and an already-encoded
+    // URL encoded again (`%20` → `%2520`) resolves to a page nobody saved.
+    // These three facts are what close that gap.
+    expect(instructions).toContain('<wiki origin>/<page id>');
+    expect(instructions).toContain('a space in a page path is written `+`');
+    expect(instructions).toContain('%2520');
+  });
+
   it('crowi_get_page returns the body in both content text and structuredContent', async () => {
     const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',

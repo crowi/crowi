@@ -5,9 +5,7 @@ description: Full-text search across pages
 
 Crowi includes full-text search for finding pages across your wiki. You
 use it from the search box in the header or from the search page
-(`/_search`). The query input on `/_search` is **debounced** — the
-backend is hit a short moment after you stop typing rather than on every
-keystroke.
+(`/_search`).
 
 ## What search results contain
 
@@ -60,17 +58,12 @@ list.
 
 ## When search is unavailable
 
-Crowi's full-text search is backed by **Elasticsearch** through the
-`@crowi/plugin-search-elasticsearch` plugin. When the plugin is not
-loaded or no search backend is configured, the search page shows a
-"Search is not available" state and searches cannot be run.
-
-The development `docker compose` setup ships an Elasticsearch service
-out of the box, so search works locally without extra setup. For the
-operator-side configuration in production, see
-[Setting up the search backend](../operations/search-setup).
+Search works with no extra middleware: by default MongoDB itself backs it.
+If your administrator switched to another search backend and Crowi cannot
+reach it, the search page shows "Search is not available" — ask your
+administrator ([Search backend setup](../operations/search-setup)).
 
 ## Related pages
 
-- [Working with pages](./pages) — page structure and paths
-- [Setting up the search backend](../operations/search-setup) — operator-side setup
+- [Pages](./pages) — page structure and paths
+- [Search backend setup](../operations/search-setup) — operator-side setup

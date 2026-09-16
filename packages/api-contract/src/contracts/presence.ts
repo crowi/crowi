@@ -117,7 +117,8 @@ export const getLikersRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Liker list (newest-liked first when known) with full totalCount',
+      description:
+        'Liker list (newest-liked first when known) with full totalCount. Sourced from the `likes` relation collection; `likedAt` falls back to a best-effort `ACTION_LIKE` Activity join only for a migrated row with a null relation timestamp (feature-page-relations-collections D-1/D-3).',
       content: { 'application/json': { schema: LikersResponseSchema } },
     },
     400: {

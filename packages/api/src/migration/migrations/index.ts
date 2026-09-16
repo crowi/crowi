@@ -1,6 +1,7 @@
 import type { MigrationDefinition } from '../types';
 import { collabLifecycleVersion } from './collab-lifecycle-version';
 import { filesUrlToAttachments } from './files-url-to-attachments';
+import { pageLikerSeenUsersToRelations } from './page-liker-seenusers-to-relations';
 import { pageStatusDefault } from './page-status-default';
 import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
 import { revisionPageRefBackfill } from './revision-page-ref-backfill';
@@ -29,4 +30,5 @@ export const allMigrations: MigrationDefinition[] = [
   wikilinkHtmlRecover, // migration-html-tag-fixes (preflight) — recover </font> etc. corrupted by wikilink-format
   collabLifecycleVersion, // feature-collab-invalidate-on-rename-delete (boot) — RFC-0017 Phase 1 backfill
   revisionPageRefBackfill, // feature-revision-page-ref (boot — see migration JSDoc for the layer-deviation rationale) — DC-5 Revision.page backfill
+  pageLikerSeenUsersToRelations, // feature-page-relations-cutover (preflight, blocking) — pages.liker/seenUsers -> likes/seens
 ];

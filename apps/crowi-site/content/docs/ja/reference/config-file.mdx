@@ -1,0 +1,41 @@
+---
+title: crowi.config.json
+description: crowi.config.json のフィールドとドライバ名の一覧
+---
+
+`crowi.config.json` は runner プロジェクトのルートに置く JSON ファイルで、読み込むプラグインと有効にするドライバを宣言します。書き方と解決の仕組みは [設定](../operations/configuration) を参照してください。
+
+## フィールド
+
+| キー | 型 | 既定値 | 内容 |
+| --- | --- | --- | --- |
+| `plugins` | `string[]` | `[]` | 起動時に読み込むプラグインの npm パッケージ名 |
+| `storage.driver` | `string` | `"local"` | 添付ファイルの保存に使うストレージドライバ名 |
+| `search.driver` | `string` | `"mongo"` | 全文検索に使うドライバ名 |
+| `mail.driver` | `string` | `"smtp"` | メール送信に使うドライバ名 |
+
+ファイルが無い場合も、キーを省略した場合も上の既定値が使われます。スキーマに合わない内容は起動時にエラーになります。
+
+3 つのプラグインは `plugins` に書かなくても常に読み込まれます: `@crowi/plugin-storage-local`、`@crowi/plugin-search-mongo`、`@crowi/plugin-mail-smtp`。
+
+## ドライバ名
+
+| キー | ドライバ名 | 提供プラグイン |
+| --- | --- | --- |
+| `storage.driver` | `local` | `@crowi/plugin-storage-local` (既定) |
+| `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
+| `storage.driver` | `gcs` | `@crowi/plugin-storage-gcs` |
+| `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (既定) |
+| `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
+| `search.driver` | `opensearch` | `@crowi/plugin-search-opensearch` |
+| `mail.driver` | `smtp` | `@crowi/plugin-mail-smtp` (既定) |
+| `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
+| `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
+
+ドライバ名を切り替えても、対応するプラグインが `plugins` に入っていなければ起動時に警告が出ます。プラグインの一覧は [ファーストパーティプラグイン](./plugins) を参照してください。
+
+## 関連ページ
+
+- [設定](../operations/configuration) — 設定レイヤーとプラグインの解決方法
+- [ファーストパーティプラグイン](./plugins) — 配布しているプラグインの一覧
+- [環境変数](./env) — 起動時に読む環境変数

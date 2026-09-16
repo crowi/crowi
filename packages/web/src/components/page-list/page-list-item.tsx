@@ -98,7 +98,7 @@ function PageRowBody({ page, isTrash = false, snippet }: { page: Page; isTrash?:
   // hide the parent slot entirely in that case.
   const showParent = parentPath !== '/';
 
-  const likeCount = page.likerCount ?? page.liker?.length ?? 0;
+  const likeCount = page.likerCount;
   const commentCount = page.commentCount ?? 0;
   const hasReactions = likeCount > 0 || commentCount > 0;
   const updatedAt = page.updatedAt || page.createdAt;

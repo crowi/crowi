@@ -1,11 +1,12 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
+import type { PageDocument } from './page';
 import { UserDocument } from './user';
 
 export interface BookmarkDocument extends Document {
   _id: Types.ObjectId;
-  page: Types.ObjectId | any;
+  page: Types.ObjectId | PageDocument;
   user: Types.ObjectId | any;
   createdAt: Date;
 }
@@ -59,12 +60,16 @@ export default (crowi: Crowi) => {
 
     // hmm...
     return populatedBookmarks.filter((bookmark) => {
+      // Populated above, so this is always a hydrated PageDocument at
+      // runtime — the static field type stays `ObjectId | PageDocument`
+      // (D-2) because unpopulated bookmarks (GET /bookmarks) exist too.
+      const page = bookmark.page as PageDocument;
       // requestUser を指定しない場合 public のみを返す
       if (requestUser === null) {
-        return bookmark.page.isPublic();
+        return page.isPublic();
       }
 
-      return bookmark.page.isGrantedFor(requestUser);
+      return page.isGrantedFor(requestUser);
     });
   };
 

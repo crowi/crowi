@@ -1,8 +1,17 @@
 import { ENV_VAR_DESCRIPTORS, isMultiInstanceDeclared, validateEnv } from 'src/util/env-schema';
 
+/**
+ * The default `SECRET_TOKEN` every `makeEnv()` call carries unless an
+ * override replaces/removes it (pass
+ * `SECRET_TOKEN: undefined` to build an unset-secret case). Keeps every
+ * PRE-EXISTING test in this file — which exercises some other var entirely —
+ * from incidentally tripping the new required-secret validation.
+ */
+const VALID_SECRET_TOKEN = 'env-schema-test-default-secret-32chars';
+
 /** Minimal `NodeJS.ProcessEnv`-shaped object for a given set of overrides. */
 function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
-  return overrides as unknown as NodeJS.ProcessEnv;
+  return { SECRET_TOKEN: VALID_SECRET_TOKEN, ...overrides } as unknown as NodeJS.ProcessEnv;
 }
 
 describe('util/env-schema validateEnv', () => {
@@ -420,43 +429,136 @@ describe('util/env-schema validateEnv', () => {
     });
   });
 
-  describe('WS_TOKEN_SECRET (NODE_ENV-dependent minimum length — feature-signed-token-secret-strength)', () => {
-    test('NODE_ENV=production with a 1-31 char value fails boot, message names the variable, required length, and the openssl generation command', () => {
+  describe('SECRET_TOKEN (required; NODE_ENV-dependent minimum length; legacy WS_TOKEN_SECRET alias — feature-unified-signing-secret §D-2)', () => {
+    test.each([
+      ['production', undefined],
+      ['development', 'true'],
+      ['test', '1'],
+    ])('unset (and no WS_TOKEN_SECRET alias either) fails boot with NODE_ENV=%s CROWI_MULTI_INSTANCE=%s, naming the variable and the generation command', (nodeEnv, multi) => {
       let thrown: Error | null = null;
       try {
-        validateEnv(makeEnv({ NODE_ENV: 'production', WS_TOKEN_SECRET: 'short-secret', CLIENT_URL: 'https://wiki.example.com' }));
+        validateEnv(makeEnv({ SECRET_TOKEN: undefined, NODE_ENV: nodeEnv, CROWI_MULTI_INSTANCE: multi }));
       } catch (err) {
         thrown = err as Error;
       }
       expect(thrown).not.toBeNull();
-      expect(thrown?.message).toContain('WS_TOKEN_SECRET');
-      expect(thrown?.message).toMatch(/at least 32 characters/);
+      expect(thrown?.message).toContain('SECRET_TOKEN');
       expect(thrown?.message).toContain('openssl rand -base64 32');
     });
 
+    test('an empty string fails the same way as unset', () => {
+      expect(() => validateEnv(makeEnv({ SECRET_TOKEN: '' }))).toThrow(/SECRET_TOKEN/);
+    });
+
+    test.each(['development', 'test', 'production'])('a whitespace-only value fails even under NODE_ENV=%s', (nodeEnv) => {
+      expect(() => validateEnv(makeEnv({ SECRET_TOKEN: '   ', NODE_ENV: nodeEnv }))).toThrow(/SECRET_TOKEN/);
+    });
+
+    test.each([
+      'dev-only-ws-token-secret-replace-in-production-0000=',
+      'changeme',
+      'change-me',
+      'replace-me',
+      'your-secret-here',
+      'your-secret-key',
+      'this is default session secret',
+    ])('the known placeholder %s fails even under NODE_ENV=development (not just production)', (placeholder) => {
+      expect(() => validateEnv(makeEnv({ SECRET_TOKEN: placeholder, NODE_ENV: 'development' }))).toThrow(/SECRET_TOKEN/);
+    });
+
+    test('a placeholder is matched case-insensitively after trim', () => {
+      expect(() => validateEnv(makeEnv({ SECRET_TOKEN: '  ChangeMe  ' }))).toThrow(/SECRET_TOKEN/);
+    });
+
+    test('NODE_ENV=production with a non-placeholder 1-31 char value fails boot, message names the variable and required length only — no generation command or rename guidance (AC-3: those appear only on the required/placeholder message)', () => {
+      let thrown: Error | null = null;
+      try {
+        validateEnv(makeEnv({ NODE_ENV: 'production', SECRET_TOKEN: 'short-secret' }));
+      } catch (err) {
+        thrown = err as Error;
+      }
+      expect(thrown).not.toBeNull();
+      expect(thrown?.message).toContain('SECRET_TOKEN');
+      expect(thrown?.message).toMatch(/at least 32 characters/);
+      expect(thrown?.message).not.toContain('openssl rand -base64 32');
+      expect(thrown?.message).not.toContain('rename');
+    });
+
     test("an unset NODE_ENV defaults to the production (strict) severity, matching values.nodeEnv's own fallback", () => {
-      expect(() => validateEnv(makeEnv({ WS_TOKEN_SECRET: 'short-secret', CLIENT_URL: 'https://wiki.example.com' }))).toThrow(/WS_TOKEN_SECRET/);
+      expect(() => validateEnv(makeEnv({ NODE_ENV: undefined, SECRET_TOKEN: 'short-secret' }))).toThrow(/SECRET_TOKEN/);
     });
 
     test.each(['development', 'test', 'staging'])('NODE_ENV=%s with the same short value warns instead of failing boot', (nodeEnv) => {
-      const result = validateEnv(makeEnv({ NODE_ENV: nodeEnv, WS_TOKEN_SECRET: 'short-secret', CLIENT_URL: 'https://wiki.example.com' }));
-      expect(result.warnings.some((w) => w.startsWith('WS_TOKEN_SECRET:') && w.includes('at least 32 characters'))).toBe(true);
+      const result = validateEnv(makeEnv({ NODE_ENV: nodeEnv, SECRET_TOKEN: 'short-secret' }));
+      expect(result.warnings.some((w) => w.startsWith('SECRET_TOKEN:') && w.includes('at least 32 characters'))).toBe(true);
+    });
+
+    test('the short-value message never echoes the actual secret', () => {
+      const result = validateEnv(makeEnv({ NODE_ENV: 'development', SECRET_TOKEN: 'a-short-one' }));
+      expect(result.warnings.join('\n')).not.toContain('a-short-one');
     });
 
     test('a value >= 32 characters passes with no warning, in production or otherwise', () => {
       const strong = 'a'.repeat(32);
-      expect(validateEnv(makeEnv({ NODE_ENV: 'production', WS_TOKEN_SECRET: strong, CLIENT_URL: 'https://wiki.example.com' })).warnings).toEqual([]);
-      expect(validateEnv(makeEnv({ NODE_ENV: 'development', WS_TOKEN_SECRET: strong, CLIENT_URL: 'https://wiki.example.com' })).warnings).toEqual([]);
+      expect(validateEnv(makeEnv({ NODE_ENV: 'production', SECRET_TOKEN: strong, CLIENT_URL: 'https://wiki.example.com' })).warnings).toEqual([]);
+      expect(validateEnv(makeEnv({ NODE_ENV: 'development', SECRET_TOKEN: strong, CLIENT_URL: 'https://wiki.example.com' })).warnings).toEqual([]);
     });
 
-    test('a known placeholder value is exempt even in production — signed-token-factory.ts already treats it as unset (random fallback + its own warning)', () => {
-      const result = validateEnv(makeEnv({ NODE_ENV: 'production', WS_TOKEN_SECRET: 'changeme', CLIENT_URL: 'https://wiki.example.com' }));
-      expect(result.warnings).toEqual([]);
+    describe('CROWI_MULTI_INSTANCE has no bearing on SECRET_TOKEN required validation (D-4: the removed multi-instance-only guard has no successor)', () => {
+      test.each([undefined, 'false', '0', 'true', '1', '4'])('a valid SECRET_TOKEN passes with CROWI_MULTI_INSTANCE=%s', (multi) => {
+        expect(() => validateEnv(makeEnv({ SECRET_TOKEN: 'a'.repeat(32), CROWI_MULTI_INSTANCE: multi }))).not.toThrow();
+      });
+
+      test('a placeholder still fails even with CROWI_MULTI_INSTANCE unset (single-instance is no longer exempt)', () => {
+        expect(() => validateEnv(makeEnv({ SECRET_TOKEN: 'changeme', CROWI_MULTI_INSTANCE: undefined }))).toThrow(/SECRET_TOKEN/);
+      });
     });
 
-    test('unset WS_TOKEN_SECRET is unaffected — no warning, no failure', () => {
-      const result = validateEnv(makeEnv({ NODE_ENV: 'production', CLIENT_URL: 'https://wiki.example.com' }));
-      expect(result.warnings).toEqual([]);
+    describe('legacy WS_TOKEN_SECRET alias', () => {
+      test('a valid WS_TOKEN_SECRET alone satisfies the requirement with no warning', () => {
+        const strong = 'b'.repeat(32);
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: undefined, WS_TOKEN_SECRET: strong, CLIENT_URL: 'https://wiki.example.com' }));
+        expect(result.warnings).toEqual([]);
+      });
+
+      test('WS_TOKEN_SECRET takes precedence over SECRET_TOKEN when both are set to the same value — no divergence warning', () => {
+        const same = 'a'.repeat(32);
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: same, WS_TOKEN_SECRET: same, CLIENT_URL: 'https://wiki.example.com' }));
+        expect(result.warnings).toEqual([]);
+      });
+
+      test('AC-12: both set to different values warns exactly once, names WS_TOKEN_SECRET as the winner, and never echoes either value', () => {
+        const canonical = 'a'.repeat(32);
+        const alias = 'b'.repeat(32);
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: canonical, WS_TOKEN_SECRET: alias }));
+        const matches = result.warnings.filter((w) => w.startsWith('SECRET_TOKEN:') && w.includes('WS_TOKEN_SECRET'));
+        expect(matches).toHaveLength(1);
+        expect(matches[0]).not.toContain(canonical);
+        expect(matches[0]).not.toContain(alias);
+      });
+
+      test('AC-12: only WS_TOKEN_SECRET set never warns about divergence', () => {
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: undefined, WS_TOKEN_SECRET: 'd'.repeat(32), CLIENT_URL: 'https://wiki.example.com' }));
+        expect(result.warnings).toEqual([]);
+      });
+
+      test('AC-12: only SECRET_TOKEN set never warns about divergence', () => {
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: 'e'.repeat(32), CLIENT_URL: 'https://wiki.example.com' }));
+        expect(result.warnings).toEqual([]);
+      });
+
+      test('a whitespace-padded WS_TOKEN_SECRET winner is trimmed for the length/placeholder checks the same way as the canonical name', () => {
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: undefined, WS_TOKEN_SECRET: `  ${'f'.repeat(32)}  `, CLIENT_URL: 'https://wiki.example.com' }));
+        expect(result.warnings).toEqual([]);
+      });
+
+      test('AC-12: a padded WS_TOKEN_SECRET winner that trims equal to SECRET_TOKEN still warns — the raw values actually used to sign differ even though the trimmed values match', () => {
+        const value = 'g'.repeat(32);
+        const result = validateEnv(makeEnv({ SECRET_TOKEN: value, WS_TOKEN_SECRET: `  ${value}  `, CLIENT_URL: 'https://wiki.example.com' }));
+        const matches = result.warnings.filter((w) => w.startsWith('SECRET_TOKEN:') && w.includes('WS_TOKEN_SECRET'));
+        expect(matches).toHaveLength(1);
+        expect(matches[0]).not.toContain(value);
+      });
     });
   });
 
@@ -506,17 +608,20 @@ describe('util/env-schema validateEnv', () => {
     });
 
     test('exact known names (including taxonomy-only ones) never warn regardless of content', () => {
+      // SECRET_TOKEN/WS_TOKEN_SECRET are excluded from the "arbitrary
+      // content" claim below (they are no longer taxonomy-only — see the
+      // dedicated SECRET_TOKEN describe block) but are set here to the SAME
+      // >= 32 char value so the typo heuristic's own claim is exercised
+      // without also tripping the length check or the AC-12 divergence
+      // warning.
+      const strongSecret = 'x'.repeat(40);
       const result = validateEnv(
         makeEnv({
-          // >= 32 chars: this test asserts the typo heuristic ignores known
-          // names regardless of content, not the WS_TOKEN_SECRET length
-          // check (covered in its own `describe` block below) — a shorter
-          // value here would trip that separate check instead.
-          WS_TOKEN_SECRET: 'x'.repeat(40),
+          SECRET_TOKEN: strongSecret,
+          WS_TOKEN_SECRET: strongSecret,
           REDIS_REJECT_UNAUTHORIZED: 'nonsense',
           BASE_URL: 'anything',
           PASSWORD_SEED: 'anything',
-          SECRET_TOKEN: 'anything',
           ENABLE_DNSCACHE: 'anything',
           DEBUG: 'crowi:*',
           CROWI_MIGRATE_USER: 'admin@example.com',
@@ -549,7 +654,7 @@ describe('util/env-schema validateEnv', () => {
           'JWT_REFRESH_TOKEN_TTL_SECONDS',
           'COLLAB_MAX_EDITORS_PER_PAGE',
           'MIGRATION_PREFLIGHT_UNAPPLIED_POLICY',
-          'WS_TOKEN_SECRET',
+          'SECRET_TOKEN',
           'CROWI_MIGRATE_USER',
           'IMAGE_DERIVATIVE_MAX_PIXELS',
           'IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY',
@@ -557,11 +662,19 @@ describe('util/env-schema validateEnv', () => {
           'CROWI_UPLOAD_MAX_BYTES',
         ]),
       );
+      // WS_TOKEN_SECRET is registered as SECRET_TOKEN's alias, not as its
+      // own top-level descriptor name.
+      expect(names).not.toContain('WS_TOKEN_SECRET');
     });
 
     test('MONGO_URI carries its legacy aliases', () => {
       const mongo = ENV_VAR_DESCRIPTORS.find((d) => d.name === 'MONGO_URI');
       expect(mongo?.aliases).toEqual(['MONGOLAB_URI', 'MONGODB_URI', 'MONGOHQ_URL']);
+    });
+
+    test('SECRET_TOKEN carries the legacy WS_TOKEN_SECRET alias', () => {
+      const secretToken = ENV_VAR_DESCRIPTORS.find((d) => d.name === 'SECRET_TOKEN');
+      expect(secretToken?.aliases).toEqual(['WS_TOKEN_SECRET']);
     });
   });
 

@@ -48,6 +48,24 @@ export function nextNavigationMockModule(fns: { push: Mock; replace?: Mock; back
 }
 
 // ---------------------------------------------------------------------------
+// next/link
+// ---------------------------------------------------------------------------
+
+/**
+ * Module shape for `vi.mock('next/link', ...)`: a plain anchor, so a test can
+ * read `href` off a row without the App Router runtime behind it.
+ *
+ * Usage (each test file keeps its own vi.mock declaration):
+ *
+ *   vi.mock('next/link', () => nextLinkMockModule());
+ */
+export function nextLinkMockModule() {
+  return {
+    default: ({ href, children, ...rest }: ComponentProps<'a'>) => createElement('a', { href, ...rest }, children),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // @/lib/use-auth
 // ---------------------------------------------------------------------------
 
@@ -83,11 +101,19 @@ export function useAuthMockModule(useAuthFn: Mock) {
  *
  * (The `vi.spyOn` itself stays in the test file so this module keeps its
  * vitest import type-only.)
+ *
+ * `matches` is a getter, not a value fixed when the list is built:
+ * `useMediaQuery` caches one `MediaQueryList` per query in a ref and
+ * re-reads `.matches` off that same object, so a test that flips what
+ * `isMatch` answers (to play a viewport resize) would otherwise keep
+ * getting the reply from the first call forever.
  */
 export function matchMediaImpl(isMatch: (query: string) => boolean): (query: string) => MediaQueryList {
   return (query: string) =>
     ({
-      matches: isMatch(query),
+      get matches() {
+        return isMatch(query);
+      },
       media: query,
       onchange: null,
       addEventListener: () => {},
