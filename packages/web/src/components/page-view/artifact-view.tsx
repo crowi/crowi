@@ -2,10 +2,10 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Loader2 } from 'lucide-react';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { env } from '@/lib/runtime-env';
 import { useAppInfo } from '@/lib/use-app-info';
 import { ArtifactUrlUnavailableFailure, useMintArtifactUrl } from '@/lib/use-artifact-url';
@@ -84,8 +84,8 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // Bumped on every mint attempt, revision change, and stop — a mint
   // response is only ever applied if the epoch it was issued under is still
   // current. This is strictly stronger than comparing `revisionId`: an A →
-  // B → A revision round-trip, or a stop pressed mid-mint, leaves the
-  // revision id unchanged but must still discard a stale in-flight response.
+  // B → A revision round-trip leaves the revision id unchanged but must
+  // still discard a stale in-flight response.
   // Only ever read/written from an effect or an event handler, never during
   // render itself (refs are not safe to touch mid-render). The
   // revision-change bump lives in its own effect (below, ref-only, no
@@ -248,6 +248,14 @@ export function ArtifactView({ page }: ArtifactViewProps) {
     );
   }
 
+  // Loading app info and minting both normally resolve within a few hundred
+  // ms, so they get the same bare spinner the page itself uses while
+  // loading — an explanatory box here would only flash before the frame
+  // replaces it.
+  if ((effectiveState === 'unknown' && !appInfoQuery.isError) || effectiveState === 'minting') {
+    return <LoadingSpinner message={m['page.artifact.preparing']()} />;
+  }
+
   return (
     <div className="space-y-4 rounded-lg border p-6 text-center">
       <h3 className="font-medium">{m['page.artifact.placeholder_title']()}</h3>
@@ -255,7 +263,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
       {/* Fail-closed: a failed app-info fetch stays in `unknown` — never
           falls through to the run button — and offers only a way to check
           again, never a way to run. */}
-      {effectiveState === 'unknown' && appInfoQuery.isError && (
+      {effectiveState === 'unknown' && (
         <Button variant="outline" size="sm" onClick={() => appInfoQuery.refetch()}>
           {m['page.artifact.retry_button']()}
         </Button>
@@ -269,21 +277,6 @@ export function ArtifactView({ page }: ArtifactViewProps) {
             <AlertDescription>{m['page.artifact.delivery_unavailable_body']()}</AlertDescription>
           </Alert>
         ))}
-      {effectiveState === 'minting' && (
-        <div className="flex items-center justify-center gap-2">
-          <Button disabled>
-            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            {m['page.artifact.running_status']()}
-          </Button>
-          {/* A pending mint can still be abandoned — `handleStop` bumps the
-              epoch, so its eventual response (success or failure) is
-              discarded by the fence in `handleRun` regardless of when it
-              arrives. */}
-          <Button variant="outline" size="sm" onClick={handleStop}>
-            {m['page.artifact.stop_button']()}
-          </Button>
-        </div>
-      )}
       {effectiveState === 'failed' && <FailureAlert reason={effectiveReason} canRetry={phase === 'failed'} onRetry={handleRun} />}
     </div>
   );

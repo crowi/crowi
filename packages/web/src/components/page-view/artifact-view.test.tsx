@@ -148,9 +148,10 @@ afterEach(() => {
 });
 
 describe('ArtifactView', () => {
-  it('AC-SH-1: auto-mints as soon as delivery is confirmed enabled, with no iframe until the mint resolves', () => {
+  it('AC-SH-1: auto-mints as soon as delivery is confirmed enabled, showing only the preparing spinner until the mint resolves', () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
-    const mutateAsync = mockMint();
+    const { promise } = deferred<{ url: string; expiresAt: string }>();
+    const mutateAsync = mockMint(vi.fn().mockReturnValue(promise));
     render(createElement(ArtifactView, { page: makePage() }));
 
     // The mint call itself is synchronous (it happens before `handleRun`'s
@@ -159,6 +160,9 @@ describe('ArtifactView', () => {
     expect(mutateAsync).toHaveBeenCalledTimes(1);
     expect(mutateAsync).toHaveBeenCalledWith({ pageId: 'page-1', revisionId: 'rev-1' });
     expect(document.querySelectorAll('iframe')).toHaveLength(0);
+    expect(screen.getByRole('status').textContent).toContain(m['page.artifact.preparing']());
+    expect(screen.queryByText(m['page.artifact.placeholder_title']())).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('AC-SH-2: auto-run mints exactly once and creates one iframe pointed at the intermediate document', async () => {
@@ -349,31 +353,17 @@ describe('ArtifactView', () => {
       });
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
     });
-
-    it('pressing stop while the auto-triggered mint is pending discards it once it resolves', async () => {
-      mockAppInfo({ data: ENABLED_APP_INFO });
-      const { promise, resolve } = deferred<{ url: string; expiresAt: string }>();
-      mockMint(vi.fn().mockReturnValue(promise));
-      render(createElement(ArtifactView, { page: makePage() }));
-
-      fireEvent.click(screen.getByRole('button', { name: m['page.artifact.stop_button']() }));
-      expect(runButton()).toBeTruthy();
-
-      await act(async () => {
-        resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`));
-      });
-      expect(document.querySelectorAll('iframe')).toHaveLength(0);
-    });
   });
 
   describe('AC-SH-7: auto-run only fires once delivery is positively confirmed enabled', () => {
-    it('does not auto-run while app info is loading, with no retry affordance yet', () => {
+    it('does not auto-run while app info is loading, showing only the preparing spinner', () => {
       mockAppInfo({ isLoading: true });
       const mutateAsync = mockMint();
       render(createElement(ArtifactView, { page: makePage() }));
 
-      expect(screen.queryByRole('button', { name: m['page.artifact.run_button']() })).toBeNull();
-      expect(screen.queryByRole('button', { name: m['page.artifact.retry_button']() })).toBeNull();
+      expect(screen.getByRole('status').textContent).toContain(m['page.artifact.preparing']());
+      expect(screen.queryByText(m['page.artifact.placeholder_title']())).toBeNull();
+      expect(screen.queryByRole('button')).toBeNull();
       expect(mutateAsync).not.toHaveBeenCalled();
     });
 
@@ -383,6 +373,8 @@ describe('ArtifactView', () => {
       const mutateAsync = mockMint();
       render(createElement(ArtifactView, { page: makePage() }));
 
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.getByText(m['page.artifact.placeholder_title']())).toBeTruthy();
       expect(screen.queryByRole('button', { name: m['page.artifact.run_button']() })).toBeNull();
       expect(mutateAsync).not.toHaveBeenCalled();
 
