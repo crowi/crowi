@@ -41,7 +41,10 @@ describe('rebuild rendered-ast (RFC-0023 §15)', () => {
     accessToken = token;
 
     // A page whose current revision we downgrade to "no rendererVersion"
-    // (the pre-RFC legacy cohort) with a stale AST + stale toc.
+    // (the pre-RFC legacy cohort) with a stale AST + stale toc. Also strip
+    // `contentType` (RFC-0020 §1) so this fixture doubles as the
+    // missing-kind-is-Markdown control for every eligibility test below —
+    // legacy rows predate that field too.
     const stale = await createPageViaApi(accessToken, '/backfill/stale', BODY);
     stalePageId = stale._id;
     const Page = crowi.model('Page');
@@ -51,7 +54,7 @@ describe('rebuild rendered-ast (RFC-0023 §15)', () => {
       .updateOne(
         { _id: stalePageRevisionId },
         {
-          $unset: { rendererVersion: '' },
+          $unset: { rendererVersion: '', contentType: '' },
           $set: {
             renderedAst: { type: 'root', children: [{ type: 'html', value: '<p>legacy artifact</p>' }] },
             meta: { toc: [{ level: 1, text: 'Backfill Heading', anchorId: 'stale-anchor' }], wikiLinks: [], mentions: [], codeBlockLanguages: [] },
@@ -59,6 +62,7 @@ describe('rebuild rendered-ast (RFC-0023 §15)', () => {
         },
       )
       .exec();
+    await Page.updateOne({ _id: stalePageId }, { $unset: { contentType: '' } }).exec();
 
     // A page whose current revision claims a NEWER pipeline version than
     // this binary — must never be touched and must never block completion.
@@ -165,6 +169,63 @@ describe('rebuild rendered-ast (RFC-0023 §15)', () => {
     // asserting the run-wide eligible/written counters instead would bind
     // this test to how many targets the other tests in this file happen to
     // leave behind.
+    expect(untouched.rendererVersion).toBeUndefined();
+  });
+
+  it('AC-SC-13 (RFC-0020 §1): an artifact Revision with no rendererVersion is excluded from eligible/written/remainingEligible on both dry-run and a real run, and the renderer is never invoked', async () => {
+    const api = createRebuildCliApi(crowi);
+    // Baseline BEFORE this test's own fixture exists. The 'newer' fixture
+    // from `beforeAll` (rendererVersion '99.0.0') can never leave the
+    // coarse `$ne` prefilter (see the module doc comment), so `scanned`
+    // is not 0 in this shared-fixture file even once every eligible row
+    // has been backfilled — asserting a hardcoded 0 below would be wrong
+    // regardless of whether the artifact row leaks in. Comparing against
+    // this baseline isolates the artifact row's own contribution instead.
+    const baselineScanned = ((await api.rebuildRenderedAst({ dryRun: true })).stats as { scanned: number }).scanned;
+
+    const created = await createPageViaApi(accessToken, '/backfill/artifact-legacy', '<html><body>hi</body></html>');
+    const Page = crowi.model('Page');
+    const page = await Page.findById(created._id).exec();
+    const artifactRevisionId = String(page?.revision);
+    await Page.updateOne({ _id: created._id }, { $set: { contentType: 'artifact' } }).exec();
+    await Revision()
+      .updateOne({ _id: artifactRevisionId }, { $set: { contentType: 'artifact' }, $unset: { rendererVersion: '' } })
+      .exec();
+
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'runRender');
+    let dryOutcome: Awaited<ReturnType<typeof api.rebuildRenderedAst>>;
+    let realOutcome: Awaited<ReturnType<typeof api.rebuildRenderedAst>>;
+    try {
+      dryOutcome = await api.rebuildRenderedAst({ dryRun: true });
+      realOutcome = await api.rebuildRenderedAst({});
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+
+    const dryStats = dryOutcome.stats as { scanned: number; eligible: number };
+    const realStats = realOutcome.stats as { scanned: number; eligible: number; written: number; remainingEligible: number };
+    // Every other legacy-shaped row in this file was already backfilled by
+    // earlier tests, so a non-zero `eligible` here would mean the artifact
+    // row leaked into the unified eligibility predicate. AC-SC-13 names
+    // `scanned` alongside `eligible` / `written` / `remainingEligible` —
+    // the artifact row is excluded from the coarse prefilter itself (see
+    // `collectPrefilteredTargets`), not just the per-item `isEligible`
+    // check, so adding it must not move `scanned` off the baseline
+    // captured above, on both dry-run and real-run.
+    expect(dryStats.scanned).toBe(baselineScanned);
+    expect(dryStats.eligible).toBe(0);
+    expect(realStats.scanned).toBe(baselineScanned);
+    expect(realStats.eligible).toBe(0);
+    expect(realStats.written).toBe(0);
+    expect(realStats.remainingEligible).toBe(0);
+
+    // Confirms the row was never re-stamped by the rebuild (still no
+    // rendererVersion) — whatever `renderedAst` it happened to already
+    // carry from its Markdown birth is untouched either way, since the
+    // rebuild never wrote to it.
+    const untouched = await readRevision(artifactRevisionId);
     expect(untouched.rendererVersion).toBeUndefined();
   });
 });

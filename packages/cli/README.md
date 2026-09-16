@@ -110,6 +110,10 @@ Auth / lifecycle: `login`, `logout`, `whoami`, `profiles`. Read: `search`,
 `get` (alias `cat`), `ls`. Write: `create`, `edit`, `update`, `mv`, `rm`.
 Phase 2 (need extra scopes): `comment`, `attach`, `bookmark`, `watch`, `open`.
 
+### Artifact pages (RFC-0020)
+
+`create` / `update` accept `--type <markdown|artifact>` to declare a page's kind for that write. Omit it and the server keeps its default (markdown on create, the page's current kind on update) — the kind is never inferred from a file extension or from the body itself. An `artifact` body must be a single self-contained HTML document: no external script/stylesheet/image/module references, no relative paths — embed any binary asset as a `data:` URI. `edit` works on an artifact page exactly like a markdown one (it opens an `.html` temp file instead of `.md`, and never changes the page's kind on save). A rejected artifact write exits `6` (see below) and prints the rule identifier / reason / (when the rule names one) `target` alongside the server's fixed message.
+
 ## Output formats & scripting
 
 `search` and `ls` accept `--format` and `--template` so their output can be
@@ -193,7 +197,7 @@ to re-login with, and a `409` edit conflict tells you to re-run with `--force`).
 | `3` | forbidden | token lacks the required scope (`403 INSUFFICIENT_SCOPE`) — re-login with `--scope` |
 | `4` | not found | page / resource does not exist (`404`) |
 | `5` | conflict | optimistic-lock edit conflict (`409`) — re-run `edit`/`update` with `--force` to overwrite |
-| `6` | invalid | bad arguments / client-side validation (`400` / `422`) |
+| `6` | invalid | bad arguments / client-side validation (`400` / `413` / `422`) |
 | `7` | unavailable | server unavailable, or the feature is not enabled on this instance (`503`) |
 
 `edit` and `update` send the page's `revision_id` for optimistic locking; if the

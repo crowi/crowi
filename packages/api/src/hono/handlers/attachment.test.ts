@@ -214,6 +214,35 @@ describe('Routes /api attachments (Hono)', () => {
       expect(target?.inUse).toBe(true);
     });
 
+    it('AC-SC-14 (RFC-0020 §1): an artifact latest revision never scans for attachment references, even when the body textually contains a matching URI', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-artifact`, '# placeholder');
+      const id = await uploadTo(page._id);
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const stored = await Page.findById(page._id);
+      await Revision.updateOne({ _id: stored?.revision }, { $set: { body: `<img src="/api/attachments/${id}">`, contentType: 'artifact' } });
+      await Page.updateOne({ _id: page._id }, { $set: { contentType: 'artifact' } });
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(false);
+    });
+
+    it('RFC-0020 §1: a missing-kind (legacy, pre-migration) latest revision is still scanned as Markdown', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-missing-kind`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, `# doc\n\n![pixel](/api/attachments/${id})\n`);
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const stored = await Page.findById(page._id);
+      await Revision.updateOne({ _id: stored?.revision }, { $unset: { contentType: '' } });
+      await Page.updateOne({ _id: page._id }, { $unset: { contentType: '' } });
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(true);
+    });
+
     it('reports inUse=false on the addAttachment (upload) response — a fresh upload is not yet referenced', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-upload-resp`, '# x');
       const res = await request(app)
@@ -384,6 +413,46 @@ describe('Routes /api attachments (Hono)', () => {
       // with page B's own history.
       expect(entry?.referencingRevisions).toEqual([]);
       expect(entry?.referencingRevisions.some((r) => r.revisionId === strayRevId)).toBe(false);
+    });
+
+    it('AC-SC-14 (RFC-0020 §1): an artifact latest revision contributes no latest reference, and an artifact past revision contributes no referencingRevisions entry', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-artifact`, '# placeholder');
+      const idLatest = await uploadTo(page._id);
+      const idPast = await uploadTo(page._id);
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const stored = await Page.findById(page._id);
+      await Revision.updateOne({ _id: stored?.revision }, { $set: { body: `<img src="/api/attachments/${idLatest}">`, contentType: 'artifact' } });
+      await Page.updateOne({ _id: page._id }, { $set: { contentType: 'artifact' } });
+
+      await Revision.create([
+        {
+          path: `${PATH_PREFIX}usage-artifact`,
+          page: new Types.ObjectId(page._id),
+          body: `<img src="/api/attachments/${idPast}">`,
+          contentType: 'artifact',
+          author: new Types.ObjectId(userId),
+          createdAt: new Date(Date.now() - 60_000),
+        },
+      ]);
+
+      const usage = await usageOf(page._id);
+      expect(usage.latest.map((a) => a._id)).not.toContain(idLatest);
+      const pastEntry = usage.past.find((p) => p.attachment._id === idPast);
+      expect(pastEntry?.referencingRevisions).toEqual([]);
+    });
+
+    it('RFC-0020 §1: a missing-kind (legacy, pre-migration) latest revision still contributes a latest reference', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-missing-kind`, '# placeholder');
+      const id = await uploadTo(page._id);
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const stored = await Page.findById(page._id);
+      await Revision.updateOne({ _id: stored?.revision }, { $set: { body: `<img src="/api/attachments/${id}">` }, $unset: { contentType: '' } });
+      await Page.updateOne({ _id: page._id }, { $unset: { contentType: '' } });
+
+      const usage = await usageOf(page._id);
+      expect(usage.latest.map((a) => a._id)).toContain(id);
     });
   });
 

@@ -34,9 +34,9 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 | `search <query>` | Run a full-text search | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
 | `get <path-or-id>` (alias `cat`) | Write a page body to stdout | `--revision <id>` | `pages:read` |
 | `ls [path]` | List the child pages under a path | `--format <mode>` / `--template <tpl>` | `pages:read` |
-| `create <path>` | Create a page | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` | `pages:write` |
-| `edit <path>` | Edit interactively in your editor | `--editor <bin>` / `--force` | `pages:write` |
-| `update <path>` | Replace the body non-interactively | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` | `pages:write` |
+| `create <path>` | Create a page | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` / `--type <kind>` | `pages:write` |
+| `edit <path>` | Edit interactively in your editor (works on artifact pages too — opens an `.html` temp file) | `--editor <bin>` / `--force` | `pages:write` |
+| `update <path>` | Replace the body non-interactively | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` / `--type <kind>` | `pages:write` |
 | `mv <old> <new>` | Move or rename a page | `--no-redirect` / `--recursive` | `pages:write` |
 | `rm <path>` | Delete a page | `--completely` / `--force` | `pages:write` |
 | `watch status <path-or-id>` | Show whether you watch a page | — | `pages:read` |
@@ -77,8 +77,19 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 | `3` | Insufficient scope (re-login adding `--scope`) |
 | `4` | Target does not exist |
 | `5` | Edit conflict (`--force` overwrites) |
-| `6` | Invalid argument |
+| `6` | Invalid argument (also a rejected artifact write — `400` / `413` / `422` all map here) |
 | `7` | Server unavailable / feature disabled |
+
+## Artifact pages
+
+`create` / `update` accept `--type <kind>` (`markdown` or `artifact`) to declare a page's kind for that write. Omit it and the server keeps its default (markdown on create, the page's current kind on update) — the kind is never inferred from a file extension or from the body itself. `edit` works on an artifact page exactly like a markdown one and keeps whatever kind the page already has; it just opens an `.html` temp file instead of `.md` so the editor's syntax highlighting matches.
+
+A rejected artifact write (`400` / `413` / `422`, all exit code `6`) prints the server's fixed message plus the rule identifier and reason, and a `target` when the rule names one:
+
+```console
+crowi: This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)
+target: script[type]
+```
 
 ## Related pages
 

@@ -38,6 +38,10 @@ export interface paths {
                             capabilities: components["schemas"]["Capability"][];
                             canSelfRegister: boolean;
                             rendererStylesheets: string[];
+                            artifactDelivery: {
+                                enabled: boolean;
+                                origin: string | null;
+                            };
                         };
                     };
                 };
@@ -2593,6 +2597,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -2632,6 +2638,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                         };
                     };
@@ -3880,6 +3888,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -3919,6 +3929,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             recentBookmarks?: {
                                 _id: string;
@@ -3988,6 +4000,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -4027,6 +4041,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -4203,6 +4219,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -4242,6 +4260,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -4422,6 +4442,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4461,6 +4483,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -4625,6 +4649,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4664,6 +4690,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -5048,6 +5076,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -5087,6 +5117,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -5335,6 +5367,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -5374,6 +5408,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 user: string | {
                                     _id: string;
@@ -5923,6 +5959,8 @@ export interface paths {
                                 /** @enum {string} */
                                 editVia?: "web" | "oauth" | "pat";
                                 createdAt: string;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -6079,6 +6117,8 @@ export interface paths {
                                 message?: string;
                                 /** @enum {string} */
                                 editVia?: "web" | "oauth" | "pat";
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                         };
                     };
@@ -6230,6 +6270,8 @@ export interface paths {
                                 message?: string;
                                 /** @enum {string} */
                                 editVia?: "web" | "oauth" | "pat";
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -6507,6 +6549,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6546,6 +6590,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -6621,7 +6667,9 @@ export interface paths {
         put: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "x-crowi-page-content-type"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -6709,6 +6757,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6748,11 +6798,13 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
                 };
-                /** @description Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT) */
+                /** @description Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01/AI-D02) */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -6762,6 +6814,16 @@ export interface paths {
                             error: {
                                 code: string;
                                 message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
                             };
                         };
                     };
@@ -6814,13 +6876,69 @@ export interface paths {
                         };
                     };
                 };
+                /** @description The HTML artifact exceeds the configured size/complexity limit (RFC-0020) */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description HTML artifact delivery is not configured on this server (RFC-0020 AI-D03) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
             };
         };
         /** Create a new page */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "x-crowi-page-content-type"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -6907,6 +7025,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6946,11 +7066,13 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
                 };
-                /** @description Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT) */
+                /** @description Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01) */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -6960,6 +7082,16 @@ export interface paths {
                             error: {
                                 code: string;
                                 message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
                             };
                         };
                     };
@@ -6977,6 +7109,60 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Authentication is required";
                                 redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description The HTML artifact exceeds the configured size/complexity limit (RFC-0020) */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description HTML artifact delivery is not configured on this server (RFC-0020 AI-D03) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
                             };
                         };
                     };
@@ -7076,6 +7262,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7115,6 +7303,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -7311,6 +7501,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7350,6 +7542,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             }[];
                             pager: {
                                 prev: number | null;
@@ -7422,6 +7616,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7461,6 +7657,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             } | null;
                             contentPage?: {
                                 _id: string;
@@ -7528,6 +7726,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7567,6 +7767,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             } | null;
                             total: number;
                         };
@@ -7631,6 +7833,8 @@ export interface paths {
                                 path: string;
                                 isPage: boolean;
                                 hasPortal: boolean;
+                                /** @enum {string} */
+                                contentType?: "markdown" | "artifact";
                                 count: number;
                                 lastUpdatedAt?: string | null;
                                 updater?: {
@@ -7772,6 +7976,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7811,6 +8017,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -8178,6 +8386,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8217,6 +8427,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -8375,6 +8587,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8414,6 +8628,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -8572,6 +8788,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8611,6 +8829,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                             granted: boolean;
                         };
@@ -8976,6 +9196,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -9015,6 +9237,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
@@ -9206,6 +9430,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -9245,11 +9471,13 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                         };
                     };
                 };
-                /** @description PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page) */
+                /** @description PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page) / ARTIFACT_WRITE_REJECTED (RFC-0020 AI-D02) */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -9259,6 +9487,16 @@ export interface paths {
                             error: {
                                 code: string;
                                 message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
                             };
                         };
                     };
@@ -9292,6 +9530,60 @@ export interface paths {
                                 code: "PAGE_NOT_FOUND";
                                 /** @enum {string} */
                                 message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description The stored HTML artifact exceeds the configured size/complexity limit (RFC-0020) */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description HTML artifact delivery is not configured on this server (RFC-0020 AI-D03) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_WRITE_REJECTED";
+                                /** @enum {string} */
+                                reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                ruleId: string;
+                                message: string;
+                                target?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
                             };
                         };
                     };
@@ -9408,6 +9700,8 @@ export interface paths {
                                     message?: string;
                                     /** @enum {string} */
                                     editVia?: "web" | "oauth" | "pat";
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -9447,6 +9741,8 @@ export interface paths {
                                 likerCount: number;
                                 seenUsersCount: number;
                                 isLiked: boolean;
+                                /** @enum {string} */
+                                contentType: "markdown" | "artifact";
                             };
                             renamed_count: number;
                         };
@@ -9737,6 +10033,173 @@ export interface paths {
                     };
                 };
                 /** @description Renderer pipeline failure */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages/{id}/artifact-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a signed delivery URL for a Page HTML artifact */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Page id (24-char hex ObjectId) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        revisionId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Signed artifact URL minted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            url: string;
+                            expiresAt: string;
+                        };
+                    };
+                };
+                /** @description Invalid page id, invalid request body, or the target revision is not an HTML artifact */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INVALID_PAGE_ID";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_URL_UNAVAILABLE";
+                                /** @enum {string} */
+                                reason: "NOT_AN_ARTIFACT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description The access token does not grant pages:read */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Page not found, not granted, or the revision does not belong to this page */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description HTML artifact delivery is not configured on this server */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_URL_UNAVAILABLE";
+                                /** @enum {string} */
+                                reason: "NOT_AN_ARTIFACT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
                 500: {
                     headers: {
                         [name: string]: unknown;
@@ -11539,6 +12002,8 @@ export interface paths {
                                         message?: string;
                                         /** @enum {string} */
                                         editVia?: "web" | "oauth" | "pat";
+                                        /** @enum {string} */
+                                        contentType: "markdown" | "artifact";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -11578,6 +12043,8 @@ export interface paths {
                                     likerCount: number;
                                     seenUsersCount: number;
                                     isLiked: boolean;
+                                    /** @enum {string} */
+                                    contentType: "markdown" | "artifact";
                                 };
                             }[];
                         };
@@ -15776,6 +16243,225 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the current HTML artifact delivery mode and settings */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current artifact delivery mode and settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            deliveryMode: "separate-origin" | "same-origin" | "disabled";
+                            artifactOrigin: string | null;
+                            crowiOrigin: string | null;
+                            writeEnabled: boolean;
+                            /** @enum {string|null} */
+                            sameOriginInactiveReason: "separate-origin-active" | "client-url-unset" | null;
+                            settings: {
+                                sameOriginEnabled: boolean;
+                                allowWebFonts: boolean;
+                                maxBytes: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        /** Update HTML artifact delivery settings (sameOriginEnabled / allowWebFonts / maxBytes) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sameOriginEnabled: boolean;
+                        allowWebFonts: boolean;
+                        maxBytes: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated settings (re-resolved from in-memory cache) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            deliveryMode: "separate-origin" | "same-origin" | "disabled";
+                            artifactOrigin: string | null;
+                            crowiOrigin: string | null;
+                            writeEnabled: boolean;
+                            /** @enum {string|null} */
+                            sameOriginInactiveReason: "separate-origin-active" | "client-url-unset" | null;
+                            settings: {
+                                sameOriginEnabled: boolean;
+                                allowWebFonts: boolean;
+                                maxBytes: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Validation failure or a same-origin toggle rejected for missing CLIENT_URL */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "ARTIFACT_SETTINGS_REJECTED";
+                                message: string;
+                                /** @enum {string} */
+                                reason: "CLIENT_URL_REQUIRED_FOR_SAME_ORIGIN";
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications": {
         parameters: {
             query?: never;
@@ -16247,7 +16933,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "IDEMPOTENCY_KEY_REQUIRED" | "IDEMPOTENCY_KEY_CONFLICT" | "PAGE_TRANSITION_IN_PROGRESS" | "PAGE_TRANSITION_INCOMPLETE" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "IDEMPOTENCY_KEY_REQUIRED" | "IDEMPOTENCY_KEY_CONFLICT" | "PAGE_TRANSITION_IN_PROGRESS" | "PAGE_TRANSITION_INCOMPLETE" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED" | "LINKED_IDENTITIES_EXIST" | "ARTIFACT_SETTINGS_REJECTED" | "ARTIFACT_WRITE_REJECTED" | "ARTIFACT_URL_UNAVAILABLE";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -16550,6 +17236,8 @@ export interface components {
                 message?: string;
                 /** @enum {string} */
                 editVia?: "web" | "oauth" | "pat";
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -16589,6 +17277,8 @@ export interface components {
             likerCount: number;
             seenUsersCount: number;
             isLiked: boolean;
+            /** @enum {string} */
+            contentType: "markdown" | "artifact";
         };
         RenderedAstEnvelope: {
             /** @enum {number} */
@@ -16666,6 +17356,8 @@ export interface components {
                 message?: string;
                 /** @enum {string} */
                 editVia?: "web" | "oauth" | "pat";
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -16705,6 +17397,8 @@ export interface components {
             likerCount: number;
             seenUsersCount: number;
             isLiked: boolean;
+            /** @enum {string} */
+            contentType: "markdown" | "artifact";
         };
         Revision: {
             _id: string;
@@ -16769,6 +17463,8 @@ export interface components {
             message?: string;
             /** @enum {string} */
             editVia?: "web" | "oauth" | "pat";
+            /** @enum {string} */
+            contentType: "markdown" | "artifact";
         };
         RevisionMeta: {
             toc?: {
@@ -16893,6 +17589,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -16932,6 +17630,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             }[];
             pager: {
                 prev: number | null;
@@ -17004,6 +17704,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17043,6 +17745,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             } | null;
             contentPage?: {
                 _id: string;
@@ -17110,6 +17814,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17149,6 +17855,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             } | null;
             total: number;
         };
@@ -17219,6 +17927,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17258,6 +17968,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             };
         };
         UpdatePageRequest: {
@@ -17377,6 +18089,8 @@ export interface components {
                     message?: string;
                     /** @enum {string} */
                     editVia?: "web" | "oauth" | "pat";
+                    /** @enum {string} */
+                    contentType: "markdown" | "artifact";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -17416,6 +18130,8 @@ export interface components {
                 likerCount: number;
                 seenUsersCount: number;
                 isLiked: boolean;
+                /** @enum {string} */
+                contentType: "markdown" | "artifact";
             }[];
         };
         Attachment: {

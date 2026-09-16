@@ -365,6 +365,66 @@ describe('createOpenSearchDriver rebuild()', () => {
 
     await expect(driver.rebuild?.()).rejects.toThrow(/getLikeCountsBulk/);
   });
+
+  // RFC-0020 (AC-CH-8) — mirrors the Elasticsearch driver's own case:
+  // the two drivers must agree on this after a rebuild.
+  it('empties body for an artifact page while keeping its path, and keeps body for a Markdown page', async () => {
+    const docs: PageStreamDoc[] = [
+      {
+        _id: 'artifact-1',
+        path: '/artifact-1',
+        redirectTo: null,
+        status: 'published',
+        grant: 1,
+        creator: { username: 'alice' },
+        revision: { body: 'body text' },
+        contentType: 'artifact',
+      },
+      {
+        _id: 'markdown-1',
+        path: '/markdown-1',
+        redirectTo: null,
+        status: 'published',
+        grant: 1,
+        creator: { username: 'alice' },
+        revision: { body: 'body text' },
+      },
+    ];
+
+    const driver = createOpenSearchDriver(applyConfig(CONFIG), {
+      iteratePages: async (handler) => {
+        for (const doc of docs) await handler(doc);
+      },
+      countAllPages: async () => docs.length,
+      getBookmarkCountsBulk: async () => new Map(),
+      getLikeCountsBulk: async (pageIds) => new Map(pageIds.map((id) => [id, 0])),
+    });
+
+    const client = driver.client as unknown as {
+      indices: Record<string, jest.Mock>;
+      cat: Record<string, jest.Mock>;
+      bulk: jest.Mock;
+    };
+    client.indices.create = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
+    client.indices.existsAlias = jest.fn().mockResolvedValue({ body: false, statusCode: 404 });
+    client.indices.updateAliases = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
+    client.indices.delete = jest.fn().mockResolvedValue({ body: { acknowledged: true }, statusCode: 200 });
+    client.cat.aliases = jest.fn().mockResolvedValue({ body: [], statusCode: 200 });
+    client.cat.indices = jest.fn().mockResolvedValue({ body: [], statusCode: 200 });
+    const body: Array<Record<string, unknown>> = [];
+    client.bulk = jest.fn(async (call: { body: Array<Record<string, unknown>> }) => {
+      body.push(...call.body);
+      return { body: { errors: false, took: 1, items: [] }, statusCode: 200 };
+    });
+
+    await driver.rebuild?.();
+
+    const sources = body.filter((op) => 'path' in op) as Array<{ path: string; body: string }>;
+    const artifactSource = sources.find((s) => s.path === '/artifact-1');
+    const markdownSource = sources.find((s) => s.path === '/markdown-1');
+    expect(artifactSource?.body).toBe('');
+    expect(markdownSource?.body).toBe('body text');
+  });
 });
 
 describe('applyConfig', () => {

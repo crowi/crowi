@@ -144,6 +144,20 @@ The subcommands, their own flags and the scope each needs are listed in
 API request schema before anything is sent, so a malformed path fails locally
 with a clear error instead of after a round trip.
 
+### Writing artifact pages (`--type`)
+
+`create` / `update` accept `--type markdown` or `--type artifact` to declare a page's kind. Omit it and the server keeps its own default: `create` makes a markdown page, `update` keeps the page's current kind — an update that omits `--type` never turns an artifact page back into markdown. The kind is never guessed from `--file`'s extension or from the body's own content either way. An `--type artifact` body must be a single self-contained HTML document: no external script / stylesheet / image / module references, no relative paths — embed any binary asset as a `data:` URI.
+
+`edit` works on an artifact page exactly like a markdown one: it opens an `.html` temp file instead of `.md` (so your editor's syntax highlighting matches) and never changes the page's kind on save.
+
+A rejected artifact write exits `6` (invalid) and prints the server's fixed message plus the rule identifier and reason:
+
+```console
+$ crowi create /demo --type artifact --file page.html
+crowi: This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)
+target: script[type]
+```
+
 ### `edit` conflicts (409)
 
 `edit` / `update` send the page's `revision_id` for optimistic locking. If the

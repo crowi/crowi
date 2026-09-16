@@ -11,6 +11,8 @@
  */
 import { randomBytes } from 'node:crypto';
 
+import { ArtifactWriteRejectionSchema } from '@crowi/api-contract';
+
 import { ApiToolError } from './dispatch';
 
 /** Minimal MCP tool-result shape (subset of the SDK's `CallToolResult`). */
@@ -100,8 +102,27 @@ export const okResultWithBody = (body: string, meta: Structured): McpToolResult 
  * error envelope's `code` + `message` (RFC-0011 §9) so the model gets a
  * human-readable, recoverable signal. The full body is echoed in
  * `structuredContent` for clients that introspect it.
+ *
+ * RFC-0020 §J-2 — a `feature-html-artifact-write-path` rejection carries
+ * `reason` / `ruleId` / `target?` alongside `code` / `message`; when `err.body`
+ * validates against the contract's `ArtifactWriteRejectionSchema` (the same
+ * in-process response `ingestHtmlArtifact` / the write-path leaf produce —
+ * see `dispatch.ts`) those are folded into both the text and
+ * `structuredContent.error` so the model knows which rule fired and what to
+ * fix, not just that the write was rejected.
  */
 export const errorResult = (err: ApiToolError): McpToolResult => {
+  const artifactParse = ArtifactWriteRejectionSchema.safeParse(err.body);
+  if (artifactParse.success) {
+    const artifact = artifactParse.data.error;
+    const targetSuffix = artifact.target !== undefined ? ` [target: ${artifact.target}]` : '';
+    return {
+      content: [{ type: 'text', text: `Error (${artifact.code}): ${artifact.message} (${artifact.ruleId} / ${artifact.reason})${targetSuffix}` }],
+      structuredContent: { status: err.status, error: artifact },
+      isError: true,
+    };
+  }
+
   const envelope = extractErrorEnvelope(err.body);
   const code = envelope.code ?? `HTTP_${err.status}`;
   const message = envelope.message ?? 'The Crowi API rejected the request.';

@@ -38,6 +38,14 @@ The tools, and the scope each one needs, are listed on [HTTP API](../reference/a
 
 `crowi_update_page` takes the revision the client read along with the update. If someone else saved the page in the meantime the call fails as a conflict, and the AI re-reads the page and tries again.
 
+### Writing an artifact page
+
+`crowi_create_page` / `crowi_update_page` accept an optional `content_type` field, `'markdown'` or `'artifact'`. Omit it and the server falls back to its own default: `crowi_create_page` makes a markdown page, `crowi_update_page` keeps the page's current kind — an update call that omits `content_type` never turns an artifact page back into markdown. Set it to `'artifact'` and `body` must be a single self-contained HTML document: no external `<script>` / `<link>` / `<img>` / module references, and no relative paths — embed any binary asset as a `data:` URI. The kind is never inferred from the body's content, so declare it explicitly whenever you mean an artifact.
+
+Reading a page back (`crowi_get_page` / `crowi_get_revision`) reports its kind as `content_type` in the result, so the AI can tell whether the returned body is markdown or HTML before it treats it as either.
+
+A rejected artifact write comes back as an error result naming the rule that fired (`ruleId`), the reason, and — when the rule names one — the offending element/attribute (`target`), so the AI knows what to fix rather than just that the write failed.
+
 ## Things to keep in mind
 
 - **The token is your own permissions.** A page you cannot see is invisible over MCP too — and conversely, a write-scoped token can edit anything you can edit.

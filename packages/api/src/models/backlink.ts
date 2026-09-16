@@ -162,6 +162,16 @@ export default (crowi: Crowi) => {
       throw new Error('no revision/body in savedPage');
     }
 
+    // RFC-0020 §1 — artifact HTML must never reach `linkDetector.search`.
+    // The saved Revision's own kind decides (missing = legacy Markdown);
+    // an artifact save just clears whatever fromPage backlinks existed
+    // (e.g. from a prior Markdown revision at this page) rather than
+    // creating new ones.
+    if (savedPage.revision.contentType === 'artifact') {
+      await Backlink.removeBySavedPage(savedPage);
+      return [];
+    }
+
     const body = savedPage.revision.body;
 
     // Extract-before-delete: run `linkDetector.search` / `convertLinksToPageIds`
@@ -247,7 +257,11 @@ export default (crowi: Crowi) => {
     const pages = await Page.find({ revision: { $exists: true, $ne: null } }).select('_id revision');
     const latestRevisionIds = pages.map(({ revision }) => revision);
 
-    const revisions = await Revision.find({ _id: { $in: latestRevisionIds } }).and({
+    // RFC-0020 §1 — exclude artifact Revisions from full-rebuild candidacy:
+    // artifact HTML must never be matched against the link regexes or
+    // handed to `linkDetector.search` below. Missing kind (legacy) stays
+    // eligible.
+    const revisions = await Revision.find({ _id: { $in: latestRevisionIds }, contentType: { $ne: 'artifact' } }).and({
       $or: [{ body: linkDetector.getLinkRegexp() }, { body: linkDetector.getPathRegexps()[0] }, { body: linkDetector.getPathRegexps()[1] }],
     } as any);
 

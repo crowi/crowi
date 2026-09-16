@@ -77,6 +77,7 @@ import { hc } from 'hono/client';
 import type { z } from 'zod';
 
 import { adminAppRoutes } from './contracts/admin/app';
+import { adminArtifactRoutes } from './contracts/admin/artifact';
 import { adminAuthRoutes } from './contracts/admin/auth';
 import { adminMailRoutes } from './contracts/admin/mail';
 import { adminPageDeletionRoutes } from './contracts/admin/page-deletion';
@@ -98,6 +99,7 @@ import { accessTokenRoutes } from './contracts/access-token';
 import { oauthRoutes } from './contracts/oauth';
 import { oauthSessionRoutes } from './contracts/oauth-session';
 import { notificationRoutes } from './contracts/notification';
+import { artifactRoutes } from './contracts/artifact';
 import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
 import { pagePreviewRoutes } from './contracts/page-preview';
@@ -146,6 +148,7 @@ import type {
   OpenNotificationResponseSchema,
 } from './schemas/notification';
 import type { WsTokenResponseSchema } from './schemas/collab';
+import type { MintArtifactUrlResponseSchema } from './schemas/artifact';
 import type {
   GetPageResponseSchema,
   ListPageChildrenResponseSchema,
@@ -185,6 +188,7 @@ import type {
   PluginConfigResponseSchema,
   UpdatePluginConfigResponseSchema,
 } from './schemas/admin/plugins';
+import type { GetArtifactSettingsResponseSchema } from './schemas/admin/artifact';
 import type { GetSearchStatusResponseSchema } from './schemas/admin/search';
 import type { GetSecuritySettingsResponseSchema, UpdateSecuritySettingsResponseSchema } from './schemas/admin/security';
 import type { GetStorageStatusResponseSchema } from './schemas/admin/storage';
@@ -254,6 +258,7 @@ type ListPageChildrenResponse = z.infer<typeof ListPageChildrenResponseSchema>;
 type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
 type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
 type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;
+type MintArtifactUrlResponse = z.infer<typeof MintArtifactUrlResponseSchema>;
 type WsTokenResponse = z.infer<typeof WsTokenResponseSchema>;
 type PresenceTokenResponse = z.infer<typeof PresenceTokenResponseSchema>;
 type LikersResponse = z.infer<typeof LikersResponseSchema>;
@@ -273,6 +278,7 @@ type UpdateAppSettingsResponse = z.infer<typeof UpdateAppSettingsResponseSchema>
 type GetAuthSettingsResponse = z.infer<typeof GetAuthSettingsResponseSchema>;
 type UpdateAuthSettingsResponse = z.infer<typeof UpdateAuthSettingsResponseSchema>;
 type GetSecuritySettingsResponse = z.infer<typeof GetSecuritySettingsResponseSchema>;
+type GetArtifactSettingsResponse = z.infer<typeof GetArtifactSettingsResponseSchema>;
 type UpdateSecuritySettingsResponse = z.infer<typeof UpdateSecuritySettingsResponseSchema>;
 type GetMailSettingsResponse = z.infer<typeof GetMailSettingsResponseSchema>;
 type UpdateMailSettingsResponse = z.infer<typeof UpdateMailSettingsResponseSchema>;
@@ -457,6 +463,7 @@ const stubRevision = {
   format: 'markdown',
   author: null,
   createdAt: '',
+  contentType: 'markdown' as const,
 };
 const stubGetRevision: GetRevisionResponse = { revision: stubRevision };
 const stubGetRevisions: GetRevisionsResponse = { revisions: [] };
@@ -491,6 +498,7 @@ const stubPage: Page = {
   likerCount: 0,
   seenUsersCount: 0,
   isLiked: false,
+  contentType: 'markdown',
 };
 
 const stubPageWithRevision: GetPageResponse = {
@@ -503,12 +511,14 @@ const stubPageWithRevision: GetPageResponse = {
       body: '',
       format: 'markdown',
       createdAt: '',
+      contentType: 'markdown',
     },
     commentCount: 0,
     createdAt: '',
     likerCount: 0,
     seenUsersCount: 0,
     isLiked: false,
+    contentType: 'markdown',
   },
 };
 
@@ -518,6 +528,10 @@ const stubListPageChildren: ListPageChildrenResponse = { children: [] };
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };
 const stubPreview: PreviewPageResponse = {};
+const stubArtifactUrl: MintArtifactUrlResponse = {
+  url: 'https://artifacts.example.net/api/artifact/000000000000000000000000/000000000000000000000000?t=stub',
+  expiresAt: '',
+};
 const stubWsToken: WsTokenResponse = {
   wsToken: '',
   pageId: '',
@@ -587,6 +601,14 @@ const stubSecuritySettings: GetSecuritySettingsResponse = {
   registrationWhiteList: [],
   linkCardEnabled: true,
 };
+const stubArtifactSettings: GetArtifactSettingsResponse = {
+  deliveryMode: 'disabled',
+  artifactOrigin: null,
+  crowiOrigin: null,
+  writeEnabled: false,
+  sameOriginInactiveReason: null,
+  settings: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: 0 },
+};
 const stubMailSettings: GetMailSettingsResponse = {
   from: '',
   activeDriver: '',
@@ -635,6 +657,7 @@ const appAuthMeUserChain = new OpenAPIHono()
         capabilities: [],
         canSelfRegister: true,
         rendererStylesheets: [],
+        artifactDelivery: { enabled: false, origin: null },
       } satisfies AppInfoResponse,
       200,
     ),
@@ -711,7 +734,7 @@ const bookmarkBacklinkCommentRevisionChain = new OpenAPIHono()
   // chains (the split exists to keep the inferred types under TS2589).
   .openapi(getPageHistoryRoute, (c) => c.json(stubPageHistory, 200));
 
-// page / page-preview / pageCollab / presence — 18 routes. Page CRUD
+// page / page-preview / artifact / pageCollab / presence — 19 routes. Page CRUD
 // registers AFTER revision in the runtime chain so the shared
 // `/pages/*` `createJwtAuth` apply in revision is reused. Inside this
 // block, literal sub-paths (`/pages/list`, `/pages/grant`, `/pages/seen`,
@@ -747,6 +770,9 @@ const pageChain = new OpenAPIHono()
   // (getPage) or POST /pages (createPage) — Hono dispatches by
   // method+path so this is purely organisational.
   .openapi(pagePreviewRoutes.previewPageRoute, (c) => c.json(stubPreview, 200))
+  // Artifact URL minting — same `/pages/{id}/<suffix>` shape family (24-hex id,
+  // no collision with literal paths like `/pages/list`).
+  .openapi(artifactRoutes.mintArtifactUrlRoute, (c) => c.json(stubArtifactUrl, 200))
   // pageCollab + presence — `/pages/{id}/<suffix>` routes that share
   // the revision handler's `/pages/*` jwtAuth apply. RFC-0003 wsToken
   // and RFC-0005 presence token / likers list. The path uses a 24-hex
@@ -797,10 +823,11 @@ const lateContractApp = new OpenAPIHono()
   .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
 /**
- * Batch 9 — admin sub-contracts (26 endpoints across two chains):
+ * Batch 9 — admin sub-contracts (26 endpoints across two chains), plus
+ * feature-html-artifact-delivery-policy's `admin.artifact` (2 endpoints):
  *
  * - `adminSettingsContractApp`: the 6 read+write settings sub-contracts
- *   (app / auth / security / mail / storage / search) = 11 routes.
+ *   (app / artifact / auth / security / mail / storage / search) = 13 routes.
  * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (6)
  *   sub-contracts = 16 routes.
  *
@@ -818,6 +845,8 @@ const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminAuthRoutes.updateAuthSettingsRoute, (c) => c.json(stubAuthSettings, 200))
   .openapi(adminSecurityRoutes.getSecuritySettingsRoute, (c) => c.json(stubSecuritySettings, 200))
   .openapi(adminSecurityRoutes.updateSecuritySettingsRoute, (c) => c.json(stubSecuritySettings, 200))
+  .openapi(adminArtifactRoutes.getArtifactSettingsRoute, (c) => c.json(stubArtifactSettings, 200))
+  .openapi(adminArtifactRoutes.updateArtifactSettingsRoute, (c) => c.json(stubArtifactSettings, 200))
   .openapi(adminMailRoutes.getMailSettingsRoute, (c) => c.json(stubMailSettings, 200))
   .openapi(adminMailRoutes.updateMailSettingsRoute, (c) => c.json(stubUpdateMailSettings, 200))
   .openapi(adminMailRoutes.sendTestMailRoute, (c) => c.json(stubSendTestMail, 200))

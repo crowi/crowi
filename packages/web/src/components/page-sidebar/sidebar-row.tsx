@@ -1,7 +1,7 @@
 'use client';
 
 import type { PageChildSegment } from '@crowi/api-contract';
-import { Compass, FileText, Folder } from 'lucide-react';
+import { Compass, FileText, Folder, LayoutFreeform } from 'lucide-react';
 import Link from 'next/link';
 import { pagePathToHref } from '@/lib/page-path';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,14 @@ const INDENT_REM = 0.75;
 
 // One leading-icon size and colour for every row the tree draws.
 const ROW_ICON_CLASS = 'h-3.5 w-3.5 shrink-0 text-muted-foreground';
+
+// The small markers after a label, saying what a node is beyond file/folder.
+const ROW_MARKER_CLASS = 'h-3 w-3 shrink-0 text-muted-foreground/70';
+
+/** RFC-0020 — labelled like the page list's artifact icon. */
+function ArtifactMarker() {
+  return <LayoutFreeform className={ROW_MARKER_CLASS} aria-label="HTML artifact page" />;
+}
 
 interface SidebarRowProps {
   // Wiki path to link to (spaces are rendered as `+` for the URL).
@@ -71,6 +79,15 @@ export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: { segment:
   // portal is instead surfaced as a small marker after the label, so the
   // leading column stays a consistent folder/file split.
   const Icon = isDirectory ? Folder : FileText;
+  // A directory row links to the listing, so an artifact page saved at the
+  // same path is marked on its self-link row instead (`SidebarSelfLinkRow`).
+  const isArtifactPage = !isDirectory && segment.contentType === 'artifact';
+  const trailing = (
+    <>
+      {segment.hasPortal && <Compass className={ROW_MARKER_CLASS} aria-hidden />}
+      {isArtifactPage && <ArtifactMarker />}
+    </>
+  );
   return (
     <SidebarRow
       href={href}
@@ -79,7 +96,7 @@ export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: { segment:
       depth={depth}
       isCurrent={isCurrent}
       isOpen={isOpen}
-      trailing={segment.hasPortal ? <Compass className="h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden /> : undefined}
+      trailing={trailing}
     />
   );
 }
@@ -97,6 +114,7 @@ export function SidebarSelfLinkRow({ link, depth }: { link: SidebarSelfLink; dep
       leading={<FileText className={ROW_ICON_CLASS} aria-hidden />}
       depth={depth}
       isCurrent={link.isCurrent}
+      trailing={link.isArtifact ? <ArtifactMarker /> : undefined}
     />
   );
 }

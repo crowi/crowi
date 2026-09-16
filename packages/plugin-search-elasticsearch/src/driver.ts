@@ -74,6 +74,8 @@ export interface PageStreamDoc {
   bookmarkCount?: number;
   createdAt?: Date;
   updatedAt?: Date;
+  /** RFC-0020 — denormalized kind hint; `'artifact'` empties `body` (see `pageStreamDocToEsSource`). */
+  contentType?: string;
 }
 
 export interface ElasticsearchDriver extends SearchDriver {
@@ -647,10 +649,14 @@ export function docToEsSource(doc: SearchableDoc): EsPageSource {
  */
 function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number, likeCount: number): EsPageSource {
   const grantedUsers = (doc.grantedUsers ?? []).map((u) => (typeof u === 'string' ? u : u.toString()));
+  // RFC-0020 — an artifact page's body is HTML, not prose; a full
+  // rebuild must apply the same exclusion `indexPageInSearch` applies on
+  // the event path, or the two would disagree after a rebuild.
+  const isArtifact = doc.contentType === 'artifact';
   const searchable: SearchableDoc = {
     id: typeof doc._id === 'string' ? doc._id : doc._id.toString(),
     path: doc.path,
-    body: doc.revision?.body ?? '',
+    body: isArtifact ? '' : (doc.revision?.body ?? ''),
     meta: {
       username: doc.creator?.username,
       grant: doc.grant,

@@ -6,7 +6,15 @@ import { renderFallbackCard } from 'src/renderer/core/link-card/render-card';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import type { UserDocument } from 'src/models/user';
 import { crowi } from 'src/test/setup';
-import { type EnrichedPage, type PageLike, computeRevisionRenderArtifactsAsync, pageToResponse, populatePageRelationData } from './page-response';
+import {
+  type EnrichedPage,
+  type PageLike,
+  type PopulatedRevision,
+  computeRevisionRenderArtifactsAsync,
+  pageToResponse,
+  populatePageRelationData,
+  toRevisionResponse,
+} from './page-response';
 
 const TEST_ACTOR: RenderActor = { kind: 'system' };
 const silentLogger: PluginLogger = {
@@ -668,6 +676,87 @@ describe('pageToResponse — D-2 projection always emits 3 required relation fie
     expect(response.likerCount).toBe(0);
     expect(response.seenUsersCount).toBe(0);
     expect(response.isLiked).toBe(false);
+  });
+});
+
+describe('RFC-0020 §1 — content type discriminator', () => {
+  function makeRevision(overrides: Partial<PopulatedRevision> = {}): PopulatedRevision {
+    return {
+      _id: new Types.ObjectId(),
+      path: '/x',
+      body: 'body',
+      format: 'markdown',
+      createdAt: new Date(),
+      ...overrides,
+    };
+  }
+
+  function makePage(overrides: Partial<EnrichedPage> = {}): EnrichedPage {
+    return {
+      _id: new Types.ObjectId(),
+      path: '/x',
+      commentCount: 0,
+      createdAt: new Date(),
+      likerCount: 0,
+      seenUsersCount: 0,
+      isLiked: false,
+      ...overrides,
+    } as unknown as EnrichedPage;
+  }
+
+  it('AC-SC-1: toRevisionResponse normalizes a missing stored contentType to markdown without mutating the input', () => {
+    const revision = makeRevision();
+    const response = toRevisionResponse(revision);
+    expect(response.contentType).toBe('markdown');
+    expect(revision.contentType).toBeUndefined();
+  });
+
+  it('AC-SC-1: toRevisionResponse passes through an explicit artifact contentType', () => {
+    const revision = makeRevision({ contentType: 'artifact' });
+    const response = toRevisionResponse(revision);
+    expect(response.contentType).toBe('artifact');
+  });
+
+  it('AC-SC-1: pageToResponse normalizes a missing Page hint to markdown without mutating the input', () => {
+    const page = makePage();
+    const response = pageToResponse(page);
+    expect(response.contentType).toBe('markdown');
+    expect((page as PageLike).contentType).toBeUndefined();
+  });
+
+  it('AC-SC-1: pageToResponse passes through an explicit artifact Page hint', () => {
+    const page = makePage({ contentType: 'artifact' } as Partial<EnrichedPage>);
+    const response = pageToResponse(page);
+    expect(response.contentType).toBe('artifact');
+  });
+
+  it('AC-SC-7/AC-SC-2: toRevisionResponse omits meta/renderedAst/rendererVersion for an artifact Revision even when those fields are stored on it', () => {
+    // `prepareRevision` never writes these onto an artifact Revision, but
+    // the response contract doesn't lean on that as its only guard — a
+    // row that reached this shape some other way (legacy data, a future
+    // writer bug) must still never leak them into the response.
+    const revision = makeRevision({
+      contentType: 'artifact',
+      meta: { toc: [{ text: 'Heading', anchorId: 'h', level: 1 }] },
+      renderedAst: { type: 'root', children: [] },
+      rendererVersion: '1.0.0',
+    });
+    const response = toRevisionResponse(revision, { withMeta: true, withRenderedAst: true });
+    expect(response.contentType).toBe('artifact');
+    expect(response.meta).toBeUndefined();
+    expect(response.renderedAst).toBeUndefined();
+    expect(response.rendererVersion).toBeUndefined();
+    expect(response.body).toBe(revision.body);
+  });
+
+  it('AC-SC-7: the top-level Page hint and the nested selected Revision kind serialize independently', () => {
+    // A historical page detail: the Page's current (latest) kind is
+    // markdown, but the caller selected an older artifact Revision. Neither
+    // value is derived from the other.
+    const page = makePage({ contentType: 'markdown', revision: makeRevision({ contentType: 'artifact' }) } as Partial<EnrichedPage>);
+    const response = pageToResponse(page);
+    expect(response.contentType).toBe('markdown');
+    expect(response.revision.contentType).toBe('artifact');
   });
 });
 

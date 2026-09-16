@@ -308,6 +308,30 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
     expect(report?.counts?.rewrites).toBe(2);
   });
 
+  it('AC-SC-10 (RFC-0020 §1): an artifact Page with a /files/ candidate is excluded from isPending / detect / apply, and a co-existing Markdown page is still rewritten', async () => {
+    await Page.createPage(`${PATH_PREFIX}/artifact-with-files-url`, `![pic](/files/${ID_A})`, admin, { contentType: 'artifact' });
+    const markdownPage = await Page.createPage(`${PATH_PREFIX}/markdown-with-files-url`, `![pic](/files/${ID_A})`, admin, {});
+    // A legacy row that predates the contentType field (missing-kind, not
+    // explicit 'markdown') — the walker must still treat it as Markdown.
+    await Revision.updateOne({ _id: markdownPage.revision._id }, { $unset: { contentType: '' } });
+    await Page.updateOne({ _id: markdownPage._id }, { $unset: { contentType: '' } });
+
+    const runner = new MigrationRunner(crowi);
+    expect(await runner.isPending(filesUrlToAttachments)).toBe(true);
+
+    const report = await runner.detect(filesUrlToAttachments);
+    expect(report?.counts?.pages).toBe(1);
+
+    const revisionCountBefore = await Revision.countDocuments({ path: { $regex: `^${PATH_PREFIX}/artifact-with-files-url` } });
+    await runner.apply(filesUrlToAttachments);
+    const revisionCountAfter = await Revision.countDocuments({ path: { $regex: `^${PATH_PREFIX}/artifact-with-files-url` } });
+    expect(revisionCountAfter).toBe(revisionCountBefore);
+
+    const artifactReloaded = await Page.findOne({ path: `${PATH_PREFIX}/artifact-with-files-url` }).populate('revision');
+    expect(artifactReloaded.revision.body).toBe(`![pic](/files/${ID_A})`);
+    expect(await runner.isPending(filesUrlToAttachments)).toBe(false);
+  });
+
   it('rewrites the body via the updatePage path (relative + self-host) and records the application', async () => {
     const created = await Page.createPage(
       `${PATH_PREFIX}/rewrite`,

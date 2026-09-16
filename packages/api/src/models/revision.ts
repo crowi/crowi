@@ -1,4 +1,4 @@
-import type { MentionResponse, RevisionMetaShape, RevisionType, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
+import type { MentionResponse, PageContentType, RevisionMetaShape, RevisionType, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
@@ -147,6 +147,14 @@ export interface RevisionDocument extends Document {
    * does not invent one for them.
    */
   historyOperationId?: string;
+  /**
+   * RFC-0020 §1 — body content discriminator, authoritative for this
+   * Revision (`Page.contentType` is a denormalized copy of the current
+   * Revision's value, not an independent authority). Optional so legacy
+   * rows written before this field existed keep reading as `undefined`
+   * on disk; the response serializer normalizes missing to `'markdown'`.
+   */
+  contentType?: PageContentType;
 }
 
 /**
@@ -171,6 +179,13 @@ export interface PrepareRevisionOptions {
   type?: RevisionType;
   parentRevisionId?: Types.ObjectId | null;
   editVia?: 'web' | 'oauth' | 'pat';
+  /**
+   * RFC-0020 §1 — explicit body content discriminator for the new
+   * Revision. Callers that omit it get the pointer-aware resolution in
+   * `prepareRevision` (current Page kind when a pointer exists, else
+   * `'markdown'`).
+   */
+  contentType?: PageContentType;
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -345,6 +360,15 @@ export default (crowi: Crowi) => {
       type: String,
       default: undefined,
     },
+    // RFC-0020 §1 — body content discriminator. `required: false` /
+    // `default: undefined` so pre-existing rows keep reading as
+    // `undefined` on disk (legacy Markdown); no backfill migration.
+    contentType: {
+      type: String,
+      enum: ['markdown', 'artifact'],
+      required: false,
+      default: undefined,
+    },
   });
 
   // DC-5: every `page`-keyed read sorts or scans by recency — the history
@@ -422,44 +446,58 @@ export default (crowi: Crowi) => {
     newRevision.format = format;
     newRevision.author = user._id;
     newRevision.createdAt = new Date();
-    // Run the unified pipeline once at save time and persist BOTH
-    // (a) the derived metadata (TOC + wikilinks + mentions + code-
-    //     block langs) for backlinks / search / notify consumers, and
-    // (b) the JSON-serialised transformed mdast (`renderedAst`) which
-    //     the web client renders directly without re-parsing the body.
-    // RFC-0002 Phase 3. Older revisions written under Phase 1/2 lack
-    // `renderedAst` and fall through to the on-the-fly fallback path
-    // in `computeRevisionRenderedAstAsync`.
-    //
-    // `pageId` is required for the Phase 4+ plugin-dispatch transforms
-    // (embed-tag / url-inline-expand / code-block) to fire — without
-    // it, `runPipeline` skips dispatch and `code` nodes for
-    // PlantUML / Mermaid / etc. survive as plain code blocks. The
-    // mongoose `_id` is populated on document construction, so even on
-    // first-save (page not yet persisted) this is a real id.
-    const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', {
-      mode: 'save',
-      pageId: pageData._id?.toString(),
-      actor: actorFromUser(user),
-    });
-    newRevision.meta = metadataToRevisionMeta(metadata);
-    // RFC-0023 §10 — whole-document BSON budget. Sidecars ride
-    // alongside the html they describe, so the AST can grow ~2x; this
-    // guard (measured against body + meta + yjsUpdate + AST + fixed
-    // headroom, NOT the AST alone) strips sidecars largest-first when
-    // the document nears the 16MB cap. Placed at THIS chokepoint
-    // because every revision-creation path (HTTP save / collab save /
-    // draft / migration rewritePageBody) runs through prepareRevision —
-    // same rationale as the `page` ref stamp above. `yjsUpdate` is
-    // assigned by callers after prepareRevision returns when at all
-    // (no shipped writer today) — the fixed headroom covers typical
-    // deltas; the backfill path passes its target's real value.
-    const guarded = applyRevisionAstBudget(
-      { renderedAst, body: body || '', meta: newRevision.meta, yjsUpdateBytes: newRevision.yjsUpdate?.byteLength },
-      (message) => console.warn(`${message} (path=${pageData.path})`),
-    );
-    newRevision.renderedAst = guarded.renderedAst;
-    newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;
+    // RFC-0020 §1 — resolve the explicit kind for the new Revision.
+    // `pageData.contentType` is only trusted as a fallback when a pointer
+    // (`pageData.revision`) exists: a pointerless Page's hint (if any
+    // happens to be on disk) is not an authority — see the storage spec's
+    // "pointerless recovery と kind 不変条件" section.
+    const resolvedContentType: PageContentType = opts.contentType ?? (pageData.revision != null ? pageData.contentType : undefined) ?? 'markdown';
+    newRevision.contentType = resolvedContentType;
+    // Artifact bodies are opaque HTML, not Markdown source: skip the
+    // renderer / metadata / AST-budget pipeline entirely (RFC-0020 §1 —
+    // artifact HTML must never reach the Markdown renderer). Everything
+    // below this branch (collab options, `page` ref stamp) still runs for
+    // artifact revisions so authoring-channel bookkeeping isn't lost.
+    if (resolvedContentType !== 'artifact') {
+      // Run the unified pipeline once at save time and persist BOTH
+      // (a) the derived metadata (TOC + wikilinks + mentions + code-
+      //     block langs) for backlinks / search / notify consumers, and
+      // (b) the JSON-serialised transformed mdast (`renderedAst`) which
+      //     the web client renders directly without re-parsing the body.
+      // RFC-0002 Phase 3. Older revisions written under Phase 1/2 lack
+      // `renderedAst` and fall through to the on-the-fly fallback path
+      // in `computeRevisionRenderedAstAsync`.
+      //
+      // `pageId` is required for the Phase 4+ plugin-dispatch transforms
+      // (embed-tag / url-inline-expand / code-block) to fire — without
+      // it, `runPipeline` skips dispatch and `code` nodes for
+      // PlantUML / Mermaid / etc. survive as plain code blocks. The
+      // mongoose `_id` is populated on document construction, so even on
+      // first-save (page not yet persisted) this is a real id.
+      const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', {
+        mode: 'save',
+        pageId: pageData._id?.toString(),
+        actor: actorFromUser(user),
+      });
+      newRevision.meta = metadataToRevisionMeta(metadata);
+      // RFC-0023 §10 — whole-document BSON budget. Sidecars ride
+      // alongside the html they describe, so the AST can grow ~2x; this
+      // guard (measured against body + meta + yjsUpdate + AST + fixed
+      // headroom, NOT the AST alone) strips sidecars largest-first when
+      // the document nears the 16MB cap. Placed at THIS chokepoint
+      // because every revision-creation path (HTTP save / collab save /
+      // draft / migration rewritePageBody) runs through prepareRevision —
+      // same rationale as the `page` ref stamp above. `yjsUpdate` is
+      // assigned by callers after prepareRevision returns when at all
+      // (no shipped writer today) — the fixed headroom covers typical
+      // deltas; the backfill path passes its target's real value.
+      const guarded = applyRevisionAstBudget(
+        { renderedAst, body: body || '', meta: newRevision.meta, yjsUpdateBytes: newRevision.yjsUpdate?.byteLength },
+        (message) => console.warn(`${message} (path=${pageData.path})`),
+      );
+      newRevision.renderedAst = guarded.renderedAst;
+      newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;
+    }
 
     // RFC-0003 Phase 5 collab-save options. Only assign when the caller
     // explicitly passed a value so v1.x callers (Page.createPage /

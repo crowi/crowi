@@ -197,7 +197,7 @@ That defence has one boundary worth stating rather than discovering. It exists o
 
 An artifact page keeps the chrome of a Markdown page and replaces only the part that renders the body. Title, breadcrumb, author and timestamps, comments, likes, watch, share and history all behave as they do for Markdown, because none of them read the body. Treating that as the default — rather than designing a separate artifact page shell — is the decision here: an artifact is a page whose body renders differently, not a different kind of object.
 
-**Width.** Markdown pages reserve a right rail for the table of contents and cap the body at a readable measure. Neither applies to an artifact. There is no heading structure to extract, so the rail has nothing to hold; and the width cap exists to keep prose lines readable, which is a property of prose rather than of a rendering surface. **Both go together.** Removing the rail alone would leave the artifact at the same capped width with empty space beside it, which is the worst of the two layouts. The artifact region therefore spans the body column and the rail together. It does not bleed to the viewport edge — the outer margins stay aligned with the rest of the application.
+**Width.** Markdown pages reserve a right rail for the table of contents and cap the body at a readable measure. Neither applies to an artifact. There is no heading structure to extract, so the rail has nothing to hold; and the width cap exists to keep prose lines readable, which is a property of prose rather than of a rendering surface. **Both go together.** Removing the rail alone would leave the artifact at the same capped width with empty space beside it, which is the worst of the two layouts. An artifact page's column therefore spans the body column and the rail together, and it is the whole column that widens — title, page actions, body, and the comments and backlinks under it — since a wide body under a prose-width header and prose-width comments reads as two layouts on one page. It does not bleed to the viewport edge: the left edge stays where a Markdown page's is, and the application header widens to the same right edge.
 
 **Menu.** The page menu divides three ways rather than two.
 
@@ -212,7 +212,7 @@ An artifact page keeps the chrome of a Markdown page and replaces only the part 
 
 A reader scanning a list should be able to tell an artifact from a Markdown page before opening it.
 
-The list row already has a vocabulary for this, and it distinguishes two things. **An icon states what a page is** — a compass for a portal, a link for link-only sharing, a lock for a private page — while **a coloured pill states what state a page is in**, as draft and deleted do. Being an artifact is a kind, not a state: it is intrinsic, permanent, and not a stage the page passes through. **It therefore takes an icon, in the same muted treatment as its neighbours.** A pill would place artifacts in the draft-and-deleted bucket and imply the page is in some temporary condition.
+The list row already has a vocabulary for this, and it distinguishes two things. **An icon states what a page is** — a compass for a portal, a link for link-only sharing, a lock for a private page — while **a coloured pill states what state a page is in**, as draft and deleted do. Being an artifact is a kind, not a state: it is intrinsic, permanent, and not a stage the page passes through. **It therefore takes an icon, in the same muted treatment as its neighbours.** A pill would place artifacts in the draft-and-deleted bucket and imply the page is in some temporary condition. The sidebar tree follows the same rule: an artifact page's row carries the icon after its label, where a portal's carries the compass.
 
 The glyph is `layout-freeform`. What separates an artifact from a Markdown page, for someone about to click it, is that it composes its own layout: a Markdown page is always the same single column, and an artifact is whatever it arranges itself to be. That is the quality the icon should carry.
 
@@ -244,11 +244,11 @@ Two properties make this exception safe where a general allowlist was not. **A b
 
 What remains is a disclosure rather than a vulnerability: Google observes the viewer's IP address and whatever the request carries. An artifact's author chooses the requested family name, so a low-bandwidth channel exists in principle, but its recipient is Google rather than the artifact's author. **The setting defaults to off** because Crowi is deployed inside organisations that deliberately close their network, and an artifact view silently reaching a third party is not a decision to make on an operator's behalf. When it is off, ingest rejects a font reference rather than letting it fail quietly at view time.
 
-### Execution is user-initiated
+### Execution starts when the page is opened
 
-Artifacts do not auto-execute on page load. The shell renders a placeholder with title and metadata, and the iframe is created on explicit user action. This bounds the damage from a runaway artifact — an accidental infinite loop or an unbounded allocation degrades one deliberately opened tab rather than every page view — and it means listing or linking an artifact never executes it.
+Opening an artifact page mints its signed delivery URL and renders the sandboxed frame immediately, once delivery is confirmed enabled — there is no separate confirmation step between opening the page and running its content. An earlier draft withheld the frame behind an explicit "Run" action, reasoning that this bounded a runaway artifact's damage to a deliberately opened tab; that reasoning does not survive the fact that opening the page tab is itself already the deliberate act guarding this, and a second click in front of every single view added friction without a second decision behind it. Listing or linking an artifact still never executes it — only the page's own body mounts the frame, so a list row, a search result, or a backlink stays inert. There is no separate stop control: leaving the page, or switching to another revision, unmounts the frame together with everything it allocated.
 
-The shell displays a persistent indicator that the frame contains sandboxed, agent-authored content, so that a user cannot mistake artifact-rendered chrome for Crowi's own interface.
+The shell displays a persistent indicator that the frame contains sandboxed, agent-authored content, so that a user cannot mistake artifact-rendered chrome for Crowi's own interface. The sandbox and CSP from *Delivery: embedding* bound what a runaway or hostile artifact can do regardless of how its frame came to exist.
 
 ## Resolved decisions
 
@@ -298,7 +298,7 @@ None outstanding. The six questions this RFC carried in draft — allowlist cont
 
 **Phase 3 — Delivery.** The artifact serving route, signed-URL minting and verification, response headers, and Mode A / Mode B configuration with the startup check that disables the feature when neither is configured.
 
-**Phase 4 — Shell.** The page-level rendering surface: placeholder, explicit execution control, sandboxed indicator, revision navigation. Also the surrounding chrome — the widened layout that drops the table-of-contents rail and the body width cap together, the menu with format-specific and undefined actions hidden, the HTML download served as an attachment, and the artifact icon in page lists.
+**Phase 4 — Shell.** The page-level rendering surface: placeholder, automatic execution on open, sandboxed indicator, revision navigation. Also the surrounding chrome — the widened layout that drops the table-of-contents rail and the body width cap together, the menu with format-specific and undefined actions hidden, the HTML download served as an attachment, and the artifact icon in page lists.
 
 **Phase 5 — RFC-0009 amendment.** Generalise the snapshot safety valve from a paste-size heuristic to a diff-to-body ratio test. Separable from the phases above and beneficial to Markdown independently.
 

@@ -56,4 +56,19 @@ describe('PageListItem', () => {
     expect(screen.getByText('2')).toBeTruthy();
     expect(screen.getByText('5')).toBeTruthy();
   });
+
+  // RFC-0020 (AC-CH-6) — artifact is a kind, shown as an icon, never a pill.
+  it('shows the artifact icon (not a pill) for a page with the artifact content-type hint', () => {
+    render(<PageListItem page={makePage({ contentType: 'artifact' })} />);
+    const icon = screen.getByLabelText('HTML artifact page');
+    expect(icon).toBeTruthy();
+    // Icons and pills are visually distinct implementations — an `<svg>`
+    // (lucide) never carries the pill's rounded-badge text content.
+    expect(icon.tagName.toLowerCase()).toBe('svg');
+  });
+
+  it('does not show the artifact icon for a page without the hint', () => {
+    render(<PageListItem page={makePage()} />);
+    expect(screen.queryByLabelText('HTML artifact page')).toBeNull();
+  });
 });

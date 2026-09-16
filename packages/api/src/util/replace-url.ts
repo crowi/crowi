@@ -201,11 +201,15 @@ async function scan(
 
   // Stream-walk so a large install doesn't have to fit in memory. Read each
   // page's CURRENT revision body (the body editors / viewers seed from).
-  const cursor = Page.find(statusFilter(includeTrash)).select('_id path revision').lean().cursor();
+  const cursor = Page.find(statusFilter(includeTrash)).select('_id path revision contentType').lean().cursor();
   for (let page = await cursor.next(); page != null; page = await cursor.next()) {
     pagesScanned++;
-    const pageDoc = page as unknown as { _id: Types.ObjectId; path: string; revision?: Types.ObjectId | null };
+    const pageDoc = page as unknown as { _id: Types.ObjectId; path: string; revision?: Types.ObjectId | null; contentType?: string };
     if (!pageDoc.revision) continue;
+    // RFC-0020 §1 — the Page hint decides eligibility here: artifact
+    // bodies are excluded before the Revision body is even fetched, so
+    // they never enter `pagesMatched` / `occurrences` / samples.
+    if (pageDoc.contentType === 'artifact') continue;
     const rev = (await Revision.findById(pageDoc.revision).select('body').lean()) as { body?: unknown } | null;
     const body = rev?.body;
     if (typeof body !== 'string' || !body.includes(from)) continue;
@@ -233,6 +237,11 @@ async function quietRewrite(crowi: Crowi, pageId: string, from: string, to: stri
 
   const page = await Page.findById(pageId).exec();
   if (!page?.revision) return false;
+  // RFC-0020 §1 — re-confirm the Page hint on this quiet re-read: the scan
+  // ran earlier and a concurrent save could have turned this page into an
+  // artifact page since. A no-op here (not a throw) mirrors the "changed
+  // since the scan — nothing to do" outcome just below.
+  if (page.contentType === 'artifact') return false;
   const currentRev = await Revision.findById(page.revision).exec();
   if (!currentRev || typeof currentRev.body !== 'string') return false;
 
@@ -248,6 +257,11 @@ async function quietRewrite(crowi: Crowi, pageId: string, from: string, to: stri
   // listings and visibility, auditable only via the new revision's author.
   page.revision = newRevision._id;
   page.currentRevision = newRevision._id;
+  // RFC-0020 §1 — the list-view hint is co-written in the SAME save as
+  // the pointer, mirroring `Page.pushRevision`. This path never touches
+  // an artifact Page (guarded above), so the resolved kind is always
+  // 'markdown'.
+  page.contentType = newRevision.contentType ?? 'markdown';
   page.yjsState = null;
   page.yjsCheckpointAt = null;
   await page.save();

@@ -88,6 +88,29 @@ describe('Crowi constructor env validation wiring', () => {
     ).toThrow(/CROWI_ENCRYPTION_KEY/);
   });
 
+  it("feature-html-artifact-delivery-policy §E-4: getArtifactDeliveryEnv() returns validateEnv()'s artifactDelivery value verbatim", () => {
+    const bothUnset = new Crowi(ROOT_DIR, { SECRET_TOKEN: TEST_SECRET_TOKEN } as unknown as NodeJS.ProcessEnv);
+    expect(bothUnset.getArtifactDeliveryEnv()).toEqual({ artifactOrigin: null, crowiOrigin: null });
+
+    const bothSet = new Crowi(ROOT_DIR, {
+      SECRET_TOKEN: TEST_SECRET_TOKEN,
+      CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net',
+      CLIENT_URL: 'https://wiki.example.com',
+    } as unknown as NodeJS.ProcessEnv);
+    expect(bothSet.getArtifactDeliveryEnv()).toEqual({ artifactOrigin: 'https://artifacts.example.net', crowiOrigin: 'https://wiki.example.com' });
+  });
+
+  it("feature-html-artifact-delivery-policy §E-3: CROWI_ARTIFACT_ORIGIN sharing CLIENT_URL's hostname on a different port throws at construction", () => {
+    expect(
+      () =>
+        new Crowi(ROOT_DIR, {
+          SECRET_TOKEN: TEST_SECRET_TOKEN,
+          CROWI_ARTIFACT_ORIGIN: 'https://wiki.example.com:8443',
+          CLIENT_URL: 'https://wiki.example.com',
+        } as unknown as NodeJS.ProcessEnv),
+    ).toThrow(/CROWI_ARTIFACT_ORIGIN/);
+  });
+
   it('feature-unified-signing-secret AC-2: a missing SECRET_TOKEN/WS_TOKEN_SECRET throws before any other boot layer runs', () => {
     expect(
       () =>

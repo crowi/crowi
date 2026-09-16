@@ -216,6 +216,22 @@ describe('Routes /api/search (Hono)', () => {
       });
     });
 
+    it('AC-SC-6: the nested Page surfaces the artifact hint (RFC-0020 §1)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}hit-artifact`, '<html></html>');
+      const Page = crowi.model('Page');
+      await Page.updateOne({ _id: page._id }, { $set: { contentType: 'artifact' } });
+
+      const driver = buildMockDriver({
+        total: 1,
+        hits: [{ id: page._id, path: page.path, snippet: 'hit', score: 1.0 }],
+      });
+      await withMockDriver(driver, async () => {
+        const res = await search(accessToken, { q: 'hit' });
+        expect(res.status).toBe(200);
+        expect(res.body.data[0].page.contentType).toBe('artifact');
+      });
+    });
+
     // AC-4/D-2 — the authorized hit set is enriched in ONE batched call
     // (F-2), and each hit carries its own real likerCount/isLiked.
     it('AC-4: batch-enriches authorized hits with real likerCount/isLiked, in one call', async () => {

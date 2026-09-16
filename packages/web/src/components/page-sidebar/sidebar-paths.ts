@@ -144,6 +144,7 @@ export interface SidebarSelfLink {
   contentPath: string;
   label: string;
   isCurrent: boolean;
+  isArtifact: boolean;
 }
 
 /**
@@ -193,6 +194,7 @@ export function folderPageSelfLink(entry: PageChildSegment | undefined, isCurren
     contentPath: entry.path.replace(/\/$/, ''),
     label: entry.segment,
     isCurrent,
+    isArtifact: entry.contentType === 'artifact',
   };
 }
 

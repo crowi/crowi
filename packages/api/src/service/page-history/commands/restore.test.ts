@@ -198,4 +198,62 @@ describe('service/page-history/commands/restore (RFC-0021 Phase 2c-2a)', () => {
       expect(await PageHistoryEvent.countDocuments({ page: page._id, kind: 'page_restored' })).toBe(1);
     });
   });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    async function createTrashedArtifactPage(originalPath: string) {
+      const page = await Page.create({
+        path: originalPath,
+        creator: user._id,
+        lastUpdateUser: user._id,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        redirectTo: null,
+        grant: Page.GRANT_PUBLIC,
+        status: STATUS_PUBLISHED,
+        grantedUsers: [user._id],
+      });
+      const revision = await Revision.prepareRevision(page, '<html></html>', user, { contentType: 'artifact' });
+      await Page.pushRevision(page, revision, user);
+      await Page.updateOne({ _id: page._id }, { $set: { path: Page.getDeletedPageName(originalPath), status: STATUS_DELETED } });
+      return Page.findById(page._id);
+    }
+
+    test('AC-SC-5: restore preserves the artifact Page pointer/hint', async () => {
+      const page = await createTrashedArtifactPage('/restore-cmd/artifact-1');
+      const revisionIdBefore = String(page.revision);
+      const outcome = await run(page);
+      expect(outcome.status).toBe('committed');
+
+      const raw = await Page.collection.findOne({ _id: page._id });
+      expect(raw.contentType).toBe('artifact');
+      expect(String(raw.revision)).toBe(revisionIdBefore);
+    });
+
+    test('AC-SC-5: resume restore preserves the artifact Page pointer/hint', async () => {
+      const page = await createTrashedArtifactPage('/restore-cmd/artifact-resume');
+      const revisionIdBefore = String(page.revision);
+      const operationId = nextOperationId();
+      await Page.updateOne({ _id: page._id }, { $set: { pendingHistoryEntry: { entryId: new Types.ObjectId(), type: 'page_event' } } });
+      expect((await run(page, operationId)).status).toBe('incomplete');
+
+      await Page.updateOne({ _id: page._id }, { $set: { pendingHistoryEntry: null } });
+      const action = await resumeRestoreCommand(crowi, {
+        page: page._id,
+        fromPath: '/trash/restore-cmd/artifact-resume',
+        toPath: '/restore-cmd/artifact-resume',
+        fromStatus: STATUS_DELETED,
+        fromStatusPresent: true,
+        operationId,
+        actor: user._id,
+        source: 'web',
+        command: 'restore',
+      } as never);
+
+      expect(action).toBe('resumed');
+      const raw = await Page.collection.findOne({ _id: page._id });
+      expect(raw.status).toBe(STATUS_PUBLISHED);
+      expect(raw.contentType).toBe('artifact');
+      expect(String(raw.revision)).toBe(revisionIdBefore);
+    });
+  });
 });

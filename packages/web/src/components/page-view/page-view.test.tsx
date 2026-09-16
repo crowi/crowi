@@ -1,9 +1,9 @@
-import type { PageWithRevision } from '@crowi/api-contract';
+import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
 import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,11 +38,51 @@ vi.mock('@/lib/use-route-focus', () => ({ skipRouteFocusFor }));
 
 // Content leaves are irrelevant to render ORDER of the two banners — stub
 // each with an identifiable marker (their own behaviour has its own tests).
-vi.mock('./page-header', () => ({ PageHeader: () => createElement('div', { 'data-testid': 'page-header-stub' }) }));
+const { pageHeaderProps } = vi.hoisted(() => ({ pageHeaderProps: [] as Array<{ wide?: boolean }> }));
+vi.mock('./page-header', () => ({
+  PageHeader: (props: { wide?: boolean }) => {
+    pageHeaderProps.push(props);
+    return createElement('div', { 'data-testid': 'page-header-stub' });
+  },
+}));
 vi.mock('./page-content', () => ({ PageContent: () => createElement('div', { 'data-testid': 'page-content-stub' }) }));
+vi.mock('./artifact-view', () => ({ ArtifactView: () => createElement('div', { 'data-testid': 'artifact-view-stub' }) }));
 vi.mock('./backlink-list', () => ({ BacklinkList: () => createElement('div', { 'data-testid': 'backlink-list-stub' }) }));
 vi.mock('./attachment-list', () => ({ AttachmentList: () => createElement('div', { 'data-testid': 'attachment-list-stub' }) }));
 vi.mock('@/components/page-comments', () => ({ PageComments: () => createElement('div', { 'data-testid': 'page-comments-stub' }) }));
+
+// RFC-0020 (AC-CH-1/AC-CH-2) — `PageTocColumns` owns its own geometry
+// (`page-toc-columns.test.tsx`); it is stubbed JUST so `toc` / `railActions` /
+// `wide` become inspectable via data attributes AND `railActions` actually
+// renders — a boolean flag alone can't prove the rail-mounted copy-markdown
+// button is (or isn't) in the DOM (AC-CH-2). `children` renders through
+// unchanged, so every other test in this file (banner order,
+// over-encoded-path recovery) is unaffected.
+vi.mock('./page-toc-columns', () => ({
+  PageTocColumns: ({
+    toc,
+    railActions,
+    wide,
+    children,
+  }: {
+    toc: TocEntryResponse[];
+    activeTocId: string | null;
+    railActions?: ReactNode;
+    wide?: boolean;
+    children: ReactNode;
+  }) =>
+    createElement(
+      'div',
+      {
+        'data-testid': 'page-toc-columns-stub',
+        'data-toc-length': String(toc.length),
+        'data-has-rail-actions': String(railActions != null),
+        'data-wide': String(wide === true),
+      },
+      createElement('div', { 'data-testid': 'rail-actions-slot' }, railActions ?? null),
+      children,
+    ),
+}));
 
 import { PageView } from './page-view';
 
@@ -59,6 +99,7 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
       format: 'markdown',
       createdAt: '2026-05-01T00:00:00.000Z',
       author: { _id: 'u1', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
+      contentType: 'markdown',
     },
     latestRevision: 'rev-1',
     creator: null,
@@ -72,7 +113,7 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   } as PageWithRevision;
 }
 
-function renderPageView(page: PageWithRevision) {
+function renderPageView(page: PageWithRevision, usePageOverrides: { isDeleted?: boolean } = {}) {
   usePage.mockReturnValue({
     page,
     isLoading: false,
@@ -83,6 +124,7 @@ function renderPageView(page: PageWithRevision) {
     redirectTo: null,
     isDeleted: false,
     refetch: vi.fn(),
+    ...usePageOverrides,
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
@@ -101,6 +143,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  pageHeaderProps.length = 0;
 });
 
 describe('PageView — a link that arrived percent-encoded twice', () => {
@@ -236,6 +279,120 @@ describe('PageView — RestrictedShareBanner / PortalizeBanner render order (AC6
     renderPageView(makePage({ grant: PageGrantEnum.PUBLIC, status: PageStatusEnum.PUBLISHED }));
 
     expect(screen.queryByText(m['page.share.restricted_banner_title']())).toBeNull();
+    expect(screen.getByRole('button', { name: m['page_list.portalize_banner_action']() })).toBeTruthy();
+  });
+});
+
+function makeArtifactRevision(overrides: Partial<PageWithRevision['revision']> = {}): PageWithRevision['revision'] {
+  return {
+    _id: 'rev-artifact-1',
+    path: '/docs/guide/example',
+    body: '<!doctype html><html><body>hi</body></html>',
+    format: 'artifact',
+    createdAt: '2026-05-01T00:00:00.000Z',
+    contentType: 'artifact',
+    ...overrides,
+  };
+}
+
+describe('PageView — artifact vs Markdown body rendering (feature-html-artifact-shell AC-SH-1, AC-SH-9)', () => {
+  it('renders ArtifactView (not PageContent) for a page whose displayed Revision is an artifact (AC-SH-1)', () => {
+    renderPageView(makePage({ revision: makeArtifactRevision(), latestRevision: 'rev-artifact-1' }));
+
+    expect(screen.getByTestId('artifact-view-stub')).toBeTruthy();
+    expect(screen.queryByTestId('page-content-stub')).toBeNull();
+  });
+
+  it('renders PageContent (not ArtifactView) for a Markdown page (AC-SH-1)', () => {
+    renderPageView(makePage());
+
+    expect(screen.getByTestId('page-content-stub')).toBeTruthy();
+    expect(screen.queryByTestId('artifact-view-stub')).toBeNull();
+  });
+
+  it('never renders ArtifactView on the deleted-page card, even for an artifact-kind Revision (AC-SH-9)', () => {
+    renderPageView(makePage({ revision: makeArtifactRevision(), latestRevision: 'rev-artifact-1' }), { isDeleted: true });
+
+    expect(screen.queryByTestId('artifact-view-stub')).toBeNull();
+    expect(screen.getByTestId('page-content-stub')).toBeTruthy();
+  });
+});
+
+describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-0020)', () => {
+  const TWO_HEADINGS = [
+    { level: 1, text: 'A', anchorId: 'a' },
+    { level: 1, text: 'B', anchorId: 'b' },
+  ];
+
+  // AC-CH-1 — the exact wording of `EMPTY_TOC` here proves this is NOT
+  // simply "the artifact revision happens to have no toc": the artifact
+  // Revision below carries a 2-entry `meta.toc`, and it is still dropped.
+  it('passes an empty toc and no railActions to PageTocColumns for an artifact page, and makes the shell wide so header, body and sections all span the rail', () => {
+    renderPageView(
+      makePage({
+        revision: makeArtifactRevision({ meta: { toc: TWO_HEADINGS } }),
+        latestRevision: 'rev-artifact-1',
+      }),
+    );
+
+    const columns = screen.getByTestId('page-toc-columns-stub');
+    expect(columns.getAttribute('data-toc-length')).toBe('0');
+    expect(columns.getAttribute('data-has-rail-actions')).toBe('false');
+
+    // AC-CH-2 — no rail-mounted copy-markdown button node in the DOM (not
+    // merely a falsy prop): the rail slot the stub renders `railActions`
+    // into is empty for an artifact page.
+    const railSlot = screen.getByTestId('rail-actions-slot');
+    expect(railSlot.textContent).toBe('');
+    expect(screen.queryByRole('button', { name: m['page.action_copy_markdown']() })).toBeNull();
+
+    // W-1 — the shell itself is wide, so the header, the artifact and every
+    // section under it share the widened column; the compact header follows.
+    expect(columns.getAttribute('data-wide')).toBe('true');
+    for (const id of ['page-header-stub', 'artifact-view-stub', 'backlink-list-stub', 'attachment-list-stub', 'page-comments-stub']) {
+      expect(columns.contains(screen.getByTestId(id))).toBe(true);
+    }
+    expect(pageHeaderProps.at(-1)?.wide).toBe(true);
+  });
+
+  // AC-CH-1 (Markdown side of the same contract) / AC-CH-2 — a Markdown
+  // page's toc and rail actions are unaffected by this leaf.
+  it('passes the real toc and a railActions node to PageTocColumns for a Markdown page, rendering the rail copy-markdown button in a normal-width shell', () => {
+    renderPageView(makePage({ revision: { ...makePage().revision, meta: { toc: TWO_HEADINGS } } }));
+
+    const columns = screen.getByTestId('page-toc-columns-stub');
+    expect(columns.getAttribute('data-toc-length')).toBe('2');
+    expect(columns.getAttribute('data-has-rail-actions')).toBe('true');
+
+    // AC-CH-2 — the actual rail-mounted copy-markdown button is present for
+    // a Markdown page (this leaf must not have broken it while adding the
+    // artifact branch).
+    expect(screen.getByRole('button', { name: m['page.action_copy_markdown']() })).toBeTruthy();
+
+    // AC-CH-1 — widening is exclusive to artifact pages.
+    expect(columns.getAttribute('data-wide')).toBe('false');
+    expect(pageHeaderProps.at(-1)?.wide).toBe(false);
+  });
+
+  // AC-CH-5 — the portalize banner is suppressed for an artifact page even
+  // when every other condition that would show it holds (public,
+  // published, has descendants).
+  it('suppresses the portalize banner for an artifact page with descendants, but shows it for an equivalent Markdown page', () => {
+    usePageChildren.mockReturnValue({ data: { children: [{ path: '/docs/guide/example/child', hasChildren: false }] } });
+
+    renderPageView(
+      makePage({
+        revision: makeArtifactRevision(),
+        latestRevision: 'rev-artifact-1',
+        grant: PageGrantEnum.PUBLIC,
+        status: PageStatusEnum.PUBLISHED,
+      }),
+    );
+    expect(screen.queryByRole('button', { name: m['page_list.portalize_banner_action']() })).toBeNull();
+
+    cleanup();
+    usePageChildren.mockReturnValue({ data: { children: [{ path: '/docs/guide/example/child', hasChildren: false }] } });
+    renderPageView(makePage({ grant: PageGrantEnum.PUBLIC, status: PageStatusEnum.PUBLISHED }));
     expect(screen.getByRole('button', { name: m['page_list.portalize_banner_action']() })).toBeTruthy();
   });
 });

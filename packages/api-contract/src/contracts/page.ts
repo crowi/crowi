@@ -42,6 +42,8 @@ import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPa
 import { AutocompleteRateLimitErrorSchema } from '../schemas/autocomplete';
 import { InsufficientScopeErrorSchema } from '../schemas/oauth';
 import {
+  ArtifactContentTypeHeaderSchema,
+  ArtifactWriteRejectionSchema,
   ClaimPageLinkAccessResponseSchema,
   CreatePageRequestSchema,
   GetPageRequestSchema,
@@ -193,6 +195,10 @@ export const createPageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Create a new page',
   request: {
+    // RFC-0020 — optional write discriminator (`markdown | artifact`, exact
+    // lowercase). Omitted = `markdown`. Validated by the handler's own
+    // AI-D01 check, not by this schema (see ArtifactContentTypeHeaderSchema).
+    headers: ArtifactContentTypeHeaderSchema,
     body: {
       content: { 'application/json': { schema: CreatePageRequestSchema } },
     },
@@ -203,12 +209,25 @@ export const createPageRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT)',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description:
+        'Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01)',
+      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
     },
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    413: {
+      description: 'The HTML artifact exceeds the configured size/complexity limit (RFC-0020)',
+      content: { 'application/json': { schema: ArtifactWriteRejectionSchema } },
+    },
+    422: {
+      description: 'HTML artifact delivery is not configured on this server (RFC-0020 AI-D03)',
+      content: { 'application/json': { schema: ArtifactWriteRejectionSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });
@@ -220,6 +239,10 @@ export const updatePageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Update existing page',
   request: {
+    // RFC-0020 — optional write discriminator. Omitted = keep the current
+    // Revision's kind (populated `revision.contentType ?? 'markdown'`), or
+    // `markdown` for a pointerless Page. See ArtifactContentTypeHeaderSchema.
+    headers: ArtifactContentTypeHeaderSchema,
     body: {
       content: { 'application/json': { schema: UpdatePageRequestSchema } },
     },
@@ -230,8 +253,8 @@ export const updatePageRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT)',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description: 'Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01/AI-D02)',
+      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
     },
     401: {
       description: 'Authentication required',
@@ -244,6 +267,18 @@ export const updatePageRoute = createRoute({
     409: {
       description: 'Stale revision_id (someone else updated the page)',
       content: { 'application/json': { schema: PageRevisionErrorSchema } },
+    },
+    413: {
+      description: 'The HTML artifact exceeds the configured size/complexity limit (RFC-0020)',
+      content: { 'application/json': { schema: ArtifactWriteRejectionSchema } },
+    },
+    422: {
+      description: 'HTML artifact delivery is not configured on this server (RFC-0020 AI-D03)',
+      content: { 'application/json': { schema: ArtifactWriteRejectionSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });
@@ -620,6 +655,8 @@ export const revertToRevisionRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Revert a page to one of its past revisions (non-destructive — stacks a new revision)',
   request: {
+    // No content-type header — a revert always re-derives its kind from the
+    // target Revision's own `contentType` (RFC-0020), not from the caller.
     body: {
       content: { 'application/json': { schema: RevertToRevisionRequestSchema } },
     },
@@ -630,8 +667,8 @@ export const revertToRevisionRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page)',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description: 'PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page) / ARTIFACT_WRITE_REJECTED (RFC-0020 AI-D02)',
+      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
     },
     401: {
       description: 'Authentication required',
@@ -640,6 +677,18 @@ export const revertToRevisionRoute = createRoute({
     404: {
       description: 'Page not found (also covers grant-denied)',
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
+    413: {
+      description: 'The stored HTML artifact exceeds the configured size/complexity limit (RFC-0020)',
+      content: { 'application/json': { schema: ArtifactWriteRejectionSchema } },
+    },
+    422: {
+      description: 'HTML artifact delivery is not configured on this server (RFC-0020 AI-D03)',
+      content: { 'application/json': { schema: ArtifactWriteRejectionSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });

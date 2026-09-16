@@ -158,6 +158,10 @@ describe('createSaveFlow.executeSave', () => {
     // The core renderer ran: meta + renderedAst + rendererVersion are stamped.
     expect(rev.meta).toBeDefined();
     expect(rev.rendererVersion).toBeDefined();
+    // RFC-0020 §1 — the collab save flow only ever writes Markdown, and
+    // stamps it explicitly (missing hint on the pointerless seed Page
+    // normalizes through the same resolution as any other writer).
+    expect(rev.contentType).toBe('markdown');
 
     // Page is bumped (revision pointer + currentRevision + yjsState + yjsCheckpointAt).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,6 +171,7 @@ describe('createSaveFlow.executeSave', () => {
     expect(page.currentRevision.toString()).toBe(result.revisionId);
     expect(page.yjsState).toBeTruthy();
     expect(page.yjsCheckpointAt).toBeInstanceOf(Date);
+    expect(page.contentType).toBe('markdown');
 
     // PageYjsUpdate cleared.
     expect(await fixtures.countPending(pageId)).toBe(0);
@@ -1034,6 +1039,56 @@ describe('createSaveFlow.executeSave', () => {
 
       doc.getText(CONTENT_FIELD).insert(0, "this replica does not know about the other replica's rename");
       await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+  });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    test('AC-SC-9: a Page that acquired artifact kind mid-session rejects the save via the pointer CAS, without writing pointer/hint (a genuine but tolerated orphan Revision may still exist)', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Revision = models.Revision as any;
+
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+
+      // Simulate the live doc's Page acquiring artifact kind AFTER this
+      // process materialised it (a writer outside this leaf's scope would
+      // do this; the storage spec's "collaboration の 3 gate" section
+      // explicitly does not close this window at connect time — only the
+      // write-path CAS does). `currentRevision`/epoch are left untouched
+      // so the CAS would otherwise pass on every OTHER predicate.
+      await Page.updateOne({ _id: pageId }, { $set: { contentType: 'artifact' } }).exec();
+
+      const revisionCountBefore = await Revision.countDocuments({}).exec();
+      doc.getText(CONTENT_FIELD).insert(0, 'markdown content that must never land on the artifact Page');
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      // The `prepareRevision` + `newRevision.save()` steps run BEFORE the
+      // CAS (see save-flow.ts's own doc comment on this ordering) — a
+      // Markdown Revision row is a tolerated orphan, never referenced by
+      // any Page pointer.
+      const revisionCountAfter = await Revision.countDocuments({}).exec();
+      expect(revisionCountAfter).toBe(revisionCountBefore + 1);
+
+      // Pointer/hint were never written: the Page still shows artifact
+      // kind and its ORIGINAL (pointerless) pointer state.
+      const after = await Page.findById(pageId).exec();
+      expect(after.contentType).toBe('artifact');
+      expect(after.revision).toBeUndefined();
+      expect(after.currentRevision).toBeNull();
     });
   });
 });

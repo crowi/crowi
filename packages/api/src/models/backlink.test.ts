@@ -197,6 +197,53 @@ describe('Backlink', () => {
     });
   });
 
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    beforeEach(async () => {
+      await Promise.all([Page.deleteMany({}), Revision.deleteMany({}), Backlink.deleteMany({})]);
+    });
+
+    test('AC-SC-11: createBySavedPage never hands an artifact body to linkDetector, and removes existing fromPage backlinks', async () => {
+      const pageId = new mongoose.Types.ObjectId();
+      const revisionId = new mongoose.Types.ObjectId();
+      const targetId = new mongoose.Types.ObjectId();
+      // A pre-existing backlink from a prior Markdown revision of this page.
+      await Backlink.create({ page: targetId, fromPage: pageId, fromRevision: revisionId });
+
+      const savedPage = {
+        _id: pageId,
+        revision: { _id: revisionId, body: `<a href="${crowi.baseUrl}/some/markdown/looking/target">x</a>`, contentType: 'artifact', meta: {} },
+      };
+      const result = await Backlink.createBySavedPage(savedPage);
+      expect(result).toEqual([]);
+      expect(await Backlink.countDocuments({ fromPage: pageId })).toBe(0);
+    });
+
+    test('AC-SC-11: createByAllPages excludes artifact Revisions from full-rebuild candidacy', async () => {
+      const targetPath = '/' + faker.lorem.slug() + '-artifact-target';
+      await Page.createPage(targetPath, '# target', user, {});
+
+      const artifactSourcePath = '/' + faker.lorem.slug() + '-artifact-source';
+      const artifactPage = await Page.createPage(artifactSourcePath, `<a href="${crowi.baseUrl}${targetPath}">link</a>`, user, { contentType: 'artifact' });
+      expect(artifactPage.contentType).toBe('artifact');
+
+      const markdownSourcePath = '/' + faker.lorem.slug() + '-markdown-source';
+      const markdownPage = await Page.createPage(markdownSourcePath, `link: <${targetPath}>`, user, {});
+      // A legacy row that predates the contentType field (missing-kind, not
+      // explicit 'markdown') — createByAllPages must still treat it as Markdown.
+      await Revision.updateOne({ _id: markdownPage.revision._id }, { $unset: { contentType: '' } });
+      await Page.updateOne({ _id: markdownPage._id }, { $unset: { contentType: '' } });
+
+      await crowi.drainSideEffects();
+      await Backlink.deleteMany({});
+
+      const rebuilt = await Backlink.createByAllPages();
+      // Only the Markdown source contributes a backlink; the artifact
+      // source's HTML anchor is never matched against the link regexes.
+      expect(rebuilt.flat()).toHaveLength(1);
+      expect(await Backlink.countDocuments({ fromPage: artifactPage._id })).toBe(0);
+    });
+  });
+
   describe('via pageEvent hooks', () => {
     const PREFIX = '/backlink-event-test/';
 

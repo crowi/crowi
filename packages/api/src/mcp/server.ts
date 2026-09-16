@@ -20,7 +20,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShape } from 'zod';
 
-import type { Dispatch } from './dispatch';
+import type { Dispatch, DispatchInit } from './dispatch';
 import { type McpToolResult, okResult, runTool } from './result';
 import { pageTools } from './tools/page';
 import { searchTools } from './tools/search';
@@ -107,6 +107,17 @@ export interface ToolDescriptor {
   scope: string;
   /** Map the dispatched route's JSON result into an MCP tool result. */
   resultMapper: (body: unknown) => McpToolResult;
+  /**
+   * RFC-0020 §M-2 — derive dispatch headers from the tool's validated input.
+   * Returns `undefined` when the input carries nothing header-worthy (the
+   * common case): no header is sent and nothing is removed from the body.
+   * When it returns a value, `omitFromBody` names the input keys that were
+   * consumed into `headers` and must not also ride along in the JSON body /
+   * query — a header name never maps mechanically to a body field name, so
+   * the tool itself (not `server.ts`) is the one place that knows the
+   * correspondence.
+   */
+  requestFrom?: (args: Record<string, unknown>) => Readonly<{ headers: Record<string, string>; omitFromBody: readonly string[] }> | undefined;
 }
 
 /** Names of `{param}` placeholders in a path template. */
@@ -154,7 +165,16 @@ export const buildMcpServer = (ctx: McpServerContext): McpServer => {
     const handler = async (args: Record<string, unknown>): Promise<McpToolResult> =>
       runTool(async () => {
         const { path, rest } = splicePathParams(tool.path, args ?? {});
-        const init = tool.kind === 'query' ? { query: rest as Record<string, string | number | boolean | undefined | null> } : { json: rest };
+        const requestInfo = tool.requestFrom?.(args ?? {});
+        if (requestInfo) {
+          for (const key of requestInfo.omitFromBody) {
+            delete rest[key];
+          }
+        }
+        const init: DispatchInit = tool.kind === 'query' ? { query: rest as Record<string, string | number | boolean | undefined | null> } : { json: rest };
+        if (requestInfo) {
+          init.headers = requestInfo.headers;
+        }
         const body = await ctx.dispatch(tool.method, path, init);
         return tool.resultMapper(body);
       });

@@ -52,6 +52,14 @@ export interface DispatchInit {
   query?: DispatchQuery;
   /** JSON body for POST / PUT / DELETE dispatches. */
   json?: unknown;
+  /**
+   * Extra headers a tool wants to send (RFC-0020 §M-1, e.g.
+   * `X-Crowi-Page-Content-Type`). `authorization` / `content-type` are
+   * stripped here (case-insensitively) before the caller's own `Authorization`
+   * and `content-type` are applied, so a tool can never override the
+   * dispatcher's own identity or body framing — see `makeDispatch` below.
+   */
+  headers?: Record<string, string>;
 }
 
 /** Serialise a query bag, skipping `undefined` / `null`. */
@@ -66,6 +74,26 @@ const buildQueryString = (query: DispatchQuery): string => {
 };
 
 export type Dispatch = (method: string, path: string, init?: DispatchInit) => Promise<unknown>;
+
+/**
+ * Fetch's `Headers` treats names case-insensitively and CONCATENATES a
+ * repeated name rather than overwriting it, so a caller-supplied
+ * `authorization` (lowercase) would corrupt the real `Authorization` this
+ * dispatcher sets rather than simply losing a shadowing race. Normalising
+ * every surviving key to lowercase here (and applying `Authorization` /
+ * `content-type` afterwards, in `makeDispatch`) is what makes "the caller
+ * can never override these two" true regardless of the case a tool used.
+ */
+const stripAuthAndContentType = (headers: Record<string, string> | undefined): Record<string, string> => {
+  if (!headers) return {};
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = key.toLowerCase();
+    if (lower === 'authorization' || lower === 'content-type') continue;
+    result[lower] = value;
+  }
+  return result;
+};
 
 /**
  * Build a dispatcher bound to a single request's authorization. The
@@ -85,6 +113,7 @@ export const makeDispatch = (honoApp: OpenAPIHono<CrowiHonoBindings>, authorizat
     const res = await honoApp.request(url, {
       method,
       headers: {
+        ...stripAuthAndContentType(init?.headers),
         Authorization: authorization,
         ...(hasJsonBody ? { 'content-type': 'application/json' } : {}),
       },

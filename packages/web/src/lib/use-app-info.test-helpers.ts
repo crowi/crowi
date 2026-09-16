@@ -28,5 +28,6 @@ export const makeAppInfo = (overrides: Partial<AppInfoResponse> = {}): AppInfoRe
   capabilities: [],
   canSelfRegister: true,
   rendererStylesheets: [],
+  artifactDelivery: { enabled: false, origin: null },
   ...overrides,
 });

@@ -188,4 +188,40 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
     const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
     expect(ctx).toEqual({ userId, pageId, readonly: false, epoch: 5 });
   });
+
+  test('AC-SC-9 (RFC-0020 §1): a valid, current-epoch token for an artifact Page is generic-rejected before cap acquire', async () => {
+    const { pageId, userId } = await seedPage({ contentType: 'artifact' });
+    const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 0 });
+
+    let acquireCalled = false;
+    const editorCapCounter = {
+      maxEditorsPerPage: 20,
+      async peek() {
+        return { count: 0, cap: 20 };
+      },
+      async tryAcquire() {
+        acquireCalled = true;
+        return { acquired: true, count: 1, cap: 20 };
+      },
+      async release() {
+        /* nothing */
+      },
+      async disconnect() {
+        /* nothing */
+      },
+    };
+
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page }, editorCapCounter });
+    await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
+    expect(acquireCalled).toBe(false);
+  });
+
+  test('a missing contentType hint (legacy Markdown) still authenticates normally', async () => {
+    const { pageId, userId } = await seedPage();
+    const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 0 });
+
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
+    expect(ctx.epoch).toBe(0);
+  });
 });

@@ -156,7 +156,14 @@ export async function persistYjsState(page: PageModelLike, input: PersistYjsStat
   // deleted page); `collabLifecycleVersion` is added only when
   // `expectedEpoch` is known (see `PersistYjsStateInput.expectedEpoch`'s
   // doc comment for the fail-safe-fallback rationale).
-  const filter: Record<string, unknown> = { _id: input.pageId, status: { $ne: DELETED_STATUS } };
+  // RFC-0020 §1 — artifact Pages never accept a Yjs checkpoint. Matches a
+  // missing field too (legacy Markdown / never-set hint), same as
+  // `status: { $ne: DELETED_STATUS }` above. This is what closes the
+  // window where a live doc's Page acquires artifact kind mid-session
+  // (the 3 connect-time gates in `on-authenticate.ts` / `on-load-document.ts`
+  // can't catch that): the checkpoint falls through to the existing
+  // zero-match `epoch-mismatch` reject below, writing nothing.
+  const filter: Record<string, unknown> = { _id: input.pageId, status: { $ne: DELETED_STATUS }, contentType: { $ne: 'artifact' } };
   if (input.expectedEpoch !== undefined) {
     filter.collabLifecycleVersion = input.expectedEpoch;
   }

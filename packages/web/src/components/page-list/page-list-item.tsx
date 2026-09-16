@@ -4,7 +4,7 @@ import type { Page } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
-import { Compass, Link2, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
+import { Compass, LayoutFreeform, Link2, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -87,6 +87,11 @@ function PageRowBody({ page, isTrash = false, snippet }: { page: Page; isTrash?:
   // (RFC-0004 visibility), so showing the badge to whoever sees the row
   // is safe and signals "this is mine and not yet public".
   const isDraft = page.status === PageStatusEnum.DRAFT;
+  // RFC-0020 — artifact is a kind, not a transient state, so it gets an
+  // icon alongside portal/link-only/private rather than a draft/deleted-style
+  // pill. Read from the denormalized `Page.contentType` hint (list rows don't
+  // always carry a populated revision).
+  const isArtifact = page.contentType === 'artifact';
 
   // `pageDisplayName` collapses a trailing date hierarchy (e.g. `/2026/05/23`)
   // into a single readable title — so a daily-note page shows "2026/05/23"
@@ -122,6 +127,7 @@ function PageRowBody({ page, isTrash = false, snippet }: { page: Page; isTrash?:
           {isPortal && <Compass className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Portal page" />}
           {isLinkOnly && <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Link-only sharing" />}
           {isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private page" />}
+          {isArtifact && <LayoutFreeform className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="HTML artifact page" />}
           {isDraft && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
               {m['page_list.draft_badge']()}

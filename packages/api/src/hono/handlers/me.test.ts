@@ -427,6 +427,29 @@ describe('Routes /api/me (Hono)', () => {
         await crowi.model('Page').deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
       }
     });
+
+    it('AC-SC-6: surfaces the artifact hint (RFC-0020 §1)', async () => {
+      const authHeader = { Authorization: `Bearer ${accessToken}` };
+      const PATH_PREFIX = '/hono-me-rvp-artifact-test/';
+      const Page = crowi.model('Page');
+      const created = await request(app)
+        .post('/api/pages')
+        .set(authHeader)
+        .send({ path: `${PATH_PREFIX}a`, body: '<html></html>' });
+      expect(created.status).toBe(200);
+      await Page.updateOne({ _id: created.body.page._id }, { $set: { contentType: 'artifact' } });
+
+      const lruGetSpy = jest.spyOn(crowi.lru, 'get').mockResolvedValueOnce([created.body.page._id]);
+      try {
+        const res = await request(app).get('/api/me/recently-viewed-pages').set(authHeader);
+        expect(res.status).toBe(200);
+        const found = res.body.pages.find((p: { _id: string }) => p._id === created.body.page._id);
+        expect(found?.contentType).toBe('artifact');
+      } finally {
+        lruGetSpy.mockRestore();
+        await Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
+      }
+    });
   });
 
   describe('POST + DELETE /me/picture', () => {

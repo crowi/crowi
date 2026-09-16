@@ -3,7 +3,24 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Bell, Cloud, Database, HardDrive, Key, KeyRound, Mail, Plug, Search, Server, Settings, Share2, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import {
+  Bell,
+  Cloud,
+  Database,
+  HardDrive,
+  Key,
+  KeyRound,
+  LayoutFreeform,
+  Mail,
+  Plug,
+  Search,
+  Server,
+  Settings,
+  Share2,
+  ShieldCheck,
+  UserCheck,
+  Users,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PluginInfo } from '@crowi/api-contract';
 import { GoogleMark, SlackMark } from '@/components/brand-icons';
@@ -78,6 +95,12 @@ const STATIC_GROUPS: AdminNavGroup[] = [
         label: () => m['admin.nav_security'](),
         icon: ShieldCheck,
         description: () => m['admin.nav_security_summary'](),
+      },
+      {
+        href: '/admin/artifact',
+        label: () => m['admin.nav_artifact'](),
+        icon: LayoutFreeform,
+        description: () => m['admin.nav_artifact_summary'](),
       },
       {
         href: '/admin/auth',

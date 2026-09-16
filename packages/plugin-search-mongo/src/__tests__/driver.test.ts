@@ -2,7 +2,7 @@ import mongoose, { Schema, Types } from 'mongoose';
 
 import type { PluginContext, SearchQuery } from '@crowi/plugin-api';
 
-import { buildSnippet, createMongoSearchDriver } from '../driver';
+import { CANDIDATE_CAP, buildSnippet, createMongoSearchDriver } from '../driver';
 import { keywordRegex } from '../query-builder';
 import { startTestMongo, type TestMongo } from './setup';
 
@@ -16,6 +16,7 @@ interface TestPage {
   grant: number;
   grantedUsers: Types.ObjectId[];
   creator?: Types.ObjectId;
+  contentType?: string;
 }
 interface TestRevision {
   path?: string;
@@ -31,6 +32,7 @@ const PageSchema = new Schema<TestPage>(
     grant: { type: Number, default: 1 },
     grantedUsers: [{ type: Schema.Types.ObjectId }],
     creator: { type: Schema.Types.ObjectId },
+    contentType: { type: String },
   },
   { timestamps: true },
 );
@@ -62,6 +64,7 @@ async function seedPage(opts: {
   redirectTo?: string;
   creator?: Types.ObjectId;
   grantedUsers?: Types.ObjectId[];
+  contentType?: string;
 }): Promise<void> {
   const revision = await Revision.create({ path: opts.path, body: opts.body ?? '' });
   await Page.create({
@@ -72,6 +75,7 @@ async function seedPage(opts: {
     redirectTo: opts.redirectTo,
     creator: opts.creator,
     grantedUsers: opts.grantedUsers ?? [],
+    contentType: opts.contentType,
   });
 }
 
@@ -160,6 +164,47 @@ describe('mongo search driver — query()', () => {
     const driver = createMongoSearchDriver(makeCtx());
     const res = await driver.query({ q: 'topsecret' });
     expect(res.hits.map((h) => h.path)).toEqual(['/live']);
+  });
+
+  describe('RFC-0020 — artifact pages excluded from the BODY pass (AC-CH-9)', () => {
+    it('an artifact page is found by path but never by a body-only match', async () => {
+      // The body keyword ("kumquat") deliberately does not appear anywhere
+      // in the path, so a hit on it can only come from the BODY pass.
+      await seedPage({ path: '/artifact-notes', body: 'this html mentions kumquat deep inside', contentType: 'artifact' });
+      await seedPage({ path: '/other', body: 'no relevant text here' });
+      const driver = createMongoSearchDriver(makeCtx());
+
+      const pathRes = await driver.query({ q: 'artifact-notes' });
+      expect(pathRes.hits.map((h) => h.path)).toEqual(['/artifact-notes']);
+
+      const bodyRes = await driver.query({ q: 'kumquat' });
+      expect(bodyRes.hits).toEqual([]);
+    });
+
+    it('does not let a surplus of artifact pages push a Markdown body hit out of the candidate cap', async () => {
+      // Consume the whole candidate cap with artifact pages first — none of
+      // them carry a Revision (irrelevant to this exclusion; they only need
+      // to occupy candidate slots). Inserted before the Markdown page below
+      // so a fresh collection's natural (insertion) order puts them ahead of
+      // it — exactly the ordering that would truncate the Markdown page out
+      // of `.limit(CANDIDATE_CAP)` if the exclusion were applied AFTER the
+      // limit instead of as part of the query itself.
+      const artifactFlood = Array.from({ length: CANDIDATE_CAP + 1 }, (_, i) => ({
+        path: `/artifact-flood-${i}`,
+        status: 'published',
+        grant: 1,
+        grantedUsers: [],
+        contentType: 'artifact',
+      }));
+      await Page.insertMany(artifactFlood);
+
+      await seedPage({ path: '/markdown-needle', body: 'the term needle-term appears here' });
+
+      const driver = createMongoSearchDriver(makeCtx());
+      const res = await driver.query({ q: 'needle-term' });
+
+      expect(res.hits.map((h) => h.path)).toEqual(['/markdown-needle']);
+    });
   });
 
   describe('grant-aware filtering', () => {

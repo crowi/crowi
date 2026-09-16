@@ -54,8 +54,8 @@ The tools a client sees after connecting to `/api/mcp`.
 | `crowi_get_revision` | Read the body of one revision | `pages:read` |
 | `crowi_get_backlinks` | List the pages linking to this one | `pages:read` |
 | `crowi_autocomplete_pages` | Suggest page paths | `pages:read` |
-| `crowi_create_page` | Create a page | `pages:write` |
-| `crowi_update_page` | Update a page | `pages:write` |
+| `crowi_create_page` | Create a page (optional `content_type`: `markdown` or `artifact`) | `pages:write` |
+| `crowi_update_page` | Update a page (optional `content_type`: `markdown` or `artifact`) | `pages:write` |
 | `crowi_rename_page` | Rename or move a page | `pages:write` |
 | `crowi_delete_page` | Move a page to the trash (or delete it outright) | `pages:write` |
 | `crowi_revert_page` | Restore a page from the trash | `pages:write` |

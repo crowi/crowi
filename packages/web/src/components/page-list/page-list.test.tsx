@@ -9,10 +9,11 @@ vi.mock('@/lib/use-page-list', () => ({ usePageList }));
 vi.mock('@/lib/use-auth', () => ({ useAuth: () => ({ user: null }) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('next/link', () => nextLinkMockModule());
-// The header / banner / body pieces render nothing these tests look at, and
-// pull in the renderer and the api client.
+// The header / banner / body pieces pull in the renderer and the api client.
+// The banner is a stub rather than `null` because whether page-list renders
+// it at all is what the portalize-banner tests below look at.
 vi.mock('@/components/page-view/page-content', () => ({ PageContent: () => null }));
-vi.mock('@/components/page-view/portalize-dialog', () => ({ PortalizeBanner: () => null }));
+vi.mock('@/components/page-view/portalize-dialog', () => ({ PortalizeBanner: () => <div data-testid="portalize-banner-stub" /> }));
 vi.mock('@/components/create-page/create-page-dialog', () => ({ CreatePageCtaButton: () => null, CreatePageListButton: () => null }));
 vi.mock('./portal-header', () => ({ PortalHeader: () => null, PortalOverline: () => null }));
 
@@ -61,5 +62,23 @@ describe('PageList of a folder whose path is also a page', () => {
 
     expect(row('/xxx/yyy/aa/bb')).not.toBeNull();
     expect(row('/xxx/yyy/aa')).toBeNull();
+  });
+});
+
+describe('PageList — portalize banner at the content-page fallback (RFC-0020, AC-CH-5)', () => {
+  it('shows the portalize banner when the content page at the stripped path is Markdown', () => {
+    serve({ contentPage: makePage({ _id: 'id:/foo', path: '/foo', contentType: 'markdown' }) });
+    render(<PageList initialParams={{ path: '/foo/' }} disableCreatePortal />);
+
+    expect(screen.queryByTestId('portalize-banner-stub')).not.toBeNull();
+  });
+
+  it('hides the portalize banner when the content page at the stripped path is an artifact', () => {
+    serve({ contentPage: makePage({ _id: 'id:/foo', path: '/foo', contentType: 'artifact' }) });
+    render(<PageList initialParams={{ path: '/foo/' }} disableCreatePortal />);
+
+    expect(screen.queryByTestId('portalize-banner-stub')).toBeNull();
+    // The page itself is still listed — only the banner is withheld.
+    expect(row('/foo')).not.toBeNull();
   });
 });

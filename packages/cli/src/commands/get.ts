@@ -10,9 +10,9 @@ import { requireProfile } from './_shared';
 
 /**
  * The `GET /api/pages` response (GetPageResponseSchema). Parsed
- * leniently — only the fields the CLI reads are declared. The markdown body
- * lives at `page.revision.body`; the current revision id (needed by `edit`)
- * at `page.revision._id`.
+ * leniently — only the fields the CLI reads are declared. The body (markdown
+ * or, for an artifact page, HTML) lives at `page.revision.body`; the current
+ * revision id (needed by `edit`) at `page.revision._id`.
  */
 interface GetPageResponse {
   page?: {
@@ -20,20 +20,22 @@ interface GetPageResponse {
     path?: string;
     grant?: number;
     updatedAt?: string;
+    contentType?: string;
     revision?: {
       _id?: string;
       body?: string;
       author?: unknown;
       createdAt?: string;
+      contentType?: string;
     };
   };
 }
 
 /**
  * Shared implementation for `get` and its `cat` alias. Fetches a page via
- * `GET /api/pages` (`pages:read`) and, in human mode, writes the raw
- * markdown body to stdout (pipe-friendly — no trailing chatter). `--json`
- * emits the page meta + body as structured JSON.
+ * `GET /api/pages` (`pages:read`) and, in human mode, writes the raw body
+ * (markdown, or HTML for an artifact page) to stdout (pipe-friendly — no
+ * trailing chatter). `--json` emits the page meta + body as structured JSON.
  */
 async function runGet(pathOrId: string, options: { revision?: string }, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
@@ -75,29 +77,35 @@ async function readReferenceFromStdin(): Promise<string> {
   return first;
 }
 
-/** Render a fetched page: markdown body to stdout (human) or full JSON. */
+/** Render a fetched page: body to stdout (human) or full JSON. */
 function printPage(body: GetPageResponse, _profile: Profile, globals: GlobalOptions): void {
   const page = body.page ?? {};
-  const markdown = page.revision?.body ?? '';
+  const text = page.revision?.body ?? '';
+  // RFC-0020 §R-1/R-3b — the SELECTED revision's own kind (the one
+  // `--revision <id>` chose, when given) is authoritative; `page.contentType`
+  // is only the current-kind hint, read here as a fallback for a response
+  // with no populated revision.
+  const contentType = page.revision?.contentType ?? page.contentType;
   render(
     {
       path: page.path,
       pageId: page._id,
       revisionId: page.revision?._id,
       updatedAt: page.updatedAt,
-      body: markdown,
+      contentType,
+      body: text,
     },
     // Human mode: the body alone, so `crowi get <path> > file.md` works.
-    () => markdown,
+    () => text,
     globals,
   );
 }
 
-/** `crowi get <path-or-id>` — print a page's markdown body. */
+/** `crowi get <path-or-id>` — print a page's body (markdown, or HTML for an artifact page). */
 export function registerGet(program: Command): void {
   program
     .command('get <path-or-id>')
-    .description("Print a page's markdown body (pipe-friendly; --json for metadata)")
+    .description("Print a page's body — markdown, or HTML for an artifact page (pipe-friendly; --json for metadata)")
     .option('--revision <id>', 'fetch a specific revision instead of the latest')
     .action(async (pathOrId: string, options: { revision?: string }, command: Command) => {
       await runGet(pathOrId, options, command);
@@ -108,7 +116,7 @@ export function registerGet(program: Command): void {
 export function registerCat(program: Command): void {
   program
     .command('cat <path-or-id>')
-    .description("Alias of `get` — print a page's markdown body")
+    .description("Alias of `get` — print a page's body (markdown, or HTML for an artifact page)")
     .option('--revision <id>', 'fetch a specific revision instead of the latest')
     .action(async (pathOrId: string, options: { revision?: string }, command: Command) => {
       await runGet(pathOrId, options, command);

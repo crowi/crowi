@@ -347,6 +347,62 @@ describe('createElasticsearchDriver rebuild() — per-flush-batch like counts (f
   });
 });
 
+describe('createElasticsearchDriver rebuild() — RFC-0020 artifact body exclusion (AC-CH-8)', () => {
+  function fakePageStreamDoc(id: string, overrides?: Partial<PageStreamDoc>): PageStreamDoc {
+    return {
+      _id: id,
+      path: `/${id}`,
+      redirectTo: null,
+      status: 'published',
+      grant: 1,
+      creator: { username: 'alice' },
+      revision: { body: 'body text' },
+      commentCount: 0,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      ...overrides,
+    };
+  }
+
+  it('empties body for an artifact page while keeping its path, and keeps body for a Markdown page', async () => {
+    const docs = [fakePageStreamDoc('artifact-1', { contentType: 'artifact' }), fakePageStreamDoc('markdown-1')];
+
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)), {
+      iteratePages: async (handler) => {
+        for (const doc of docs) await handler(doc);
+      },
+      countAllPages: async () => docs.length,
+      getBookmarkCountsBulk: async () => new Map(),
+      getLikeCountsBulk: async (pageIds) => new Map(pageIds.map((id) => [id, 0])),
+    });
+
+    const client = driver.client as unknown as {
+      indices: { create: jest.Mock; existsAlias: jest.Mock; updateAliases: jest.Mock; delete: jest.Mock };
+      cat: { aliases: jest.Mock; indices: jest.Mock };
+      bulk: jest.Mock;
+    };
+    client.indices.create = jest.fn().mockResolvedValue({});
+    client.indices.existsAlias = jest.fn().mockResolvedValue(false);
+    client.indices.updateAliases = jest.fn().mockResolvedValue({});
+    client.indices.delete = jest.fn().mockResolvedValue({});
+    client.cat.aliases = jest.fn().mockResolvedValue([]);
+    client.cat.indices = jest.fn().mockResolvedValue([]);
+    const operations: Array<Record<string, unknown>> = [];
+    client.bulk = jest.fn(async ({ operations: ops }: { operations: Array<Record<string, unknown>> }) => {
+      operations.push(...ops);
+      return { errors: false, took: 1 };
+    });
+
+    await driver.rebuild?.();
+
+    const sources = operations.filter((op) => 'path' in op) as Array<{ path: string; body: string }>;
+    const artifactSource = sources.find((s) => s.path === '/artifact-1');
+    const markdownSource = sources.find((s) => s.path === '/markdown-1');
+    expect(artifactSource?.body).toBe('');
+    expect(markdownSource?.body).toBe('body text');
+  });
+});
+
 describe('createElasticsearchDriver query() user-count caching', () => {
   it('caches countUsers() across query calls', async () => {
     const countUsers = jest.fn(async () => 42);

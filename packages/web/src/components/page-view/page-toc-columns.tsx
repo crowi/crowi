@@ -1,6 +1,7 @@
 'use client';
 
 import type { TocEntryResponse } from '@crowi/api-contract';
+import { cn } from '@/lib/utils';
 import { PageToc } from './page-toc';
 
 /**
@@ -37,6 +38,12 @@ import { PageToc } from './page-toc';
  * which this column cannot see, so it must not gate the column on it.
  * Narrower viewports reach the same actions through the page dotmenu.
  *
+ * `wide` is for a body with nothing to put in the rail at all (an HTML
+ * artifact page): the rail column is not drawn and the content column takes
+ * its width from 1280, so the whole page column — header, body, sections —
+ * spans the pair. The group keeps its total width and the content its left
+ * edge, and `data-toc-columns="wide"` lets the app header follow.
+ *
  * Shared by the single-page view (`PageView`) and the portal listing
  * (`PageList`), so both render the same TOC rail over their body's headings.
  * Children own their vertical rhythm (the slot adds none).
@@ -45,25 +52,29 @@ export function PageTocColumns({
   toc,
   activeTocId,
   railActions,
+  wide = false,
   children,
 }: {
   toc: TocEntryResponse[];
   activeTocId: string | null;
   /** Page-level controls pinned under the TOC (see this file's header). */
   railActions?: React.ReactNode;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const hasToc = toc.length >= 2;
   return (
-    <div data-toc-columns className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-[var(--shell-gap)] px-4">
+    <div data-toc-columns={wide ? 'wide' : ''} className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-[var(--shell-gap)] px-4">
       <div aria-hidden className="hidden w-[var(--shell-rail)] shrink-0 min-[1440px]:block" />
-      <div className="w-full min-w-0 max-w-[var(--shell-content)]">{children}</div>
-      <div className="hidden w-[var(--shell-rail)] shrink-0 min-[1280px]:block">
-        <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-3">
-          {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
-          {railActions}
+      <div className={cn('w-full min-w-0 max-w-[var(--shell-content)]', wide && 'min-[1280px]:max-w-[var(--shell-pair)]')}>{children}</div>
+      {!wide && (
+        <div className="hidden w-[var(--shell-rail)] shrink-0 min-[1280px]:block">
+          <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-3">
+            {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
+            {railActions}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
