@@ -11,7 +11,7 @@ const debug = Debug('crowi:util:mail-token');
  * Distinct from the WebSocket issuers (`crowi-collab` / `crowi-presence`
  * / `crowi-notifications`, see `util/ws-token.ts` et al.) and the HTTP
  * access/refresh issuer (`crowi`). All of these share the same
- * `WS_TOKEN_SECRET` key material but verify against different `iss`
+ * `SECRET_TOKEN` key material but verify against different `iss`
  * claims, so a token minted for one channel is never replayable against
  * another. A single mail-token issuer is reused across invite /
  * activate / reset; the `purpose` claim (verified per endpoint) scopes

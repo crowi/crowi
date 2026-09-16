@@ -1,39 +1,34 @@
 # @crowi/collab
 
-Standalone Hocuspocus host process for Crowi 2.0's realtime collaborative
-editing feature (RFC-0003). Runs out-of-band from `@crowi/api` on a
-dedicated WebSocket port and reuses the api package's Mongoose model
-factories so schemas never drift between the two processes.
+Hocuspocus engine for Crowi 2.0's realtime collaborative editing feature
+(RFC-0003). Attached as a library inside the `@crowi/api` process itself
+(`src/collab/attach.ts`) — there is no separate collab process, port, or
+Mongoose connection to run or configure; `pnpm dev` boots it as part of the
+api.
 
 ## Quick start (dev)
 
 ```bash
 docker compose up -d        # mongo / redis
 pnpm install
-pnpm --filter @crowi/api build
-pnpm --filter @crowi/collab dev
+pnpm dev                    # boots api (with collab attached), web, plugins
 ```
-
-The root `pnpm dev` script also starts `@crowi/collab` alongside `api` /
-`web` / contracts / plugins.
 
 ## Environment variables
 
-| Variable           | Default                       | Meaning                                                                 |
-| ------------------ | ----------------------------- | ----------------------------------------------------------------------- |
-| `COLLAB_PORT`      | `3302`                        | TCP port for the Hocuspocus HTTP/WebSocket server.                      |
-| `COLLAB_HOST`      | `0.0.0.0`                     | Bind address.                                                           |
-| `MONGO_URI`        | `mongodb://localhost/crowi`   | MongoDB connection string. Must match the api process.                  |
-| `WS_TOKEN_SECRET`  | _(random per process)_        | JWT signing secret for the short-lived wsToken. **Must** match the api / every collab instance in a multi-server deployment — otherwise tokens minted by one node cannot be verified by another. |
-| `NODE_ENV`         | _(unset)_                     | `production` silences the Hocuspocus start screen.                      |
+Collab has no environment variables of its own — it reads everything through
+the `@crowi/api` process that attaches it:
 
-## Architecture (Phase 3 scope)
+| Variable        | Meaning                                                                 |
+| --------------- | ------------------------------------------------------------------------ |
+| `MONGO_URI`     | MongoDB connection — shared with the api's own Mongoose connection.      |
+| `SECRET_TOKEN`  | The api's mandatory unified signing secret (`WS_TOKEN_SECRET` is a legacy alias) — collab's wsTokens are signed/verified with the same value as every other Crowi JWT/HMAC channel. **Must** be identical across every api replica in a multi-instance deployment, otherwise a wsToken minted on one replica cannot be verified by another. Boot aborts if it is unset, empty, whitespace-only, or a known placeholder — see the root `.env.example` and `docs/operations/realtime-collab` for the full contract. |
+| `REDIS_URL`     | When set, `@hocuspocus/extension-redis` is attached automatically so multi-instance deployments fan out Y.Doc updates/awareness via Redis pub/sub. |
 
-- Boots its own Mongoose connection — no `Crowi` class, no plugin
-  registry, no config service. Heavy startup paths live in `@crowi/api`.
-- Loads model factories from `@crowi/api/dist/models/*` dynamically
-  (same `require.resolve` pattern as `@crowi/admin-cli`) so a workspace
-  symlink in dev and an npm install in prod resolve identically.
+## Architecture
+
+- Shares the api process's Mongoose connection and model factories — no
+  separate connection, no plugin registry, no config service of its own.
 - Hooks:
   - `onAuthenticate` — verifies the wsToken (Phase 2 util), enforces
     `pageId === documentName`, confirms the page exists, and rolls in

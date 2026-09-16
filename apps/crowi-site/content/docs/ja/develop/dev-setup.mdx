@@ -31,7 +31,11 @@ docker compose up -d
 # 4. 環境変数ファイルを用意
 cp .env.example .env
 
-# 5. api + web + プラグインを起動
+# 5. 必須の署名鍵を生成して .env に設定する (api はこれが無いと起動しない)
+openssl rand -base64 32
+# 出力値を .env の SECRET_TOKEN= に貼り付ける
+
+# 6. api + web + プラグインを起動
 pnpm dev
 ```
 
@@ -39,7 +43,7 @@ pnpm dev
 
 `:4304` は api と web を前段でまとめる同一オリジンの reverse proxy です (Caddy があれば Caddy、無ければ依存ゼロの node フォールバック)。**dev の正式な入口はここだけ** で、素の web ポート `:4302` を直接開くとリアルタイム共同編集・プレゼンス・通知の WebSocket がつながりません。
 
-`.env.example` の初期値のままでも起動しますが、`CROWI_ENCRYPTION_KEY` の設定を推奨します。未設定だと機密設定が平文で保存され、起動時に警告が出ます。
+`SECRET_TOKEN` は `.env.example` では空のままなので、**必ず値を設定してから** `pnpm dev` を実行してください。未設定・空白のみ・既知の placeholder のままだと api は起動に失敗します。`CROWI_ENCRYPTION_KEY` の設定も推奨します — こちらは未設定でも起動しますが、機密設定が平文で保存され、起動時に警告が出ます。
 
 ```bash
 pnpm --filter @crowi/api crypto:gen-key

@@ -156,7 +156,7 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
       debug('reject: wsToken verify failed');
       // §6 — prod-visible (sampled): a verify failure is the #1 cause of
       // the "closed before established" report (expired token / wrong or
-      // unshared WS_TOKEN_SECRET across replicas / clock skew).
+      // unshared SECRET_TOKEN across replicas / clock skew).
       sampledWarn(
         `onAuthenticate rejected a connection: wsToken verify failed for document ${String(documentName)} (expired / bad signature / secret mismatch / clock skew)`,
       );

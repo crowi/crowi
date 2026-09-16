@@ -66,6 +66,25 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Lint must be errors=0** (warnings tolerated). pre-push lefthook enforces.
 - **Format**: Biome auto-runs on staged files (lefthook pre-commit). `pnpm
   format` only when bypassing hooks.
+- **Why the `next dev` scripts start with `env -u`**: `next dev` writes
+  `AGENTS.md` + `CLAUDE.md` into the Next app's directory whenever it detects
+  an AI coding agent in the environment, and re-creates them every start, so
+  they kept reappearing as untracked files in main and in every worktree.
+  Next offers no opt-out flag (`node_modules/next/dist/server/lib/generate-agent-files.js`),
+  and the detector only ever answers "yes" — so the dev scripts in
+  `packages/web` and `apps/crowi-site`, and `packages/e2e`'s `start:web`,
+  unset the variables it reads. Do not drop that prefix; the files come
+  straight back.
+- **Why `packages/e2e`'s `start:web` sets `WATCHPACK_POLLING=true`**: macOS
+  shares one small FSEvents stream pool (~320) across the whole machine, and
+  when it is exhausted libuv reports `EMFILE: too many open files, watch` to
+  every `fs.watch` in the loop — even to a process holding a handful of
+  descriptors, so raising `ulimit` does nothing. Next watches its `distDir`
+  through Watchpack, reads that error as "the directory was deleted", and
+  restarts itself, forever: the e2e run then dies on Playwright's 120s
+  `webServer` timeout instead of on anything to do with the tests. Polling
+  sidesteps the pool. Measured with fault injection: 63 restarts and no
+  response without it, one clean `Ready` and HTTP 200 with it.
 - **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
   build` to regenerate dts before api/web consumers pick them up (turbo `^build`
   handles this in `dev` / `build` / `test`).
@@ -104,6 +123,22 @@ operators the api's `dotenv.config()` reads the `.env` in the process cwd (the
 runner project dir); the Docker image gets these from the container env instead.
 Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
+- `SECRET_TOKEN` — **required**, boot aborts if it is unset, empty,
+  whitespace-only, or a known placeholder value. The single signing secret
+  for every JWT/HMAC the api issues: Web session access/refresh tokens,
+  OAuth access tokens, OAuth sign-in state, and the realtime collab /
+  presence / notifications / mail tokens (`util/signed-token-factory.ts#resolveSignedTokenSecret`
+  is the sole runtime resolver — nothing reads it from the DB `Config`
+  collection). Must be at least 32 characters (shorter only warns outside
+  production). Generate with `openssl rand -base64 32`. **Must be identical
+  across every api replica** in a deployment — a token minted on replica A
+  must verify on replica B. `WS_TOKEN_SECRET` is accepted as a legacy alias
+  (checked first, so an existing deployment that only ever set that name
+  keeps working); setting both to different values only warns once, naming
+  which one wins, never the values. Rotating this value invalidates every
+  outstanding Web session, OAuth access token, and OAuth sign-in state —
+  roll out with a drain-first sequence (stop old replicas, then start new
+  ones with the new value), never a live mixed-fleet rotation.
 - `REDIS_URL` — session / socket.io adapter + realtime-collab pub/sub
   (`@hocuspocus/extension-redis`) + per-page editor cap counter. **Required
   for multi-instance api deployments**; optional in single-instance dev.
@@ -114,12 +149,6 @@ Required / commonly-set:
   `pnpm --filter @crowi/api crypto:gen-key`. Optional but strongly recommended;
   when missing, sensitive values are stored as plaintext (legacy mode) and a
   warning is logged on boot.
-- `WS_TOKEN_SECRET` — HMAC signing key for the short-lived wsToken (JWT) used
-  to authenticate Hocuspocus WebSocket upgrades. **Must be identical across all
-  api replicas** in multi-instance deployments — a token minted on replica A
-  may be verified on replica B, and a mismatch leaves clients unable to
-  connect. If unset, a random secret is generated per process and a warning is
-  logged (acceptable only for single-instance development).
 - `COLLAB_MAX_EDITORS_PER_PAGE` — per-page simultaneous-editor cap (default
   `20`). The 21st editor and beyond receive read-only realtime updates.
 - `NEXT_PUBLIC_COLLAB_URL` — optional. The WebSocket URL the browser dials.

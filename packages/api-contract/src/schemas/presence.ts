@@ -40,7 +40,7 @@ export type PresenceTokenResponse = z.infer<typeof PresenceTokenResponseSchema>;
 
 /**
  * Decoded payload of the short-lived presence token JWT. The api signs
- * this with `WS_TOKEN_SECRET` (same secret as the collab wsToken, but a
+ * this with `SECRET_TOKEN` (same secret as the collab wsToken, but a
  * distinct `iss` claim) and the `/presence` WebSocket handler verifies
  * it on connect.
  */

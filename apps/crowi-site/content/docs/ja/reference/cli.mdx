@@ -51,6 +51,8 @@ description: crowi コマンドのサブコマンド・フラグ・終了コー�
 | `bookmark add <path-or-id>` | ブックマークに追加する | — | `bookmarks:write` |
 | `bookmark remove <path-or-id>` | ブックマークから外す | — | `bookmarks:write` |
 
+`mv` と `rm` (`--completely` を除く) は、実行のたびに鍵を自動生成してリクエストに付け、通信の都合で同じリクエストがサーバへ二重に届いても 1 回しか適用されないようにします。利用者が鍵を意識したり指定したりする必要はありません。ただし、コマンドを自分でもう一度実行するのは別の操作として扱われ重複排除の対象にはなりません — `rm /some/page` を 2 回実行すれば削除も 2 回試みられます。`rm --completely` も鍵は送りますが、hard delete の経路はその鍵を読まないため、この保護の対象外です。
+
 ## 出力フォーマット
 
 `search` と `ls` は `--format` / `--template` で出力を整形できます。

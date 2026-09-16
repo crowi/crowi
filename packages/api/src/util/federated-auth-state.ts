@@ -12,17 +12,19 @@
  * State cookie wire format: `base64url(JSON(payload)) + '.' + base64url(
  * HMAC-SHA256(payload))`. The HMAC key is derived via HKDF-SHA-256
  * (`info = "crowi:oauth-state-hmac:v1"`) from the SAME secret source
- * `util/jwt.ts#createJwtUtil` signs JWTs with (`app:secret` / `SECRET_TOKEN`
- * / the same `'your-secret-key'` fallback) — but HKDF derives a distinct
- * 32-byte key, so this cookie's HMAC key is never the JWT signing key
- * itself (design decision: a compromise of one must not cross-apply to the
- * other).
+ * `util/jwt.ts#createJwtUtil` signs JWTs with
+ * (`util/signed-token-factory.ts#resolveSignedTokenSecret`) — but HKDF
+ * derives a distinct 32-byte key, so this cookie's HMAC key is never the
+ * JWT signing key itself (design decision: a compromise of one must not
+ * cross-apply to the other).
  */
 
 import type { webcrypto } from 'node:crypto';
 import crypto from 'node:crypto';
 
 import type Crowi from 'src/crowi';
+
+import { resolveSignedTokenSecret } from './signed-token-factory';
 
 /** `Max-Age` for the state cookie — 300 seconds (RFC-0014 phase 1 §"契約・不変条件"). Also the sign-in-state / link-state TTL used throughout this module. */
 const STATE_TTL_MS = 5 * 60 * 1000;
@@ -284,19 +286,6 @@ export function timingSafeEqualStrings(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-/**
- * Build the state-cookie HMAC key from the SAME secret source
- * `util/jwt.ts#createJwtUtil` reads (kept as a literal duplicate — not a
- * shared import — so this module never has to import from `crowi/index`'s
- * `Crowi` class, and so a future change to `createJwtUtil`'s fallback chain
- * is a deliberate, reviewable two-file diff rather than an invisible
- * cross-module coupling).
- */
-function resolveAppSecret(crowi: Pick<Crowi, 'getConfig'>): string {
-  const config = crowi.getConfig();
-  return (config.crowi['app:secret'] as string | undefined) || (config.crowi['SECRET_TOKEN'] as string | undefined) || 'your-secret-key';
-}
-
 /** Verify an HMAC-signed `<payloadB64>.<mac>` cookie value against `key`; returns the decoded JSON payload (unvalidated shape) or `null` for any signature/decode failure. Shared by sign-in `verify`, `verifyLink`, and `planLinkCookiePrune`'s per-token scan. */
 function verifySignedCookieValue(key: Buffer, cookieValue: string): unknown {
   const dot = cookieValue.lastIndexOf('.');
@@ -327,8 +316,13 @@ function parseRawCookieTokens(cookieHeader: string | undefined): string[] {
     .filter((token) => token.length > 0);
 }
 
-export function createFederatedAuthStateUtil(crowi: Pick<Crowi, 'getConfig' | 'node_env'>): FederatedAuthStateUtil {
-  const key = deriveStateHmacKey(resolveAppSecret(crowi));
+/**
+ * `crowi` is narrowed to `Pick<Crowi, 'node_env'>`: the signing secret comes
+ * from `util/signed-token-factory.ts#resolveSignedTokenSecret` (env), not
+ * `crowi.getConfig()`/DB, so this module no longer needs `getConfig` at all.
+ */
+export function createFederatedAuthStateUtil(crowi: Pick<Crowi, 'node_env'>): FederatedAuthStateUtil {
+  const key = deriveStateHmacKey(resolveSignedTokenSecret());
 
   const decodeLinkCookieForPrune = (value: string): { expiresAt: number } | null => {
     const parsed = verifySignedCookieValue(key, value);

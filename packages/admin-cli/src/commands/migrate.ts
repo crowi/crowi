@@ -99,12 +99,15 @@ async function withMigrationApi(fn: (api: MigrationCliApi) => Promise<void>): Pr
     process.exit(1);
   }
 
-  const crowi = new loaded.Crowi(process.cwd(), process.env);
+  // `let`, not `const`: the constructor itself can throw (e.g. an invalid
+  // SECRET_TOKEN), and the catch below must not touch an uninitialised binding.
+  let crowi: ApiCrowi | undefined;
   try {
+    crowi = new loaded.Crowi(process.cwd(), process.env);
     await crowi.initForCli();
   } catch (err) {
     console.error('crowi-admin: failed to initialise Crowi:', (err as Error).message);
-    await crowi.teardownForCli().catch(() => undefined);
+    await crowi?.teardownForCli().catch(() => undefined);
     process.exit(1);
   }
 

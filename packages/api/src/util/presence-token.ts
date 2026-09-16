@@ -11,7 +11,7 @@ import { createSignedTokenUtil } from './signed-token-factory';
  * replayable against the collab WebSocket — `/collab` carries write
  * access to the Y.Doc, `/presence` is read-only viewer tracking — so
  * the two channels verify against different `iss` claims even though
- * they share the same `WS_TOKEN_SECRET` key material.
+ * they share the same `SECRET_TOKEN` key material.
  */
 const PRESENCE_TOKEN_ISSUER = 'crowi-presence';
 
@@ -40,8 +40,8 @@ export interface SignPresenceTokenResult {
 /**
  * Thin wrapper around `createSignedTokenUtil` (secret resolution —
  * placeholder rejection included — memoization, sign, verify all live
- * there now; see `util/signed-token-factory.ts`). Presence reuses
- * `WS_TOKEN_SECRET` rather than introducing a new env: the two token
+ * there now; see `util/signed-token-factory.ts`). Presence reuses the
+ * unified `SECRET_TOKEN` rather than introducing a new env: the two token
  * kinds are isolated by their `iss` claim, so sharing the key material
  * is safe and keeps operators from having to distribute a second
  * secret.

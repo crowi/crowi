@@ -36,14 +36,18 @@ const debug = Debug('crowi:util:signed-token-factory');
  * notifications WebSocket reconnect storm when WS_TOKEN_SECRET is
  * unset"): a mint request and a later verify (almost always a different
  * `createXTokenUtil()` call) must resolve to the *same* secret even
- * when `WS_TOKEN_SECRET` is unset, otherwise every handshake fails and
- * the client retries in an unthrottled loop. This factory standardises
- * on that fallback-secret-only strategy so the fix — and any future
- * one — applies to all four channels at once.
+ * when the configured secret (`SECRET_TOKEN`, or its legacy alias
+ * `WS_TOKEN_SECRET`) is unset, otherwise every handshake fails and the
+ * client retries in an unthrottled loop. This factory standardises on
+ * that fallback-secret-only strategy so the fix — and any future one —
+ * applies to all four channels at once.
  */
 
 /** Default env var every channel reads unless it opts into another one. */
-const DEFAULT_SECRET_ENV_VAR = 'WS_TOKEN_SECRET';
+const DEFAULT_SECRET_ENV_VAR = 'SECRET_TOKEN';
+
+/** Legacy alias checked before {@link DEFAULT_SECRET_ENV_VAR} — see {@link resolveSignedTokenSecret}. */
+const LEGACY_SECRET_ENV_VAR = 'WS_TOKEN_SECRET';
 
 /**
  * Known non-functional placeholder values that must NOT be treated as a
@@ -53,10 +57,9 @@ const DEFAULT_SECRET_ENV_VAR = 'WS_TOKEN_SECRET';
  * and, worst case, a third party who knows the placeholder could forge
  * a password-reset mail token for any user. Rejecting these makes them
  * read as "not from env": the per-process random fallback kicks in
- * (safe for a single instance), and the multi-instance boot guard
- * (`collab/attach.ts:assertWsTokenSecretForMultiInstance`, via
- * `isWsTokenSecretFromEnv`) still fails, forcing a real secret. Compared
- * case-insensitively against the trimmed value.
+ * (safe for a single instance), and `util/env-schema.ts`'s required
+ * `SECRET_TOKEN` boot validation still fails, forcing a real secret in
+ * production. Compared case-insensitively against the trimmed value.
  */
 const SIGNED_TOKEN_SECRET_PLACEHOLDERS = new Set<string>([
   'dev-only-ws-token-secret-replace-in-production-0000=',
@@ -64,48 +67,31 @@ const SIGNED_TOKEN_SECRET_PLACEHOLDERS = new Set<string>([
   'change-me',
   'replace-me',
   'your-secret-here',
+  'your-secret-key',
+  'this is default session secret',
 ]);
 
 /**
- * Whether `process.env[envVarName]` holds a REAL configured secret (vs
- * unset / empty / a known placeholder — in which case callers fall back
- * to the per-process random secret). `ws-token.ts` re-exports this
- * (bound to `WS_TOKEN_SECRET`) as `isWsTokenSecretFromEnv`, which
- * `collab/attach.ts`'s multi-instance boot guard depends on: a random
- * fallback secret can only be verified by the process that minted it,
- * so a second replica would reject every token it didn't issue itself.
- * Rejecting placeholders here means a forgotten template value can
- * never satisfy that guard.
- */
-export function isSignedTokenSecretConfiguredFromEnv(envVarName: string): boolean {
-  const fromEnv = process.env[envVarName];
-  if (!fromEnv) return false;
-  const trimmed = fromEnv.trim();
-  if (trimmed.length === 0) return false;
-  if (isKnownSignedTokenSecretPlaceholder(trimmed)) return false;
-  return true;
-}
-
-/**
- * Whether `trimmed` (already trimmed, compared case-insensitively — same as
- * {@link isSignedTokenSecretConfiguredFromEnv}) is one of the known
- * non-functional placeholder values above. Exported so
- * `util/env-schema.ts`'s `WS_TOKEN_SECRET` minimum-length check can exempt a
- * value this factory already treats as "not configured" (random fallback +
- * its own warning), instead of keeping a second, driftable copy of the
- * placeholder list.
+ * Whether `trimmed` (already trimmed, compared case-insensitively) is one of
+ * the known non-functional placeholder values above. Exported so
+ * `util/env-schema.ts`'s `SECRET_TOKEN` validator can exempt a value this
+ * factory already treats as "not configured" (random fallback + its own
+ * warning), instead of keeping a second, driftable copy of the placeholder
+ * list.
  */
 export function isKnownSignedTokenSecretPlaceholder(trimmed: string): boolean {
   return SIGNED_TOKEN_SECRET_PLACEHOLDERS.has(trimmed.toLowerCase());
 }
 
 /**
- * Process-wide random fallback secrets, keyed by env var name and
- * generated at most once per key. Every channel defaults to the same
- * `WS_TOKEN_SECRET` env var, so in practice this map holds a single
- * entry shared by ws / presence / notifications / mail tokens — cross-
- * channel replay is still prevented by the distinct `issuer` each
- * channel signs with, not by secret isolation.
+ * Process-wide random fallback secrets, keyed by the resolved canonical env
+ * var name and generated at most once per key. Every channel defaults to
+ * the same `SECRET_TOKEN` resolution (canonical name, with `WS_TOKEN_SECRET`
+ * as a legacy alias), so in practice this map holds a single entry shared
+ * by the web session/OAuth JWTs, OAuth state, and the ws / presence /
+ * notifications / mail tokens — cross-channel replay is still prevented by
+ * the distinct `issuer` (or HKDF info, for OAuth state) each channel signs
+ * with, not by secret isolation.
  *
  * Must NOT be regenerated per call: a token is typically minted by one
  * request and verified by a later, separate one — almost always through
@@ -116,36 +102,92 @@ export function isKnownSignedTokenSecretPlaceholder(trimmed: string): boolean {
 const fallbackSecretsByEnvVar = new Map<string, string>();
 
 /**
- * Resolve the signing secret for `envVarName`. Reads `process.env`
- * fresh on every call — this module is imported transitively before
- * `app.ts` runs `dotenv.config()`, and a test may mutate the env
- * between two `createSignedTokenUtil()` calls, so the env is the single
- * source of truth read at construction time rather than cached. Only
- * the random fallback (used when the env var is unset / a placeholder)
- * is memoized, and only once per `envVarName` — see
- * `fallbackSecretsByEnvVar` above. The "secret missing" warning fires
- * at most once per `envVarName` per process (silenced under tests, same
- * as the pre-consolidation per-channel warnings).
+ * Generate (once per `fallbackKey`, memoized in {@link fallbackSecretsByEnvVar})
+ * a process-local random secret, warning at most once per `fallbackKey` per
+ * process (silenced under tests). `describeCandidates` is only used in the
+ * warning text — it never appears in the returned secret.
  */
-function resolveSignedTokenSecret(envVarName: string): string {
-  if (isSignedTokenSecretConfiguredFromEnv(envVarName)) {
-    debug('%s resolved from env', envVarName);
-    return process.env[envVarName] as string;
-  }
-  const cached = fallbackSecretsByEnvVar.get(envVarName);
+function resolveFallbackSecret(fallbackKey: string, describeCandidates: string): string {
+  const cached = fallbackSecretsByEnvVar.get(fallbackKey);
   if (cached) return cached;
 
   const generated = crypto.randomBytes(32).toString('base64');
-  fallbackSecretsByEnvVar.set(envVarName, generated);
+  fallbackSecretsByEnvVar.set(fallbackKey, generated);
   if (process.env.NODE_ENV !== 'test') {
     console.warn(
-      `[crowi] ${envVarName} is not set (or is a known placeholder value) — signed tokens will be issued with ` +
-        'a random in-memory secret. Process restarts will invalidate outstanding tokens, and multi-instance ' +
-        `deployments will not be able to cross-verify them. Set ${envVarName} to a stable base64-encoded ` +
-        '32-byte value (`openssl rand -base64 32`) in production.',
+      `[crowi] ${describeCandidates} is not set (or is a known placeholder value) — signed tokens will be issued ` +
+        'with a random in-memory secret. Process restarts will invalidate outstanding tokens, and multi-instance ' +
+        'deployments will not be able to cross-verify them. Set it to a stable base64-encoded 32-byte value ' +
+        '(`openssl rand -base64 32`) in production.',
     );
   }
   return generated;
+}
+
+/**
+ * Resolve the runtime signing secret every JWT/HMAC channel uses: Web
+ * session access/refresh, OAuth access, OAuth state (via
+ * `federated-auth-state.ts`'s HKDF derivation), and the four
+ * `createSignedTokenUtil` wrappers (ws / presence / notifications / mail).
+ * This is the single runtime resolver — no caller reads `Config`/DB or
+ * ambient env directly.
+ *
+ * Reads `process.env` fresh on every call (this module is imported
+ * transitively before `app.ts` runs `dotenv.config()`, and a test may
+ * mutate the env between two calls), except the random fallback (see
+ * {@link resolveFallbackSecret}), which is memoized per resolved key so a
+ * mint and a later, separate verify (almost always a different
+ * `createSignedTokenUtil()`/`createJwtUtil()`/`createFederatedAuthStateUtil()`
+ * call) still agree.
+ *
+ * For the default `secretEnvVar` (`'SECRET_TOKEN'`, the canonical name) only,
+ * `WS_TOKEN_SECRET` is checked FIRST as a legacy alias — matching
+ * `util/env-schema.ts`'s alias-first `resolveRaw()` precedence, so an
+ * operator who has only ever set `WS_TOKEN_SECRET` keeps working unchanged.
+ * A custom `secretEnvVar` (the ws/presence/notifications/mail wrappers never
+ * pass one; only tests do) reads that single key, no alias applied.
+ *
+ * Each candidate's RAW value (before trim) is what decides "set" — an empty
+ * string is skipped in favour of the next candidate, matching
+ * `util/env-schema.ts#resolveRaw`'s own truthiness check. The first
+ * candidate with a truthy raw value is the WINNER: if its TRIMMED value is
+ * whitespace-only or a known placeholder, resolution does **not** fall
+ * through to the next candidate — it short-circuits straight to the
+ * canonical random fallback. This mirrors `util/env-schema.ts`'s required
+ * validation (a whitespace/placeholder `WS_TOKEN_SECRET` boot-fails even
+ * when a valid `SECRET_TOKEN` is also present) and keeps the two modules
+ * from silently disagreeing about which value "wins". In normal (validated)
+ * boot this branch is unreachable — `validateEnv()` already aborted — so it
+ * only matters for a test or one-off script that bypasses env validation.
+ *
+ * The winner itself is returned UNTRIMMED: `util/env-schema.ts#resolveRaw`
+ * validates the trimmed value but this resolver hands back the raw one, so a
+ * legacy `WS_TOKEN_SECRET` with incidental leading/trailing whitespace keeps
+ * signing/verifying the exact same tokens it always did.
+ */
+export function resolveSignedTokenSecret(secretEnvVar: string = DEFAULT_SECRET_ENV_VAR): string {
+  const isCanonical = secretEnvVar === DEFAULT_SECRET_ENV_VAR;
+  const candidateKeys = isCanonical ? [LEGACY_SECRET_ENV_VAR, DEFAULT_SECRET_ENV_VAR] : [secretEnvVar];
+  const fallbackKey = isCanonical ? DEFAULT_SECRET_ENV_VAR : secretEnvVar;
+  const describeCandidates = isCanonical ? `${DEFAULT_SECRET_ENV_VAR} (or its legacy alias ${LEGACY_SECRET_ENV_VAR})` : secretEnvVar;
+
+  for (const key of candidateKeys) {
+    const raw = process.env[key];
+    if (!raw) continue;
+
+    const trimmed = raw.trim();
+    if (trimmed.length === 0 || isKnownSignedTokenSecretPlaceholder(trimmed)) {
+      // Winner is invalid — do not fall through to the next candidate (see
+      // doc comment above). `validateEnv()` already boot-aborts this case in
+      // production; this path only serves unvalidated tests/scripts.
+      return resolveFallbackSecret(fallbackKey, describeCandidates);
+    }
+
+    debug('%s resolved from env', key);
+    return raw;
+  }
+
+  return resolveFallbackSecret(fallbackKey, describeCandidates);
 }
 
 /** Compact JWT plus its absolute expiry, returned by every `sign()`. */
@@ -178,7 +220,7 @@ export interface CreateSignedTokenUtilConfig<TClaims extends object, TPayload> {
    * `iss` claim signed / required on verify. Each channel uses a
    * distinct issuer so a token leaked from one channel is never
    * replayable against another, even though they share the same
-   * `WS_TOKEN_SECRET` key material by default.
+   * `SECRET_TOKEN` key material by default.
    */
   issuer: string;
   /**
@@ -188,7 +230,7 @@ export interface CreateSignedTokenUtilConfig<TClaims extends object, TPayload> {
   ttlSeconds: number | ((claims: TClaims) => number);
   /** Runtime schema the decoded payload must satisfy on verify. */
   payloadSchema: ZodType<TPayload>;
-  /** Env var the secret is read from. Defaults to `WS_TOKEN_SECRET`. */
+  /** Env var the secret is read from. Defaults to `SECRET_TOKEN` (legacy alias `WS_TOKEN_SECRET`). */
   secretEnvVar?: string;
 }
 

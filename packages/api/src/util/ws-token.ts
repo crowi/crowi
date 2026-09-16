@@ -1,6 +1,6 @@
 import { type WsTokenPayload, WsTokenPayloadSchema } from '@crowi/api-contract';
 
-import { createSignedTokenUtil, isSignedTokenSecretConfiguredFromEnv } from './signed-token-factory';
+import { createSignedTokenUtil } from './signed-token-factory';
 
 /**
  * Issuer claim used to sign / verify wsTokens. Distinct from the
@@ -50,11 +50,11 @@ export interface SignWsTokenResult {
  * Thin wrapper around `createSignedTokenUtil` (secret resolution —
  * placeholder rejection included — memoization, sign, verify all live
  * there now; see `util/signed-token-factory.ts`). Each call builds a
- * fresh util bound to the currently-resolved secret: when
- * `WS_TOKEN_SECRET` is set, that's a fresh env read every time; when
- * unset, the factory's process-wide random fallback keeps mint and
- * verify agreeing regardless of which `createWsTokenUtil()` call built
- * which instance.
+ * fresh util bound to the currently-resolved secret: when `SECRET_TOKEN`
+ * (or its legacy `WS_TOKEN_SECRET` alias) is set, that's a fresh env read
+ * every time; when unset, the factory's process-wide random fallback keeps
+ * mint and verify agreeing regardless of which `createWsTokenUtil()` call
+ * built which instance.
  */
 export function createWsTokenUtil() {
   const util = createSignedTokenUtil<WsTokenClaims, WsTokenPayload>({
@@ -69,21 +69,4 @@ export function createWsTokenUtil() {
     ttlSeconds: WS_TOKEN_TTL_SECONDS,
     issuer: WS_TOKEN_ISSUER,
   };
-}
-
-/**
- * Whether `WS_TOKEN_SECRET` is a REAL configured secret (vs unset /
- * empty / a known placeholder, in which case we use the per-process
- * random fallback). editor-preview-reliability §4 / E1 uses this at
- * boot to fail-fast on a declared multi-instance deployment: a random
- * fallback secret can only be verified by the process that minted it,
- * so a second replica rejects every wsToken it didn't issue ("WebSocket
- * closed before the connection was established"). Delegates the actual
- * placeholder judgement to `signed-token-factory.ts` so this stays the
- * single source of truth shared with `resolveSignedTokenSecret`. Kept
- * under this ws-specific name (rather than renamed) so
- * `collab/attach.ts`'s import stays unchanged.
- */
-export function isWsTokenSecretFromEnv(): boolean {
-  return isSignedTokenSecretConfiguredFromEnv('WS_TOKEN_SECRET');
 }

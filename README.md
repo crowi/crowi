@@ -116,7 +116,11 @@ docker compose up -d
 cp .env.example .env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 
-# 4. Run everything (api on :4301, web on :4302). Workspace libs/plugins are
+# 4. Generate the required signing secret — the api refuses to boot without
+#    it (see the Environment variables table below).
+openssl rand -base64 32   # paste the output into .env as SECRET_TOKEN=...
+
+# 5. Run everything (api on :4301, web on :4302). Workspace libs/plugins are
 #    built ONCE up front (turbo-cached); only api, web and api-contract stay
 #    under a live watch — see the note below to watch a specific one back.
 pnpm dev
@@ -149,6 +153,7 @@ pnpm dev --watch @crowi/api-contract    # also regenerates its .d.ts live
 | Variable | Purpose |
 | --- | --- |
 | `MONGO_URI` | MongoDB connection string |
+| `SECRET_TOKEN` | **Required.** The single signing secret for every JWT/HMAC the api issues (Web session, OAuth access/state, realtime collab / presence / notifications, transactional-email tokens). Boot aborts if unset, empty, whitespace-only, or a known placeholder. Must be at least 32 characters and identical across every api replica. Generate via `openssl rand -base64 32`. `WS_TOKEN_SECRET` is accepted as a legacy alias. |
 | `REDIS_URL` | Coordination for realtime-collab pub/sub, the editor-cap counter, presence, notification invalidation, Config sync, rate limiting, and LRU (use `rediss://` for TLS) |
 | `PASSWORD_SEED` | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | CORS allowlist origin in production (defaults allow localhost in dev) |

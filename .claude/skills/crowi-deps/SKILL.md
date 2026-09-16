@@ -123,7 +123,7 @@ gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
 - `pnpm lint`(errors=0 必須)
 - 影響パッケージの `pnpm --filter <pkg> type-check`
 - 影響パッケージに **test があれば** その test(`pnpm --filter <pkg> test`、api は flaky 回避で単独実行)。**無ければ** build + type-check で API 互換を確認し、可能なら最小 test を足して以後の bump を守る(特に **major bump** は実 runtime を 1 経路通すと安心。例: nodemailer なら `createTransport({ jsonTransport: true })` + `sendMail`)。
-- 公開パッケージの bump は changeset を追加(patch/minor/major は内容で判断)。
+- 公開パッケージの bump は changeset を追加(patch/minor/major は内容で判断)。文面の主語は `crowi-changesets` の「依存パッケージの脆弱性対応の書き方」に従う — 依存の脆弱性を Crowi の脆弱性として書かない。
 
 ### 5. commit(push しない)
 

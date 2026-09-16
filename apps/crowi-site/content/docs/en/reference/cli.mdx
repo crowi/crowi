@@ -51,6 +51,8 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 | `bookmark add <path-or-id>` | Add a bookmark | — | `bookmarks:write` |
 | `bookmark remove <path-or-id>` | Remove a bookmark | — | `bookmarks:write` |
 
+`mv` and `rm` (other than with `--completely`) each generate a key automatically and attach it to the request, so that if the same request reaches the server twice over an unreliable connection it is only applied once — you never see or supply the key yourself. Running the command again yourself, however, is a separate operation and is not deduplicated: running `rm /some/page` twice attempts two deletes. `rm --completely` also sends a key, but the hard-delete path does not read it, so it is outside this protection.
+
 ## Output formats
 
 `search` and `ls` shape their output with `--format` / `--template`.

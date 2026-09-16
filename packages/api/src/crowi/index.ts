@@ -20,7 +20,7 @@ import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type AttachedPresence, attachPresenceServer } from 'src/presence/attach';
 import { createRenderer, type Renderer } from 'src/renderer';
 import { MailService } from 'src/service/mail';
-import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
+import { type BootLayer, type BootReporter, createBootReporter, formatBootFailureReason, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
 import { type ArtifactDeliveryEnv, validateEnv } from 'src/util/env-schema';
 import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
@@ -962,8 +962,7 @@ class Crowi {
     // (api · web · deps) down — otherwise `tsx watch` survives the crash and
     // web keeps serving against a dead api. Harmless in prod (a grep-able line
     // before exit). Reason is the first line of the error, length-capped.
-    const reason = (err instanceof Error ? err.message : String(err)).split('\n')[0].slice(0, 200);
-    process.stdout.write(`${formatFailMarker('api', reason)}\n`);
+    process.stdout.write(`${formatFailMarker('api', formatBootFailureReason(err))}\n`);
     console.error(err);
     console.error(err.stack);
     process.exit(1);

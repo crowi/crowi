@@ -7,13 +7,35 @@
  */
 
 import dotenv from 'dotenv';
-import Crowi from 'src/crowi';
 import { join, resolve } from 'path';
+import Crowi from 'src/crowi';
+import { formatBootFailureReason, formatFailMarker } from 'src/util/boot-reporter';
 
 // load .env
 dotenv.config();
 
-const crowi = new Crowi(resolve(join(__dirname, '..')), process.env);
+/**
+ * `new Crowi(...)` runs `validateEnv()` synchronously in the constructor
+ * (e.g. a missing/invalid `SECRET_TOKEN`) and throws before any instance
+ * exists — `crowi.exitOnError` below (an arrow property bound to `this`) is
+ * unreachable for a construction-time failure, since there is no `this` yet.
+ * Without this wrapper the process
+ * exits via Node's default uncaught-exception path, which prints a raw
+ * stack but never the `@@crowi:fail` marker `scripts/dev.mjs` watches for
+ * to tear the whole dev tree down — so a boot failure here would otherwise
+ * leave `web` and the watched deps running against a dead api.
+ */
+function createCrowiOrExit(): Crowi {
+  try {
+    return new Crowi(resolve(join(__dirname, '..')), process.env);
+  } catch (err) {
+    process.stdout.write(`${formatFailMarker('api', formatBootFailureReason(err))}\n`);
+    console.error(err);
+    process.exit(1);
+  }
+}
+
+const crowi = createCrowiOrExit();
 
 crowi.init().then(crowi.start).catch(crowi.exitOnError);
 

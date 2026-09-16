@@ -204,6 +204,8 @@ to re-login with, and a `409` edit conflict tells you to re-run with `--force`).
 page changed while you were editing, the write returns `5` (conflict) and aborts
 rather than clobbering — re-run with `--force` to overwrite the newer revision.
 
+`mv` and `rm` (without `--completely`) each generate a fresh key and attach it to the request automatically — there is nothing to pass yourself. It protects a single invocation from being applied twice when the network is unreliable (e.g. a retried connection): if the same request reaches the server more than once, only the first copy takes effect. Running the command again yourself is a separate operation with its own key, so it is not deduplicated — `rm /some/page` twice attempts two deletes. `rm --completely` also sends a key, but the hard-delete path does not read it, so it is outside this protection.
+
 ## Single-file binary
 
 `pnpm --filter @crowi/cli build:binary` produces a standalone `crowi`

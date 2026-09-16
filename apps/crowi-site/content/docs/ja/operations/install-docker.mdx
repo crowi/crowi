@@ -96,11 +96,11 @@ Caddy / nginx / Traefik の具体的な設定行と、WebSocket の `Upgrade` �
 MONGO_URI=mongodb://mongodb:27017/crowi
 REDIS_URL=redis://redis:6379
 CROWI_ENCRYPTION_KEY=...     # openssl rand -base64 32
-WS_TOKEN_SECRET=...
+SECRET_TOKEN=...             # openssl rand -base64 32 — required, api won't boot without it
 PASSWORD_SEED=...
 ```
 
-各変数の意味と既定値は [環境変数](../reference/env) を参照してください。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
+各変数の意味と既定値は [環境変数](../reference/env) を参照してください。`SECRET_TOKEN` は必須です — 未設定・空・空白のみ・既知の placeholder のいずれかだと api は起動しません。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
 
 </Step>
 

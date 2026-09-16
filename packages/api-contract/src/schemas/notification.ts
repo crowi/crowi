@@ -132,7 +132,7 @@ export type NotificationsTokenResponse = z.infer<typeof NotificationsTokenRespon
 
 /**
  * Decoded payload of the short-lived notifications token JWT. The api
- * signs this with `WS_TOKEN_SECRET` (shared with collab + presence) but
+ * signs this with `SECRET_TOKEN` (shared with collab + presence) but
  * uses a distinct `iss` claim (`crowi-notifications`) so a leaked
  * collab/presence token can never be replayed against the notifications
  * channel and vice versa.

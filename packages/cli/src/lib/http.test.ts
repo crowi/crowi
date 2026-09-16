@@ -207,4 +207,24 @@ describe('authedFetch 401 refresh + retry', () => {
     });
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it('keeps the same idempotency key across the 401 refresh retry', async () => {
+    // The retry re-sends the SAME `opts` object the caller passed in, so a
+    // header the caller put there (e.g. an Idempotency-Key for a write
+    // command) must come out identical on both attempts — this is what lets
+    // a command generate its key once per logical operation rather than per
+    // HTTP attempt.
+    fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: { message: 'expired' } })).mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    setRefreshHook(async () => 'access-2');
+
+    await authedFetch(PROFILE, 'DELETE', '/pages', { json: { page_id: 'p1' }, headers: { 'idempotency-key': 'fixed-test-key-0000000' } });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstInit] = fetchMock.mock.calls[0];
+    const [, secondInit] = fetchMock.mock.calls[1];
+    const firstKey = (firstInit.headers as Record<string, string>)['idempotency-key'];
+    const secondKey = (secondInit.headers as Record<string, string>)['idempotency-key'];
+    expect(firstKey).toBe('fixed-test-key-0000000');
+    expect(secondKey).toBe(firstKey);
+  });
 });

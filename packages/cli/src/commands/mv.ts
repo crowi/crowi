@@ -2,6 +2,7 @@ import { RenamePageRequestSchema, RenameSubtreeRequestSchema } from '@crowi/api-
 import type { Command } from 'commander';
 
 import { authedFetch, CliError, EXIT } from '../lib/http';
+import { newIdempotencyKey } from '../lib/idempotency';
 import { info, render } from '../lib/output';
 import { isObjectId, normalisePath } from '../lib/page-ref';
 import { fetchCurrentPage } from '../lib/page-write';
@@ -46,6 +47,10 @@ export function registerMv(program: Command): void {
       const createRedirect = options.redirect !== false;
 
       const current = await fetchCurrentPage(profile, oldRef);
+      // One key for the whole invocation: only one of the two rename routes
+      // below is ever called, and a 401 retry inside `authedFetch` reuses
+      // `opts` (and therefore this same key) automatically.
+      const idempotencyKey = newIdempotencyKey();
 
       // The source resolves to a real page document → single-page rename
       // (optionally carrying the subtree with --recursive).
@@ -61,7 +66,10 @@ export function registerMv(program: Command): void {
           throw new CliError(`invalid rename: ${parsed.error.issues.map((i) => i.message).join('; ')}`, { exitCode: EXIT.INVALID });
         }
 
-        const result = await authedFetch<RenamePageResponse>(profile, 'POST', '/pages/rename', { json: parsed.data });
+        const result = await authedFetch<RenamePageResponse>(profile, 'POST', '/pages/rename', {
+          json: parsed.data,
+          headers: { 'idempotency-key': idempotencyKey },
+        });
         render(
           { from: current.path, to: result.page?.path ?? destination, renamedCount: result.renamed_count },
           () =>
@@ -91,9 +99,10 @@ export function registerMv(program: Command): void {
       // `POST /pages/rename-subtree` is above the v2 floor: an older instance
       // may lack the route entirely. A 404 there is ambiguous, so degrade it
       // to a clear "needs a newer Crowi" hint rather than a bare not-found.
-      const result = await authedFetch<RenameSubtreeResponse>(profile, 'POST', '/pages/rename-subtree', { json: parsed.data }).catch((err: unknown) =>
-        rethrowNewerEndpointHint(err, 'mv (folder/subtree)'),
-      );
+      const result = await authedFetch<RenameSubtreeResponse>(profile, 'POST', '/pages/rename-subtree', {
+        json: parsed.data,
+        headers: { 'idempotency-key': idempotencyKey },
+      }).catch((err: unknown) => rethrowNewerEndpointHint(err, 'mv (folder/subtree)'));
       if ((result.renamed_count ?? 0) === 0) {
         throw new CliError(`nothing found at ${normalisePath(oldRef)} to move`, { exitCode: EXIT.NOT_FOUND });
       }

@@ -133,14 +133,17 @@ export function registerReplace(program: Command): void {
         process.exit(1);
       }
 
-      const crowi = new api.Crowi(process.cwd(), process.env);
       console.log(`[crowi-admin] replace url: '${from}' → '${to}'${opts.dryRun ? ' (dry-run)' : ''}`);
 
+      // `let`, not `const`: the constructor itself can throw (e.g. an invalid
+      // SECRET_TOKEN), and the catch below must not touch an uninitialised binding.
+      let crowi: ApiCrowi | undefined;
       try {
+        crowi = new api.Crowi(process.cwd(), process.env);
         await crowi.initForCli();
       } catch (err) {
         console.error('crowi-admin: failed to initialise Crowi:', (err as Error).message);
-        await crowi.teardownForCli().catch(() => undefined);
+        await crowi?.teardownForCli().catch(() => undefined);
         process.exit(1);
       }
 

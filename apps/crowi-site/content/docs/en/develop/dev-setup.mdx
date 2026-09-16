@@ -31,7 +31,12 @@ docker compose up -d
 # 4. Create the environment file
 cp .env.example .env
 
-# 5. Start api, web and the plugins
+# 5. Generate the required signing secret and set it in .env (the api will
+#    not boot without it)
+openssl rand -base64 32
+# paste the output into .env as SECRET_TOKEN=...
+
+# 6. Start api, web and the plugins
 pnpm dev
 ```
 
@@ -39,7 +44,7 @@ Open **http://localhost:4304** in a browser and Crowi appears. The first visit s
 
 `:4304` is a same-origin reverse proxy in front of api and web (Caddy when it is installed, otherwise a dependency-free node fallback). **It is the only supported entrypoint in development**: opening the bare web port `:4302` bypasses it and the WebSockets behind realtime collaboration, presence and notifications will not connect.
 
-Crowi starts with the defaults in `.env.example`, but setting `CROWI_ENCRYPTION_KEY` is recommended. Without it, sensitive settings are stored in plaintext and a warning is logged at boot.
+`SECRET_TOKEN` ships empty in `.env.example`, so **set a value before** running `pnpm dev` — boot fails if it is left unset, whitespace-only, or a known placeholder. Setting `CROWI_ENCRYPTION_KEY` is also recommended: unlike `SECRET_TOKEN` the api still boots without it, but sensitive settings are then stored in plaintext and a warning is logged at boot.
 
 ```bash
 pnpm --filter @crowi/api crypto:gen-key

@@ -71,7 +71,7 @@ description: Subcommands, options and exit codes of crowi-admin
 | `page-history repair` | `--resume-after <pageId>` | — | Per-page resume point |
 | `page-history repair` | `--resume-after-operation <operationId>` | — | Per-operation resume point for `--transitions` |
 
-The only global options are `--help` and `--version`. The connection is resolved from environment variables (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`).
+The only global options are `--help` and `--version`. The connection is resolved from environment variables (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`). Every command boots the api internally, so `SECRET_TOKEN` is required too — unset, empty, whitespace-only, or a known placeholder value prints a formatted initialization-failure message and exits with code `1`.
 
 ## Exit codes
 

@@ -38,8 +38,13 @@ reported together as a single consolidated warning in the boot log instead
 (an unset `CLIENT_URL` also gets a warning there, since links in outgoing
 mail would otherwise be relative).
 
-`WS_TOKEN_SECRET` is the one exception whose **severity depends on
-`NODE_ENV`**. Its requirement is stated on its row in
+`SECRET_TOKEN` is **required**. Boot fails — regardless of `NODE_ENV` or
+`CROWI_MULTI_INSTANCE` — if it is unset, empty, whitespace-only, or a known
+placeholder value. It is also the one variable whose **severity otherwise
+depends on `NODE_ENV`**: a value shorter than 32 characters fails boot under
+`NODE_ENV=production` (including when unset, since that is the default) but
+only warns elsewhere. The legacy `WS_TOKEN_SECRET` name is still read as a
+deprecated alias. Its full requirement is stated on its row in
 [Environment variables](../reference/env).
 
 An env var carrying one of the known Crowi prefixes (`CROWI_`, `WS_TOKEN_`,
@@ -55,7 +60,7 @@ Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
 
 Names, defaults and meanings are listed in [Environment variables](../reference/env). For how the collaboration variables are used together see [Operating realtime collaboration](./realtime-collab), and for choosing `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_COLLAB_URL` per topology see [Deployment topologies](./deployment).
 
-> **Tip**: Both `WS_TOKEN_SECRET` and `CROWI_ENCRYPTION_KEY` can be
+> **Tip**: Both `SECRET_TOKEN` and `CROWI_ENCRYPTION_KEY` can be
 > generated with `openssl rand -base64 32`. `CROWI_ENCRYPTION_KEY` can
 > also be generated with `pnpm --filter @crowi/api crypto:gen-key`.
 
@@ -75,7 +80,7 @@ When running the full stack with `docker compose --profile app`, the
 `api` service reads `.env` as an `env_file`. However, the
 container-network URIs (`MONGO_URI` / `REDIS_URL` / `CLIENT_URL`) are
 overridden by the `environment` entries in `docker-compose.yml`.
-Secrets such as `CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` are passed
+Secrets such as `CROWI_ENCRYPTION_KEY` and `SECRET_TOKEN` are passed
 through as long as they are present in `.env`.
 
 > **Tip**: The web app (`@crowi/web`) is a **separate deployable** with no

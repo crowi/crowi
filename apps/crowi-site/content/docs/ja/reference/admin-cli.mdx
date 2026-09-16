@@ -71,7 +71,7 @@ description: crowi-admin のサブコマンド・オプション・終了コー�
 | `page-history repair` | `--resume-after <pageId>` | — | ページ単位の再開位置 |
 | `page-history repair` | `--resume-after-operation <operationId>` | — | `--transitions` の操作単位の再開位置 |
 
-グローバルオプションは `--help` と `--version` の 2 つだけです。接続先は環境変数 (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`) から解決されます。
+グローバルオプションは `--help` と `--version` の 2 つだけです。接続先は環境変数 (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`) から解決されます。すべてのコマンドは内部で api の boot 経路を通るため `SECRET_TOKEN` も必須です — 未設定・空・空白のみ・既知の placeholder のいずれかだと、整形済みの初期化失敗メッセージを出して終了コード `1` で終了します。
 
 ## 終了コード
 
