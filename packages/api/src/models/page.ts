@@ -444,6 +444,7 @@ export interface PageModel extends Model<PageDocument> {
       path: string;
       isPage: boolean;
       hasPortal: boolean;
+      contentType?: PageContentType;
       count: number;
       lastUpdatedAt: string | null;
       updater: PageUser | null;
@@ -1784,7 +1785,8 @@ export default (crowi: Crowi) => {
    * issuing a request per day. Every per-node field keeps its depth-1
    * meaning at every level: `count` is that node's own descendant count
    * (which may reach past `depth`), and `isPage`/`hasPortal` describe the
-   * docs saved at that node.
+   * docs saved at that node. `contentType` (only alongside `isPage`) is that
+   * node's own page's kind, for the sidebar's artifact marker.
    */
   pageSchema.statics.findChildSegments = async function (path, userData, depth = 1) {
     const prefix = addTrailingSlash(path);
@@ -1800,7 +1802,8 @@ export default (crowi: Crowi) => {
       status?: string | null;
       updatedAt?: Date;
       lastUpdateUser?: Types.ObjectId | null;
-    }> = await Page.find(query, { path: 1, status: 1, updatedAt: 1, lastUpdateUser: 1 }).lean().exec();
+      contentType?: PageContentType | null;
+    }> = await Page.find(query, { path: 1, status: 1, updatedAt: 1, lastUpdateUser: 1, contentType: 1 }).lean().exec();
 
     type SegmentMeta = { updatedAt?: Date; lastUpdateUser?: Types.ObjectId | null };
     type SegmentEntry = {
@@ -1812,6 +1815,7 @@ export default (crowi: Crowi) => {
       // The segment's own leaf page metadata (set at most once — there is
       // exactly one doc with no deeper remainder per segment).
       selfMeta: SegmentMeta | null;
+      selfContentType: PageContentType;
       // The most-recently-updated metadata among the portal doc and
       // descendants seen so far.
       maxOtherMeta: SegmentMeta | null;
@@ -1847,6 +1851,7 @@ export default (crowi: Crowi) => {
           hasPortal: false,
           count: 0,
           selfMeta: null,
+          selfContentType: 'markdown',
           maxOtherMeta: null,
           children: [],
         };
@@ -1894,6 +1899,7 @@ export default (crowi: Crowi) => {
         } else {
           entry.isPage = true;
           entry.selfMeta = meta;
+          entry.selfContentType = doc.contentType ?? 'markdown';
         }
       }
     }
@@ -1944,6 +1950,7 @@ export default (crowi: Crowi) => {
         path: e.path,
         isPage: e.isPage,
         hasPortal: e.hasPortal,
+        ...(e.isPage ? { contentType: e.selfContentType } : {}),
         count: e.count,
         lastUpdatedAt: toISOStringOrNull(meta?.updatedAt),
         updater: updaterDoc ? toPageUser(updaterDoc) : null,

@@ -310,6 +310,9 @@ export const PageChildSegmentSchema = z.object({
   isPage: z.boolean(),
   // True when a real portal page is saved at `path` (→ compass icon).
   hasPortal: z.boolean(),
+  // RFC-0020 — the kind of the page saved at the segment path itself
+  // (→ artifact icon). Present only when `isPage` is true.
+  contentType: PageContentTypeSchema.optional(),
   // Number of descendant content pages strictly under this segment
   // (excludes the segment's own page / portal docs). A rough "how much
   // lives here" hint; > 0 means the segment is an expandable directory.

@@ -1138,6 +1138,46 @@ describe('Page', () => {
         userFindSpy.mockRestore();
       });
     });
+
+    // RFC-0020 — the sidebar marks an artifact page from `contentType`,
+    // which describes the page saved AT the node, never a portal doc or a
+    // descendant under it.
+    describe('contentType', () => {
+      const publish = (path, contentType?: 'markdown' | 'artifact') => ({
+        path,
+        grant: Page.GRANT_PUBLIC,
+        creator: author,
+        status: 'published',
+        updatedAt: new Date('2026-08-07T00:00:00Z'),
+        lastUpdateUser: author,
+        ...(contentType ? { contentType } : {}),
+      });
+
+      test("reports a page node's own kind, defaulting a hint-less legacy page to markdown", async () => {
+        await Fixture.generate('Page', [publish('/k/art', 'artifact'), publish('/k/md', 'markdown'), publish('/k/legacy')]);
+
+        const segments = await Page.findChildSegments('/k', author);
+        const bySegment = Object.fromEntries(segments.map((seg) => [seg.segment, seg.contentType]));
+        expect(bySegment).toEqual({ art: 'artifact', md: 'markdown', legacy: 'markdown' });
+      });
+
+      test('omits it on a node with no page of its own, even when a portal or descendant there is an artifact', async () => {
+        await Fixture.generate('Page', [publish('/k/dir/', 'artifact'), publish('/k/dir/child', 'artifact')]);
+
+        const segments = await Page.findChildSegments('/k', author);
+        const dir = segments.find((seg) => seg.segment === 'dir');
+        expect(dir?.isPage).toBe(false);
+        expect(dir && 'contentType' in dir).toBe(false);
+      });
+
+      test("a folder that is also a page carries that page's kind, not its descendants'", async () => {
+        await Fixture.generate('Page', [publish('/k/both', 'artifact'), publish('/k/both/child', 'markdown')]);
+
+        const segments = await Page.findChildSegments('/k', author, 2);
+        expect(segments.find((seg) => seg.segment === 'both')?.contentType).toBe('artifact');
+        expect(segments.find((seg) => seg.segment === 'child')?.contentType).toBe('markdown');
+      });
+    });
   });
 
   // RFC-0004 Phase 2: draft page status + draft visibility filtering.

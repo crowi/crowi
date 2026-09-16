@@ -157,9 +157,18 @@ describe('resolveSidebarSelfLinks', () => {
   it("surfaces the current node's content page at the top of its own listing when it is a page WITH children", () => {
     const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { isPage: true, count: 3 })], []];
     // On the content page itself → the self-link is the current node.
-    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: true }]);
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: true, isArtifact: false }]);
     // On the portal listing → same link, but the folder node stays current.
-    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c/')).toEqual([null, null, { contentPath: '/a/b/c', label: 'c', isCurrent: false }]);
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c/')).toEqual([
+      null,
+      null,
+      { contentPath: '/a/b/c', label: 'c', isCurrent: false, isArtifact: false },
+    ]);
+  });
+
+  it('marks the self-link when the page saved at the folder is an artifact', () => {
+    const levels: PageChildSegment[][] = [[seg('/a/b/', { count: 1 })], [seg('/a/b/c/', { isPage: true, contentType: 'artifact', count: 3 })], []];
+    expect(resolveSidebarSelfLinks(layout, levels, '/a/b/c')[2]?.isArtifact).toBe(true);
   });
 
   it('surfaces an opened ANCESTOR folder that is also a page, never as the current node', () => {
@@ -172,7 +181,11 @@ describe('resolveSidebarSelfLinks', () => {
       [seg('/xxx/yyy/aa/bb/', { isPage: true })],
       [],
     ];
-    expect(resolveSidebarSelfLinks(deep, levels, '/xxx/yyy/aa/bb')).toEqual([null, { contentPath: '/xxx/yyy/aa', label: 'aa', isCurrent: false }, null]);
+    expect(resolveSidebarSelfLinks(deep, levels, '/xxx/yyy/aa/bb')).toEqual([
+      null,
+      { contentPath: '/xxx/yyy/aa', label: 'aa', isCurrent: false, isArtifact: false },
+      null,
+    ]);
   });
 
   it('surfaces nothing for a folder-page that is NOT on the open branch', () => {

@@ -28227,6 +28227,13 @@
                           "hasPortal": {
                             "type": "boolean"
                           },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
+                          },
                           "count": {
                             "type": "number"
                           },

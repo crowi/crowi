@@ -7833,6 +7833,8 @@ export interface paths {
                                 path: string;
                                 isPage: boolean;
                                 hasPortal: boolean;
+                                /** @enum {string} */
+                                contentType?: "markdown" | "artifact";
                                 count: number;
                                 lastUpdatedAt?: string | null;
                                 updater?: {

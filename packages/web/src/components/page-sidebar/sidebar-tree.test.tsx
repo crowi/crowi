@@ -114,6 +114,29 @@ describe('SidebarTree around a folder that is also a page', () => {
   });
 });
 
+// RFC-0020 — an artifact page carries a marker after its label, like the
+// portal compass; a Markdown page does not.
+describe('SidebarTree marking artifact pages', () => {
+  const ARTIFACT = 'HTML artifact page';
+  const artifact = (path: string): PageChildSegment => ({ ...page(path), contentType: 'artifact' });
+
+  it('marks an artifact page row and leaves a Markdown page row plain', () => {
+    serveLevels([[dir('/xxx/yyy/', 2)], [artifact('/xxx/yyy/art/'), { ...page('/xxx/yyy/md/'), contentType: 'markdown' }], []]);
+    render(<SidebarTree path="/xxx/yyy/md" />);
+
+    expect(screen.getByText('art').closest('a')?.querySelector(`[aria-label="${ARTIFACT}"]`)).not.toBeNull();
+    expect(screen.getByText('md').closest('a')?.querySelector(`[aria-label="${ARTIFACT}"]`)).toBeNull();
+  });
+
+  it("marks a folder's own artifact page on its page row, not on the folder row that links to the listing", () => {
+    serveLevels([[{ ...artifact('/xxx/yyy/aa/'), count: 1 }], [page('/xxx/yyy/aa/bb/')], []]);
+    render(<SidebarTree path="/xxx/yyy/aa/bb" />);
+
+    expect(screen.getByText('aa/').closest('a')?.querySelector(`[aria-label="${ARTIFACT}"]`)).toBeNull();
+    expect(screen.getByText('aa').closest('a')?.querySelector(`[aria-label="${ARTIFACT}"]`)).not.toBeNull();
+  });
+});
+
 describe('SidebarTree inside a date hierarchy', () => {
   // /s/2026/08/07/report → levels ['/s/2026/', '/s/2026/08/', '/s/2026/08/07/',
   // '/s/2026/08/07/report/'], with the month at index 1.
