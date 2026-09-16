@@ -81,11 +81,13 @@ export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: { segment:
   const Icon = isDirectory ? Folder : FileText;
   // A directory row links to the listing, so an artifact page saved at the
   // same path is marked on its self-link row instead (`SidebarSelfLinkRow`).
-  const trailing = segment.hasPortal ? (
-    <Compass className={ROW_MARKER_CLASS} aria-hidden />
-  ) : !isDirectory && segment.contentType === 'artifact' ? (
-    <ArtifactMarker />
-  ) : undefined;
+  const isArtifactPage = !isDirectory && segment.contentType === 'artifact';
+  const trailing = (
+    <>
+      {segment.hasPortal && <Compass className={ROW_MARKER_CLASS} aria-hidden />}
+      {isArtifactPage && <ArtifactMarker />}
+    </>
+  );
   return (
     <SidebarRow
       href={href}

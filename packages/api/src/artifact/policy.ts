@@ -129,11 +129,8 @@ interface ResolvedDeliveryMode {
 }
 
 /**
- * §R 表, evaluated top-to-bottom. The signing key itself (`SECRET_TOKEN`,
- * required at boot — `util/signed-token-factory.ts#resolveSignedTokenSecret`)
- * can no longer be a well-known default here: an unset or placeholder value
- * aborts boot before this ever runs, so there is nothing left for this
- * resolver to gate on.
+ * §R 表, evaluated top-to-bottom. The signing key (`SECRET_TOKEN`) is not
+ * checked here: an unset or placeholder value aborts boot before this runs.
  */
 function resolveDeliveryMode(env: ArtifactDeliveryEnv, settings: ArtifactPolicySettings): ResolvedDeliveryMode {
   if (env.artifactOrigin !== null) {

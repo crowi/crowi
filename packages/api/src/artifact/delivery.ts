@@ -32,7 +32,7 @@ export const ARTIFACT_URL_ERROR_MESSAGES: Readonly<Record<ArtifactUrlErrorReason
 
 /**
  * Same HKDF-SHA-256 construction as `federated-auth-state.ts#deriveStateHmacKey`,
- * distinguished only by `info`, so both derive independent keys from one app secret.
+ * distinguished only by `info`, so both derive independent keys from one `SECRET_TOKEN`.
  */
 export function deriveArtifactTokenKey(secret: string): Buffer {
   const okm = crypto.hkdfSync('sha256', secret, Buffer.alloc(0), ARTIFACT_TOKEN_HKDF_INFO, 32);

@@ -713,6 +713,17 @@ describe('Page', () => {
       other = createdUsers[1];
     });
 
+    /** A published public page by `author`, optionally carrying a kind hint. */
+    const publish = (path, contentType?: 'markdown' | 'artifact') => ({
+      path,
+      grant: Page.GRANT_PUBLIC,
+      creator: author,
+      status: 'published',
+      updatedAt: new Date('2026-08-07T00:00:00Z'),
+      lastUpdateUser: author,
+      ...(contentType ? { contentType } : {}),
+    });
+
     beforeEach(async () => {
       await Page.deleteMany({});
     });
@@ -1053,15 +1064,6 @@ describe('Page', () => {
     // inside them, so the tree can open every day at once instead of
     // issuing a request per day.
     describe('depth', () => {
-      const publish = (path) => ({
-        path,
-        grant: Page.GRANT_PUBLIC,
-        creator: author,
-        status: 'published',
-        updatedAt: new Date('2026-08-07T00:00:00Z'),
-        lastUpdateUser: author,
-      });
-
       test('depth defaults to 1 — only first-level segments, exactly as before', async () => {
         await Fixture.generate('Page', [publish('/s/2026/08/03/spec'), publish('/s/2026/08/07/report')]);
 
@@ -1143,16 +1145,6 @@ describe('Page', () => {
     // which describes the page saved AT the node, never a portal doc or a
     // descendant under it.
     describe('contentType', () => {
-      const publish = (path, contentType?: 'markdown' | 'artifact') => ({
-        path,
-        grant: Page.GRANT_PUBLIC,
-        creator: author,
-        status: 'published',
-        updatedAt: new Date('2026-08-07T00:00:00Z'),
-        lastUpdateUser: author,
-        ...(contentType ? { contentType } : {}),
-      });
-
       test("reports a page node's own kind, defaulting a hint-less legacy page to markdown", async () => {
         await Fixture.generate('Page', [publish('/k/art', 'artifact'), publish('/k/md', 'markdown'), publish('/k/legacy')]);
 

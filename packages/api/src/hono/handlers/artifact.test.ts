@@ -1,6 +1,6 @@
 import Debug from 'debug';
 import { DEFAULT_ARTIFACT_MAX_BYTES } from 'src/artifact/constants';
-import { deriveArtifactTokenKey, verifyArtifactToken } from 'src/artifact/delivery';
+import { resolveArtifactTokenKey, verifyArtifactToken } from 'src/artifact/delivery';
 import { ingestHtmlArtifact } from 'src/artifact/ingest';
 import * as artifactPolicy from 'src/artifact/policy';
 import { STATUS_DRAFT, STATUS_RENAMING } from 'src/models/page';
@@ -9,7 +9,6 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createPageViaApi, createTestUser } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
-import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 import request from 'supertest';
 
 describe('POST /api/pages/:id/artifact-url (Hono)', () => {
@@ -220,8 +219,12 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
     const token = url.searchParams.get('t');
     expect(token).not.toBeNull();
 
-    const key = deriveArtifactTokenKey(resolveSignedTokenSecret());
-    const payload = verifyArtifactToken(key as Buffer, token as string, { pageId: page._id.toString(), revisionId: page.revision._id.toString() }, fixedNow);
+    const payload = verifyArtifactToken(
+      resolveArtifactTokenKey(),
+      token as string,
+      { pageId: page._id.toString(), revisionId: page.revision._id.toString() },
+      fixedNow,
+    );
     expect(payload).not.toBeNull();
     expect(payload?.u).toBe(userId);
   });
