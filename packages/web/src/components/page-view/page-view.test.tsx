@@ -38,7 +38,13 @@ vi.mock('@/lib/use-route-focus', () => ({ skipRouteFocusFor }));
 
 // Content leaves are irrelevant to render ORDER of the two banners — stub
 // each with an identifiable marker (their own behaviour has its own tests).
-vi.mock('./page-header', () => ({ PageHeader: () => createElement('div', { 'data-testid': 'page-header-stub' }) }));
+const { pageHeaderProps } = vi.hoisted(() => ({ pageHeaderProps: [] as Array<{ wide?: boolean }> }));
+vi.mock('./page-header', () => ({
+  PageHeader: (props: { wide?: boolean }) => {
+    pageHeaderProps.push(props);
+    return createElement('div', { 'data-testid': 'page-header-stub' });
+  },
+}));
 vi.mock('./page-content', () => ({ PageContent: () => createElement('div', { 'data-testid': 'page-content-stub' }) }));
 vi.mock('./artifact-view', () => ({ ArtifactView: () => createElement('div', { 'data-testid': 'artifact-view-stub' }) }));
 vi.mock('./backlink-list', () => ({ BacklinkList: () => createElement('div', { 'data-testid': 'backlink-list-stub' }) }));
@@ -121,6 +127,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  pageHeaderProps.length = 0;
 });
 
 describe('PageView — a link that arrived percent-encoded twice', () => {
@@ -304,7 +311,7 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
   // AC-CH-1 — the exact wording of `EMPTY_TOC` here proves this is NOT
   // simply "the artifact revision happens to have no toc": the artifact
   // Revision below carries a 2-entry `meta.toc`, and it is still dropped.
-  it('passes an empty toc and no railActions to PageTocColumns for an artifact page, wrapping ONLY ArtifactView in the negative-margin rail-reclaim div', () => {
+  it('passes an empty toc and no railActions to PageTocColumns for an artifact page, and widens the whole article — header, body and sections — into the rail', () => {
     renderPageView(
       makePage({
         revision: makeArtifactRevision({ meta: { toc: TWO_HEADINGS } }),
@@ -323,14 +330,17 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     expect(railSlot.textContent).toBe('');
     expect(screen.queryByRole('button', { name: m['page.action_copy_markdown']() })).toBeNull();
 
-    const artifactView = screen.getByTestId('artifact-view-stub');
-    expect(artifactView.parentElement?.className).toContain('min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
-    // W-1 — the wrapper holds ONLY ArtifactView: sibling sections (backlink /
-    // attachment / comments) stay at the normal prose width, not widened
-    // along with it.
-    expect(artifactView.parentElement?.children).toHaveLength(1);
-    expect(artifactView.parentElement?.contains(screen.getByTestId('backlink-list-stub'))).toBe(false);
-    expect(artifactView.parentElement?.contains(screen.getByTestId('page-comments-stub'))).toBe(false);
+    // W-1 — one widened element holds the header, the artifact and every
+    // section under it, so none of them is left at the prose width beside
+    // a wider body; `data-shell-wide` is what the app header keys on.
+    const wide = screen.getByTestId('artifact-view-stub').closest('[data-shell-wide]');
+    expect(wide).not.toBeNull();
+    expect(wide?.className).toContain('min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
+    for (const id of ['page-header-stub', 'backlink-list-stub', 'attachment-list-stub', 'page-comments-stub']) {
+      expect(wide?.contains(screen.getByTestId(id))).toBe(true);
+    }
+    expect(document.querySelectorAll('[data-shell-wide]')).toHaveLength(1);
+    expect(pageHeaderProps.at(-1)?.wide).toBe(true);
   });
 
   // AC-CH-1 (Markdown side of the same contract) / AC-CH-2 — a Markdown
@@ -347,10 +357,10 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     // artifact branch).
     expect(screen.getByRole('button', { name: m['page.action_copy_markdown']() })).toBeTruthy();
 
-    // AC-CH-1 — the W-1 wrapper is exclusive to artifact pages: a Markdown
-    // page's `PageContent` never gets the negative-margin treatment.
-    const pageContent = screen.getByTestId('page-content-stub');
-    expect(pageContent.parentElement?.className ?? '').not.toContain('min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
+    // AC-CH-1 — widening is exclusive to artifact pages.
+    expect(document.querySelector('[data-shell-wide]')).toBeNull();
+    expect(document.body.innerHTML).not.toContain('-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
+    expect(pageHeaderProps.at(-1)?.wide).toBe(false);
   });
 
   // AC-CH-5 — the portalize banner is suppressed for an artifact page even

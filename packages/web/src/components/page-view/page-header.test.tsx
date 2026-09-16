@@ -267,6 +267,18 @@ describe('PageHeader — compact state', () => {
     expect(screen.getByTestId('page-header-compact').firstElementChild?.className).toContain(shiftClass);
   });
 
+  // RFC-0020 — an artifact page's article also spans the rail, so the
+  // compact bar spans it too: dead-centre up to 1440, pushed right by the
+  // left spacer from there.
+  it('spans the article plus the rail when wide, instead of the prose-column shift', () => {
+    renderHeader(<PageHeader page={makePage()} sticky showActions wide />);
+    const bar = screen.getByTestId('page-header-compact').firstElementChild?.className ?? '';
+
+    expect(bar).toContain('min-[1280px]:max-w-[calc(var(--shell-content)+var(--shell-gap)+var(--shell-rail)+2rem)]');
+    expect(bar).toContain('min-[1440px]:translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]');
+    expect(bar).not.toContain('min-[1280px]:max-[1439px]:-translate-x-');
+  });
+
   it('shows only the path tail as the title in the compact bar', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
     // /docs/guide/example → "example"; the full path is not rendered.

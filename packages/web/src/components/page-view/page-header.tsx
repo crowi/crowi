@@ -67,6 +67,11 @@ interface PageHeaderProps {
    */
   sticky?: boolean;
   /**
+   * The page column also spans the empty TOC rail (an artifact page — see
+   * `page-view.tsx`), so the compact bar widens to the same right edge.
+   */
+  wide?: boolean;
+  /**
    * Page TOC + its shared scroll-spy active id. Used to render the
    * collapsed `PageTocMenu` ("目次" popover) in the header when the
    * right-rail TOC is hidden (< 1280px). Omitted by non-page hosts
@@ -89,6 +94,7 @@ export function PageHeader({
   showTitle = true,
   showPresence = false,
   sticky = false,
+  wide = false,
   toc = [],
   activeTocId = null,
   presence,
@@ -408,7 +414,16 @@ export function PageHeader({
             // article it labels. The rail column is there for every page in
             // that band — it carries the page actions even where there are
             // too few headings for a TOC — so the shift is unconditional.
-            className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4 min-[1280px]:max-[1439px]:-translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]"
+            //
+            // `wide` spans the article plus that rail from 1280: the pair is
+            // dead-centre until 1440, then the left spacer pushes it right by
+            // half a rail-plus-gap.
+            className={cn(
+              'mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4',
+              wide
+                ? 'min-[1280px]:max-w-[calc(var(--shell-content)+var(--shell-gap)+var(--shell-rail)+2rem)] min-[1440px]:translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]'
+                : 'min-[1280px]:max-[1439px]:-translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]',
+            )}
           >
             <div className="relative flex items-center gap-2">
               {/* Leading icons, hung out past the content gutter so the

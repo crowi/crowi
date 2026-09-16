@@ -783,7 +783,18 @@ export function PageView({ path, revisionId }: PageViewProps) {
     return (
       <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={railActions}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
-        <article className="space-y-12">
+        {/* RFC-0020 — an artifact page's toc rail is empty (`toc` above is
+            `EMPTY_TOC`), but the rail COLUMN still takes its width at
+            ≥1280px (`PageTocColumns` draws it unconditionally). The whole
+            article — header, body and the sections under it — reclaims
+            that width with a negative margin, so the page reads as one wide
+            column rather than a wide body under a narrow header. The left
+            edge stays put; `data-shell-wide` lets the app header and the
+            compact page header widen to the same right edge. */}
+        <article
+          data-shell-wide={isArtifact ? '' : undefined}
+          className={isArtifact ? 'space-y-12 min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]' : 'space-y-12'}
+        >
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
             page={renderedPage}
@@ -791,6 +802,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
             showActions={!isStaleRevision}
             showPresence={!isStaleRevision && !isDraft}
             sticky={!isStaleRevision}
+            wide={isArtifact}
             toc={toc}
             activeTocId={activeTocId}
             presence={presence}
@@ -799,20 +811,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}
-          {isArtifact ? (
-            // RFC-0020 — the toc rail is empty (`toc` above
-            // is `EMPTY_TOC`) but the rail COLUMN still occupies its width at
-            // ≥1280px (`PageTocColumns` draws it unconditionally); this
-            // negative margin reclaims that width (rail + gap) for the
-            // artifact instead of leaving it as dead space. Wrapping only
-            // this element — not `children` as a whole — keeps the
-            // comment/backlink/attachment sections at the normal prose width.
-            <div className="min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]">
-              <ArtifactView page={renderedPage} />
-            </div>
-          ) : (
-            <PageContent page={renderedPage} />
-          )}
+          {isArtifact ? <ArtifactView page={renderedPage} /> : <PageContent page={renderedPage} />}
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />
