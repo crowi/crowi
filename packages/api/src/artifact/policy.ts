@@ -14,7 +14,6 @@ import type Crowi from 'src/crowi';
 import { getCrowiConfigNamespace } from 'src/util/admin-config';
 import type { ArtifactDeliveryEnv } from 'src/util/env-schema';
 import {
-  ARTIFACT_BOOT_NOTE_APP_SECRET_REQUIRED,
   ARTIFACT_BOOT_NOTE_DISABLED,
   ARTIFACT_BOOT_NOTE_SAME_ORIGIN_ACTIVE,
   ARTIFACT_BOOT_NOTE_SAME_ORIGIN_NEEDS_CLIENT_URL,
@@ -57,16 +56,6 @@ export type ArtifactPolicyState = Readonly<{
   sameOriginInactiveReason: ArtifactSameOriginInactiveReason | null;
   invalidFields: readonly (ArtifactPolicyField | 'policy')[];
 }>;
-
-/**
- * Same literal `util/jwt.ts:74` and `util/federated-auth-state.ts:297` use
- * for the built-in development JWT-signing fallback. Kept as a deliberate
- * literal duplicate here (not imported from either module — both are
- * function-scoped / import `Crowi`, and this is a dependency-free pure
- * value) — a future change to the placeholder value must touch every file
- * that names it, visibly, as a multi-file diff.
- */
-export const DEVELOPMENT_APP_SECRET = 'your-secret-key';
 
 // ---------------------------------------------------------------------------
 // §C 表 — reading the stored `artifact:policy` value
@@ -127,18 +116,6 @@ function readArtifactPolicySettings(config: Readonly<Record<string, unknown>>): 
   return { settings: { sameOriginEnabled, allowWebFonts, maxBytes }, invalidFields };
 }
 
-/**
- * §C-5 — application secret usability. Mirrors `util/jwt.ts:74`'s own
- * fallback chain exactly (`config['app:secret'] || config['SECRET_TOKEN'] ||
- * DEVELOPMENT_APP_SECRET`) so the two can never classify the same
- * configuration differently. The resolved value is used only for this
- * boolean comparison — never returned, logged, or included in any snapshot.
- */
-function isAppSecretUsable(config: Readonly<Record<string, unknown>>): boolean {
-  const secret = config['app:secret'] || config.SECRET_TOKEN || DEVELOPMENT_APP_SECRET;
-  return secret !== DEVELOPMENT_APP_SECRET;
-}
-
 // ---------------------------------------------------------------------------
 // §R 表 — delivery mode resolution
 // ---------------------------------------------------------------------------
@@ -151,11 +128,14 @@ interface ResolvedDeliveryMode {
   sameOriginInactiveReason: ArtifactSameOriginInactiveReason | null;
 }
 
-/** §R 表, evaluated top-to-bottom — R-0 (app secret) always wins regardless of the other rows. */
-function resolveDeliveryMode(env: ArtifactDeliveryEnv, settings: ArtifactPolicySettings, appSecretUsable: boolean): ResolvedDeliveryMode {
-  if (!appSecretUsable) {
-    return { deliveryMode: 'disabled', artifactOrigin: null, crowiOrigin: env.crowiOrigin, writeEnabled: false, sameOriginInactiveReason: null };
-  }
+/**
+ * §R 表, evaluated top-to-bottom. The signing key itself (`SECRET_TOKEN`,
+ * required at boot — `util/signed-token-factory.ts#resolveSignedTokenSecret`)
+ * can no longer be a well-known default here: an unset or placeholder value
+ * aborts boot before this ever runs, so there is nothing left for this
+ * resolver to gate on.
+ */
+function resolveDeliveryMode(env: ArtifactDeliveryEnv, settings: ArtifactPolicySettings): ResolvedDeliveryMode {
   if (env.artifactOrigin !== null) {
     return {
       deliveryMode: 'separate-origin',
@@ -180,8 +160,7 @@ function resolveDeliveryMode(env: ArtifactDeliveryEnv, settings: ArtifactPolicyS
  */
 export function computeArtifactPolicyState(input: ArtifactPolicyInput): ArtifactPolicyState {
   const { settings, invalidFields } = readArtifactPolicySettings(input.config);
-  const appSecretUsable = isAppSecretUsable(input.config);
-  const resolved = resolveDeliveryMode(input.env, settings, appSecretUsable);
+  const resolved = resolveDeliveryMode(input.env, settings);
 
   const snapshot: ArtifactPolicySnapshot = Object.freeze({
     deliveryMode: resolved.deliveryMode,
@@ -264,11 +243,9 @@ export function isArtifactWriteEnabled(crowi: Crowi, snapshot?: ArtifactPolicySn
 /**
  * Emits exactly one `crowi.bootNote(...)` line describing the resolved
  * delivery state (§S-5). `deliveryMode === 'disabled'` alone doesn't
- * distinguish R-0 (app secret unusable) / R-3 (same-origin needs
- * CLIENT_URL) / R-4 (nothing configured) — `sameOriginInactiveReason`
- * already carries R-3, so only R-0 vs. R-4 needs a second, cheap in-memory
- * config read here (not exposed on `ArtifactPolicyState`, which is a
- * leaf-crossing contract fixed at 4 fields).
+ * distinguish R-3 (same-origin needs CLIENT_URL) from R-4 (nothing
+ * configured) — `sameOriginInactiveReason` already carries R-3, so anything
+ * else falls through to R-4.
  */
 export function reportArtifactPolicyAtBoot(crowi: Crowi): void {
   const { snapshot, sameOriginInactiveReason } = resolveArtifactPolicyState(crowi);
@@ -289,11 +266,6 @@ export function reportArtifactPolicyAtBoot(crowi: Crowi): void {
 
   if (sameOriginInactiveReason === 'client-url-unset') {
     crowi.bootNote(() => console.warn(ARTIFACT_BOOT_NOTE_SAME_ORIGIN_NEEDS_CLIENT_URL));
-    return;
-  }
-
-  if (!isAppSecretUsable(getCrowiConfigNamespace(crowi))) {
-    crowi.bootNote(() => console.warn(ARTIFACT_BOOT_NOTE_APP_SECRET_REQUIRED));
     return;
   }
 

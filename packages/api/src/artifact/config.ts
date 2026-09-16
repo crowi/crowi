@@ -56,10 +56,6 @@ export const ARTIFACT_BOOT_NOTE_DISABLED =
   '[crowi] artifact delivery is disabled: set CROWI_ARTIFACT_ORIGIN (recommended) or enable same-origin delivery in ' +
   'Admin > Artifact. Artifact writes are rejected until one of them is configured.';
 
-export const ARTIFACT_BOOT_NOTE_APP_SECRET_REQUIRED =
-  '[crowi] artifact delivery is disabled: set app:secret (or SECRET_TOKEN) to a value of your own. Artifact URLs are ' +
-  'signed with a key derived from it, and the built-in development default would let anyone forge them.';
-
 export const ARTIFACT_BOOT_NOTE_SAME_ORIGIN_NEEDS_CLIENT_URL =
   '[crowi] artifact delivery is disabled: same-origin delivery is enabled in settings but CLIENT_URL is not set. Set ' +
   'CLIENT_URL (or CROWI_ARTIFACT_ORIGIN) to activate artifact delivery.';

@@ -125,11 +125,11 @@ export const registerArtifactRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
 
       // Resolved exactly once per request to avoid inconsistency if config changes mid-request.
       const snapshot = resolveArtifactPolicySnapshot(crowi);
-      const key = snapshot.deliveryMode === 'disabled' ? null : resolveArtifactTokenKey(crowi);
-      if (key === null) {
+      if (snapshot.deliveryMode === 'disabled') {
         debug('mintArtifactUrl', { pageId: normalizedPageId, revisionId: resolvedRevisionId, outcome: 'error' });
         return c.json(artifactUrlUnavailableBody('ARTIFACT_DELIVERY_NOT_CONFIGURED'), 422);
       }
+      const key = resolveArtifactTokenKey();
 
       const nowMs = Date.now();
       const expiresAtMs = nowMs + ARTIFACT_TOKEN_TTL_SECONDS * 1000;

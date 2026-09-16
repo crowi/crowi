@@ -97,9 +97,7 @@ export const registerArtifactStreamRoutes = (app: OpenAPIHono<CrowiHonoBindings>
 
     if (typeof token !== 'string' || token.length === 0) return finish('V-1', notFoundResponse());
 
-    const key = resolveArtifactTokenKey(crowi);
-    if (key === null) return finish('V-1', notFoundResponse());
-
+    const key = resolveArtifactTokenKey();
     const payload = verifyArtifactToken(key, token, { pageId: pathPageId, revisionId: pathRevisionId }, Date.now());
     if (payload === null) return finish('V-1', notFoundResponse());
 

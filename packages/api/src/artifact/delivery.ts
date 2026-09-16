@@ -4,18 +4,14 @@
  */
 import crypto from 'node:crypto';
 
-import type Crowi from 'src/crowi';
 import { timingSafeEqualStrings } from 'src/util/federated-auth-state';
+import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 
 // Distinct info string prevents key collision with oauth-state HMAC,
-// allowing both to coexist from the same app secret.
+// allowing both to coexist from the same signing secret.
 export const ARTIFACT_TOKEN_HKDF_INFO = 'crowi:artifact-delivery-hmac:v1';
 
 export const ARTIFACT_TOKEN_TTL_SECONDS = 60;
-
-// Literal duplicate (not imported) to avoid pulling in Crowi-shaped dependencies
-// while this module remains a pure function of Pick<Crowi, 'getConfig'>.
-const DEVELOPMENT_APP_SECRET = 'your-secret-key';
 
 // userId (u) included in payload for audit trails and future revocation,
 // but never checked during verification since the artifact origin has no session.
@@ -44,20 +40,15 @@ export function deriveArtifactTokenKey(secret: string): Buffer {
 }
 
 /**
- * Resolves the token-signing key from the same `app:secret` / `SECRET_TOKEN`
- * fallback chain `util/jwt.ts:74` reads, in the same order. Returns `null`
- * (never derives a key) when both are unset OR the resolved value is the
- * development default — an independent gate on top of the delivery-mode
- * resolver's own default-secret check, so a caller of this module alone can
- * never mint or verify against the well-known default secret even if it
- * forgets to consult that resolver first.
+ * Resolves the token-signing key from the same `SECRET_TOKEN` (env, required
+ * at boot) that every other JWT/HMAC channel signs with —
+ * `util/signed-token-factory.ts#resolveSignedTokenSecret`. That resolver
+ * never returns an unusable value in a normally booted process (an unset or
+ * placeholder `SECRET_TOKEN` aborts boot first), so this always derives a
+ * real key.
  */
-export function resolveArtifactTokenKey(crowi: Pick<Crowi, 'getConfig'>): Buffer | null {
-  const config = crowi.getConfig() as { crowi?: Record<string, unknown> } | undefined;
-  const namespace = config?.crowi ?? {};
-  const secret = namespace['app:secret'] || namespace['SECRET_TOKEN'];
-  if (typeof secret !== 'string' || secret === '' || secret === DEVELOPMENT_APP_SECRET) return null;
-  return deriveArtifactTokenKey(secret);
+export function resolveArtifactTokenKey(): Buffer {
+  return deriveArtifactTokenKey(resolveSignedTokenSecret());
 }
 
 /**
