@@ -1,25 +1,16 @@
 'use client';
 
 import type { PageChildSegment } from '@crowi/api-contract';
-import { CornerLeftUp, FileText } from 'lucide-react';
+import { CornerLeftUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { m } from '@paraglide/messages.js';
 import { usePageChildrenLevels } from '@/lib/use-page-children';
 import { cn } from '@/lib/utils';
 import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
-import { SidebarRow, SidebarRowLink } from './sidebar-row';
+import { SidebarRowLink, SidebarSelfLinkRow } from './sidebar-row';
 import { SidebarUserHome } from './sidebar-user-home';
-import {
-  dateMonthPath,
-  deepChildRowsOf,
-  folderPageSelfLink,
-  MEMBER_DIR_PATH,
-  type PageSidebarLayout,
-  pageSidebarLayout,
-  resolveSidebarSelfLinks,
-  type SidebarSelfLink,
-} from './sidebar-paths';
+import { deepChildRowsOf, folderPageSelfLink, MEMBER_DIR_PATH, monthLevelIndex, pageSidebarLayout, resolveSidebarSelfLinks } from './sidebar-paths';
 import { SIDEBAR_SCROLLER_ATTR, scrollOffsetToCenter } from './sidebar-scroll';
 
 /**
@@ -43,7 +34,7 @@ export function SidebarTree({ path }: { path: string }) {
   const layout = useMemo(() => pageSidebarLayout(path), [path]);
   // The month level is fetched two deep (days AND their pages) in the one
   // request that would have fetched the days alone.
-  const monthIndex = layout.levelPaths.indexOf(dateMonthPath(path) ?? '');
+  const monthIndex = monthLevelIndex(layout, path);
   const depths = layout.levelPaths.map((_, index) => (index === monthIndex ? 2 : 1));
   const results = usePageChildrenLevels(layout.levelPaths, depths);
   // `isPending`, not `isLoading`: a query paused while offline has no data
@@ -62,11 +53,12 @@ export function SidebarTree({ path }: { path: string }) {
   // render rather than in an effect, so it is kept in the same commit that
   // draws it.
   const [settled, setSettled] = useState<SidebarTreeViewProps | null>(null);
-  const isSettled = settled?.path === path && settled.fetched.length === fetched.length && settled.fetched.every((rows, index) => rows === fetched[index]);
-  if (!isPending && !isSettled) setSettled({ path, layout, monthIndex, fetched });
+  const isSettled = settled?.path === path && settled.fetched.every((rows, index) => rows === fetched[index]);
+  if (!isPending && !isSettled) setSettled({ path, fetched });
 
-  const shown = isPending ? settled : { path, layout, monthIndex, fetched };
-  if (shown === null) {
+  // A render that stores a snapshot is discarded and re-run, so by the time
+  // one commits, `settled` is the newest complete tree there is.
+  if (settled === null) {
     return (
       <div className="space-y-1.5" aria-hidden>
         {Array.from({ length: 6 }).map((_, i) => (
@@ -75,18 +67,18 @@ export function SidebarTree({ path }: { path: string }) {
       </div>
     );
   }
-  return <SidebarTreeView {...shown} />;
+  return <SidebarTreeView {...settled} />;
 }
 
 interface SidebarTreeViewProps {
   path: string;
-  layout: PageSidebarLayout;
-  monthIndex: number;
   fetched: (PageChildSegment[] | undefined)[];
 }
 
 /** The tree for one path whose levels have all been fetched. */
-function SidebarTreeView({ path, layout, monthIndex, fetched }: SidebarTreeViewProps) {
+function SidebarTreeView({ path, fetched }: SidebarTreeViewProps) {
+  const layout = useMemo(() => pageSidebarLayout(path), [path]);
+  const monthIndex = monthLevelIndex(layout, path);
   const levels = fetched.map((rows) => rows ?? []);
   // The same levels narrowed to each level's DIRECT children. Only the
   // month level can differ (its response spans two levels), but taking
@@ -97,9 +89,11 @@ function SidebarTreeView({ path, layout, monthIndex, fetched }: SidebarTreeViewP
   // listing `/…/x/`, leaving the content page at `/…/x` unreachable. Surface
   // it as the first child under `x/`. When the viewer is on the current
   // node's content page, that self-link is the current row (so the folder
-  // node yields the highlight to it — see `currentSelfLinkIsCurrent` below).
+  // node yields the highlight to it — see `hasCurrentSelfLink` below).
   const selfLinks = resolveSidebarSelfLinks(layout, directLevels, path);
-  const currentSelfLinkIsCurrent = selfLinks[layout.currentLevelIndex + 1]?.isCurrent ?? false;
+  // Only the current node's own self-link is ever marked current, so any
+  // marked one means the folder row hands its highlight over.
+  const hasCurrentSelfLink = selfLinks.some((link) => link?.isCurrent);
 
   // The user-home node occupies depth 0, so its space's levels nest under
   // it one step deeper.
@@ -122,19 +116,6 @@ function SidebarTreeView({ path, layout, monthIndex, fetched }: SidebarTreeViewP
     scroller.scrollTop += scrollOffsetToCenter(current.getBoundingClientRect(), scroller.getBoundingClientRect());
   }, [path]);
 
-  // A folder's own content page, listed first among the children it opens.
-  const renderSelfLink = (selfLink: SidebarSelfLink, depth: number): React.ReactNode => (
-    <li key="__self__">
-      <SidebarRow
-        href={selfLink.contentPath}
-        label={selfLink.label}
-        leading={<FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
-        depth={depth}
-        isCurrent={selfLink.isCurrent}
-      />
-    </li>
-  );
-
   // The pages of one non-active day, taken from the month level's deeper
   // fetch. A day the viewer is not on can never hold the current node, so
   // these rows need no active state.
@@ -144,7 +125,11 @@ function SidebarTreeView({ path, layout, monthIndex, fetched }: SidebarTreeViewP
     const selfLink = folderPageSelfLink(day);
     return (
       <ul className="space-y-0.5">
-        {selfLink && renderSelfLink(selfLink, monthIndex + 1 + baseDepth)}
+        {selfLink && (
+          <li key="__self__">
+            <SidebarSelfLinkRow link={selfLink} depth={monthIndex + 1 + baseDepth} />
+          </li>
+        )}
         {pages.map((page) => (
           <li key={page.segment}>
             <SidebarRowLink segment={page} depth={monthIndex + 1 + baseDepth} />
@@ -169,12 +154,16 @@ function SidebarTreeView({ path, layout, monthIndex, fetched }: SidebarTreeViewP
 
     return (
       <ul className="space-y-0.5">
-        {selfLink && renderSelfLink(selfLink, k + baseDepth)}
+        {selfLink && (
+          <li key="__self__">
+            <SidebarSelfLinkRow link={selfLink} depth={k + baseDepth} />
+          </li>
+        )}
         {children.map((child) => {
           const isActive = activeSegment !== null && child.segment === activeSegment;
           // The folder node yields its highlight to the self-link when the
           // viewer is on the content page itself.
-          const isCurrent = k === layout.currentLevelIndex && child.segment === layout.currentSegment && !currentSelfLinkIsCurrent;
+          const isCurrent = k === layout.currentLevelIndex && child.segment === layout.currentSegment && !hasCurrentSelfLink;
           return (
             <li key={child.segment}>
               <SidebarRowLink segment={child} depth={k + baseDepth} isCurrent={isCurrent} isOpen={isActive && !isCurrent} />

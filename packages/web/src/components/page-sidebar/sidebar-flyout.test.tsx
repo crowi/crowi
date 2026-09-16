@@ -1,12 +1,12 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { matchMediaImpl } from '@/lib/test-utils/mocks';
+import { MAIN_CONTENT_ID } from '@/lib/use-route-focus';
 import { SidebarFlyoutProvider, SidebarFlyoutTrigger } from './sidebar-flyout';
 
-const { pathname } = vi.hoisted(() => ({ pathname: { value: '/some/page' } }));
-vi.mock('next/navigation', () => ({
-  usePathname: () => pathname.value,
-}));
+// The provider itself no longer reads the pathname; this keeps the modules in
+// the panel's import graph from reaching for the App Router runtime.
+vi.mock('next/navigation', () => ({ usePathname: () => '/some/page' }));
 
 // The panel's contents are covered by their own tests; this file is about
 // the open/close machine, so both are stubbed down to markers.
@@ -36,7 +36,6 @@ function flyout(path = '/some/page', triggerCount = 1) {
 const rail = { matches: false };
 
 beforeEach(() => {
-  pathname.value = '/some/page';
   rail.matches = false;
   vi.spyOn(window, 'matchMedia').mockImplementation(matchMediaImpl(() => rail.matches));
   // The hover grace window is the only timer here, and every test drives it
@@ -142,7 +141,6 @@ describe('SidebarFlyout', () => {
     fireEvent.click(openButton());
 
     for (const next of ['/some/other-page', '/some/third-page']) {
-      pathname.value = next;
       rerender(flyout(next));
       expect(panel()).not.toBeNull();
       expect(screen.getByTestId('sidebar-body')).toHaveTextContent(next);
@@ -155,12 +153,12 @@ describe('SidebarFlyout', () => {
     render(
       <>
         {flyout()}
-        <main id="main-content" tabIndex={-1} />
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} />
       </>,
     );
     fireEvent.click(openButton());
 
-    act(() => document.getElementById('main-content')?.focus());
+    act(() => document.getElementById(MAIN_CONTENT_ID)?.focus());
     expect(panel()).not.toBeNull();
   });
 

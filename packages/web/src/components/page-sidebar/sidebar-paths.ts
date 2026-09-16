@@ -233,6 +233,15 @@ export function dateMonthPath(path: string): string | null {
 }
 
 /**
+ * Index into `layout.levelPaths` of the month level `dateMonthPath` names,
+ * or `-1` when the path has no month. The level the tree fetches two deep
+ * and opens whole.
+ */
+export function monthLevelIndex(layout: PageSidebarLayout, path: string): number {
+  return layout.levelPaths.indexOf(dateMonthPath(path) ?? '');
+}
+
+/**
  * The rows of a `depth > 1` children fetch that are DIRECT children of
  * `parentPath`.
  *

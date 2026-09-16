@@ -135,14 +135,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
             {/* The header spans the same text column as the page below it.
               From 1280 up to the 1440 rail breakpoint, a page in the
-              `PageTocColumns` shell is a 54rem article + 1.5rem gap + 14rem
-              rail pair (69.5rem, plus this row's gutters), so the header
-              widens to it there; every other route keeps the centred
+              `PageTocColumns` shell is an article + gap + rail pair (the shell
+              tokens in globals.css, plus this row's own gutters), so the header
+              widens to that pair there; every other route keeps the centred
               `max-w-4xl`. The shell is chosen deep in the page tree, so
               `:has()` reads it rather than lifting state up to this layout —
               the width is right on the first paint of each navigation, with no
               effect to wait for. */}
-            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4 min-[1280px]:max-[1440px]:group-has-[[data-toc-columns]]/shell:max-w-[71.5rem]">
+            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4 min-[1280px]:max-[1440px]:group-has-[[data-toc-columns]]/shell:max-w-[calc(var(--shell-content)+var(--shell-gap)+var(--shell-rail)+2rem)]">
               {/* `relative` so the sidebar control can hang off the left of
               this cluster on viewports with a gutter to spare — see
               `SidebarFlyout`. */}

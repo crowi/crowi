@@ -11,16 +11,14 @@ import { PageToc } from './page-toc';
  * stay viewport-relative) and re-centres the content as a
  * `[spacer | content | toc]` triple.
  *
- * The content column is 54rem, not `max-w-4xl`: the app header and the
+ * The column is `--shell-content`, not `max-w-4xl`: the app header and the
  * plain `<main>` are `max-w-4xl` INCLUDING their `px-4` gutters, so their
- * text runs 54rem wide. A 56rem column would sit a gutter wider on each side
- * than the header's logo / avatar and than a portal-less listing. The compact
- * page header and the fixed nav rail (`PageSidebar`) are placed against the
- * same 54rem column.
+ * text runs that much narrower, and a 56rem column here would sit a gutter
+ * wider on each side than the header's logo / avatar and than a portal-less
+ * listing.
  *
- * `data-toc-columns` marks the shell for the app header in `(auth)/layout`,
- * which widens itself over `content + rail` from 1280 up to 1440 while this
- * shell is on screen (see the header's class there).
+ * `data-toc-columns` marks this shell for the app header, which widens to
+ * match it between the two breakpoints below (see `(auth)/layout.tsx`).
  *
  * The left spacer (≥1440) reserves the fixed nav rail's width so the content
  * stays dead-centre; below 1440 it collapses and content + right rail
@@ -57,10 +55,10 @@ export function PageTocColumns({
 }) {
   const hasToc = toc.length >= 2;
   return (
-    <div data-toc-columns className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
-      <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
-      <div className="w-full min-w-0 max-w-[54rem]">{children}</div>
-      <div className="hidden w-56 shrink-0 min-[1280px]:block">
+    <div data-toc-columns className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-[var(--shell-gap)] px-4">
+      <div aria-hidden className="hidden w-[var(--shell-rail)] shrink-0 min-[1440px]:block" />
+      <div className="w-full min-w-0 max-w-[var(--shell-content)]">{children}</div>
+      <div className="hidden w-[var(--shell-rail)] shrink-0 min-[1280px]:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-3">
           {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
           {railActions}

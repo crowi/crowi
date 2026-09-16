@@ -5,9 +5,13 @@ import { Compass, FileText, Folder } from 'lucide-react';
 import Link from 'next/link';
 import { pagePathToHref } from '@/lib/page-path';
 import { cn } from '@/lib/utils';
+import type { SidebarSelfLink } from './sidebar-paths';
 
 // rem of left padding added per tree depth, on top of a small base inset.
 const INDENT_REM = 0.75;
+
+// One leading-icon size and colour for every row the tree draws.
+const ROW_ICON_CLASS = 'h-3.5 w-3.5 shrink-0 text-muted-foreground';
 
 interface SidebarRowProps {
   // Wiki path to link to (spaces are rendered as `+` for the URL).
@@ -71,11 +75,28 @@ export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: { segment:
     <SidebarRow
       href={href}
       label={label}
-      leading={<Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+      leading={<Icon className={ROW_ICON_CLASS} aria-hidden />}
       depth={depth}
       isCurrent={isCurrent}
       isOpen={isOpen}
       trailing={segment.hasPortal ? <Compass className="h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden /> : undefined}
+    />
+  );
+}
+
+/**
+ * The content page of a folder that is also a page (`resolveSidebarSelfLinks`),
+ * listed first among the children that folder opens. The folder row above it
+ * links to the listing, so this is the only row that reaches the page itself.
+ */
+export function SidebarSelfLinkRow({ link, depth }: { link: SidebarSelfLink; depth: number }) {
+  return (
+    <SidebarRow
+      href={link.contentPath}
+      label={link.label}
+      leading={<FileText className={ROW_ICON_CLASS} aria-hidden />}
+      depth={depth}
+      isCurrent={link.isCurrent}
     />
   );
 }

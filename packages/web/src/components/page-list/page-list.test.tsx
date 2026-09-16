@@ -1,19 +1,14 @@
-import type { ListPagesResponse, Page } from '@crowi/api-contract';
+import type { ListPagesResponse } from '@crowi/api-contract';
 import { cleanup, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { makePage } from '@/lib/test-utils/factories';
+import { nextLinkMockModule } from '@/lib/test-utils/mocks';
 
 const { usePageList } = vi.hoisted(() => ({ usePageList: vi.fn() }));
 vi.mock('@/lib/use-page-list', () => ({ usePageList }));
 vi.mock('@/lib/use-auth', () => ({ useAuth: () => ({ user: null }) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock('next/link', () => ({
-  default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
-}));
+vi.mock('next/link', () => nextLinkMockModule());
 // The header / banner / body pieces render nothing these tests look at, and
 // pull in the renderer and the api client.
 vi.mock('@/components/page-view/page-content', () => ({ PageContent: () => null }));
@@ -23,17 +18,8 @@ vi.mock('./portal-header', () => ({ PortalHeader: () => null, PortalOverline: ()
 
 import { PageList } from './page-list';
 
-const makePage = (path: string): Page =>
-  ({
-    _id: `id:${path}`,
-    path,
-    commentCount: 0,
-    createdAt: '2026-09-01T00:00:00.000Z',
-    updatedAt: '2026-09-01T00:00:00.000Z',
-    likerCount: 0,
-    seenUsersCount: 0,
-    isLiked: false,
-  }) as Page;
+/** A row at `path`, with an `_id` of its own so rows can share a list. */
+const pageAt = (path: string) => makePage({ _id: `id:${path}`, path });
 
 const serve = (response: Partial<ListPagesResponse>) => {
   usePageList.mockReturnValue({
@@ -55,25 +41,22 @@ describe('PageList of a folder whose path is also a page', () => {
   // Listing `/xxx/yyy/aa/` while a page lives at `/xxx/yyy/aa`: the server
   // hands that page back as `contentPage`, separate from the rows under it.
   it('lists the same-named page first, ahead of the pages inside the folder', () => {
-    serve({ pages: [makePage('/xxx/yyy/aa/bb')], contentPage: makePage('/xxx/yyy/aa'), total: 1 });
+    serve({ pages: [pageAt('/xxx/yyy/aa/bb')], contentPage: pageAt('/xxx/yyy/aa'), total: 1 });
     render(<PageList initialParams={{ path: '/xxx/yyy/aa/' }} />);
 
-    const aa = row('/xxx/yyy/aa');
-    const bb = row('/xxx/yyy/aa/bb');
-    expect(aa?.closest('a')?.getAttribute('href')).toBe('/xxx/yyy/aa');
-    expect(bb).not.toBeNull();
-    expect(aa && bb && aa.compareDocumentPosition(bb) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByTitle(/^\/xxx\/yyy\/aa(\/bb)?$/).map((el) => el.getAttribute('title'))).toEqual(['/xxx/yyy/aa', '/xxx/yyy/aa/bb']);
+    expect(row('/xxx/yyy/aa')?.closest('a')?.getAttribute('href')).toBe('/xxx/yyy/aa');
   });
 
   it('lists the same-named page even when nothing sits inside the folder yet', () => {
-    serve({ pages: [], contentPage: makePage('/xxx/yyy/zz') });
+    serve({ pages: [], contentPage: pageAt('/xxx/yyy/zz') });
     render(<PageList initialParams={{ path: '/xxx/yyy/zz/' }} />);
 
     expect(row('/xxx/yyy/zz')?.closest('a')?.getAttribute('href')).toBe('/xxx/yyy/zz');
   });
 
   it('pins it to the first page of results only', () => {
-    serve({ pages: [makePage('/xxx/yyy/aa/bb')], pager: { prev: 0, next: null, offset: 100 }, contentPage: makePage('/xxx/yyy/aa') });
+    serve({ pages: [pageAt('/xxx/yyy/aa/bb')], pager: { prev: 0, next: null, offset: 100 }, contentPage: pageAt('/xxx/yyy/aa') });
     render(<PageList initialParams={{ path: '/xxx/yyy/aa/', offset: 100 }} />);
 
     expect(row('/xxx/yyy/aa/bb')).not.toBeNull();
