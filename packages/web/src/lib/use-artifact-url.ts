@@ -7,8 +7,8 @@ import { errorMessage } from './error-message';
 
 /**
  * A `mutationKey`, not a query cache key — minting is a mutation:
- * `ArtifactView`'s explicit "run" action must always hit the network, never
- * be served from a `useQuery` cache. Kept for the same discoverability
+ * every `ArtifactView` run must hit the network, never be served from a
+ * `useQuery` cache. Kept for the same discoverability
  * reason every other `xxxKeys` factory exists (devtools, `useMutationState`
  * filtering).
  */
@@ -55,7 +55,7 @@ export function useMintArtifactUrl() {
     // after `ArtifactView` clears its own `runningUrl` state. `gcTime: 0`
     // makes the mutation (and its data) eligible for removal as soon as the
     // last observer detaches, which `ArtifactView` triggers by calling
-    // `reset()` on stop and on revision change.
+    // `reset()` on a revision change or a rejected mint.
     gcTime: 0,
     mutationFn: async ({ pageId, revisionId }: MintArtifactUrlVariables): Promise<MintArtifactUrlResponse> => {
       const response = await apiClient.pages[':id']['artifact-url'].$post({

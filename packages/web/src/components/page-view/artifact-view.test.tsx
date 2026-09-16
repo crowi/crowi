@@ -185,7 +185,7 @@ describe('ArtifactView', () => {
 
     // Same revision, same props — a re-render a parent could trigger for
     // reasons unrelated to this component (e.g. its own state changing)
-    // must not re-arm `autoRunAttemptedRef` or fire a second mint.
+    // must not fire a second mint.
     rerender(createElement(ArtifactView, { page: makePage() }));
     expect(mutateAsync).toHaveBeenCalledTimes(1);
 
@@ -290,9 +290,9 @@ describe('ArtifactView', () => {
 
       rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-2') }));
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
-      // Same invariant as the stop path: the displayed revision changing
-      // out from under a running artifact must drop the MutationCache
-      // entry, not just the component's own `runningUrl` state.
+      // The displayed revision changing out from under a running artifact
+      // must drop the MutationCache entry, not just the component's own
+      // `runningUrl` state.
       expect(reset).toHaveBeenCalledTimes(1);
 
       // Revision navigation re-arms auto-run: the new revision mints and
@@ -322,6 +322,29 @@ describe('ArtifactView', () => {
       // resolved after rev-2's own (unrelated) mint was already in flight.
       expect(document.querySelectorAll('iframe')).toHaveLength(0);
 
+      await act(async () => {
+        fresh.resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r2?t=fresh`));
+      });
+      expect(document.querySelector('iframe')?.getAttribute('src')).toContain('fresh');
+    });
+
+    it("still auto-mints the new revision while the hook reports the old revision's mint as pending", async () => {
+      mockAppInfo({ data: ENABLED_APP_INFO });
+      const fresh = deferred<{ url: string; expiresAt: string }>();
+      const mutateAsync = vi
+        .fn()
+        .mockReturnValueOnce(new Promise(() => {}))
+        .mockReturnValueOnce(fresh.promise);
+      const { reset } = mockMintWithReset(mutateAsync);
+      const { rerender } = render(createElement(ArtifactView, { page: pageWithRevisionId('rev-1') }));
+
+      // TanStack reports the rev-1 mint as pending on the render that
+      // carries the revision switch; the switch itself is what resets it.
+      useMintArtifactUrl.mockReturnValue({ mutateAsync, isPending: true, reset });
+      rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-2') }));
+
+      expect(mutateAsync).toHaveBeenCalledTimes(2);
+      expect(mutateAsync).toHaveBeenLastCalledWith({ pageId: 'page-1', revisionId: 'rev-2' });
       await act(async () => {
         fresh.resolve(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r2?t=fresh`));
       });
@@ -426,7 +449,7 @@ describe('ArtifactView', () => {
       expectNoConsoleLeak(consoleSpies, mintedUrl);
       // A successful mint response still carries a live token even after
       // this component decides never to render it — must not linger in the
-      // MutationCache the same way a stopped or abandoned run doesn't.
+      // MutationCache, any more than an abandoned run's does.
       expect(reset).toHaveBeenCalledTimes(1);
       // A DYNAMIC mismatch (discovered after an actual mint attempt) gets
       // the ordinary "reason + retry" treatment, unlike the STATIC pre-mint

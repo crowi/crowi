@@ -2,7 +2,7 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -18,9 +18,12 @@ interface ArtifactViewProps {
  * `unknown` covers both "app info hasn't resolved yet" and "app info failed
  * to load" — both must prevent auto-run (fail-closed: running before
  * `enabled === true` is confirmed would let a brief loading flash mint on a
- * server where delivery is actually disabled).
+ * server where delivery is actually disabled). `idle` is only ever the
+ * render just before auto-run; a server without delivery reads `disabled`.
  */
-type ArtifactRunState = 'unknown' | 'idle' | 'minting' | 'running' | 'failed';
+type ArtifactRunState = 'unknown' | 'disabled' | 'idle' | 'minting' | 'running' | 'failed';
+
+type ArtifactPhase = Exclude<ArtifactRunState, 'unknown' | 'disabled'>;
 
 type FailureReason = 'delivery-disabled' | 'origin-mismatch' | 'generic';
 
@@ -103,16 +106,12 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // caller that updates `page` from an async callback with an `await`
   // before the prop change should re-examine this.
   const epochRef = useRef(0);
-  // Guards the auto-run effect below so it fires at most once per revision
-  // — reset here, in the SAME effect that bumps the epoch, so a revision
-  // switch always re-arms auto-run before that effect's own dependency
-  // check runs in this commit (hook call order, not source order, is what
-  // makes this ordering guarantee hold — see the auto-run effect's comment).
-  const autoRunAttemptedRef = useRef(false);
+  // Both are bound once in `MutationObserver`'s constructor, so they stay
+  // referentially stable while the object `useMutation` returns does not.
   const resetMint = mintMutation.reset;
+  const mintArtifactUrl = mintMutation.mutateAsync;
   useLayoutEffect(() => {
     epochRef.current += 1;
-    autoRunAttemptedRef.current = false;
     // Returning to idle must not leave a minted URL/token reachable from
     // TanStack Query's MutationCache. `reset()` detaches this component's
     // observer from the mutation, and paired with `useMintArtifactUrl`'s
@@ -125,7 +124,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
     resetMint();
   }, [revisionId, resetMint]);
 
-  const [phase, setPhase] = useState<'idle' | 'minting' | 'running' | 'failed'>('idle');
+  const [phase, setPhase] = useState<ArtifactPhase>('idle');
   const [runningUrl, setRunningUrl] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<FailureReason>('generic');
 
@@ -160,16 +159,21 @@ export function ArtifactView({ page }: ArtifactViewProps) {
     configuredWebOrigin !== null &&
     normalizeOrigin(deliveryOrigin) !== normalizeOrigin(configuredWebOrigin);
 
-  const effectiveState: ArtifactRunState = !enabledKnown ? 'unknown' : phase === 'idle' && configMismatch ? 'failed' : phase;
+  let effectiveState: ArtifactRunState = phase;
+  if (!enabledKnown) effectiveState = 'unknown';
+  else if (phase === 'idle' && configMismatch) effectiveState = 'failed';
+  else if (phase === 'idle' && !deliveryEnabled) effectiveState = 'disabled';
   const effectiveReason: FailureReason = phase === 'failed' ? failureReason : 'origin-mismatch';
 
+  // No `isPending` guard: the synchronous move to `minting` is what stops a
+  // second call (the button that could fire it unmounts), and a pending
+  // mint from the previous revision must not block this one's.
   const handleRun = useCallback(async () => {
-    if (mintMutation.isPending) return;
     epochRef.current += 1;
     const epoch = epochRef.current;
     setPhase('minting');
     try {
-      const data = await mintMutation.mutateAsync({ pageId: page._id, revisionId });
+      const data = await mintArtifactUrl({ pageId: page._id, revisionId });
       if (epochRef.current !== epoch) return;
       const mintedOrigin = normalizeOrigin(data.url);
       if (mintedOrigin === null || mintedOrigin !== deliveryOrigin) {
@@ -190,31 +194,20 @@ export function ArtifactView({ page }: ArtifactViewProps) {
       setFailureReason(error instanceof ArtifactUrlUnavailableFailure && error.reason === 'ARTIFACT_DELIVERY_NOT_CONFIGURED' ? 'delivery-disabled' : 'generic');
       setPhase('failed');
     }
-  }, [mintMutation, resetMint, page._id, revisionId, deliveryOrigin]);
+  }, [mintArtifactUrl, resetMint, page._id, revisionId, deliveryOrigin]);
 
-  // Runs the revision automatically once delivery is confirmed enabled — see
-  // the `ArtifactRunState` doc comment above for why `enabledKnown` gates
-  // this fail-closed, and `configMismatch` for why a self-inconsistent
-  // deployment must not even attempt it. `effectiveState === 'idle'` is NOT
-  // used as the guard here: it stays `'idle'` even when `deliveryEnabled` is
-  // false (the render below then shows the disabled notice instead of
-  // running), so this checks `deliveryEnabled` directly. `autoRunAttemptedRef`
-  // limits this to once per revision — declared after the revision-change
-  // effect above so React flushes that effect's ref reset first on a
-  // revision switch.
-  useLayoutEffect(() => {
-    if (enabledKnown && deliveryEnabled && !configMismatch && phase === 'idle' && !autoRunAttemptedRef.current) {
-      autoRunAttemptedRef.current = true;
-      // `handleRun`'s synchronous `setPhase('minting')` (before its first
-      // `await`) is deliberate, not the derive-state-from-props anti-pattern
-      // this rule targets: it is what lets the placeholder skip straight to
-      // "minting" in the SAME commit as the layout effect, with no idle
-      // frame ever painted. The ref guard above already limits this to one
-      // call per revision.
+  // `idle` is left the moment `handleRun` starts, and only a revision switch
+  // returns to it, so this fires once per revision.
+  const shouldAutoRun = effectiveState === 'idle';
+  useEffect(() => {
+    if (shouldAutoRun) {
+      // Starting an async mint is the external work this effect exists for;
+      // the synchronous `setPhase('minting')` inside is its first step, not
+      // state derived from props.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void handleRun();
     }
-  }, [enabledKnown, deliveryEnabled, configMismatch, phase, handleRun]);
+  }, [shouldAutoRun, handleRun]);
 
   if (effectiveState === 'running' && runningUrl) {
     return (
@@ -235,10 +228,8 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // Loading app info and minting both normally resolve within a few hundred
   // ms, so they get the same bare spinner the page itself uses while
   // loading — an explanatory box here would only flash before the frame
-  // replaces it. `idle` with delivery enabled is the render just before the
-  // auto-run effect moves to `minting` (a config mismatch already reads as
-  // `failed`), so it gets the spinner too.
-  if ((effectiveState === 'unknown' && !appInfoQuery.isError) || effectiveState === 'minting' || (effectiveState === 'idle' && deliveryEnabled)) {
+  // replaces it.
+  if ((effectiveState === 'unknown' && !appInfoQuery.isError) || effectiveState === 'idle' || effectiveState === 'minting') {
     return <LoadingSpinner message={m['page.artifact.preparing']()} />;
   }
 
@@ -253,7 +244,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
           {m['page.artifact.retry_button']()}
         </Button>
       )}
-      {effectiveState === 'idle' && (
+      {effectiveState === 'disabled' && (
         <Alert>
           <AlertTitle>{m['page.artifact.delivery_unavailable_title']()}</AlertTitle>
           <AlertDescription>{m['page.artifact.delivery_unavailable_body']()}</AlertDescription>
