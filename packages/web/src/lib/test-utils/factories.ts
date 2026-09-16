@@ -10,10 +10,8 @@ import type { Attachment, Page } from '@crowi/api-contract';
 
 /**
  * Build a minimal `Page` fixture (a list row: no revision, no grant).
- * Centralised here because the same definition appeared in:
- *   - page-list-item.test.tsx
- *   - page-display-user.test.ts
- *   - user-subpages.test.tsx
+ * The same shape is still written inline in page-list-item.test.tsx,
+ * page-display-user.test.ts and user-subpages.test.tsx — prefer this one.
  * Give rows that share a list distinct `_id`s — list components key on it.
  */
 export function makePage(overrides: Partial<Page> = {}): Page {
