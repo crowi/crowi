@@ -94,10 +94,6 @@ async function flush() {
   });
 }
 
-function runButton() {
-  return screen.getByRole('button', { name: m['page.artifact.run_button']() });
-}
-
 function mintSuccess(url: string) {
   return { url, expiresAt: '2026-05-01T00:01:00.000Z' };
 }
@@ -247,34 +243,33 @@ describe('ArtifactView', () => {
     expect(inputNoteContainer?.parentElement).toBe(iframe?.parentElement);
   });
 
-  it('AC-SH-5: stop removes the iframe and returns to a manual-resume idle state; the Run button mints a second time without reusing the URL', async () => {
+  it('AC-SH-5: the running state offers no controls — only the frame and the notice', async () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
-    const { mutateAsync, reset } = mockMintWithReset(
+    mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+    render(createElement(ArtifactView, { page: makePage() }));
+
+    await flush();
+
+    expect(document.querySelectorAll('iframe')).toHaveLength(1);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('AC-SH-5: retrying after a failed mint mints again rather than reusing anything from the failed attempt', async () => {
+    mockAppInfo({ data: ENABLED_APP_INFO });
+    const mutateAsync = mockMint(
       vi
         .fn()
-        .mockResolvedValueOnce(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok1`))
+        .mockRejectedValueOnce(new Error('network'))
         .mockResolvedValueOnce(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok2`)),
     );
     render(createElement(ArtifactView, { page: makePage() }));
-    await flush(); // the auto-triggered first mint
-    expect(document.querySelectorAll('iframe')).toHaveLength(1);
-    reset.mockClear(); // discard the mount-time no-op call; isolate stop's own call
-
-    fireEvent.click(screen.getByRole('button', { name: m['page.artifact.stop_button']() }));
-    expect(document.querySelectorAll('iframe')).toHaveLength(0);
-    // Stop must drop the mint's MutationCache entry, not just the
-    // component's own `runningUrl` state — otherwise a stale signed
-    // URL/token would still be retrievable from the cache after stop.
-    expect(reset).toHaveBeenCalledTimes(1);
-    // Stopping must NOT be immediately undone by auto-run re-firing — the
-    // component sits in `idle` with a manual Run button, not a second
-    // automatic mint.
-    expect(mutateAsync).toHaveBeenCalledTimes(1);
-    expect(runButton()).toBeTruthy();
+    await flush();
+    expect(screen.getByText(m['page.artifact.mint_failed_title']())).toBeTruthy();
 
     await act(async () => {
-      fireEvent.click(runButton());
+      fireEvent.click(screen.getByRole('button', { name: m['page.artifact.retry_button']() }));
     });
+
     expect(mutateAsync).toHaveBeenCalledTimes(2);
     expect(document.querySelector('iframe')?.getAttribute('src')).toContain('tok2');
   });
@@ -375,7 +370,7 @@ describe('ArtifactView', () => {
 
       expect(screen.queryByRole('status')).toBeNull();
       expect(screen.getByText(m['page.artifact.placeholder_title']())).toBeTruthy();
-      expect(screen.queryByRole('button', { name: m['page.artifact.run_button']() })).toBeNull();
+      expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([m['page.artifact.retry_button']()]);
       expect(mutateAsync).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole('button', { name: m['page.artifact.retry_button']() }));
@@ -387,7 +382,7 @@ describe('ArtifactView', () => {
       const mutateAsync = mockMint();
       render(createElement(ArtifactView, { page: makePage() }));
 
-      expect(screen.queryByRole('button', { name: m['page.artifact.run_button']() })).toBeNull();
+      expect(screen.queryByRole('button')).toBeNull();
       expect(screen.getByText(m['page.artifact.delivery_unavailable_body']())).toBeTruthy();
       expect(mutateAsync).not.toHaveBeenCalled();
     });
@@ -486,7 +481,7 @@ describe('ArtifactView', () => {
       const consoleSpies = spyOnAllConsoleMethods();
       render(createElement(ArtifactView, { page: makePage() }));
 
-      expect(screen.queryByRole('button', { name: m['page.artifact.run_button']() })).toBeNull();
+      expect(screen.queryByRole('button')).toBeNull();
       expect(mutateAsync).not.toHaveBeenCalled();
       expect(screen.getByText(m['page.artifact.origin_mismatch_title']())).toBeTruthy();
       expect(screen.queryByRole('button', { name: m['page.artifact.retry_button']() })).toBeNull();

@@ -81,7 +81,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   const appInfoQuery = useAppInfo();
   const mintMutation = useMintArtifactUrl();
 
-  // Bumped on every mint attempt, revision change, and stop — a mint
+  // Bumped on every mint attempt and revision change — a mint
   // response is only ever applied if the epoch it was issued under is still
   // current. This is strictly stronger than comparing `revisionId`: an A →
   // B → A revision round-trip leaves the revision id unchanged but must
@@ -175,9 +175,9 @@ export function ArtifactView({ page }: ArtifactViewProps) {
       if (mintedOrigin === null || mintedOrigin !== deliveryOrigin) {
         // The mutation still holds this URL/token in TanStack's
         // MutationCache even though it's never rendered — discard it the
-        // same way the revision-change effect and `handleStop` do, rather
-        // than leaving it reachable until some later state change happens
-        // to reset the mutation.
+        // same way the revision-change effect does, rather than leaving it
+        // reachable until some later state change happens to reset the
+        // mutation.
         resetMint();
         setFailureReason('origin-mismatch');
         setPhase('failed');
@@ -201,9 +201,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // running), so this checks `deliveryEnabled` directly. `autoRunAttemptedRef`
   // limits this to once per revision — declared after the revision-change
   // effect above so React flushes that effect's ref reset first on a
-  // revision switch, and read again after `handleStop` (which does not
-  // reset it) so stopping returns to a manual-resume `idle` rather than
-  // looping straight back into running.
+  // revision switch.
   useLayoutEffect(() => {
     if (enabledKnown && deliveryEnabled && !configMismatch && phase === 'idle' && !autoRunAttemptedRef.current) {
       autoRunAttemptedRef.current = true;
@@ -218,15 +216,6 @@ export function ArtifactView({ page }: ArtifactViewProps) {
     }
   }, [enabledKnown, deliveryEnabled, configMismatch, phase, handleRun]);
 
-  const handleStop = () => {
-    epochRef.current += 1;
-    // See the revision-change effect above for why `reset()` (not just
-    // clearing `runningUrl`) is required here.
-    resetMint();
-    setPhase('idle');
-    setRunningUrl(null);
-  };
-
   if (effectiveState === 'running' && runningUrl) {
     return (
       <div className="space-y-2">
@@ -235,14 +224,9 @@ export function ArtifactView({ page }: ArtifactViewProps) {
           title={m['page.artifact.iframe_title']()}
           className="h-[70vh] min-h-[480px] w-full"
         />
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-          <div>
-            <p>{m['page.artifact.sandbox_notice_generated']()}</p>
-            <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleStop}>
-            {m['page.artifact.stop_button']()}
-          </Button>
+        <div className="text-sm text-muted-foreground">
+          <p>{m['page.artifact.sandbox_notice_generated']()}</p>
+          <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
         </div>
       </div>
     );
@@ -251,8 +235,10 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   // Loading app info and minting both normally resolve within a few hundred
   // ms, so they get the same bare spinner the page itself uses while
   // loading — an explanatory box here would only flash before the frame
-  // replaces it.
-  if ((effectiveState === 'unknown' && !appInfoQuery.isError) || effectiveState === 'minting') {
+  // replaces it. `idle` with delivery enabled is the render just before the
+  // auto-run effect moves to `minting` (a config mismatch already reads as
+  // `failed`), so it gets the spinner too.
+  if ((effectiveState === 'unknown' && !appInfoQuery.isError) || effectiveState === 'minting' || (effectiveState === 'idle' && deliveryEnabled)) {
     return <LoadingSpinner message={m['page.artifact.preparing']()} />;
   }
 
@@ -260,23 +246,19 @@ export function ArtifactView({ page }: ArtifactViewProps) {
     <div className="space-y-4 rounded-lg border p-6 text-center">
       <h3 className="font-medium">{m['page.artifact.placeholder_title']()}</h3>
       <p className="text-sm text-muted-foreground">{m['page.artifact.placeholder_body']()}</p>
-      {/* Fail-closed: a failed app-info fetch stays in `unknown` — never
-          falls through to the run button — and offers only a way to check
-          again, never a way to run. */}
+      {/* Fail-closed: a failed app-info fetch stays in `unknown` and offers
+          only a way to check again, never a way to run. */}
       {effectiveState === 'unknown' && (
         <Button variant="outline" size="sm" onClick={() => appInfoQuery.refetch()}>
           {m['page.artifact.retry_button']()}
         </Button>
       )}
-      {effectiveState === 'idle' &&
-        (deliveryEnabled ? (
-          <Button onClick={handleRun}>{m['page.artifact.run_button']()}</Button>
-        ) : (
-          <Alert>
-            <AlertTitle>{m['page.artifact.delivery_unavailable_title']()}</AlertTitle>
-            <AlertDescription>{m['page.artifact.delivery_unavailable_body']()}</AlertDescription>
-          </Alert>
-        ))}
+      {effectiveState === 'idle' && (
+        <Alert>
+          <AlertTitle>{m['page.artifact.delivery_unavailable_title']()}</AlertTitle>
+          <AlertDescription>{m['page.artifact.delivery_unavailable_body']()}</AlertDescription>
+        </Alert>
+      )}
       {effectiveState === 'failed' && <FailureAlert reason={effectiveReason} canRetry={phase === 'failed'} onRetry={handleRun} />}
     </div>
   );
