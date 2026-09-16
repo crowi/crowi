@@ -38,9 +38,17 @@ name="${repo}:${id}"
 winname="${br%/impl}"
 [ -z "$winname" ] && winname="$(basename "$wt")"
 
+# GW_CLAUDE_MODEL picks the model at launch. Sending `/model <name>` to the
+# session afterwards also switches it, but Claude Code saves that choice as the
+# user's default for every new session in every project (`model` in
+# ~/.claude/settings.json), so a kickoff would silently change how unrelated
+# sessions start.
+model_flag=""
+[ -n "${GW_CLAUDE_MODEL:-}" ] && model_flag=" --model '${GW_CLAUDE_MODEL}'"
+
 if [ "${GW_TMUX_CLAUDE_DRYRUN:-0}" = "1" ]; then
-  printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q\n' "$wt" "$winname" "$name" "$name"
+  printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q%s\n' "$wt" "$winname" "$name" "$name" "$model_flag"
   exit 0
 fi
 
-exec tmux new-window -c "$wt" -n "$winname" "claude --remote-control '$name' --name '$name'"
+exec tmux new-window -c "$wt" -n "$winname" "claude --remote-control '$name' --name '$name'$model_flag"

@@ -233,6 +233,35 @@ sleep 1   # SIGTERM が効くのを待つ
 `pnpm dev` を別 pane に出している場合は、Step 6.5 の window kill が先に効けばそちらでも止まる
 (が、Step 6.5 は `gw end` の **後**なので、この Step 5.5 がレース回避の本命)。
 
+**共有コンテナの所有者を確認する(`gw end` の前に必須)**。同じ `pre_end_hook` は worktree で
+`docker compose down -v --remove-orphans` も実行する。`docker-compose.yml` で `container_name:` を
+固定しているサービス(`crowi-mongodb` / `crowi-redis` / `crowi-test-mongodb` / `crowi-test-redis` /
+`crowi-test-redis-tls` / `crowi-mailpit` / `crowi-elasticsearch`)は **最初に作った compose project が
+所有**するので、worktree セッションが手元確認のために起動していると、その worktree の `gw end` が
+**他セッションも使っている実体ごと消す**(実例 2026-09-16: 統合対象の worktree が mongodb/redis を
+所有したまま別 worktree の e2e が 27017 に接続中だった。mailpit も別 worktree の所有だった):
+
+```bash
+docker ps -a --format '{{.Names}}|{{.Label "com.docker.compose.project"}}|{{.State}}' | grep -a '^crowi'
+# project 列が `crowi` 以外 = その worktree の所有。`gw end` で消える
+```
+
+所有者が今から閉じる worktree のときは:
+
+1. **使用中でないことを確認する** — `lsof -nP -iTCP:27017 -iTCP:27018 -iTCP:6379 -iTCP:1025 -sTCP:ESTABLISHED -t`
+   の各 PID の cwd を見て、他 worktree のプロセスが繋がっていないことを確かめる。繋がっていれば
+   `gw end` を待つ(他セッションのテストが DB ごと落ち、CLAUDE.md の flake ルートに乗せてしまう)。
+2. `gw end` 実行後、**main worktree からサービス名を明示して起動し直す**。素の `up -d` は他 project
+   所有の固定名と衝突して全体が止まるので、必ず名指しする:
+
+```bash
+docker compose up -d mongodb redis mailpit   # 直前に running だったものだけ
+```
+
+3. `State=created` 等で**起動していなかったコンテナは復元しない** — 消えたままが元の状態。
+4. 付け替え時刻と「この時刻をまたいだ接続エラーは製品起因ではない」ことを、稼働中の他 worktree
+   セッションへ agmsg で伝える。
+
 ### Step 5.6: 統合後コードへの selective `/crowi-qa` 呼び出し (必須フック)
 
 Step 5.5 で止めるのは **source worktree** 側の dev/watch プロセスであり、統合後のコードを
