@@ -43,12 +43,17 @@ winname="${br%/impl}"
 # user's default for every new session in every project (`model` in
 # ~/.claude/settings.json), so a kickoff would silently change how unrelated
 # sessions start.
-model_flag=""
-[ -n "${GW_CLAUDE_MODEL:-}" ] && model_flag=" --model '${GW_CLAUDE_MODEL}'"
+model_args=()
+[ -n "${GW_CLAUDE_MODEL:-}" ] && model_args=(--model "$GW_CLAUDE_MODEL")
 
+# Hand tmux the argv directly instead of a command string: a string is run
+# through a shell, so a quote inside any value (a model name here) would end
+# the quoting and the rest would be read as shell syntax.
 if [ "${GW_TMUX_CLAUDE_DRYRUN:-0}" = "1" ]; then
-  printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q%s\n' "$wt" "$winname" "$name" "$name" "$model_flag"
+  printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q' "$wt" "$winname" "$name" "$name"
+  [ -n "${GW_CLAUDE_MODEL:-}" ] && printf ' --model %q' "$GW_CLAUDE_MODEL"
+  printf '\n'
   exit 0
 fi
 
-exec tmux new-window -c "$wt" -n "$winname" "claude --remote-control '$name' --name '$name'$model_flag"
+exec tmux new-window -c "$wt" -n "$winname" -- claude --remote-control "$name" --name "$name" "${model_args[@]}"
