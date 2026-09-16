@@ -51,18 +51,34 @@ vi.mock('./backlink-list', () => ({ BacklinkList: () => createElement('div', { '
 vi.mock('./attachment-list', () => ({ AttachmentList: () => createElement('div', { 'data-testid': 'attachment-list-stub' }) }));
 vi.mock('@/components/page-comments', () => ({ PageComments: () => createElement('div', { 'data-testid': 'page-comments-stub' }) }));
 
-// RFC-0020 (AC-CH-1/AC-CH-2) — `PageTocColumns` itself is unchanged by this
-// feature (its own geometry stays correct precisely because nothing here
-// edits it); it is stubbed JUST so `toc` / `railActions` become inspectable
-// via data attributes AND `railActions` actually renders — a boolean flag
-// alone can't prove the rail-mounted copy-markdown button is (or isn't) in
-// the DOM (AC-CH-2). `children` renders through unchanged, so every other
-// test in this file (banner order, over-encoded-path recovery) is unaffected.
+// RFC-0020 (AC-CH-1/AC-CH-2) — `PageTocColumns` owns its own geometry
+// (`page-toc-columns.test.tsx`); it is stubbed JUST so `toc` / `railActions` /
+// `wide` become inspectable via data attributes AND `railActions` actually
+// renders — a boolean flag alone can't prove the rail-mounted copy-markdown
+// button is (or isn't) in the DOM (AC-CH-2). `children` renders through
+// unchanged, so every other test in this file (banner order,
+// over-encoded-path recovery) is unaffected.
 vi.mock('./page-toc-columns', () => ({
-  PageTocColumns: ({ toc, railActions, children }: { toc: TocEntryResponse[]; activeTocId: string | null; railActions?: ReactNode; children: ReactNode }) =>
+  PageTocColumns: ({
+    toc,
+    railActions,
+    wide,
+    children,
+  }: {
+    toc: TocEntryResponse[];
+    activeTocId: string | null;
+    railActions?: ReactNode;
+    wide?: boolean;
+    children: ReactNode;
+  }) =>
     createElement(
       'div',
-      { 'data-testid': 'page-toc-columns-stub', 'data-toc-length': String(toc.length), 'data-has-rail-actions': String(railActions != null) },
+      {
+        'data-testid': 'page-toc-columns-stub',
+        'data-toc-length': String(toc.length),
+        'data-has-rail-actions': String(railActions != null),
+        'data-wide': String(wide === true),
+      },
       createElement('div', { 'data-testid': 'rail-actions-slot' }, railActions ?? null),
       children,
     ),
@@ -311,7 +327,7 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
   // AC-CH-1 — the exact wording of `EMPTY_TOC` here proves this is NOT
   // simply "the artifact revision happens to have no toc": the artifact
   // Revision below carries a 2-entry `meta.toc`, and it is still dropped.
-  it('passes an empty toc and no railActions to PageTocColumns for an artifact page, and widens the whole article — header, body and sections — into the rail', () => {
+  it('passes an empty toc and no railActions to PageTocColumns for an artifact page, and makes the shell wide so header, body and sections all span the rail', () => {
     renderPageView(
       makePage({
         revision: makeArtifactRevision({ meta: { toc: TWO_HEADINGS } }),
@@ -330,22 +346,18 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     expect(railSlot.textContent).toBe('');
     expect(screen.queryByRole('button', { name: m['page.action_copy_markdown']() })).toBeNull();
 
-    // W-1 — one widened element holds the header, the artifact and every
-    // section under it, so none of them is left at the prose width beside
-    // a wider body; `data-shell-wide` is what the app header keys on.
-    const wide = screen.getByTestId('artifact-view-stub').closest('[data-shell-wide]');
-    expect(wide).not.toBeNull();
-    expect(wide?.className).toContain('min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
-    for (const id of ['page-header-stub', 'backlink-list-stub', 'attachment-list-stub', 'page-comments-stub']) {
-      expect(wide?.contains(screen.getByTestId(id))).toBe(true);
+    // W-1 — the shell itself is wide, so the header, the artifact and every
+    // section under it share the widened column; the compact header follows.
+    expect(columns.getAttribute('data-wide')).toBe('true');
+    for (const id of ['page-header-stub', 'artifact-view-stub', 'backlink-list-stub', 'attachment-list-stub', 'page-comments-stub']) {
+      expect(columns.contains(screen.getByTestId(id))).toBe(true);
     }
-    expect(document.querySelectorAll('[data-shell-wide]')).toHaveLength(1);
     expect(pageHeaderProps.at(-1)?.wide).toBe(true);
   });
 
   // AC-CH-1 (Markdown side of the same contract) / AC-CH-2 — a Markdown
   // page's toc and rail actions are unaffected by this leaf.
-  it('passes the real toc and a railActions node to PageTocColumns for a Markdown page, rendering the rail copy-markdown button and no negative-margin wrapper', () => {
+  it('passes the real toc and a railActions node to PageTocColumns for a Markdown page, rendering the rail copy-markdown button in a normal-width shell', () => {
     renderPageView(makePage({ revision: { ...makePage().revision, meta: { toc: TWO_HEADINGS } } }));
 
     const columns = screen.getByTestId('page-toc-columns-stub');
@@ -358,8 +370,7 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     expect(screen.getByRole('button', { name: m['page.action_copy_markdown']() })).toBeTruthy();
 
     // AC-CH-1 — widening is exclusive to artifact pages.
-    expect(document.querySelector('[data-shell-wide]')).toBeNull();
-    expect(document.body.innerHTML).not.toContain('-mr-[calc(var(--shell-rail)+var(--shell-gap))]');
+    expect(columns.getAttribute('data-wide')).toBe('false');
     expect(pageHeaderProps.at(-1)?.wide).toBe(false);
   });
 

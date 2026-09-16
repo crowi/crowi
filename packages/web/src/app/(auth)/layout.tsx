@@ -141,12 +141,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               `max-w-4xl`. The shell is chosen deep in the page tree, so
               `:has()` reads it rather than lifting state up to this layout —
               the width is right on the first paint of each navigation, with no
-              effect to wait for. From 1440 a `data-shell-wide` page (an
-              artifact, whose column also covers the rail) keeps the same pair
-              width but only extends to the right, so the header shifts by half
-              the extra width to keep its left edge on the article's. `left`,
-              not a transform, so nothing inside gains a new containing block. */}
-            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4 min-[1280px]:max-[1440px]:group-has-[[data-toc-columns]]/shell:max-w-[calc(var(--shell-content)+var(--shell-gap)+var(--shell-rail)+2rem)] min-[1440px]:group-has-[[data-shell-wide]]/shell:relative min-[1440px]:group-has-[[data-shell-wide]]/shell:left-[calc((var(--shell-gap)+var(--shell-rail))*0.5)] min-[1440px]:group-has-[[data-shell-wide]]/shell:max-w-[calc(var(--shell-content)+var(--shell-gap)+var(--shell-rail)+2rem)]">
+              effect to wait for. From 1440 a wide shell (an artifact page, whose
+              column also covers the rail) keeps the same pair width but only
+              extends to the right, so the header shifts by half the extra width
+              to keep its left edge on the article's. `left`, not a transform,
+              so nothing inside gains a new containing block. */}
+            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4 min-[1280px]:max-[1440px]:group-has-[[data-toc-columns]]/shell:max-w-[calc(var(--shell-pair)+2rem)] min-[1440px]:group-has-[[data-toc-columns=wide]]/shell:relative min-[1440px]:group-has-[[data-toc-columns=wide]]/shell:left-[var(--shell-rail-shift)] min-[1440px]:group-has-[[data-toc-columns=wide]]/shell:max-w-[calc(var(--shell-pair)+2rem)]">
               {/* `relative` so the sidebar control can hang off the left of
               this cluster on viewports with a gutter to spare — see
               `SidebarFlyout`. */}

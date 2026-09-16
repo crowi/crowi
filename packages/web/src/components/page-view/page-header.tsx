@@ -421,8 +421,8 @@ export function PageHeader({
             className={cn(
               'mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4',
               wide
-                ? 'min-[1280px]:max-w-[calc(var(--shell-content)+var(--shell-gap)+var(--shell-rail)+2rem)] min-[1440px]:translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]'
-                : 'min-[1280px]:max-[1439px]:-translate-x-[calc((var(--shell-rail)+var(--shell-gap))*0.5)]',
+                ? 'min-[1280px]:max-w-[calc(var(--shell-pair)+2rem)] min-[1440px]:translate-x-[var(--shell-rail-shift)]'
+                : 'min-[1280px]:max-[1439px]:-translate-x-[var(--shell-rail-shift)]',
             )}
           >
             <div className="relative flex items-center gap-2">

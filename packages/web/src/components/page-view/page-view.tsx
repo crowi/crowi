@@ -781,20 +781,11 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // dotmenu, which independently omits its own copy-markdown item).
     const railActions = isArtifact ? undefined : <CopyPageMarkdownButton key={renderedPage._id} page={renderedPage} />;
     return (
-      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={railActions}>
+      // RFC-0020 — an artifact has nothing for the TOC rail, so the whole
+      // page column takes the rail's width.
+      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={railActions} wide={isArtifact}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
-        {/* RFC-0020 — an artifact page's toc rail is empty (`toc` above is
-            `EMPTY_TOC`), but the rail COLUMN still takes its width at
-            ≥1280px (`PageTocColumns` draws it unconditionally). The whole
-            article — header, body and the sections under it — reclaims
-            that width with a negative margin, so the page reads as one wide
-            column rather than a wide body under a narrow header. The left
-            edge stays put; `data-shell-wide` lets the app header and the
-            compact page header widen to the same right edge. */}
-        <article
-          data-shell-wide={isArtifact ? '' : undefined}
-          className={isArtifact ? 'space-y-12 min-[1280px]:-mr-[calc(var(--shell-rail)+var(--shell-gap))]' : 'space-y-12'}
-        >
+        <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
             page={renderedPage}
