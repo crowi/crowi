@@ -41,7 +41,7 @@ worth knowing without reading code:
 Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 `turbo` automatically. Non-obvious points:
 
-- **Dev**: `docker compose up -d` for infra (mongo/redis/es/plantuml) →
+- **Dev**: `docker compose up -d` for infra (mongo/redis/es/mailpit) →
   `pnpm dev` for api+web+plugins. `pnpm dev:api` / `pnpm dev:web` for one side.
   `pnpm dev` builds every workspace lib/plugin **once** up front (turbo-cached),
   then keeps only `@crowi/api` (tsx), `@crowi/web` (next) and `@crowi/api-contract`
