@@ -57,7 +57,7 @@ export const ARTIFACT_IFRAME_SANDBOX = 'allow-scripts';
  */
 export const ARTIFACT_FRAME_CSP = (frameSrc: string): string => `default-src 'none'; frame-src ${frameSrc}; style-src 'unsafe-inline'; frame-ancestors 'self'`;
 
-type ResolvedArtifactOrigin = Readonly<{ mode: 'configured'; origin: string }> | Readonly<{ mode: 'request-host'; host: string }>;
+type ResolvedArtifactOrigin = Readonly<{ mode: 'configured'; origin: string }> | Readonly<{ mode: 'request-host'; host: string | null }>;
 
 /**
  * `NEXT_PUBLIC_ARTIFACT_ORIGIN` is read via `readPublicRuntimeEnv()` (an
@@ -65,22 +65,31 @@ type ResolvedArtifactOrigin = Readonly<{ mode: 'configured'; origin: string }> |
  * member access) so this evaluates at REQUEST time, not baked in at build
  * time — the same reasoning `public-runtime-env.ts` documents for the
  * browser-injected `window.__ENV` path. When unset (same-origin delivery),
- * falls back to the CURRENT request's own host — deliberately NOT its
- * scheme: behind a TLS-terminating proxy this server sees `http`, while the
- * signed artifact URL a same-origin mint produces is built from
- * `CLIENT_URL` and is `https`. Comparing on host+port only (never scheme)
- * avoids rejecting every legitimate same-origin request in that (common)
- * topology; the real defence against a scheme downgrade is this response's
- * own scheme-less `frame-src` token, which the browser resolves against the
- * page's real (TLS-terminated) scheme.
+ * falls back to the CURRENT request's own host, read from the `Host`
+ * header rather than `request.url` — Next's router rebuilds `request.url`
+ * from its own `hostname:port` bind address whenever
+ * `experimental.trustHostHeader` is off (the default, unset here), so
+ * behind a reverse proxy `request.url` carries the server's internal port,
+ * never the public one the browser actually connected to and the signed
+ * `src` was minted against. The `Host` header is untouched by that
+ * rewriting: it comes straight from the incoming request. Deliberately NOT
+ * matched on scheme either: behind a TLS-terminating proxy this server sees
+ * `http`, while the signed artifact URL a same-origin mint produces is
+ * built from `CLIENT_URL` and is `https`. Comparing on host+port only
+ * (never scheme) avoids rejecting every legitimate same-origin request in
+ * that (common) topology; the real defence against a scheme downgrade is
+ * this response's own scheme-less `frame-src` token, which the browser
+ * resolves against the page's real (TLS-terminated) scheme.
  */
 function resolveArtifactOrigin(request: Request): ResolvedArtifactOrigin {
   const configured = readPublicRuntimeEnv().NEXT_PUBLIC_ARTIFACT_ORIGIN;
   if (configured) {
     return { mode: 'configured', origin: new URL(configured).origin };
   }
-  return { mode: 'request-host', host: new URL(request.url).host };
+  return { mode: 'request-host', host: request.headers.get('host') };
 }
+
+type ValidatedSrc = Readonly<{ url: URL; frameSrcToken: string }>;
 
 /**
  * `src` must be present, parseable, and resolve to exactly the artifact
@@ -91,9 +100,11 @@ function resolveArtifactOrigin(request: Request): ResolvedArtifactOrigin {
  * intentionally NOT stricter than the CSP it precedes (never scheme-checked
  * in the unconfigured case) — the CSP is the outer, browser-enforced
  * defence, this is only the inner one deciding whether to serve a frame at
- * all.
+ * all. Returns the CSP `frame-src` token alongside the validated URL so the
+ * caller never has to re-derive it (and can't drift from what was actually
+ * matched against).
  */
-function validateSrc(rawSrc: string | null, resolved: ResolvedArtifactOrigin): URL | null {
+function validateSrc(rawSrc: string | null, resolved: ResolvedArtifactOrigin): ValidatedSrc | null {
   if (!rawSrc) return null;
   let parsed: URL;
   try {
@@ -102,9 +113,10 @@ function validateSrc(rawSrc: string | null, resolved: ResolvedArtifactOrigin): U
     return null;
   }
   if (resolved.mode === 'configured') {
-    return parsed.origin === resolved.origin ? parsed : null;
+    return parsed.origin === resolved.origin ? { url: parsed, frameSrcToken: resolved.origin } : null;
   }
-  return parsed.host === resolved.host ? parsed : null;
+  if (resolved.host === null) return null;
+  return parsed.host === resolved.host ? { url: parsed, frameSrcToken: resolved.host } : null;
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -117,17 +129,16 @@ export async function GET(request: Request): Promise<Response> {
     return new Response('Invalid or missing src.', { status: 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   }
 
-  const frameSrcToken = resolved.mode === 'configured' ? resolved.origin : resolved.host;
   // No inline script anywhere in this document — the only reason it needs
   // a CSP at all is to constrain the CHILD frame, so the document itself
   // stays trivial enough that `default-src 'none'` never has to be relaxed.
-  const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe src="${escapeHtml(validated.href)}" sandbox="${ARTIFACT_IFRAME_SANDBOX}" referrerpolicy="no-referrer"></iframe></body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe src="${escapeHtml(validated.url.href)}" sandbox="${ARTIFACT_IFRAME_SANDBOX}" referrerpolicy="no-referrer"></iframe></body></html>`;
 
   return new Response(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Content-Security-Policy': ARTIFACT_FRAME_CSP(frameSrcToken),
+      'Content-Security-Policy': ARTIFACT_FRAME_CSP(validated.frameSrcToken),
     },
   });
 }

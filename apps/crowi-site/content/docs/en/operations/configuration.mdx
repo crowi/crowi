@@ -142,6 +142,8 @@ exist, and neither is on by default.
   setting's propagation to other replicas is best-effort — after turning it
   off, restart every instance to be sure it has taken effect everywhere.
 
+Same-origin delivery's `/_artifact-frame` document derives the artifact's expected host from the request's `Host` header — any reverse proxy in front of Crowi must forward the original `Host` header unchanged (Caddy does this by default; nginx needs `proxy_set_header Host $host;`), or legitimate same-origin artifact requests are rejected with `Invalid or missing src.`
+
 If neither mode is configured, Crowi boots normally and the boot log
 explains what to set; artifact writes are rejected until one of them is
 active (reading pre-existing artifact pages still works, just without the

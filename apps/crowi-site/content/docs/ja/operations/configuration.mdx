@@ -140,6 +140,8 @@ HTML artifact ページは、Crowi に到達できる security context では絶
   best-effort です — 無効化した後は、全 instance に確実に反映させるため
   それぞれを再起動してください。
 
+same-origin 配信の `/_artifact-frame` は、request の `Host` header から artifact の期待 host を導出します。手前に reverse proxy を置く場合は、元の `Host` header をそのまま転送するよう設定してください(Caddy は既定でそのまま転送します。nginx では `proxy_set_header Host $host;` が必要です)。転送されないと、正当な same-origin artifact request が `Invalid or missing src.` として拒否されます。
+
 どちらのモードも設定していない場合、Crowi は通常どおり起動し、boot log に
 設定手順が表示されます。いずれかを有効にするまで artifact の書き込みは
 拒否されます(既存の artifact ページの閲覧は、実行可能なプレビューを

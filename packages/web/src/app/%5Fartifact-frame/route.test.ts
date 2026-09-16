@@ -19,8 +19,16 @@ async function importRoute() {
   return import('./route');
 }
 
-function requestFor(url: string): Request {
-  return new Request(url);
+/**
+ * Defaults the `Host` header to the URL's own host, matching what a direct
+ * (non-proxied) request looks like. Pass `host` explicitly to simulate a
+ * reverse-proxied request where the incoming `Host` header differs from
+ * whatever `request.url` says — see the "Host header, not request.url"
+ * tests below for why that distinction matters.
+ */
+function requestFor(url: string, opts?: { host?: string | null }): Request {
+  const host = opts?.host === undefined ? new URL(url).host : opts.host;
+  return new Request(url, host === null ? undefined : { headers: { host } });
 }
 
 /**
@@ -206,6 +214,37 @@ describe('GET /_artifact-frame', () => {
       // neither response was served from a value pinned once at import time.
       const mismatched = await GET(requestFor(`https://wiki.example.com/_artifact-frame?src=${encodeURIComponent(secondHostSrc)}`));
       expect(mismatched.status).toBe(400);
+    });
+
+    it("derives the origin from the Host header, not from request.url's own host", async () => {
+      // Reproduces a reverse-proxied deployment (Caddy/nginx in front of the
+      // Next.js server on a different port): the framework's own router
+      // rebuilds `request.url` from its internal bind address unless
+      // `experimental.trustHostHeader` is set, so `request.url` here
+      // deliberately points at an address the public `src` was never minted
+      // against — only the `Host` header carries the real, public-facing
+      // value. A route that read `new URL(request.url).host` instead of the
+      // `Host` header would 400 this legitimate request.
+      const { GET } = await importRoute();
+      const src = 'https://wiki.example.com:4333/api/artifact/p1/r1?t=tok';
+      const req = requestFor(`http://127.0.0.1:4331/_artifact-frame?src=${encodeURIComponent(src)}`, { host: 'wiki.example.com:4333' });
+
+      const res = await GET(req);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Security-Policy')).toBe(
+        "default-src 'none'; frame-src wiki.example.com:4333; style-src 'unsafe-inline'; frame-ancestors 'self'",
+      );
+    });
+
+    it('400s when the Host header is absent, even if request.url would otherwise match', async () => {
+      const { GET } = await importRoute();
+      const src = 'https://wiki.example.com/api/artifact/p1/r1?t=tok';
+      const req = requestFor(`https://wiki.example.com/_artifact-frame?src=${encodeURIComponent(src)}`, { host: null });
+
+      const res = await GET(req);
+
+      expect(res.status).toBe(400);
     });
   });
 });
