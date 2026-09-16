@@ -9,11 +9,11 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createPageViaApi, createTestUser } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
+import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 import request from 'supertest';
 
 describe('POST /api/pages/:id/artifact-url (Hono)', () => {
   const PATH_PREFIX = '/hono-artifact-url-test/';
-  const USABLE_SECRET = 'a-real-secret-value-for-artifact-url-tests';
   let Page;
   let Revision;
   let accessToken: string;
@@ -44,10 +44,9 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
     await restoreCrowiConfig(crowi, configSnapshot);
   });
 
-  /** Mode A (separate-origin) with a usable app secret — the "delivery is configured" baseline most tests need. */
+  /** Mode A (separate-origin) — the "delivery is configured" baseline most tests need. */
   const enableArtifactDelivery = () => {
     jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.test', crowiOrigin: 'http://localhost:13001' });
-    return crowi.getConfigService().saveConfig('crowi', { 'app:secret': USABLE_SECRET });
   };
 
   const ingestedBody = async (html: string): Promise<string> => {
@@ -99,10 +98,7 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
 
   test('403 INSUFFICIENT_SCOPE for a token lacking pages:read', async () => {
     // The scope guard runs BEFORE the page/revision lookup, so it rejects
-    // even a nonexistent page id — no need to seed a page (and, crucially,
-    // no `enableArtifactDelivery()`: that mutates `app:secret`, which would
-    // sign this OAuth token with a different secret than the one the auth
-    // middleware's boot-time-cached `jwtUtil` verifies against).
+    // even a nonexistent page id — no need to seed a page.
     const res = await request(app)
       .post('/api/pages/000000000000000000000000/artifact-url')
       .set(await insufficientScopeHeaders())
@@ -200,15 +196,6 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
     expect(res.body.error).toMatchObject({ code: 'ARTIFACT_URL_UNAVAILABLE', reason: 'ARTIFACT_DELIVERY_NOT_CONFIGURED' });
   });
 
-  test('422 ARTIFACT_URL_UNAVAILABLE when the app secret is still the development default, even with an otherwise-valid artifact origin (R-0 always wins)', async () => {
-    jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.test', crowiOrigin: 'http://localhost:13001' });
-    // app:secret is left at the snapshot baseline (the development default).
-    const page = await createArtifactPage(`${PATH_PREFIX}secret-default`, await ingestedBody(validArtifactHtml()));
-    const res = await request(app).post(`/api/pages/${page._id}/artifact-url`).set(authHeaders(accessToken)).send({});
-    expect(res.status).toBe(422);
-    expect(res.body.error).toMatchObject({ code: 'ARTIFACT_URL_UNAVAILABLE', reason: 'ARTIFACT_DELIVERY_NOT_CONFIGURED' });
-  });
-
   test('200: mints a URL for the current revision, expiring exactly 60s after mint, resolving the policy snapshot exactly once', async () => {
     await enableArtifactDelivery();
     const page = await createArtifactPage(`${PATH_PREFIX}success`, await ingestedBody(validArtifactHtml()));
@@ -233,7 +220,7 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
     const token = url.searchParams.get('t');
     expect(token).not.toBeNull();
 
-    const key = deriveArtifactTokenKey(USABLE_SECRET);
+    const key = deriveArtifactTokenKey(resolveSignedTokenSecret());
     const payload = verifyArtifactToken(key as Buffer, token as string, { pageId: page._id.toString(), revisionId: page.revision._id.toString() }, fixedNow);
     expect(payload).not.toBeNull();
     expect(payload?.u).toBe(userId);

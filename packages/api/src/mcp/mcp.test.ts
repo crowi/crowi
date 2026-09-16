@@ -648,7 +648,6 @@ describe('MCP server (/api/mcp)', () => {
       beforeEach(async () => {
         configSnapshot = await snapshotCrowiConfig(crowi);
         jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.test', crowiOrigin: 'http://localhost:13001' });
-        await crowi.getConfigService().saveConfig('crowi', { 'app:secret': 'a-real-secret-value-for-mcp-clients-tests' });
       });
 
       afterEach(async () => {

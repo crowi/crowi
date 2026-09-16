@@ -3998,12 +3998,7 @@ describe('RFC-0020 §1 — content type discriminator (Hono page routes)', () =>
     user = created.user;
     userId = String(created.user._id);
 
-    // feature-html-artifact-write-path AC-DP-5 / §C-5 — a target kind of
-    // `artifact` now re-validates through the delivery-policy gate, which
-    // refuses to enable delivery while the app secret is still the
-    // development default (umbrella §leaf を跨ぐ契約 #12).
     configSnapshot = await snapshotCrowiConfig(crowi);
-    await crowi.getConfigService().saveConfig('crowi', { 'app:secret': 'a-real-secret-value-for-artifact-storage-tests' });
   });
 
   afterAll(() => restoreCrowiConfig(crowi, configSnapshot));
@@ -4236,7 +4231,6 @@ describe('RFC-0020 §1 — content type discriminator (Hono page routes)', () =>
 
 describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write integration)', () => {
   const PATH_PREFIX = '/hono-page-artifact-write-path-test/';
-  const USABLE_SECRET = 'a-real-secret-value-for-artifact-write-path-tests';
   let Page;
   let Revision;
   let Bookmark;
@@ -4265,16 +4259,14 @@ describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write i
   afterEach(async () => {
     await cleanupPathPrefix(PATH_PREFIX);
     // Every test starts from a known "delivery not configured" baseline
-    // (§C-5: the default app secret disables delivery outright) unless it
-    // opts in via `enableArtifactDelivery`.
+    // unless it opts in via `enableArtifactDelivery`.
     await restoreCrowiConfig(crowi, configSnapshot);
   });
 
-  /** Mode A (separate-origin) with a usable app secret — the "delivery is configured" baseline most tests need. */
+  /** Mode A (separate-origin) — the "delivery is configured" baseline most tests need. */
   const enableArtifactDelivery = (overrides?: Readonly<{ allowWebFonts?: boolean; maxBytes?: number }>) => {
     jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.test', crowiOrigin: 'http://localhost:13001' });
     return crowi.getConfigService().saveConfig('crowi', {
-      'app:secret': USABLE_SECRET,
       'artifact:policy': {
         sameOriginEnabled: false,
         allowWebFonts: overrides?.allowWebFonts ?? false,
@@ -4409,7 +4401,6 @@ describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write i
       // gate once this process re-reads it.
       jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: null, crowiOrigin: 'http://localhost:13001' });
       await crowi.getConfigService().saveConfig('crowi', {
-        'app:secret': USABLE_SECRET,
         'artifact:policy': { sameOriginEnabled: true, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
       });
 

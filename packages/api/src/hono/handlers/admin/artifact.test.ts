@@ -6,8 +6,6 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
-const USABLE_SECRET = 'a-real-secret-value-for-admin-artifact-tests';
-
 describe('AC-DP-2: contract byte-range constants match the core leaf definitions', () => {
   it('ARTIFACT_MAX_BYTES_MIN === ARTIFACT_MIN_MAX_BYTES', () => {
     expect(ARTIFACT_MAX_BYTES_MIN).toBe(ARTIFACT_MIN_MAX_BYTES);
@@ -25,7 +23,6 @@ describe('Routes /api/admin/artifact (Hono)', () => {
 
   const resetArtifactConfig = async () => {
     await crowi.getConfigService().saveConfig('crowi', {
-      'app:secret': USABLE_SECRET,
       'artifact:policy': { sameOriginEnabled: false, allowWebFonts: false, maxBytes: 2 * 1024 * 1024 },
     });
   };

@@ -2,7 +2,6 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 import { crowi } from 'src/test/setup';
 import type { ArtifactDeliveryEnv } from 'src/util/env-schema';
 import {
-  ARTIFACT_BOOT_NOTE_APP_SECRET_REQUIRED,
   ARTIFACT_BOOT_NOTE_DISABLED,
   ARTIFACT_BOOT_NOTE_SAME_ORIGIN_ACTIVE,
   ARTIFACT_BOOT_NOTE_SAME_ORIGIN_NEEDS_CLIENT_URL,
@@ -14,7 +13,6 @@ import {
 import { ARTIFACT_HARD_MAX_BYTES, ARTIFACT_MIN_MAX_BYTES, DEFAULT_ARTIFACT_MAX_BYTES } from './constants';
 import {
   computeArtifactPolicyState,
-  DEVELOPMENT_APP_SECRET,
   isArtifactWriteEnabled,
   reportArtifactPolicyAtBoot,
   resetArtifactConfigWarningsForTests,
@@ -26,13 +24,8 @@ const ENV_SEPARATE_ORIGIN: ArtifactDeliveryEnv = { artifactOrigin: 'https://arti
 const ENV_SAME_ORIGIN_ELIGIBLE: ArtifactDeliveryEnv = { artifactOrigin: null, crowiOrigin: 'https://wiki.example.com' };
 const ENV_NO_CLIENT_URL: ArtifactDeliveryEnv = { artifactOrigin: null, crowiOrigin: null };
 
-const USABLE_SECRET = 'a-real-secret-value';
-
-function makeConfig(overrides: { secretField?: 'app:secret' | 'SECRET_TOKEN'; secret?: string; policy?: unknown }): Readonly<Record<string, unknown>> {
+function makeConfig(overrides: { policy?: unknown }): Readonly<Record<string, unknown>> {
   const config: Record<string, unknown> = {};
-  if (overrides.secret !== undefined) {
-    config[overrides.secretField ?? 'app:secret'] = overrides.secret;
-  }
   if (overrides.policy !== undefined) {
     config[ARTIFACT_POLICY_KEY] = overrides.policy;
   }
@@ -40,69 +33,9 @@ function makeConfig(overrides: { secretField?: 'app:secret' | 'SECRET_TOKEN'; se
 }
 
 describe('computeArtifactPolicyState', () => {
-  describe('§R-0: application secret usability gates every other row', () => {
-    const UNUSABLE_SECRET_CASES: [string, Readonly<Record<string, unknown>>][] = [
-      [
-        'app:secret and SECRET_TOKEN both unset',
-        makeConfig({ policy: { sameOriginEnabled: true, allowWebFonts: true, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES } }),
-      ],
-      [
-        "app:secret === 'your-secret-key'",
-        makeConfig({ secret: DEVELOPMENT_APP_SECRET, policy: { sameOriginEnabled: true, allowWebFonts: true, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES } }),
-      ],
-      [
-        "SECRET_TOKEN === 'your-secret-key' (app:secret unset)",
-        makeConfig({
-          secretField: 'SECRET_TOKEN',
-          secret: DEVELOPMENT_APP_SECRET,
-          policy: { sameOriginEnabled: true, allowWebFonts: true, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
-        }),
-      ],
-    ];
-
-    it.each(UNUSABLE_SECRET_CASES)('%s -> disabled + writeEnabled:false with a Mode A env, regardless of stored settings', (_label, config) => {
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config });
-      expect(state.snapshot.deliveryMode).toBe('disabled');
-      expect(state.snapshot.artifactOrigin).toBeNull();
-      expect(state.snapshot.writeEnabled).toBe(false);
-      expect(state.sameOriginInactiveReason).toBeNull();
-    });
-
-    it.each(UNUSABLE_SECRET_CASES)('%s -> disabled + writeEnabled:false with a Mode B-eligible env too (R-0 wins over R-2)', (_label, config) => {
-      const state = computeArtifactPolicyState({ env: ENV_SAME_ORIGIN_ELIGIBLE, config });
-      expect(state.snapshot.deliveryMode).toBe('disabled');
-      expect(state.snapshot.writeEnabled).toBe(false);
-    });
-
-    it('a real, independent app:secret value is usable and lets Mode A resolve normally', () => {
-      const config = makeConfig({ secret: USABLE_SECRET, policy: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES } });
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config });
-      expect(state.snapshot.deliveryMode).toBe('separate-origin');
-      expect(state.snapshot.writeEnabled).toBe(true);
-    });
-
-    it('a real, independent SECRET_TOKEN value (app:secret unset) is usable too', () => {
-      const config = makeConfig({
-        secretField: 'SECRET_TOKEN',
-        secret: USABLE_SECRET,
-        policy: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
-      });
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config });
-      expect(state.snapshot.deliveryMode).toBe('separate-origin');
-    });
-
-    it('never leaks the secret value into the returned state (snapshot, settings, or JSON serialization)', () => {
-      const secret = 'a-real-secret-value-that-must-never-appear-anywhere';
-      const config = makeConfig({ secret, policy: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES } });
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config });
-      expect(JSON.stringify(state)).not.toContain(secret);
-    });
-  });
-
-  describe('§R-1..R-4 (usable secret assumed)', () => {
+  describe('§R-1..R-4', () => {
     const baseConfig = (settings: { sameOriginEnabled?: boolean; allowWebFonts?: boolean; maxBytes?: number } = {}) =>
       makeConfig({
-        secret: USABLE_SECRET,
         policy: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES, ...settings },
       });
 
@@ -165,7 +98,7 @@ describe('computeArtifactPolicyState', () => {
 
   describe('§C 表 — reading the stored artifact:policy value', () => {
     it('C-0: a missing artifact:policy key resolves to all defaults with no invalidFields', () => {
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ secret: USABLE_SECRET }) });
+      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({}) });
       expect(state.settings).toEqual({ sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES });
       expect(state.invalidFields).toEqual([]);
     });
@@ -175,7 +108,7 @@ describe('computeArtifactPolicyState', () => {
       ['an array', []],
       ['a string', 'not-an-object'],
     ])('C-0: artifact:policy = %s -> all defaults + invalidFields === ["policy"] only (not also the 3 fields)', (_label, value) => {
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ secret: USABLE_SECRET, policy: value }) });
+      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ policy: value }) });
       expect(state.settings).toEqual({ sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES });
       expect(state.invalidFields).toEqual(['policy']);
     });
@@ -193,7 +126,7 @@ describe('computeArtifactPolicyState', () => {
       ] as const)('%s = %p -> %p (invalid: %p)', (field, raw, expected, invalid) => {
         const record: Record<string, unknown> = { maxBytes: DEFAULT_ARTIFACT_MAX_BYTES };
         if (raw !== undefined) record[field] = raw;
-        const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ secret: USABLE_SECRET, policy: record }) });
+        const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ policy: record }) });
         expect(state.settings[field]).toBe(expected);
         expect(state.invalidFields.includes(field)).toBe(invalid);
       });
@@ -210,7 +143,7 @@ describe('computeArtifactPolicyState', () => {
     ])('C-3: maxBytes = %s -> %p (invalid: %p)', (_label, raw, expected, invalid) => {
       const record: Record<string, unknown> = { sameOriginEnabled: false, allowWebFonts: false };
       if (raw !== undefined) record.maxBytes = raw;
-      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ secret: USABLE_SECRET, policy: record }) });
+      const state = computeArtifactPolicyState({ env: ENV_SEPARATE_ORIGIN, config: makeConfig({ policy: record }) });
       expect(state.settings.maxBytes).toBe(expected);
       expect(state.invalidFields.includes('maxBytes')).toBe(invalid);
     });
@@ -369,10 +302,6 @@ describe('resolveArtifactPolicySnapshot / resolveArtifactPolicyState (booted cro
   });
 
   describe('AC-DP-5: R-1 / R-3 reproduced on a booted harness via a getArtifactDeliveryEnv spy', () => {
-    beforeAll(async () => {
-      await crowi.getConfigService().saveConfig('crowi', { 'app:secret': USABLE_SECRET });
-    });
-
     it('R-1: a spied artifactOrigin resolves separate-origin with writeEnabled true', async () => {
       await crowi.getConfigService().saveConfig(ARTIFACT_CONFIG_NAMESPACE, {
         [ARTIFACT_POLICY_KEY]: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
@@ -417,21 +346,8 @@ describe('resolveArtifactPolicySnapshot / resolveArtifactPolicyState (booted cro
       jest.restoreAllMocks();
     });
 
-    it('R-0 (app secret unusable) -> M-10 only', async () => {
-      await crowi.getConfigService().saveConfig('crowi', { 'app:secret': DEVELOPMENT_APP_SECRET });
-      const writes = captureBootNoteWrites();
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      reportArtifactPolicyAtBoot(crowi);
-
-      expect(writes).toHaveLength(1);
-      writes[0]();
-      expect(warnSpy).toHaveBeenCalledWith(ARTIFACT_BOOT_NOTE_APP_SECRET_REQUIRED);
-    });
-
     it('R-1 with no inactive reason -> M-4a only', async () => {
       await crowi.getConfigService().saveConfig('crowi', {
-        'app:secret': USABLE_SECRET,
         [ARTIFACT_POLICY_KEY]: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
       });
       const envSpy = jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue(ENV_SEPARATE_ORIGIN);
@@ -447,8 +363,7 @@ describe('resolveArtifactPolicySnapshot / resolveArtifactPolicyState (booted cro
     });
 
     it('R-1 with an inactive reason -> M-3 only, never M-4a', async () => {
-      await crowi.getConfigService().saveConfig('crowi', {
-        'app:secret': USABLE_SECRET,
+      await crowi.getConfigService().saveConfig(ARTIFACT_CONFIG_NAMESPACE, {
         [ARTIFACT_POLICY_KEY]: { sameOriginEnabled: true, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
       });
       const envSpy = jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue(ENV_SEPARATE_ORIGIN);
@@ -465,8 +380,7 @@ describe('resolveArtifactPolicySnapshot / resolveArtifactPolicyState (booted cro
     });
 
     it('R-2 (same-origin active) -> M-4b only', async () => {
-      await crowi.getConfigService().saveConfig('crowi', {
-        'app:secret': USABLE_SECRET,
+      await crowi.getConfigService().saveConfig(ARTIFACT_CONFIG_NAMESPACE, {
         [ARTIFACT_POLICY_KEY]: { sameOriginEnabled: true, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
       });
       const envSpy = jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue(ENV_SAME_ORIGIN_ELIGIBLE);
@@ -482,8 +396,7 @@ describe('resolveArtifactPolicySnapshot / resolveArtifactPolicyState (booted cro
     });
 
     it('R-3 (same-origin needs CLIENT_URL) -> M-2 only', async () => {
-      await crowi.getConfigService().saveConfig('crowi', {
-        'app:secret': USABLE_SECRET,
+      await crowi.getConfigService().saveConfig(ARTIFACT_CONFIG_NAMESPACE, {
         [ARTIFACT_POLICY_KEY]: { sameOriginEnabled: true, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
       });
       const envSpy = jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue(ENV_NO_CLIENT_URL);
@@ -499,8 +412,7 @@ describe('resolveArtifactPolicySnapshot / resolveArtifactPolicyState (booted cro
     });
 
     it('R-4 (nothing configured) -> M-1 only', async () => {
-      await crowi.getConfigService().saveConfig('crowi', {
-        'app:secret': USABLE_SECRET,
+      await crowi.getConfigService().saveConfig(ARTIFACT_CONFIG_NAMESPACE, {
         [ARTIFACT_POLICY_KEY]: { sameOriginEnabled: false, allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES },
       });
       const envSpy = jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue(ENV_SAME_ORIGIN_ELIGIBLE);

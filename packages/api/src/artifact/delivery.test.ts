@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { withSecretTokenEnv } from 'src/test/secret-token-env';
+import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 import {
   ARTIFACT_TOKEN_HKDF_INFO,
   ARTIFACT_TOKEN_TTL_SECONDS,
@@ -172,33 +174,18 @@ describe('artifact delivery token', () => {
   });
 
   describe('resolveArtifactTokenKey', () => {
-    const crowiWithSecrets = (crowiNamespace: Record<string, unknown>) => ({
-      getConfig: () => ({ crowi: crowiNamespace }),
+    it('derives a key from the unified SECRET_TOKEN signing secret', () => {
+      expect(resolveArtifactTokenKey()).toEqual(deriveArtifactTokenKey(resolveSignedTokenSecret()));
     });
 
-    it('returns null when both app:secret and SECRET_TOKEN are unset', () => {
-      expect(resolveArtifactTokenKey(crowiWithSecrets({}))).toBeNull();
+    it('follows SECRET_TOKEN when it changes', () => {
+      withSecretTokenEnv({ SECRET_TOKEN: 'a-real-secret-value-for-delivery-tests-32c' }, () => {
+        expect(resolveArtifactTokenKey()).toEqual(deriveArtifactTokenKey('a-real-secret-value-for-delivery-tests-32c'));
+      });
     });
 
-    it('returns null when the resolved secret is the development default', () => {
-      expect(resolveArtifactTokenKey(crowiWithSecrets({ 'app:secret': 'your-secret-key' }))).toBeNull();
-    });
-
-    it('derives a key from app:secret when set to a non-default value', () => {
-      const result = resolveArtifactTokenKey(crowiWithSecrets({ 'app:secret': 'a-real-secret-value' }));
-      expect(result).toEqual(deriveArtifactTokenKey('a-real-secret-value'));
-    });
-
-    it('falls back to SECRET_TOKEN when app:secret is unset', () => {
-      const result = resolveArtifactTokenKey(crowiWithSecrets({ SECRET_TOKEN: 'a-real-secret-token-value' }));
-      expect(result).toEqual(deriveArtifactTokenKey('a-real-secret-token-value'));
-    });
-
-    it('does not throw for any of the 4 combinations', () => {
-      expect(() => resolveArtifactTokenKey(crowiWithSecrets({}))).not.toThrow();
-      expect(() => resolveArtifactTokenKey(crowiWithSecrets({ 'app:secret': 'your-secret-key' }))).not.toThrow();
-      expect(() => resolveArtifactTokenKey(crowiWithSecrets({ 'app:secret': 'x' }))).not.toThrow();
-      expect(() => resolveArtifactTokenKey(crowiWithSecrets({ SECRET_TOKEN: 'x' }))).not.toThrow();
+    it('does not throw', () => {
+      expect(() => resolveArtifactTokenKey()).not.toThrow();
     });
   });
 

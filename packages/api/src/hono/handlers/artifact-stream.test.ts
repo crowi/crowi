@@ -10,9 +10,8 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createPageViaApi, createTestUser } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
+import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 import request from 'supertest';
-
-const USABLE_SECRET = 'a-real-secret-value-for-artifact-stream-tests';
 
 describe('artifact-stream (the token-authenticated serve route and the JWT-authenticated download route)', () => {
   const PATH_PREFIX = '/hono-artifact-stream-test/';
@@ -46,10 +45,9 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
     await restoreCrowiConfig(crowi, configSnapshot);
   });
 
-  /** Mode A (separate-origin) with a usable app secret. */
+  /** Mode A (separate-origin). */
   const enableArtifactDelivery = () => {
     jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.test', crowiOrigin: 'http://localhost:13001' });
-    return crowi.getConfigService().saveConfig('crowi', { 'app:secret': USABLE_SECRET });
   };
 
   const ingestedBody = async (html: string): Promise<string> => {
@@ -114,7 +112,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(findRevisionSpy).not.toHaveBeenCalled();
     });
 
-    test('V-1: 404 when the app secret is still the development default (no key can be derived)', async () => {
+    test('V-1: 404 for a malformed token value', async () => {
       const res = await request(app).get('/api/artifact/000000000000000000000000/000000000000000000000000?t=whatever');
       expect(res.status).toBe(404);
       expect(res.text).toBe('Not found.');
@@ -137,7 +135,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}v1-expired`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() - 1 });
       const res = await request(app).get(`/api/artifact/${pageId}/${revisionId}?t=${token}`);
       expect(res.status).toBe(404);
@@ -149,7 +147,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}v1-mismatch`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: '000000000000000000000000', r: '000000000000000000000000', u: userId, e: Date.now() + 60_000 });
       const res = await request(app).get(`/api/artifact/${pageId}/${revisionId}?t=${token}`);
       expect(res.status).toBe(404);
@@ -161,7 +159,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}v2`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const missingRevisionId = '000000000000000000000001';
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: missingRevisionId, u: userId, e: Date.now() + 60_000 });
       const res = await request(app).get(`/api/artifact/${pageId}/${missingRevisionId}?t=${token}`);
       expect(res.status).toBe(404);
@@ -173,7 +171,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}v3-markdown`, '# markdown');
       const pageId = page._id;
       const revisionId = (page as unknown as { revision: { _id: string } }).revision._id;
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId.toString(), u: userId, e: Date.now() + 60_000 });
       const res = await request(app).get(`/api/artifact/${pageId}/${revisionId}?t=${token}`);
       expect(res.status).toBe(404);
@@ -186,7 +184,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const pageB = await createArtifactPage(`${PATH_PREFIX}v4-b`, await ingestedBody(validArtifactHtml({ body: '<p>b</p>' })));
       const pageAId = pageA._id.toString();
       const pageBRevisionId = pageB.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       // Token payload matches the URL exactly (so token verification passes);
       // the mismatch is purely between the STORED revision.page and pageAId.
       const token = mintArtifactToken(key, { p: pageAId, r: pageBRevisionId, u: userId, e: Date.now() + 60_000 });
@@ -206,7 +204,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}v1-uppercase-id`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + 60_000 });
 
       const findRevisionSpy = jest.spyOn(Revision, 'findRevision');
@@ -222,7 +220,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}v6-lookup-throws`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + 60_000 });
 
       const findRevisionSpy = jest.spyOn(Revision, 'findRevision').mockRejectedValueOnce(new Error('simulated db failure, must not reach the log'));
@@ -242,17 +240,14 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(logged).not.toContain('simulated db failure');
     });
 
-    test('V-5: 404 when delivery is disabled, even though the app secret is usable', async () => {
-      // A usable secret WITHOUT a configured artifact origin: R-0 (app
-      // secret) passes, but the mode still resolves to 'disabled' (no
-      // separate origin, same-origin not enabled) — distinct from the V-1
-      // "no key at all" case.
-      await crowi.getConfigService().saveConfig('crowi', { 'app:secret': USABLE_SECRET });
+    test('V-5: 404 when delivery is disabled, even with a valid token', async () => {
+      // No configured artifact origin and same-origin not enabled: the mode
+      // resolves to 'disabled' even though a valid token can still be
+      // minted — distinct from V-1's "no/invalid token" case.
       const page = await createArtifactPage(`${PATH_PREFIX}v5`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
-      expect(key).not.toBeNull();
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + 60_000 });
       const res = await request(app).get(`/api/artifact/${pageId}/${revisionId}?t=${token}`);
       expect(res.status).toBe(404);
@@ -267,7 +262,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}v6`, rawBody);
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + 60_000 });
       const [payloadPart] = token.split('.');
 
@@ -286,7 +281,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(logged).toContain('V-6');
       expect(logged).not.toContain(token);
       expect(logged).not.toContain(payloadPart);
-      expect(logged).not.toContain(USABLE_SECRET);
+      expect(logged).not.toContain(resolveSignedTokenSecret());
       expect(logged).not.toContain(rawBody);
       expect(logged).not.toContain('rebeccapurple');
       expect(logged).not.toContain('console.log');
@@ -302,12 +297,11 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       // valid-marker body can still fail at the CSP-assembly step rather
       // than the marker-extraction one the other V-6 test exercises.
       jest.spyOn(crowi, 'getArtifactDeliveryEnv').mockReturnValue({ artifactOrigin: 'https://artifacts.test', crowiOrigin: null });
-      await crowi.getConfigService().saveConfig('crowi', { 'app:secret': USABLE_SECRET });
       const body = await ingestedBody(VALID_ARTIFACT_HTML);
       const page = await createArtifactPage(`${PATH_PREFIX}v6-csp`, body);
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
 
       const markers = extractArtifactDigestMarkers(body);
       if (!markers.ok) throw new Error('fixture unexpectedly has no digest markers');
@@ -330,7 +324,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(logged).toContain('V-6');
       expect(logged).not.toContain(token);
       expect(logged).not.toContain(payloadPart);
-      expect(logged).not.toContain(USABLE_SECRET);
+      expect(logged).not.toContain(resolveSignedTokenSecret());
       expect(logged).not.toContain(body);
       expect(logged).not.toContain(cspFailureMessage);
       expect(logged).not.toContain(cspFailureCode);
@@ -341,7 +335,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}host-agnostic`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + 60_000 });
       const res = await request(app).get(`/api/artifact/${pageId}/${revisionId}?t=${token}`).set('Host', 'unrelated-host.example.com');
       expect(res.status).toBe(200);
@@ -389,7 +383,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}log-safety`, body);
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + 60_000 });
       const [payloadPart] = token.split('.');
 
@@ -397,7 +391,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(res.status).toBe(200);
       expect(logged).not.toContain(token);
       expect(logged).not.toContain(payloadPart);
-      expect(logged).not.toContain(USABLE_SECRET);
+      expect(logged).not.toContain(resolveSignedTokenSecret());
       expect(logged).toContain(pageId);
       expect(logged).toContain(revisionId);
       expect(logged).toContain('ok');
@@ -408,7 +402,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}log-safety-fail`, await ingestedBody(VALID_ARTIFACT_HTML));
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() - 1 });
       const [payloadPart] = token.split('.');
 
@@ -416,7 +410,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(res.status).toBe(404);
       expect(logged).not.toContain(token);
       expect(logged).not.toContain(payloadPart);
-      expect(logged).not.toContain(USABLE_SECRET);
+      expect(logged).not.toContain(resolveSignedTokenSecret());
       expect(logged).toContain(pageId);
       expect(logged).toContain(revisionId);
       expect(logged).toContain('V-1');
@@ -559,7 +553,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(res.status).toBe(404);
       expect(logged).toContain(String(page._id));
       expect(logged).toContain('not-granted');
-      expect(logged).not.toContain(USABLE_SECRET);
+      expect(logged).not.toContain(resolveSignedTokenSecret());
     });
 
     test('AC-DL-7: an invalid revision query is never logged verbatim, even though it fails validation', async () => {
@@ -583,7 +577,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}order-proof`, body);
       const pageId = page._id.toString();
       const revisionId = page.revision._id.toString();
-      const key = resolveArtifactTokenKey(crowi) as Buffer;
+      const key = resolveArtifactTokenKey();
       const token = mintArtifactToken(key, { p: pageId, r: revisionId, u: userId, e: Date.now() + ARTIFACT_TOKEN_TTL_SECONDS * 1000 });
 
       const downloadRes = await request(app).get(`/api/pages/${pageId}/artifact-download`);
