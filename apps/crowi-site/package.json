@@ -1,6 +1,6 @@
 {
   "name": "@crowi/site",
-  "version": "0.1.1-alpha.1",
+  "version": "0.1.1-alpha.2",
   "private": true,
   "description": "crowi.wiki — Landing page and documentation site",
   "scripts": {

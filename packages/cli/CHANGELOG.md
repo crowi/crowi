@@ -1,5 +1,19 @@
 # @crowi/cli
 
+## 1.0.0-alpha.7
+
+### Minor Changes
+
+- 970a8d0: MCP tools and the `crowi` CLI can now write and read HTML artifact pages (RFC-0020). `crowi_create_page` / `crowi_update_page` accept an optional `content_type: 'markdown' | 'artifact'` field, and their results — along with `crowi_get_page` / `crowi_get_revision` — report a page or revision's `content_type`. `crowi create` / `crowi update` gained a matching `--type <markdown|artifact>` flag (never inferred from a file extension or body content), `crowi get --json` reports `contentType`, and `crowi edit` opens an `.html` temp file for an artifact page while preserving its kind on save. A rejected artifact write is now shown with the server's rule identifier, reason, and (when applicable) offending target — via the CLI's exit code 6 and an enriched message, and via MCP's `isError` result text and `structuredContent`. All of this is additive: an existing MCP or CLI caller that never passes `content_type` / `--type` keeps behaving exactly as before.
+
+### Patch Changes
+
+- 35d7ed2: Fix `crowi mv` and `crowi rm` (without `--completely`), which always failed with a missing-Idempotency-Key error since the server started requiring that header on rename and soft-delete requests. Both commands now generate a key automatically and attach it to the request, and `rm --force` reuses the same key across its revision-conflict retry. `rm --completely` was never affected by this bug (the hard-delete path never reads the header); it now also sends a key for consistency, though the hard-delete path still does not act on it.
+- Updated dependencies [0a8bff6]
+- Updated dependencies [0fef93e]
+- Updated dependencies [bee7d66]
+  - @crowi/api-contract@2.0.0-alpha.21
+
 ## 1.0.0-alpha.6
 
 ### Patch Changes
