@@ -192,6 +192,14 @@ jobs:
           exit 1
 
       - name: Run tests
+        # The default hides the output of every task that succeeds, which is
+        # what keeps a local run readable. CI is the run nobody watches, and
+        # the api reporter's only signal that a test file was skipped in full
+        # — the file names it prints on an otherwise green run — would be
+        # dropped with it. `full` also replays a cached task's output, so the
+        # list survives a cache hit.
+        env:
+          TURBO_TEST_LOGS: full
         run: pnpm test
 
       - name: Emit flake-report producer manifest
