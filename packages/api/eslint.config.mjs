@@ -80,23 +80,13 @@ export default defineConfig([
       '@typescript-eslint/no-var-requires': 'warn',
     },
   },
-  {
-    files: ['src/**/*.ts'],
-    ignores: ['**/*.test.ts', 'src/test/**/*'],
-    languageOptions: {
-      parserOptions: {
-        project: './tsconfig.json',
-        // Resolve `project` relative to THIS config's directory, not the
-        // process cwd. `pnpm lint` runs with cwd = packages/api (turbo), but
-        // the VSCode ESLint extension runs with cwd = repo root, where
-        // `./tsconfig.json` would wrongly resolve to the root solution-style
-        // tsconfig (`include: []`) and fail with "TSConfig does not include
-        // this file". `import.meta.dirname` makes it deterministic in both
-        // (the `.mjs` equivalent of eslintrc's `__dirname`).
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-  },
+  // No `parserOptions.project` anywhere: not one rule enabled here reads type
+  // information, and asking for it built a whole TypeScript Program on every
+  // lint of a production file — ~700MB resident and seconds of CPU, which on a
+  // loaded CI runner pushed the guard suite's warm-up past its hook timeout.
+  // `eslint-flat-config-runner.js`'s `inspect` message and the guard suite's
+  // assertion fail if it comes back. Adding a type-aware rule means designing
+  // that cost in deliberately, not restoring this block.
   {
     files: ['**/*.test.ts', 'src/test/**/*'],
     rules: {
