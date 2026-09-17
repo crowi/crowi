@@ -506,6 +506,29 @@ rm -f <spec> <task>
   あった場合) → 黙ってスキップ。
 - `rm` が失敗 (permission 等) → 削除せず警告のみ、Step 9 へ進む。
 
+### Step 8.5: 統合完了を planner へ伝える (spec を消したら必須)
+
+Step 8 で spec / task を消すと、**その spec を書いた planner から見ると担当分が理由なく
+消滅する**。削除は正規の掃除だが、それを知っているのは統合した側だけで、planner 側には
+「消えた」という事実しか届かない (実例 2026-09-17: planner が再 ground の作業中に 2 本の
+spec の不在に気づき、消失事故かどうかの確認に時間を使った)。**消したことと理由を伝える
+責任は integrate 側にある。**
+
+```bash
+~/.agents/skills/agmsg/scripts/send.sh crowi <自分の role> planner \
+  "<id> を main へ統合しました (<merge sha>)。
+- 削除: .feature-state/specs/<...>.md と tasks/<id>.json (統合完了に伴う正規の掃除で、消失事故ではありません)
+- ゲート: <型 / テスト / lint / e2e の結果を 1 行>
+- 差し戻し / 積み残し: <simplify や review で drop した指摘があれば 1 行。無ければ「なし」>"
+```
+
+- **spec を 1 本でも消したら必須。** umbrella + leaf をまとめて消した場合は消した全 id を
+  列挙する (planner は leaf 単位で担当を数えている)。
+- Step 8 の検証で **spec を残した**場合 (task が spec の全 phase を覆っていない等) も、
+  残した理由を同じ通知に 1 行足す。planner が次に再 ground するかどうかの判断材料になる。
+- agmsg が使えない環境ではスキップしてよいが、Step 11 の報告に「planner 未通知」と明記する
+  (黙って省略しない)。
+
 ### Step 9: 直列チェーンの前進 (crowi-kickoff の複数 spec 指定時のみ)
 
 `crowi-kickoff` に複数 spec を渡した直列チェーンでは、integrate 完了が次 spec の着手
