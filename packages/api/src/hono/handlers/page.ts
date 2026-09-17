@@ -195,7 +195,7 @@ async function executeSubtreeRename(
   }
 }
 
-// RFC-0020 — HTML artifact write-path (feature-html-artifact-write-path).
+// RFC-0020 — HTML artifact write-path.
 // The pre-write boundary below runs BEFORE the existing Page.createPage /
 // Page.updatePage model call, so a rejection here never creates a new
 // Revision. Markdown writes never enter it (no snapshot, no ingest call).
@@ -1744,7 +1744,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', 'Revision does not belong to this page'), 400);
           }
 
-          // RFC-0020 §1 / feature-html-artifact-write-path — a revert stacks
+          // RFC-0020 §1 — a revert stacks
           // the historical Revision's body verbatim, bypassing
           // `Revision.prepareRevision`'s normal kind-mismatch guard (which
           // only fires on an explicit `options.contentType`, and this

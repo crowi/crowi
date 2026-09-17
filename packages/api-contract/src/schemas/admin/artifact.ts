@@ -2,8 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { ApiErrorSchema } from '../common';
 
 /**
- * `maxBytes` range for the admin `settings.maxBytes` field
- * (`feature-html-artifact-delivery-policy` §K 表 / §C-3). Mirrors
+ * `maxBytes` range for the admin `settings.maxBytes` field. Mirrors
  * `packages/api/src/artifact/constants.ts`'s `ARTIFACT_MIN_MAX_BYTES` /
  * `ARTIFACT_HARD_MAX_BYTES` — `api-contract` cannot import `api`, so these
  * are a deliberate literal duplicate; `admin/artifact.test.ts` asserts the

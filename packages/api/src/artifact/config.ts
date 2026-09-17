@@ -1,5 +1,5 @@
 /**
- * feature-html-artifact-delivery-policy §K 表 / §M 表 — the single place
+ * The single place
  * that defines the `artifact:policy` config key, its field names, its
  * installer seed, and every fixed operator/admin-facing message this leaf
  * emits. `installer` seed, the policy resolver, the admin handler, and

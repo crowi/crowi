@@ -1742,7 +1742,6 @@ export default (crowi: Crowi) => {
    * entry per distinct first segment beneath `path`, with whether a
    * real portal page is saved there (`hasPortal` → compass icon), a
    * descendant count, and the segment's representative update metadata
-   * (feature-child-segments-metadata).
    *
    * Implemented as a lean `path`-only scan + in-process grouping rather
    * than a `$group` aggregation: extracting "the segment after the

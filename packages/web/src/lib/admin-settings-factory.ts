@@ -106,7 +106,7 @@ export function createAdminSettingsHooks<Settings, UpdateRequest>(
           return (await response.json()) as Settings;
         }
         const body = await readJson(response);
-        // feature-html-artifact-delivery-policy — `admin.artifact`'s
+        // `admin.artifact`'s
         // `ARTIFACT_SETTINGS_REJECTED` is a 400, not the 422 every other
         // section's `mapValidationError` was written against; widening this
         // condition is additive (existing 422-only callers are unaffected

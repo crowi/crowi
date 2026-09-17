@@ -4069,7 +4069,7 @@ describe('RFC-0020 §1 — content type discriminator (Hono page routes)', () =>
     } finally {
       spy.mockRestore();
     }
-    // feature-html-artifact-write-path AI-D02 — the Storage leaf's own
+    // The Storage leaf's own
     // hint-based guard (PAGE_REVERT_TO_REVISION_FAILED) is replaced by this
     // leaf with the structured AI-D02 rejection, authoritative on the
     // populated current Revision rather than the `Page.contentType` hint.
@@ -4086,7 +4086,7 @@ describe('RFC-0020 §1 — content type discriminator (Hono page routes)', () =>
   });
 
   test('AC-SC-4: reverting a pointerless Page to an orphaned artifact Revision succeeds as a first save, and the renderer is never invoked', async () => {
-    // feature-html-artifact-write-path — a target kind of `artifact` now
+    // A target kind of `artifact` now
     // re-validates through `ingestHtmlArtifact` (source: 'stored-revision')
     // before the model call, gated on a request-local policy snapshot; both
     // require delivery to be configured and a well-formed artifact body.

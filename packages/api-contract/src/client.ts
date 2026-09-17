@@ -824,7 +824,7 @@ const lateContractApp = new OpenAPIHono()
 
 /**
  * Batch 9 — admin sub-contracts (26 endpoints across two chains), plus
- * feature-html-artifact-delivery-policy's `admin.artifact` (2 endpoints):
+ * `admin.artifact` (2 endpoints):
  *
  * - `adminSettingsContractApp`: the 6 read+write settings sub-contracts
  *   (app / artifact / auth / security / mail / storage / search) = 13 routes.

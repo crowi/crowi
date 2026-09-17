@@ -447,7 +447,7 @@ const AUTH_PUBLIC_WEB_URL_DESCRIPTOR: EnvVarDescriptor = {
 };
 
 /**
- * feature-html-artifact-delivery-policy §E-1 — Mode A (separate-origin
+ * Mode A (separate-origin
  * artifact delivery) opt-in. Reuses `validateOriginOnlyUrl` (the same
  * origin-only check `AUTH_PUBLIC_API_URL` / `AUTH_PUBLIC_WEB_URL` use):
  * userinfo/path/query/fragment fail boot. Unlike those two, this has no
@@ -792,7 +792,7 @@ function detectUnresolvableRedisKeyspace(resolvedByDescriptor: ReadonlyMap<EnvVa
 }
 
 /**
- * feature-html-artifact-delivery-policy §E-2/E-3 — cross-field check between
+ * Cross-field check between
  * `CROWI_ARTIFACT_ORIGIN` and `CLIENT_URL`. Only evaluated when
  * `CROWI_ARTIFACT_ORIGIN` is set AND already passed its own E-1 origin-only
  * check — mirrors {@link detectUnresolvableRedisKeyspace}'s re-validate
@@ -839,7 +839,7 @@ function detectArtifactOriginConflict(resolvedByDescriptor: ReadonlyMap<EnvVarDe
 }
 
 /**
- * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+ * The artifact/Crowi origin
  * pair `Crowi.getArtifactDeliveryEnv()` exposes to `src/artifact/policy.ts`.
  * Unlike {@link resolveFederatedAuthPublicUrls}, `artifactOrigin` NEVER falls
  * back to `CLIENT_URL` — separate-origin (Mode A) delivery is opt-in via
@@ -968,7 +968,7 @@ export interface EnvValidationResult {
      */
     federatedAuthPublicUrls: { apiUrl: string; webUrl: string } | null;
     /**
-     * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+     * The artifact/Crowi origin
      * pair `src/artifact/policy.ts`'s policy resolver reads via
      * `Crowi.getArtifactDeliveryEnv()`. See {@link resolveArtifactDeliveryOrigins}.
      */

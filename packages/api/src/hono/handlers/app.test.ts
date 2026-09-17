@@ -122,7 +122,7 @@ describe('GET /api/app/info (Hono)', () => {
     expect(() => AppInfoResponseSchema.parse(res.body)).not.toThrow();
   });
 
-  // feature-html-artifact-delivery-policy §AC-DP-9b — the public bootstrap
+  // The public bootstrap
   // slice of the artifact delivery policy (§R 表). The harness never sets
   // CROWI_ARTIFACT_ORIGIN and same-origin delivery isn't enabled, so R-4
   // (nothing configured) applies by default; the other modes are

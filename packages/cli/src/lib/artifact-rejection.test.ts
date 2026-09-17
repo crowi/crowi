@@ -2,7 +2,7 @@ import { formatArtifactRejection } from './artifact-rejection';
 
 /**
  * RFC-0020 §J-1 — `formatArtifactRejection` is the SOLE place the CLI turns
- * a `feature-html-artifact-write-path` rejection envelope into a message.
+ * a rejection envelope into a message.
  * `lib/http.ts#parseResponse` is the only caller; these tests exercise the
  * pure function directly.
  */

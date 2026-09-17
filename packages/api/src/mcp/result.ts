@@ -103,7 +103,7 @@ export const okResultWithBody = (body: string, meta: Structured): McpToolResult 
  * human-readable, recoverable signal. The full body is echoed in
  * `structuredContent` for clients that introspect it.
  *
- * RFC-0020 §J-2 — a `feature-html-artifact-write-path` rejection carries
+ * RFC-0020 §J-2 — a rejection carries
  * `reason` / `ruleId` / `target?` alongside `code` / `message`; when `err.body`
  * validates against the contract's `ArtifactWriteRejectionSchema` (the same
  * in-process response `ingestHtmlArtifact` / the write-path leaf produce —

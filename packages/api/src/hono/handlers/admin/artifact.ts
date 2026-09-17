@@ -1,5 +1,5 @@
 /**
- * feature-html-artifact-delivery-policy §A 表 — `admin.artifact` resource.
+ * `admin.artifact` resource.
  *
  *   GET /admin/artifact  — effective delivery mode + stored settings
  *   PUT /admin/artifact  — persist sameOriginEnabled / allowWebFonts / maxBytes

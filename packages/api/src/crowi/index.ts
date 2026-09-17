@@ -125,7 +125,7 @@ class Crowi {
   federatedAuthPublicUrls: { apiUrl: string; webUrl: string } | null = null;
 
   /**
-   * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+   * The artifact/Crowi origin
    * pair `validateEnv()` resolved once at construction (`CROWI_ARTIFACT_ORIGIN`
    * / `CLIENT_URL`, already cross-validated — see `util/env-schema.ts`'s
    * `resolveArtifactDeliveryOrigins`). Process-fixed, like `redisUrl` /
@@ -557,7 +557,7 @@ class Crowi {
   }
 
   /**
-   * feature-html-artifact-delivery-policy §E-4 — the artifact/Crowi origin
+   * The artifact/Crowi origin
    * pair resolved ONCE by `validateEnv()` in the constructor
    * (`util/env-schema.ts#resolveArtifactDeliveryOrigins`), returned verbatim.
    * `src/artifact/policy.ts`'s `resolveArtifactPolicyState` reads this method
@@ -765,7 +765,7 @@ class Crowi {
   }
 
   /**
-   * feature-html-artifact-delivery-policy §S-3 — boot-time artifact policy
+   * Boot-time artifact policy
    * status note. Delegates to `src/artifact/policy.ts`'s
    * `reportArtifactPolicyAtBoot(this)`; the `artifactPolicy` boot step
    * (`boot-steps.ts`) calls this method rather than importing that module

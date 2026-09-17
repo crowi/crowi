@@ -1,6 +1,5 @@
 /**
- * feature-html-artifact-delivery-policy §X 表 / §P 表 / §G 表 / §D 表 — pure
- * digest-marker extraction and CSP header assembly for HTML artifact
+ * Pure digest-marker extraction and CSP header assembly for HTML artifact
  * responses. Both functions are string-only: no HTML parser, no crypto, no
  * DB, no HTTP. `./constants` supplies the reserved marker names (never
  * `./ingest`, which would pull parse5/PostCSS into every process that loads
@@ -11,7 +10,7 @@
  * in the `Content-Security-Policy` HTTP response header.
  */
 
-import { ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME } from './constants';
+import { ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME, countOccurrences } from './constants';
 import type { ArtifactPolicySnapshot } from './policy';
 
 // ---------------------------------------------------------------------------
@@ -46,16 +45,6 @@ function policyError(code: ArtifactPolicyErrorCode): ArtifactPolicyError {
 export type ArtifactDigestMarkers = Readonly<{ scriptDigests: string; styleDigests: string }>;
 
 export type ArtifactDigestMarkersResult = { readonly ok: true; readonly markers: ArtifactDigestMarkers } | ArtifactPolicyError;
-
-function countOccurrences(haystack: string, needle: string): number {
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count += 1;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
-}
 
 /**
  * §X 表 — takes the exact serialization form the core ingest leaf produces
@@ -148,12 +137,11 @@ export type ArtifactCspResult = { readonly ok: true; readonly header: string } |
 const quoteTokens = (tokens: readonly string[]): string => tokens.map((token) => `'${token}'`).join(' ');
 
 /**
- * §D 表 — deterministic, pure directive assembly. `sandbox allow-scripts`
- * (D-10) is emitted unconditionally, in EVERY mode — see the leaf spec's
- * design rationale: the recommended reverse-proxy topology also reaches the
- * delivery route from the Crowi origin via `/api/*` rewrites, so gating
- * `sandbox` on mode alone would let a Mode A response reached through that
- * path execute unsandboxed on the Crowi origin.
+ * Deterministic, pure directive assembly. `sandbox allow-scripts` is emitted
+ * unconditionally, in EVERY mode: the recommended reverse-proxy topology
+ * also reaches the delivery route from the Crowi origin via `/api/*`
+ * rewrites, so gating `sandbox` on mode alone would let a response reached
+ * through that path execute unsandboxed on the Crowi origin.
  */
 export function buildArtifactContentSecurityPolicy(markers: ArtifactDigestMarkers, snapshot: ArtifactPolicySnapshot): ArtifactCspResult {
   if (snapshot.deliveryMode === 'disabled' || snapshot.crowiOrigin === null) return policyError('DELIVERY_DISABLED');

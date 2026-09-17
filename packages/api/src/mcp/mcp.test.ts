@@ -352,7 +352,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   /**
-   * RFC-0020 §feature-html-artifact-clients (phase 7) — the `content_type`
+   * RFC-0020 (phase 7) — the `content_type`
    * write declaration (§M table), its propagation into read results (§R
    * table), and artifact-rejection surfacing (§J-2). Delivery-independent
    * cases (header plumbing, descriptions, read propagation) run against the
@@ -546,8 +546,8 @@ describe('MCP server (/api/mcp)', () => {
       const mdPage = await Page.createPage(mixedPath, '# markdown v1', user, { grant: Page.GRANT_PUBLIC });
       const rev1Id = mdPage.revision._id.toString();
       // Orphaned artifact Revision + a direct pointer/hint flip — the same
-      // "mixed history" construction feature-html-artifact-storage's own
-      // tests use (page.test.ts:4056), since AI-D02 would otherwise refuse
+      // "mixed history" construction other tests use (page.test.ts:4056),
+      // since AI-D02 would otherwise refuse
       // to ever let a real write leave a Page's history in a mixed state.
       const rev2 = await Revision.create({ path: mixedPath, page: mdPage._id, body: VALID_ARTIFACT_HTML, author: user._id, contentType: 'artifact' });
       await Page.updateOne({ _id: mdPage._id }, { $set: { revision: rev2._id, contentType: 'artifact' } });

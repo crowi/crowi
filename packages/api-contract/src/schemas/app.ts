@@ -63,8 +63,8 @@ import { CapabilitySchema } from './app-capabilities';
  * activation order); entries are deduped. Empty when no loaded plugin
  * registered a stylesheet.
  *
- * `artifactDelivery` (feature-html-artifact-delivery-policy §AC-DP-9b) is the
- * public bootstrap slice of the HTML artifact delivery policy (§R 表):
+ * `artifactDelivery` is the public bootstrap slice of the HTML artifact
+ * delivery policy (§R 表):
  * `enabled` is `deliveryMode !== 'disabled'`, `origin` is the resolved
  * `artifactOrigin` (`null` when disabled). This is a public, unauthenticated
  * endpoint, so only the delivery mode and origin are exposed here —

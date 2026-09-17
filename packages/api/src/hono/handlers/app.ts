@@ -96,7 +96,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // optional-chain keeps this handler from throwing in a minimal test
     // harness that skips renderer setup.
     const rendererStylesheets = [...(crowi.renderer?.registry.getStylesheets() ?? [])];
-    // feature-html-artifact-delivery-policy §AC-DP-9b — the public
+    // The public
     // bootstrap slice of the artifact delivery policy (§R 表). This
     // unauthenticated endpoint exposes only whether delivery is active and
     // where; `writeEnabled` / `settings` / `sameOriginInactiveReason` are

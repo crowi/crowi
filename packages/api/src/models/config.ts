@@ -141,8 +141,8 @@ export default (crowi: Crowi) => {
       // `githubLoginEnabled` readers below are kept (they now always return
       // false) because dormant `User` methods still reference them.
 
-      // feature-html-artifact-delivery-policy §K 表 — `artifact:policy`,
-      // seeded so the row (and therefore its 3 default fields) is present
+      // `artifact:policy` is seeded so the row (and therefore its 3 default
+      // fields) is present
       // from the first boot rather than lazily materializing on first admin
       // save. An existing install with no row still resolves the identical
       // defaults via `artifact/policy.ts`'s §C 表 missing-key fallback.

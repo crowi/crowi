@@ -79,7 +79,7 @@ export const ALL_BOOT_STEPS: BootStep[] = [
   {
     name: 'artifactPolicy',
     layer: 'config',
-    // feature-html-artifact-delivery-policy §S-2 — right after `config` so
+    // Right after `config` so
     // the resolver reads the freshly-loaded in-memory `crowi` namespace;
     // before `bootMigrations` per this file's own array-order-is-execution-
     // order contract (an earlier position than `bootMigrations` is fine —
@@ -172,7 +172,7 @@ export const ALL_BOOT_STEPS: BootStep[] = [
  */
 export const CLI_SKIP_STEPS: ReadonlySet<string> = new Set([
   'redis',
-  // feature-html-artifact-delivery-policy §S-4 — the CLI never delivers
+  // The CLI never delivers
   // artifacts and reserves stdout for command output, not boot notes.
   'artifactPolicy',
   'bootMigrations',

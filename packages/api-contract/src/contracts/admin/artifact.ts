@@ -1,5 +1,5 @@
 /**
- * feature-html-artifact-delivery-policy §A 表 — `admin.artifact` sub-contract.
+ * `admin.artifact` sub-contract.
  *
  *   GET /admin/artifact  — read the effective delivery mode + stored settings
  *   PUT /admin/artifact  — persist the 3 `artifact:policy` fields

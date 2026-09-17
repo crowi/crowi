@@ -1,7 +1,6 @@
 /**
  * Minimal HTML artifact fixtures shared by `artifact/ingest.test.ts` and by
- * later leaves (`feature-html-artifact-delivery-policy`'s `csp.test.ts`,
- * `feature-html-artifact-write-path`'s `page.test.ts`). Lives outside any
+ * later leaves (`csp.test.ts`, `page.test.ts`). Lives outside any
  * `*.test.ts` file because two test files importing from each other would
  * register each other's `describe` blocks twice.
  */

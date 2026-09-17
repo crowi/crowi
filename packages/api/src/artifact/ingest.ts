@@ -2,15 +2,13 @@
  * RFC-0020 Phase 2a-1 — the pure boundary that decides whether an author's
  * HTML/CSS/inline-script "artifact" document may be stored, and if so,
  * returns the exact bytes to persist. This module knows nothing about
- * Page/Revision/HTTP; callers (`feature-html-artifact-write-path`) own the
- * create/update/revert plumbing and the HTTP envelope.
+ * Page/Revision/HTTP; callers own the create/update/revert plumbing and the
+ * HTTP envelope.
  *
  * The rule table (`ARTIFACT_INGEST_RULES`) is the single source of truth for
  * validation: every check is a data row (pass/source/priority/result), and
- * `runArtifactRules` is the only place that walks the table. See
- * `.feature-state/specs/feature-html-artifact-ingest-core.md` for the full
- * design rationale — the comments here explain *why* a given line exists,
- * not what the table already says.
+ * `runArtifactRules` is the only place that walks the table. The comments
+ * here explain *why* a given line exists, not what the table already says.
  */
 
 import { createHash } from 'node:crypto';
@@ -20,7 +18,13 @@ import valueParser from 'postcss-value-parser';
 import { init as esModuleLexerInit, parse as parseEsModules, ImportType } from 'es-module-lexer';
 import type { DefaultTreeAdapterMap, DefaultTreeAdapterTypes, TreeAdapter } from 'parse5';
 import type { ArtifactIngestRejectionReason } from '@crowi/api-contract';
-import { ARTIFACT_HARD_MAX_BYTES, ARTIFACT_MIN_MAX_BYTES, ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME } from './constants';
+import {
+  ARTIFACT_HARD_MAX_BYTES,
+  ARTIFACT_MIN_MAX_BYTES,
+  ARTIFACT_SCRIPT_DIGEST_META_NAME,
+  ARTIFACT_STYLE_DIGEST_META_NAME,
+  countOccurrences,
+} from './constants';
 
 // ---------------------------------------------------------------------------
 // Namespaces (hardcoded rather than read from the loaded parse5 module: the
@@ -1806,16 +1810,6 @@ function checkAiR21Source(context: Readonly<ArtifactRuleContext>): ArtifactRuleF
     if (count > 1) return { target: truncateArtifactIdentifier(name) };
   }
   return null;
-}
-
-function countOccurrences(haystack: string, needle: string): number {
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count += 1;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
 }
 
 function checkAiR21Normalized(context: Readonly<ArtifactRuleContext>): ArtifactRuleFailure | null {

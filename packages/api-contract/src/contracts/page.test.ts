@@ -1,5 +1,5 @@
 /**
- * feature-html-artifact-write-path AC-AI-16 — pure-data assertions over the
+ * Pure-data assertions over the
  * `page` contract's RFC-0020 write-path additions: create/update declare the
  * `x-crowi-page-content-type` header, revert does not, and the 400/413/422/
  * 500 response union (plus update's existing 409) is registered on the

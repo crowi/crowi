@@ -1,5 +1,5 @@
 /**
- * feature-html-artifact-delivery-policy §R 表 / §C 表 / §S 表 — resolving
+ * Resolving
  * whether HTML artifact delivery is active, in which mode, and the settings
  * write path / delivery route consume from a single, request-local snapshot.
  *
@@ -210,9 +210,9 @@ export function resolveArtifactPolicyState(crowi: Crowi): ArtifactPolicyState {
 }
 
 /**
- * The request-local snapshot §契約 hand-off — `feature-html-artifact-write-path`
- * calls this once per request and threads the returned object through every
- * gate / ingest-option read for that request without re-evaluating config.
+ * The request-local snapshot §契約 hand-off: call this once per request and
+ * thread the returned object through every gate / ingest-option read for
+ * that request without re-evaluating config.
  */
 export function resolveArtifactPolicySnapshot(crowi: Crowi): ArtifactPolicySnapshot {
   return resolveArtifactPolicyState(crowi).snapshot;

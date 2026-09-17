@@ -8,7 +8,6 @@
 import { mintArtifactUrlRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
-import { Types } from 'mongoose';
 
 import {
   ARTIFACT_TOKEN_TTL_SECONDS,
@@ -18,9 +17,10 @@ import {
   resolveArtifactTokenKey,
 } from 'src/artifact/delivery';
 import { resolveArtifactPolicySnapshot } from 'src/artifact/policy';
+import { resolveTargetRevision } from 'src/artifact/revision-lookup';
 import type Crowi from 'src/crowi';
-import type { RevisionDocument, RevisionModel } from 'src/models/revision';
-import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
+import type { RevisionDocument } from 'src/models/revision';
+import { loadGrantedPage } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { applyScope } from '../middleware/require-scope';
@@ -36,32 +36,6 @@ const artifactUrlUnavailableBody = (reason: ArtifactUrlErrorReason) => ({
 const INVALID_REVISION_ID_BODY = {
   error: { code: 'VALIDATION_ERROR' as const, message: 'Invalid revision id' as const },
 };
-
-type ResolveTargetRevisionResult =
-  | { ok: true; revision: RevisionDocument }
-  | { ok: false; reason: 'invalid-id' }
-  | { ok: false; reason: 'not-found' }
-  | { ok: false; reason: 'pointerless' };
-
-/** Given an optional explicit revision id and the Page's populated current revision, resolves which Revision the request targets. */
-async function resolveTargetRevision(
-  Revision: RevisionModel,
-  explicitRevisionId: string | undefined,
-  currentRevision: RevisionDocument | undefined,
-  normalizedPageId: string,
-): Promise<ResolveTargetRevisionResult> {
-  if (explicitRevisionId !== undefined) {
-    if (!isValidObjectId(explicitRevisionId)) return { ok: false, reason: 'invalid-id' };
-    const revision = (await Revision.findRevision(new Types.ObjectId(explicitRevisionId))) as RevisionDocument | null;
-    // Don't distinguish "missing" from "belongs to another page" — both
-    // report as 'not-found' — to avoid leaking information about other
-    // pages' revisions.
-    if (!revision || revision.page == null || revision.page.toString() !== normalizedPageId) return { ok: false, reason: 'not-found' };
-    return { ok: true, revision };
-  }
-  if (!currentRevision) return { ok: false, reason: 'pointerless' };
-  return { ok: true, revision: currentRevision };
-}
 
 export const registerArtifactRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');

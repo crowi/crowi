@@ -10,7 +10,7 @@ import { m } from '@paraglide/messages.js';
 /**
  * /admin/artifact
  *
- * feature-html-artifact-delivery-policy §A 表 — HTML artifact delivery mode
+ * HTML artifact delivery mode
  * (separate-origin / same-origin / disabled) and settings (same-origin
  * toggle, web fonts, payload size limit). Authorization (admin only) is
  * already enforced by the surrounding (admin) layout, so this page assumes

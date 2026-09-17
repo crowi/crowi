@@ -395,10 +395,10 @@ const routeGroups = [
   adminSearchRoutes,
   adminUsersRoutes,
   adminPluginsRoutes,
-  // feature-html-artifact-delivery-policy — `/admin/artifact` GET/PUT.
-  // Registered right after the Batch 9 admin sub-contracts to mirror the
-  // buildHonoApp chain (registerAdminArtifactRoutes runs right after
-  // registerAdminPluginsRoutes, before notification).
+  // The `/admin/artifact` GET/PUT routes are registered right after the
+  // Batch 9 admin sub-contracts to mirror the buildHonoApp chain
+  // (registerAdminArtifactRoutes runs right after registerAdminPluginsRoutes,
+  // before notification).
   adminArtifactRoutes,
   notificationRoutes,
 ];

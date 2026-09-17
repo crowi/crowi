@@ -214,7 +214,7 @@ describe('createProgram — --version reports the published package version', ()
 });
 
 /**
- * RFC-0020 §7 (feature-html-artifact-clients) — `create` / `update --type`,
+ * RFC-0020 §7 — `create` / `update --type`,
  * `edit`'s temp-file extension, and `get --json`'s `contentType`. Follows
  * `commands/attach.test.ts`'s local `build()` + mocked-`fetch` pattern
  * (rather than `createProgram()`'s full tree) since these tests drive real

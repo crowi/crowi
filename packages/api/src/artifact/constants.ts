@@ -26,3 +26,19 @@ export const ARTIFACT_MIN_MAX_BYTES = 64 * 1024;
  */
 export const ARTIFACT_SCRIPT_DIGEST_META_NAME = 'crowi-artifact-script-digests-v1';
 export const ARTIFACT_STYLE_DIGEST_META_NAME = 'crowi-artifact-style-digests-v1';
+
+/**
+ * How many times `needle` occurs in `haystack`, counting non-overlapping
+ * matches. It lives here because both the normalizer and the header builder
+ * count marker occurrences, and this module is the one they can both import
+ * without dragging a parser in.
+ */
+export function countOccurrences(haystack: string, needle: string): number {
+  let count = 0;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count += 1;
+    index = haystack.indexOf(needle, index + needle.length);
+  }
+  return count;
+}

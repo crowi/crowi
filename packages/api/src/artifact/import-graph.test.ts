@@ -1,6 +1,6 @@
 /**
- * feature-html-artifact-delivery-policy §AC-DP-8 — production import
- * boundary. `csp.ts` / `policy.ts` / `config.ts` must never reach
+ * Production import boundary. `csp.ts` / `policy.ts` / `config.ts` must
+ * never reach
  * `./ingest` (parse5 / PostCSS / es-module-lexer) — `models/config.ts`
  * imports `./config` on every process's `setupModels()`, so pulling the
  * parser chain in there would make every process (server, CLI, every test

@@ -11,7 +11,7 @@ export const adminArtifactKeys = {
 };
 
 /**
- * feature-html-artifact-delivery-policy §A-4 — the one discriminated
+ * The one discriminated
  * failure `PUT /admin/artifact` can return: a same-origin toggle request
  * with no `CLIENT_URL` configured on the api. Kept as its own `Error`
  * subclass (mirrors `use-admin-plugins.ts`'s `PluginConfigValidationError` /
