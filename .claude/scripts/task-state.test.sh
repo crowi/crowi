@@ -10,6 +10,8 @@
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.claude/scripts/git-test-env.sh
+source "$HERE/git-test-env.sh"
 SCRIPT="$HERE/task-state.sh"
 
 WORK="$(mktemp -d)"

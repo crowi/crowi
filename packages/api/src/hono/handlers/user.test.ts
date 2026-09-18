@@ -153,6 +153,28 @@ describe('Routes /api/user (Hono)', () => {
       }
     });
 
+    it('AC-SC-6: recentPages / recentBookmarks[].page surface the artifact hint (RFC-0020 §1)', async () => {
+      const artifactPage = await Page().createPage(`/user/${TARGET_USERNAME}/artifact-hint`, '<html></html>', targetUser, { contentType: 'artifact' });
+      await Bookmark().add(artifactPage, targetUser);
+      try {
+        const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+        expect(res.status).toBe(200);
+
+        const recentPage = res.body.recentPages.find((p: { _id: string }) => p._id === artifactPage._id.toString());
+        expect(recentPage?.contentType).toBe('artifact');
+
+        const bookmarkEntry = res.body.recentBookmarks.find((b: { page: { _id: string } }) => b.page._id === artifactPage._id.toString());
+        expect(bookmarkEntry?.page.contentType).toBe('artifact');
+
+        const notesPage = await Page().findOne({ path: `/user/${TARGET_USERNAME}/notes` });
+        const markdownRecent = res.body.recentPages.find((p: { _id: string }) => p._id === notesPage._id.toString());
+        expect(markdownRecent?.contentType).toBe('markdown');
+      } finally {
+        await Bookmark().deleteOne({ page: artifactPage._id, user: targetUser._id });
+        await Page().deleteOne({ _id: artifactPage._id });
+      }
+    });
+
     it('returns 404 USER_NOT_FOUND for an unknown username', async () => {
       const res = await request(app).get('/api/user/no-such-user').set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(404);
@@ -396,6 +418,25 @@ describe('Routes /api/user (Hono)', () => {
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('USER_NOT_FOUND');
     });
+
+    it('AC-SC-6: the nested Page surfaces the artifact hint (RFC-0020 §1)', async () => {
+      const artifactPage = await Page().createPage(`/user/${TARGET_USERNAME}/bookmarks-artifact-hint`, '<html></html>', targetUser, {
+        contentType: 'artifact',
+      });
+      await Bookmark().add(artifactPage, targetUser);
+      try {
+        const res = await request(app)
+          .get(`/api/user/${TARGET_USERNAME}/bookmarks`)
+          .query({ limit: 50, offset: 0 })
+          .set('Authorization', `Bearer ${viewerToken}`);
+        expect(res.status).toBe(200);
+        const found = res.body.bookmarks.find((b: { page: { _id: string } }) => b.page._id === artifactPage._id.toString());
+        expect(found?.page.contentType).toBe('artifact');
+      } finally {
+        await Bookmark().deleteOne({ page: artifactPage._id, user: targetUser._id });
+        await Page().deleteOne({ _id: artifactPage._id });
+      }
+    });
   });
 
   describe('GET /user/:username/pages', () => {
@@ -412,6 +453,18 @@ describe('Routes /api/user (Hono)', () => {
       const res = await request(app).get(`/api/user/${TARGET_USERNAME}/pages`);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('AC-SC-6: surfaces the artifact hint (RFC-0020 §1)', async () => {
+      const artifactPage = await Page().createPage(`/user/${TARGET_USERNAME}/pages-artifact-hint`, '<html></html>', targetUser, { contentType: 'artifact' });
+      try {
+        const res = await request(app).get(`/api/user/${TARGET_USERNAME}/pages`).query({ limit: 50, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
+        expect(res.status).toBe(200);
+        const found = res.body.pages.find((p: { _id: string }) => p._id === artifactPage._id.toString());
+        expect(found?.contentType).toBe('artifact');
+      } finally {
+        await Page().deleteOne({ _id: artifactPage._id });
+      }
     });
   });
 
@@ -473,6 +526,23 @@ describe('Routes /api/user (Hono)', () => {
       expect(res.body.pager).toEqual({ prev: null, next: null, offset: 0 });
       const paths = res.body.pages.map((p: { path: string }) => p.path);
       expect(paths).toEqual([`${PREFIX}/notes`, `${PREFIX}/project/deep/nested`]);
+    });
+
+    it('AC-SC-6: surfaces the artifact hint through the allowlist projection (RFC-0020 §1)', async () => {
+      await Fixture.generate('Page', [
+        { path: `${PREFIX}/markdown-note`, grant: Page().GRANT_PUBLIC, creator: subpagesOwner, status: 'published' },
+        { path: `${PREFIX}/artifact-note`, grant: Page().GRANT_PUBLIC, creator: subpagesOwner, status: 'published', contentType: 'artifact' },
+      ]);
+
+      const res = await request(app)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
+        .query({ limit: 10, offset: 0 })
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(res.status).toBe(200);
+      const byPath = new Map(res.body.pages.map((p: { path: string; contentType: string }) => [p.path, p.contentType]));
+      expect(byPath.get(`${PREFIX}/markdown-note`)).toBe('markdown');
+      expect(byPath.get(`${PREFIX}/artifact-note`)).toBe('artifact');
     });
 
     it('excludes the trailing-slash self-twin (a real, separate document from the home page) — regression for $ne: prefix', async () => {

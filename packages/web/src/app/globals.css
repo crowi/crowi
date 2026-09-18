@@ -83,6 +83,10 @@
   --shell-content: 54rem;
   --shell-rail: 14rem;
   --shell-gap: 1.5rem;
+  /* The article plus one rail beside it, and half of that rail-plus-gap —
+     how far a lone right rail pulls the article left of dead-centre. */
+  --shell-pair: calc(var(--shell-content) + var(--shell-gap) + var(--shell-rail));
+  --shell-rail-shift: calc((var(--shell-rail) + var(--shell-gap)) * 0.5);
 
   /* Crowi brand colors */
   /* Primary: #43676b - teal green */

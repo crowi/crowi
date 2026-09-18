@@ -24,7 +24,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
  */
 
 interface ErrorBody {
-  error: { message: string };
+  error: { message: string; code?: string; reason?: string };
 }
 
 const isErrorBody = (body: unknown): body is ErrorBody =>
@@ -106,7 +106,12 @@ export function createAdminSettingsHooks<Settings, UpdateRequest>(
           return (await response.json()) as Settings;
         }
         const body = await readJson(response);
-        if (response.status === 422 && mapValidationError && isErrorBody(body)) {
+        // `admin.artifact`'s
+        // `ARTIFACT_SETTINGS_REJECTED` is a 400, not the 422 every other
+        // section's `mapValidationError` was written against; widening this
+        // condition is additive (existing 422-only callers are unaffected
+        // since they never see a 400 body here in the first place).
+        if ((response.status === 422 || response.status === 400) && mapValidationError && isErrorBody(body)) {
           const mapped = mapValidationError(body);
           if (mapped) throw mapped;
         }

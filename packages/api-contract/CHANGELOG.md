@@ -1,5 +1,18 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.21
+
+### Minor Changes
+
+- 0fef93e: Add the HTTP surface that serves a stored HTML "artifact" page's bytes (RFC-0020): `POST /api/pages/{id}/artifact-url` mints a 60-second signed URL for a granted page's current (or a specified historical) artifact revision, `GET /api/artifact/{pageId}/{revisionId}` serves those bytes to that signed URL alone (no cookie, no session — the token is the only credential, and it is the endpoint an HTML artifact page's sandboxed preview will load from once later phases add that preview), and `GET /api/pages/{id}/artifact-download` downloads the same bytes as a plain attachment under normal session/PAT auth, working even when artifact delivery has not been configured on this server. The serve route's response carries the fixed security headers required to keep a served artifact from reaching Crowi's own origin, cookies, or API; the download route omits them deliberately, since it hands the bytes to the browser as a plain attachment rather than a document to render. Until later phases add the page shell that requests a delivery URL, this only changes what the API surface accepts and returns.
+- bee7d66: `POST /api/pages` and `PUT /api/pages` accept an optional `X-Crowi-Page-Content-Type: markdown | artifact` header (RFC-0020) declaring whether the request body is Markdown source or a self-contained HTML "artifact" document. An artifact body is validated and normalized before it is stored, and `POST /api/pages/revert-to-revision` re-validates a stored artifact Revision the same way before stacking it as a new revision. Omitting the header on a create defaults to Markdown; omitting it on an update keeps the page's current kind. A declared kind that conflicts with a page's existing kind, or a body that fails validation, is rejected before anything is written, with a stable machine-readable reason and no author content echoed back. Writing an artifact page requires an operator to have configured artifact delivery — until then, and until later phases add a way to view a stored artifact page, this only changes what the write API accepts.
+
+### Patch Changes
+
+- 0a8bff6: Viewing an HTML artifact page (RFC-0020) now reads and operates like the rest of Crowi instead of standing out as a special case. The whole page column — title, page actions, body, comments, backlinks, and attachments — widens to use the space the table-of-contents rail would otherwise occupy, and the app header widens to match. The page menu drops "Copy markdown" and "Make this a portal" (neither means anything for HTML) and replaces "Download markdown" with "Download HTML", which always saves the file as a browser download rather than opening it; history, rename, delete, like, watch, share, and comments all still work exactly as they do on a Markdown page. Page lists, the sidebar tree, and search suggestions mark an artifact page with a small icon next to its title (not a status pill, since being an artifact is a permanent trait of the page, not a temporary state).
+
+  Search treats an artifact page's HTML body as non-text: it is excluded from the search index on every backend (the built-in MongoDB search, Elasticsearch, and OpenSearch), so a keyword that only appears inside the markup will not match it, and a result row for it only ever shows a snippet when its path is the match. The page itself is still fully findable by its path and title.
+
 ## 2.0.0-alpha.20
 
 ### Minor Changes

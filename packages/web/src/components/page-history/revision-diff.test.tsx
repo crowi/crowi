@@ -40,6 +40,7 @@ const baseRevision = (overrides: Partial<Revision>): Revision => ({
   body: overrides.body ?? '',
   format: 'markdown',
   createdAt: overrides.createdAt ?? new Date().toISOString(),
+  contentType: 'markdown',
   ...overrides,
 });
 

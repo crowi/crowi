@@ -38,6 +38,28 @@ async function handle(msg) {
     process.send({ type: 'ready', id: msg.id });
     return;
   }
+  if (msg.type === 'inspect') {
+    try {
+      if (!eslint) {
+        throw new Error('eslint-flat-config-runner: inspect requested before init');
+      }
+      const config = await eslint.calculateConfigForFile(msg.filePath);
+      // Only whether type-aware parsing is switched on travels back: the guard
+      // suite asserts on that alone, and the rest of a resolved config is a
+      // large object that would turn any config edit into a test edit.
+      // `projectService` switches on the same Program-building cost as
+      // `project`, so either one counts.
+      const parserOptions = config?.languageOptions?.parserOptions;
+      process.send({ type: 'inspection', id: msg.id, hasTypedParserProject: Boolean(parserOptions?.project || parserOptions?.projectService) });
+    } catch (err) {
+      process.send({
+        type: 'error',
+        id: msg.id,
+        message: err instanceof Error ? (err.stack ?? err.message) : String(err),
+      });
+    }
+    return;
+  }
   if (msg.type === 'lint') {
     try {
       if (!eslint) {

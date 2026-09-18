@@ -100,4 +100,25 @@ describe('persistYjsState — RFC-0017 Phase 1 epoch/status CAS', () => {
     const page = await Page().findById(pageId).exec();
     expect(page.yjsState).toBeTruthy();
   });
+
+  test('AC-SC-9 (RFC-0020 §1): a Page that acquired artifact kind rejects the checkpoint even when the epoch matches, without writing yjsState', async () => {
+    const pageId = await seedPage({ collabLifecycleVersion: 0, contentType: 'artifact' });
+    const result = await persistYjsState(Page(), {
+      pageId,
+      document: makeDoc('must never be written onto an artifact Page'),
+      baselineBody: null,
+      origin: 'save',
+      expectedEpoch: 0,
+    });
+    expect(result).toEqual({ ok: false, reason: 'epoch-mismatch' });
+
+    const page = await Page().findById(pageId).exec();
+    expect(page.yjsState ?? null).toBeNull();
+  });
+
+  test('a missing contentType hint (legacy Markdown) still persists normally', async () => {
+    const pageId = await seedPage({ collabLifecycleVersion: 0 });
+    const result = await persistYjsState(Page(), { pageId, document: makeDoc('legacy markdown page'), baselineBody: null, origin: 'save', expectedEpoch: 0 });
+    expect(result.ok).toBe(true);
+  });
 });

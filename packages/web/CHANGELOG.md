@@ -1,5 +1,26 @@
 # @crowi/web
 
+## 2.0.0-alpha.21
+
+### Minor Changes
+
+- 0a8bff6: Viewing an HTML artifact page (RFC-0020) now reads and operates like the rest of Crowi instead of standing out as a special case. The whole page column — title, page actions, body, comments, backlinks, and attachments — widens to use the space the table-of-contents rail would otherwise occupy, and the app header widens to match. The page menu drops "Copy markdown" and "Make this a portal" (neither means anything for HTML) and replaces "Download markdown" with "Download HTML", which always saves the file as a browser download rather than opening it; history, rename, delete, like, watch, share, and comments all still work exactly as they do on a Markdown page. Page lists, the sidebar tree, and search suggestions mark an artifact page with a small icon next to its title (not a status pill, since being an artifact is a permanent trait of the page, not a temporary state).
+
+  Search treats an artifact page's HTML body as non-text: it is excluded from the search index on every backend (the built-in MongoDB search, Elasticsearch, and OpenSearch), so a keyword that only appears inside the markup will not match it, and a result row for it only ever shows a snippet when its path is the match. The page itself is still fully findable by its path and title.
+
+- d0fef67: Viewing an HTML artifact page (RFC-0020) now runs its content instead of the endless "Rendering…" it showed before. Opening the page shows a brief "Preparing artifact..." spinner while it automatically mints a short-lived signed URL, then loads the content inside a sandboxed frame that cannot navigate to other sites, submit forms, or open popups, with a permanent notice next to the frame that it is sandboxed, agent-generated content and that anything typed into it may not stay private. Switching to a different revision from the page's history tears the frame down and runs the new revision automatically in turn. If preparing the frame fails, a notice explains why and offers to try again. On a server where artifact delivery isn't configured, the page explains that instead of running anything.
+
+### Patch Changes
+
+- 7f4b42c: Line the header up with the page content at every window width. Page and portal views used to run slightly wider than the header's logo and account menu (and than a folder listing without a portal); they now share the same column. Between 1280px and 1440px wide, where a page shows its table of contents beside the body, the header now spans the body and the table of contents instead of staying narrower in the middle.
+- aeefbe4: Opening a URL that sends you on to another one no longer leaves a focus ring drawn around the whole page. This covers all three: a page's id URL (`/<page id>`), a path a page was renamed away from, and a link that arrived double-encoded and had to be recovered. Moving between pages with the keyboard still puts focus, and its ring, on the page content as before.
+- 5e35855: The sidebar panel opened from the header on narrower windows now stays open while you move between pages with it, instead of closing after a page change; it still closes with its close button, Escape, or a click outside. The page tree also keeps showing while the next page's part of the tree loads, rather than briefly collapsing to a loading placeholder, both in that panel and in the sidebar on wide windows.
+- 08c0b19: Keep a page that also has pages under it (e.g. `/team/docs` alongside `/team/docs/guide`) reachable from where you would look for it. The sidebar now lists it at the top of its folder whenever that folder is open, including while you are viewing one of the pages inside it (previously it disappeared as soon as you opened a child page). The folder's page list (`/team/docs/`) now shows it as the first row, next to the "this path has content" banner, instead of listing only the pages inside the folder.
+- Updated dependencies [0a8bff6]
+- Updated dependencies [0fef93e]
+- Updated dependencies [bee7d66]
+  - @crowi/api-contract@2.0.0-alpha.21
+
 ## 2.0.0-alpha.20
 
 ### Minor Changes

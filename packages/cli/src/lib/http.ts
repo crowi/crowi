@@ -1,3 +1,4 @@
+import { formatArtifactRejection } from './artifact-rejection';
 import type { Profile } from './config';
 import { stripTrailingSlash } from './config';
 
@@ -16,7 +17,7 @@ export const EXIT = {
   NOT_FOUND: 4,
   /** Optimistic-lock / edit conflict (409). */
   CONFLICT: 5,
-  /** Bad request / client validation (400 / 422). */
+  /** Bad request / client validation (400 / 413 / 422). */
   INVALID: 6,
   /** Server unavailable / feature disabled (503). */
   UNAVAILABLE: 7,
@@ -68,6 +69,7 @@ function statusToExit(status: number): ExitCode {
     case 409:
       return EXIT.CONFLICT;
     case 400:
+    case 413:
     case 422:
       return EXIT.INVALID;
     case 503:
@@ -317,7 +319,14 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
 
   const envelope = parseCrowiError(body);
-  const message = envelope?.message ?? (typeof body === 'string' && body.trim() !== '' ? body.trim() : `request failed with status ${response.status}`);
+  // RFC-0020 §J-1 — an artifact write-rejection body carries `ruleId` /
+  // `reason` / `target` alongside `error.message`; when the FULL envelope is
+  // present, that richer message replaces the plain `error.message` a
+  // generic Crowi error would use. `apiCode` below still comes from
+  // `envelope` either way, so `CliError.apiCode` stays `ARTIFACT_WRITE_REJECTED`.
+  const artifactMessage = formatArtifactRejection(body);
+  const message =
+    artifactMessage ?? envelope?.message ?? (typeof body === 'string' && body.trim() !== '' ? body.trim() : `request failed with status ${response.status}`);
 
   throw new CliError(message, {
     exitCode: statusToExit(response.status),

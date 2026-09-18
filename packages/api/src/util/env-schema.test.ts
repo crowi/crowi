@@ -27,6 +27,7 @@ describe('util/env-schema validateEnv', () => {
         mongoUri: 'mongodb://localhost/crowi',
         encryptionKey: null,
         federatedAuthPublicUrls: null,
+        artifactDelivery: { artifactOrigin: null, crowiOrigin: null },
       });
     });
 
@@ -253,6 +254,69 @@ describe('util/env-schema validateEnv', () => {
       expect(thrown).not.toBeNull();
       const matches = (thrown?.message.match(/REDIS_KEY_PREFIX/g) ?? []).length;
       expect(matches).toBe(1);
+    });
+  });
+
+  describe('feature-html-artifact-delivery-policy §E 表: CROWI_ARTIFACT_ORIGIN + CLIENT_URL', () => {
+    test('E-1: origin-only normalization (trailing slash / uppercase host / default port collapse to origin)', () => {
+      expect(
+        validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net/', CLIENT_URL: 'https://wiki.example.com' })).values.artifactDelivery
+          .artifactOrigin,
+      ).toBe('https://artifacts.example.net');
+      expect(
+        validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'HTTPS://ARTIFACTS.EXAMPLE.NET', CLIENT_URL: 'https://wiki.example.com' })).values.artifactDelivery
+          .artifactOrigin,
+      ).toBe('https://artifacts.example.net');
+      expect(
+        validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net:443', CLIENT_URL: 'https://wiki.example.com' })).values.artifactDelivery
+          .artifactOrigin,
+      ).toBe('https://artifacts.example.net');
+    });
+
+    test.each([
+      'https://artifacts.example.net/path',
+      'https://user:pass@artifacts.example.net',
+      'https://artifacts.example.net?x=1',
+      'https://artifacts.example.net#frag',
+    ])('E-1: %s (path/userinfo/query/fragment) fails boot', (raw) => {
+      expect(() => validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: raw, CLIENT_URL: 'https://wiki.example.com' }))).toThrow(/CROWI_ARTIFACT_ORIGIN/);
+    });
+
+    test('E-2: CLIENT_URL unset fails boot when CROWI_ARTIFACT_ORIGIN is set', () => {
+      expect(() => validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net' }))).toThrow(/CROWI_ARTIFACT_ORIGIN/);
+    });
+
+    test('E-2: CLIENT_URL set but invalid fails boot the same as unset', () => {
+      expect(() => validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net', CLIENT_URL: 'not-a-url' }))).toThrow(/CROWI_ARTIFACT_ORIGIN/);
+    });
+
+    test.each([
+      ['same origin', 'https://wiki.example.com'],
+      ['same hostname, different port', 'https://wiki.example.com:8443'],
+      ['same hostname, different scheme', 'http://wiki.example.com'],
+    ])('E-3: %s fails boot (cookies are host-scoped, not origin-scoped)', (_label, artifactOrigin) => {
+      expect(() => validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: artifactOrigin, CLIENT_URL: 'https://wiki.example.com' }))).toThrow(/CROWI_ARTIFACT_ORIGIN/);
+    });
+
+    test('E-3: a different hostname on the SAME port passes', () => {
+      expect(() => validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net', CLIENT_URL: 'https://wiki.example.com' }))).not.toThrow();
+    });
+
+    test('E-4: both unset -> { artifactOrigin: null, crowiOrigin: null }', () => {
+      expect(validateEnv(makeEnv({})).values.artifactDelivery).toEqual({ artifactOrigin: null, crowiOrigin: null });
+    });
+
+    test('E-4: CLIENT_URL only (with a path) -> crowiOrigin is the bare origin, artifactOrigin stays null', () => {
+      expect(validateEnv(makeEnv({ CLIENT_URL: 'https://wiki.example.com/some/path' })).values.artifactDelivery).toEqual({
+        artifactOrigin: null,
+        crowiOrigin: 'https://wiki.example.com',
+      });
+    });
+
+    test('E-4: both set and valid -> both origins resolved', () => {
+      expect(
+        validateEnv(makeEnv({ CROWI_ARTIFACT_ORIGIN: 'https://artifacts.example.net', CLIENT_URL: 'https://wiki.example.com' })).values.artifactDelivery,
+      ).toEqual({ artifactOrigin: 'https://artifacts.example.net', crowiOrigin: 'https://wiki.example.com' });
     });
   });
 
@@ -648,6 +712,7 @@ describe('util/env-schema validateEnv', () => {
           'REDIS_KEY_PREFIX',
           'CROWI_ENCRYPTION_KEY',
           'CLIENT_URL',
+          'CROWI_ARTIFACT_ORIGIN',
           'CROWI_MULTI_INSTANCE',
           'NODE_ENV',
           'JWT_ACCESS_TOKEN_TTL_SECONDS',

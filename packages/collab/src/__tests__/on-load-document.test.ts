@@ -408,4 +408,48 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
       expect(newDoc.getText(CONTENT_FIELD).toString()).toContain('LEGACY ROW, NO EPOCH FIELD');
     });
   });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    test('AC-SC-9: an artifact Page is generic-rejected before epoch store, Yjs restore, Revision fetch, or Y.Text seed', async () => {
+      const { pageId } = await seedPageWithBody('artifact body should never be read');
+      const Page = models.Page as unknown as { updateOne(filter: unknown, update: unknown): { exec(): Promise<unknown> } };
+      await Page.updateOne({ _id: pageId }, { $set: { contentType: 'artifact' } }).exec();
+
+      const docEpochRevisions = createDocEpochStore();
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+        docEpochRevisions,
+      });
+      const newDoc = new Y.Doc();
+      await expect(
+        onLoadDocument({
+          documentName: pageId,
+          document: newDoc,
+          instance: { documents: new Map() },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any),
+      ).rejects.toThrow('page not found');
+
+      // Y.Doc untouched — no body seed, no restore.
+      expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('');
+      // Epoch was never recorded for this document (rejected before the
+      // epoch-store write, which is unconditional on every non-rejected load).
+      expect(docEpochRevisions.get(pageId)).toBeUndefined();
+    });
+
+    test('a missing contentType hint (legacy Markdown) still materializes normally', async () => {
+      const { pageId } = await seedPageWithBody('legacy markdown body');
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      });
+      const newDoc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: newDoc,
+        instance: { documents: new Map() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+      expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('legacy markdown body');
+    });
+  });
 });

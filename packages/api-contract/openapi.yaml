@@ -87,6 +87,9 @@ components:
         - PLUGIN_NOT_FOUND
         - PLUGIN_CONFIG_VALIDATION_FAILED
         - LINKED_IDENTITIES_EXIST
+        - ARTIFACT_SETTINGS_REJECTED
+        - ARTIFACT_WRITE_REJECTED
+        - ARTIFACT_URL_UNAVAILABLE
     ApplicationNotInstalledError:
       type: object
       properties:
@@ -912,11 +915,17 @@ components:
                     - web
                     - oauth
                     - pat
+                contentType:
+                  type: string
+                  enum:
+                    - markdown
+                    - artifact
               required:
                 - _id
                 - path
                 - body
                 - createdAt
+                - contentType
         redirectTo:
           type:
             - string
@@ -1024,6 +1033,11 @@ components:
           minimum: 0
         isLiked:
           type: boolean
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - _id
         - path
@@ -1031,6 +1045,7 @@ components:
         - likerCount
         - seenUsersCount
         - isLiked
+        - contentType
     RenderedAstEnvelope:
       type: object
       properties:
@@ -1239,11 +1254,17 @@ components:
                 - web
                 - oauth
                 - pat
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
             - body
             - createdAt
+            - contentType
         redirectTo:
           type:
             - string
@@ -1349,6 +1370,11 @@ components:
           minimum: 0
         isLiked:
           type: boolean
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - _id
         - path
@@ -1357,6 +1383,7 @@ components:
         - likerCount
         - seenUsersCount
         - isLiked
+        - contentType
     Revision:
       type: object
       properties:
@@ -1535,11 +1562,17 @@ components:
             - web
             - oauth
             - pat
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - _id
         - path
         - body
         - createdAt
+        - contentType
     RevisionMeta:
       type: object
       properties:
@@ -1871,11 +1904,17 @@ components:
                           - web
                           - oauth
                           - pat
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
                       - body
                       - createdAt
+                      - contentType
               redirectTo:
                 type:
                   - string
@@ -1983,6 +2022,11 @@ components:
                 minimum: 0
               isLiked:
                 type: boolean
+              contentType:
+                type: string
+                enum:
+                  - markdown
+                  - artifact
             required:
               - _id
               - path
@@ -1990,6 +2034,7 @@ components:
               - likerCount
               - seenUsersCount
               - isLiked
+              - contentType
         pager:
           type: object
           properties:
@@ -2196,11 +2241,17 @@ components:
                         - web
                         - oauth
                         - pat
+                    contentType:
+                      type: string
+                      enum:
+                        - markdown
+                        - artifact
                   required:
                     - _id
                     - path
                     - body
                     - createdAt
+                    - contentType
             redirectTo:
               type:
                 - string
@@ -2308,6 +2359,11 @@ components:
               minimum: 0
             isLiked:
               type: boolean
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
@@ -2315,6 +2371,7 @@ components:
             - likerCount
             - seenUsersCount
             - isLiked
+            - contentType
         contentPage:
           type:
             - object
@@ -2504,11 +2561,17 @@ components:
                         - web
                         - oauth
                         - pat
+                    contentType:
+                      type: string
+                      enum:
+                        - markdown
+                        - artifact
                   required:
                     - _id
                     - path
                     - body
                     - createdAt
+                    - contentType
             redirectTo:
               type:
                 - string
@@ -2616,6 +2679,11 @@ components:
               minimum: 0
             isLiked:
               type: boolean
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
@@ -2623,6 +2691,7 @@ components:
             - likerCount
             - seenUsersCount
             - isLiked
+            - contentType
         total:
           type: number
       required:
@@ -2817,11 +2886,17 @@ components:
                     - web
                     - oauth
                     - pat
+                contentType:
+                  type: string
+                  enum:
+                    - markdown
+                    - artifact
               required:
                 - _id
                 - path
                 - body
                 - createdAt
+                - contentType
             redirectTo:
               type:
                 - string
@@ -2927,6 +3002,11 @@ components:
               minimum: 0
             isLiked:
               type: boolean
+            contentType:
+              type: string
+              enum:
+                - markdown
+                - artifact
           required:
             - _id
             - path
@@ -2935,6 +3015,7 @@ components:
             - likerCount
             - seenUsersCount
             - isLiked
+            - contentType
       required:
         - page
     UpdatePageRequest:
@@ -3256,11 +3337,17 @@ components:
                           - web
                           - oauth
                           - pat
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
                       - body
                       - createdAt
+                      - contentType
               redirectTo:
                 type:
                   - string
@@ -3368,6 +3455,11 @@ components:
                 minimum: 0
               isLiked:
                 type: boolean
+              contentType:
+                type: string
+                enum:
+                  - markdown
+                  - artifact
             required:
               - _id
               - path
@@ -3375,6 +3467,7 @@ components:
               - likerCount
               - seenUsersCount
               - isLiked
+              - contentType
       required:
         - pages
     Attachment:
@@ -5434,6 +5527,18 @@ paths:
                     type: array
                     items:
                       type: string
+                  artifactDelivery:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      origin:
+                        type:
+                          - string
+                          - 'null'
+                    required:
+                      - enabled
+                      - origin
                 required:
                   - title
                   - confidential
@@ -5442,6 +5547,7 @@ paths:
                   - capabilities
                   - canSelfRegister
                   - rendererStylesheets
+                  - artifactDelivery
         '500':
           description: Internal server error
           content:
@@ -8608,11 +8714,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -8720,6 +8832,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -8727,6 +8844,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                 required:
                   - pages
         '401':
@@ -10377,11 +10495,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -10489,6 +10613,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -10496,6 +10625,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   recentBookmarks:
                     type: array
                     items:
@@ -10691,11 +10821,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -10803,6 +10939,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -10810,6 +10951,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                         user:
                           anyOf:
                             - type: string
@@ -11166,11 +11308,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -11278,6 +11426,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -11285,6 +11438,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                         user:
                           anyOf:
                             - type: string
@@ -11653,11 +11807,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -11765,6 +11925,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -11772,6 +11937,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -12096,11 +12262,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -12208,6 +12380,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -12215,6 +12392,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -12874,11 +13052,17 @@ paths:
                                       - web
                                       - oauth
                                       - pat
+                                  contentType:
+                                    type: string
+                                    enum:
+                                      - markdown
+                                      - artifact
                                 required:
                                   - _id
                                   - path
                                   - body
                                   - createdAt
+                                  - contentType
                           redirectTo:
                             type:
                               - string
@@ -12986,6 +13170,11 @@ paths:
                             minimum: 0
                           isLiked:
                             type: boolean
+                          contentType:
+                            type: string
+                            enum:
+                              - markdown
+                              - artifact
                         required:
                           - _id
                           - path
@@ -12993,6 +13182,7 @@ paths:
                           - likerCount
                           - seenUsersCount
                           - isLiked
+                          - contentType
                       user:
                         anyOf:
                           - type: string
@@ -13437,11 +13627,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -13549,6 +13745,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -13556,6 +13757,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                         user:
                           anyOf:
                             - type: string
@@ -14443,10 +14645,16 @@ paths:
                             - pat
                         createdAt:
                           type: string
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
                         - createdAt
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -14738,11 +14946,17 @@ paths:
                             - web
                             - oauth
                             - pat
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
                         - body
                         - createdAt
+                        - contentType
                 required:
                   - revisions
         '400':
@@ -15019,11 +15233,17 @@ paths:
                           - web
                           - oauth
                           - pat
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
                       - body
                       - createdAt
+                      - contentType
                 required:
                   - revision
         '400':
@@ -15473,11 +15693,17 @@ paths:
                               - web
                               - oauth
                               - pat
+                          contentType:
+                            type: string
+                            enum:
+                              - markdown
+                              - artifact
                         required:
                           - _id
                           - path
                           - body
                           - createdAt
+                          - contentType
                       redirectTo:
                         type:
                           - string
@@ -15583,6 +15809,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -15591,6 +15822,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '401':
@@ -15693,6 +15925,12 @@ paths:
       security:
         - bearerAuth: []
       summary: Create a new page
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: x-crowi-page-content-type
+          in: header
       requestBody:
         content:
           application/json:
@@ -15903,11 +16141,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -16015,6 +16259,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -16022,29 +16271,84 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
           description: >-
             Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS /
-            NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT)
+            NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT /
+            ARTIFACT_WRITE_REJECTED AI-D01)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: object
+                anyOf:
+                  - type: object
                     properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
                     required:
-                      - code
-                      - message
-                required:
-                  - error
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - ARTIFACT_WRITE_REJECTED
+                          reason:
+                            type: string
+                            enum:
+                              - BODY_TOO_LARGE
+                              - DOM_LIMIT_EXCEEDED
+                              - HTML_PARSE_ERROR
+                              - DOCTYPE_INVALID
+                              - DOCUMENT_STRUCTURE_INVALID
+                              - ELEMENT_FORBIDDEN
+                              - INLINE_CODE_CONTENT_INVALID
+                              - ATTRIBUTE_FORBIDDEN
+                              - META_FORBIDDEN
+                              - EXTERNAL_REFERENCE
+                              - FONT_REFERENCE_FORBIDDEN
+                              - SCRIPT_TYPE_FORBIDDEN
+                              - MODULE_SPECIFIER_FORBIDDEN
+                              - CSS_PARSE_ERROR
+                              - CSS_AT_RULE_FORBIDDEN
+                              - CSS_FUNCTION_FORBIDDEN
+                              - CSS_STRING_ARGUMENT_FORBIDDEN
+                              - URL_FORBIDDEN
+                              - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                              - CSS_VALUE_DEPTH_EXCEEDED
+                              - CSS_SOURCE_TOO_LARGE
+                              - NORMALIZER_MARKER_INVALID
+                              - NORMALIZATION_NOT_IDEMPOTENT
+                              - CONTENT_TYPE_INVALID
+                              - CONTENT_TYPE_CONFLICT
+                              - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                          ruleId:
+                            type: string
+                            pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                          message:
+                            type: string
+                          target:
+                            type: string
+                        required:
+                          - code
+                          - reason
+                          - ruleId
+                          - message
+                    required:
+                      - error
         '401':
           description: Authentication required
           content:
@@ -16070,12 +16374,159 @@ paths:
                       - message
                 required:
                   - error
+        '413':
+          description: >-
+            The HTML artifact exceeds the configured size/complexity limit
+            (RFC-0020)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_WRITE_REJECTED
+                      reason:
+                        type: string
+                        enum:
+                          - BODY_TOO_LARGE
+                          - DOM_LIMIT_EXCEEDED
+                          - HTML_PARSE_ERROR
+                          - DOCTYPE_INVALID
+                          - DOCUMENT_STRUCTURE_INVALID
+                          - ELEMENT_FORBIDDEN
+                          - INLINE_CODE_CONTENT_INVALID
+                          - ATTRIBUTE_FORBIDDEN
+                          - META_FORBIDDEN
+                          - EXTERNAL_REFERENCE
+                          - FONT_REFERENCE_FORBIDDEN
+                          - SCRIPT_TYPE_FORBIDDEN
+                          - MODULE_SPECIFIER_FORBIDDEN
+                          - CSS_PARSE_ERROR
+                          - CSS_AT_RULE_FORBIDDEN
+                          - CSS_FUNCTION_FORBIDDEN
+                          - CSS_STRING_ARGUMENT_FORBIDDEN
+                          - URL_FORBIDDEN
+                          - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                          - CSS_VALUE_DEPTH_EXCEEDED
+                          - CSS_SOURCE_TOO_LARGE
+                          - NORMALIZER_MARKER_INVALID
+                          - NORMALIZATION_NOT_IDEMPOTENT
+                          - CONTENT_TYPE_INVALID
+                          - CONTENT_TYPE_CONFLICT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      ruleId:
+                        type: string
+                        pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                      message:
+                        type: string
+                      target:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - ruleId
+                      - message
+                required:
+                  - error
+        '422':
+          description: >-
+            HTML artifact delivery is not configured on this server (RFC-0020
+            AI-D03)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_WRITE_REJECTED
+                      reason:
+                        type: string
+                        enum:
+                          - BODY_TOO_LARGE
+                          - DOM_LIMIT_EXCEEDED
+                          - HTML_PARSE_ERROR
+                          - DOCTYPE_INVALID
+                          - DOCUMENT_STRUCTURE_INVALID
+                          - ELEMENT_FORBIDDEN
+                          - INLINE_CODE_CONTENT_INVALID
+                          - ATTRIBUTE_FORBIDDEN
+                          - META_FORBIDDEN
+                          - EXTERNAL_REFERENCE
+                          - FONT_REFERENCE_FORBIDDEN
+                          - SCRIPT_TYPE_FORBIDDEN
+                          - MODULE_SPECIFIER_FORBIDDEN
+                          - CSS_PARSE_ERROR
+                          - CSS_AT_RULE_FORBIDDEN
+                          - CSS_FUNCTION_FORBIDDEN
+                          - CSS_STRING_ARGUMENT_FORBIDDEN
+                          - URL_FORBIDDEN
+                          - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                          - CSS_VALUE_DEPTH_EXCEEDED
+                          - CSS_SOURCE_TOO_LARGE
+                          - NORMALIZER_MARKER_INVALID
+                          - NORMALIZATION_NOT_IDEMPOTENT
+                          - CONTENT_TYPE_INVALID
+                          - CONTENT_TYPE_CONFLICT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      ruleId:
+                        type: string
+                        pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                      message:
+                        type: string
+                      target:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - ruleId
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
     put:
       tags:
         - page
       security:
         - bearerAuth: []
       summary: Update existing page
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: x-crowi-page-content-type
+          in: header
       requestBody:
         content:
           application/json:
@@ -16288,11 +16739,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -16400,6 +16857,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -16407,27 +16869,83 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
-          description: Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT)
+          description: >-
+            Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT /
+            ARTIFACT_WRITE_REJECTED AI-D01/AI-D02)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: object
+                anyOf:
+                  - type: object
                     properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
                     required:
-                      - code
-                      - message
-                required:
-                  - error
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - ARTIFACT_WRITE_REJECTED
+                          reason:
+                            type: string
+                            enum:
+                              - BODY_TOO_LARGE
+                              - DOM_LIMIT_EXCEEDED
+                              - HTML_PARSE_ERROR
+                              - DOCTYPE_INVALID
+                              - DOCUMENT_STRUCTURE_INVALID
+                              - ELEMENT_FORBIDDEN
+                              - INLINE_CODE_CONTENT_INVALID
+                              - ATTRIBUTE_FORBIDDEN
+                              - META_FORBIDDEN
+                              - EXTERNAL_REFERENCE
+                              - FONT_REFERENCE_FORBIDDEN
+                              - SCRIPT_TYPE_FORBIDDEN
+                              - MODULE_SPECIFIER_FORBIDDEN
+                              - CSS_PARSE_ERROR
+                              - CSS_AT_RULE_FORBIDDEN
+                              - CSS_FUNCTION_FORBIDDEN
+                              - CSS_STRING_ARGUMENT_FORBIDDEN
+                              - URL_FORBIDDEN
+                              - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                              - CSS_VALUE_DEPTH_EXCEEDED
+                              - CSS_SOURCE_TOO_LARGE
+                              - NORMALIZER_MARKER_INVALID
+                              - NORMALIZATION_NOT_IDEMPOTENT
+                              - CONTENT_TYPE_INVALID
+                              - CONTENT_TYPE_CONFLICT
+                              - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                          ruleId:
+                            type: string
+                            pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                          message:
+                            type: string
+                          target:
+                            type: string
+                        required:
+                          - code
+                          - reason
+                          - ruleId
+                          - message
+                    required:
+                      - error
         '401':
           description: Authentication required
           content:
@@ -16492,6 +17010,147 @@ paths:
                           - PAGE_REVISION_ERROR
                       message:
                         type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '413':
+          description: >-
+            The HTML artifact exceeds the configured size/complexity limit
+            (RFC-0020)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_WRITE_REJECTED
+                      reason:
+                        type: string
+                        enum:
+                          - BODY_TOO_LARGE
+                          - DOM_LIMIT_EXCEEDED
+                          - HTML_PARSE_ERROR
+                          - DOCTYPE_INVALID
+                          - DOCUMENT_STRUCTURE_INVALID
+                          - ELEMENT_FORBIDDEN
+                          - INLINE_CODE_CONTENT_INVALID
+                          - ATTRIBUTE_FORBIDDEN
+                          - META_FORBIDDEN
+                          - EXTERNAL_REFERENCE
+                          - FONT_REFERENCE_FORBIDDEN
+                          - SCRIPT_TYPE_FORBIDDEN
+                          - MODULE_SPECIFIER_FORBIDDEN
+                          - CSS_PARSE_ERROR
+                          - CSS_AT_RULE_FORBIDDEN
+                          - CSS_FUNCTION_FORBIDDEN
+                          - CSS_STRING_ARGUMENT_FORBIDDEN
+                          - URL_FORBIDDEN
+                          - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                          - CSS_VALUE_DEPTH_EXCEEDED
+                          - CSS_SOURCE_TOO_LARGE
+                          - NORMALIZER_MARKER_INVALID
+                          - NORMALIZATION_NOT_IDEMPOTENT
+                          - CONTENT_TYPE_INVALID
+                          - CONTENT_TYPE_CONFLICT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      ruleId:
+                        type: string
+                        pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                      message:
+                        type: string
+                      target:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - ruleId
+                      - message
+                required:
+                  - error
+        '422':
+          description: >-
+            HTML artifact delivery is not configured on this server (RFC-0020
+            AI-D03)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_WRITE_REJECTED
+                      reason:
+                        type: string
+                        enum:
+                          - BODY_TOO_LARGE
+                          - DOM_LIMIT_EXCEEDED
+                          - HTML_PARSE_ERROR
+                          - DOCTYPE_INVALID
+                          - DOCUMENT_STRUCTURE_INVALID
+                          - ELEMENT_FORBIDDEN
+                          - INLINE_CODE_CONTENT_INVALID
+                          - ATTRIBUTE_FORBIDDEN
+                          - META_FORBIDDEN
+                          - EXTERNAL_REFERENCE
+                          - FONT_REFERENCE_FORBIDDEN
+                          - SCRIPT_TYPE_FORBIDDEN
+                          - MODULE_SPECIFIER_FORBIDDEN
+                          - CSS_PARSE_ERROR
+                          - CSS_AT_RULE_FORBIDDEN
+                          - CSS_FUNCTION_FORBIDDEN
+                          - CSS_STRING_ARGUMENT_FORBIDDEN
+                          - URL_FORBIDDEN
+                          - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                          - CSS_VALUE_DEPTH_EXCEEDED
+                          - CSS_SOURCE_TOO_LARGE
+                          - NORMALIZER_MARKER_INVALID
+                          - NORMALIZATION_NOT_IDEMPOTENT
+                          - CONTENT_TYPE_INVALID
+                          - CONTENT_TYPE_CONFLICT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      ruleId:
+                        type: string
+                        pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                      message:
+                        type: string
+                      target:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - ruleId
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
                     required:
                       - code
                       - message
@@ -16720,11 +17379,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -16832,6 +17497,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -16839,6 +17509,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -17270,11 +17941,17 @@ paths:
                                     - web
                                     - oauth
                                     - pat
+                                contentType:
+                                  type: string
+                                  enum:
+                                    - markdown
+                                    - artifact
                               required:
                                 - _id
                                 - path
                                 - body
                                 - createdAt
+                                - contentType
                         redirectTo:
                           type:
                             - string
@@ -17382,6 +18059,11 @@ paths:
                           minimum: 0
                         isLiked:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - _id
                         - path
@@ -17389,6 +18071,7 @@ paths:
                         - likerCount
                         - seenUsersCount
                         - isLiked
+                        - contentType
                   pager:
                     type: object
                     properties:
@@ -17595,11 +18278,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -17707,6 +18396,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -17714,6 +18408,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   contentPage:
                     type:
                       - object
@@ -17903,11 +18598,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -18015,6 +18716,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -18022,6 +18728,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   total:
                     type: number
                 required:
@@ -18099,6 +18806,11 @@ paths:
                           type: boolean
                         hasPortal:
                           type: boolean
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                         count:
                           type: number
                         lastUpdatedAt:
@@ -18381,11 +19093,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -18493,6 +19211,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -18500,6 +19223,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -19065,11 +19789,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -19177,6 +19907,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -19184,6 +19919,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -19471,11 +20207,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -19583,6 +20325,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -19590,6 +20337,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -19875,11 +20623,17 @@ paths:
                               - web
                               - oauth
                               - pat
+                          contentType:
+                            type: string
+                            enum:
+                              - markdown
+                              - artifact
                         required:
                           - _id
                           - path
                           - body
                           - createdAt
+                          - contentType
                       redirectTo:
                         type:
                           - string
@@ -19985,6 +20739,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -19993,6 +20752,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   granted:
                     type: boolean
                 required:
@@ -20550,11 +21310,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -20662,6 +21428,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -20669,6 +21440,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
@@ -21028,11 +21800,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -21140,6 +21918,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -21147,29 +21930,83 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                 required:
                   - page
         '400':
           description: >-
             PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to
-            the page)
+            the page) / ARTIFACT_WRITE_REJECTED (RFC-0020 AI-D02)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: object
+                anyOf:
+                  - type: object
                     properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
                     required:
-                      - code
-                      - message
-                required:
-                  - error
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - ARTIFACT_WRITE_REJECTED
+                          reason:
+                            type: string
+                            enum:
+                              - BODY_TOO_LARGE
+                              - DOM_LIMIT_EXCEEDED
+                              - HTML_PARSE_ERROR
+                              - DOCTYPE_INVALID
+                              - DOCUMENT_STRUCTURE_INVALID
+                              - ELEMENT_FORBIDDEN
+                              - INLINE_CODE_CONTENT_INVALID
+                              - ATTRIBUTE_FORBIDDEN
+                              - META_FORBIDDEN
+                              - EXTERNAL_REFERENCE
+                              - FONT_REFERENCE_FORBIDDEN
+                              - SCRIPT_TYPE_FORBIDDEN
+                              - MODULE_SPECIFIER_FORBIDDEN
+                              - CSS_PARSE_ERROR
+                              - CSS_AT_RULE_FORBIDDEN
+                              - CSS_FUNCTION_FORBIDDEN
+                              - CSS_STRING_ARGUMENT_FORBIDDEN
+                              - URL_FORBIDDEN
+                              - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                              - CSS_VALUE_DEPTH_EXCEEDED
+                              - CSS_SOURCE_TOO_LARGE
+                              - NORMALIZER_MARKER_INVALID
+                              - NORMALIZATION_NOT_IDEMPOTENT
+                              - CONTENT_TYPE_INVALID
+                              - CONTENT_TYPE_CONFLICT
+                              - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                          ruleId:
+                            type: string
+                            pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                          message:
+                            type: string
+                          target:
+                            type: string
+                        required:
+                          - code
+                          - reason
+                          - ruleId
+                          - message
+                    required:
+                      - error
         '401':
           description: Authentication required
           content:
@@ -21213,6 +22050,147 @@ paths:
                         type: string
                         enum:
                           - Page not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '413':
+          description: >-
+            The stored HTML artifact exceeds the configured size/complexity
+            limit (RFC-0020)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_WRITE_REJECTED
+                      reason:
+                        type: string
+                        enum:
+                          - BODY_TOO_LARGE
+                          - DOM_LIMIT_EXCEEDED
+                          - HTML_PARSE_ERROR
+                          - DOCTYPE_INVALID
+                          - DOCUMENT_STRUCTURE_INVALID
+                          - ELEMENT_FORBIDDEN
+                          - INLINE_CODE_CONTENT_INVALID
+                          - ATTRIBUTE_FORBIDDEN
+                          - META_FORBIDDEN
+                          - EXTERNAL_REFERENCE
+                          - FONT_REFERENCE_FORBIDDEN
+                          - SCRIPT_TYPE_FORBIDDEN
+                          - MODULE_SPECIFIER_FORBIDDEN
+                          - CSS_PARSE_ERROR
+                          - CSS_AT_RULE_FORBIDDEN
+                          - CSS_FUNCTION_FORBIDDEN
+                          - CSS_STRING_ARGUMENT_FORBIDDEN
+                          - URL_FORBIDDEN
+                          - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                          - CSS_VALUE_DEPTH_EXCEEDED
+                          - CSS_SOURCE_TOO_LARGE
+                          - NORMALIZER_MARKER_INVALID
+                          - NORMALIZATION_NOT_IDEMPOTENT
+                          - CONTENT_TYPE_INVALID
+                          - CONTENT_TYPE_CONFLICT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      ruleId:
+                        type: string
+                        pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                      message:
+                        type: string
+                      target:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - ruleId
+                      - message
+                required:
+                  - error
+        '422':
+          description: >-
+            HTML artifact delivery is not configured on this server (RFC-0020
+            AI-D03)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_WRITE_REJECTED
+                      reason:
+                        type: string
+                        enum:
+                          - BODY_TOO_LARGE
+                          - DOM_LIMIT_EXCEEDED
+                          - HTML_PARSE_ERROR
+                          - DOCTYPE_INVALID
+                          - DOCUMENT_STRUCTURE_INVALID
+                          - ELEMENT_FORBIDDEN
+                          - INLINE_CODE_CONTENT_INVALID
+                          - ATTRIBUTE_FORBIDDEN
+                          - META_FORBIDDEN
+                          - EXTERNAL_REFERENCE
+                          - FONT_REFERENCE_FORBIDDEN
+                          - SCRIPT_TYPE_FORBIDDEN
+                          - MODULE_SPECIFIER_FORBIDDEN
+                          - CSS_PARSE_ERROR
+                          - CSS_AT_RULE_FORBIDDEN
+                          - CSS_FUNCTION_FORBIDDEN
+                          - CSS_STRING_ARGUMENT_FORBIDDEN
+                          - URL_FORBIDDEN
+                          - CSS_VALUE_NODE_LIMIT_EXCEEDED
+                          - CSS_VALUE_DEPTH_EXCEEDED
+                          - CSS_SOURCE_TOO_LARGE
+                          - NORMALIZER_MARKER_INVALID
+                          - NORMALIZATION_NOT_IDEMPOTENT
+                          - CONTENT_TYPE_INVALID
+                          - CONTENT_TYPE_CONFLICT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      ruleId:
+                        type: string
+                        pattern: ^AI-(R\d{2}[a-c]?|D0[1-3])$
+                      message:
+                        type: string
+                      target:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - ruleId
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
                     required:
                       - code
                       - message
@@ -21445,11 +22423,17 @@ paths:
                                   - web
                                   - oauth
                                   - pat
+                              contentType:
+                                type: string
+                                enum:
+                                  - markdown
+                                  - artifact
                             required:
                               - _id
                               - path
                               - body
                               - createdAt
+                              - contentType
                       redirectTo:
                         type:
                           - string
@@ -21557,6 +22541,11 @@ paths:
                         minimum: 0
                       isLiked:
                         type: boolean
+                      contentType:
+                        type: string
+                        enum:
+                          - markdown
+                          - artifact
                     required:
                       - _id
                       - path
@@ -21564,6 +22553,7 @@ paths:
                       - likerCount
                       - seenUsersCount
                       - isLiked
+                      - contentType
                   renamed_count:
                     type: number
                 required:
@@ -22002,6 +22992,252 @@ paths:
                   - retryAfterSeconds
         '500':
           description: Renderer pipeline failure
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /pages/{id}/artifact-url:
+    post:
+      tags:
+        - artifact
+      security:
+        - bearerAuth: []
+      summary: Mint a signed delivery URL for a Page HTML artifact
+      parameters:
+        - schema:
+            type: string
+            description: Page id (24-char hex ObjectId)
+            example: 507f1f77bcf86cd799439011
+          required: true
+          description: Page id (24-char hex ObjectId)
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revisionId:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: Signed artifact URL minted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  expiresAt:
+                    type: string
+                required:
+                  - url
+                  - expiresAt
+        '400':
+          description: >-
+            Invalid page id, invalid request body, or the target revision is not
+            an HTML artifact
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - INVALID_PAGE_ID
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - VALIDATION_ERROR
+                          message:
+                            type: string
+                          details:
+                            type: object
+                            properties:
+                              fieldErrors:
+                                type: object
+                                additionalProperties:
+                                  type: array
+                                  items:
+                                    type: string
+                              formErrors:
+                                type: array
+                                items:
+                                  type: string
+                            required:
+                              - fieldErrors
+                              - formErrors
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - ARTIFACT_URL_UNAVAILABLE
+                          reason:
+                            type: string
+                            enum:
+                              - NOT_AN_ARTIFACT
+                              - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - reason
+                          - message
+                    required:
+                      - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: The access token does not grant pages:read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INSUFFICIENT_SCOPE
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          requiredScope:
+                            type: string
+                        required:
+                          - requiredScope
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: >-
+            Page not found, not granted, or the revision does not belong to this
+            page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - PAGE_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - Page not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '422':
+          description: HTML artifact delivery is not configured on this server
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ARTIFACT_URL_UNAVAILABLE
+                      reason:
+                        type: string
+                        enum:
+                          - NOT_AN_ARTIFACT
+                          - ARTIFACT_DELIVERY_NOT_CONFIGURED
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - reason
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -24753,11 +25989,17 @@ paths:
                                         - web
                                         - oauth
                                         - pat
+                                    contentType:
+                                      type: string
+                                      enum:
+                                        - markdown
+                                        - artifact
                                   required:
                                     - _id
                                     - path
                                     - body
                                     - createdAt
+                                    - contentType
                             redirectTo:
                               type:
                                 - string
@@ -24865,6 +26107,11 @@ paths:
                               minimum: 0
                             isLiked:
                               type: boolean
+                            contentType:
+                              type: string
+                              enum:
+                                - markdown
+                                - artifact
                           required:
                             - _id
                             - path
@@ -24872,6 +26119,7 @@ paths:
                             - likerCount
                             - seenUsersCount
                             - isLiked
+                            - contentType
                       required:
                         - pageId
                         - path
@@ -30580,6 +31828,355 @@ paths:
                         enum:
                           - PLUGIN_NOT_FOUND
                       message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /admin/artifact:
+    get:
+      tags:
+        - admin.artifact
+      security:
+        - bearerAuth: []
+      summary: Get the current HTML artifact delivery mode and settings
+      responses:
+        '200':
+          description: Current artifact delivery mode and settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveryMode:
+                    type: string
+                    enum:
+                      - separate-origin
+                      - same-origin
+                      - disabled
+                  artifactOrigin:
+                    type:
+                      - string
+                      - 'null'
+                  crowiOrigin:
+                    type:
+                      - string
+                      - 'null'
+                  writeEnabled:
+                    type: boolean
+                  sameOriginInactiveReason:
+                    type:
+                      - string
+                      - 'null'
+                    enum:
+                      - separate-origin-active
+                      - client-url-unset
+                      - null
+                  settings:
+                    type: object
+                    properties:
+                      sameOriginEnabled:
+                        type: boolean
+                      allowWebFonts:
+                        type: boolean
+                      maxBytes:
+                        type: integer
+                        minimum: 65536
+                        maximum: 10485760
+                    required:
+                      - sameOriginEnabled
+                      - allowWebFonts
+                      - maxBytes
+                required:
+                  - deliveryMode
+                  - artifactOrigin
+                  - crowiOrigin
+                  - writeEnabled
+                  - sameOriginInactiveReason
+                  - settings
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+    put:
+      tags:
+        - admin.artifact
+      security:
+        - bearerAuth: []
+      summary: >-
+        Update HTML artifact delivery settings (sameOriginEnabled /
+        allowWebFonts / maxBytes)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sameOriginEnabled:
+                  type: boolean
+                allowWebFonts:
+                  type: boolean
+                maxBytes:
+                  type: integer
+                  minimum: 65536
+                  maximum: 10485760
+              required:
+                - sameOriginEnabled
+                - allowWebFonts
+                - maxBytes
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated settings (re-resolved from in-memory cache)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveryMode:
+                    type: string
+                    enum:
+                      - separate-origin
+                      - same-origin
+                      - disabled
+                  artifactOrigin:
+                    type:
+                      - string
+                      - 'null'
+                  crowiOrigin:
+                    type:
+                      - string
+                      - 'null'
+                  writeEnabled:
+                    type: boolean
+                  sameOriginInactiveReason:
+                    type:
+                      - string
+                      - 'null'
+                    enum:
+                      - separate-origin-active
+                      - client-url-unset
+                      - null
+                  settings:
+                    type: object
+                    properties:
+                      sameOriginEnabled:
+                        type: boolean
+                      allowWebFonts:
+                        type: boolean
+                      maxBytes:
+                        type: integer
+                        minimum: 65536
+                        maximum: 10485760
+                    required:
+                      - sameOriginEnabled
+                      - allowWebFonts
+                      - maxBytes
+                required:
+                  - deliveryMode
+                  - artifactOrigin
+                  - crowiOrigin
+                  - writeEnabled
+                  - sameOriginInactiveReason
+                  - settings
+        '400':
+          description: >-
+            Validation failure or a same-origin toggle rejected for missing
+            CLIENT_URL
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - VALIDATION_ERROR
+                          message:
+                            type: string
+                          details:
+                            type: object
+                            properties:
+                              fieldErrors:
+                                type: object
+                                additionalProperties:
+                                  type: array
+                                  items:
+                                    type: string
+                              formErrors:
+                                type: array
+                                items:
+                                  type: string
+                            required:
+                              - fieldErrors
+                              - formErrors
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - ARTIFACT_SETTINGS_REJECTED
+                          message:
+                            type: string
+                          reason:
+                            type: string
+                            enum:
+                              - CLIENT_URL_REQUIRED_FOR_SAME_ORIGIN
+                        required:
+                          - code
+                          - message
+                          - reason
+                    required:
+                      - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
                         type: string
                     required:
                       - code

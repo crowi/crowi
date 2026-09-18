@@ -100,14 +100,14 @@ describe('boot-reporter pure helpers', () => {
   });
 
   describe('formatBootFailureReason', () => {
-    it('takes the first line of an Error message', () => {
-      expect(formatBootFailureReason(new Error('boom\n  at foo\n  at bar'))).toBe('boom');
+    it("keeps every line of a multi-line Error message (e.g. validateEnv()'s one-bullet-per-variable format)", () => {
+      expect(formatBootFailureReason(new Error('boom\n  - detail one\n  - detail two'))).toBe('boom\n  - detail one\n  - detail two');
     });
     it('stringifies a non-Error thrown value', () => {
       expect(formatBootFailureReason('plain string reason')).toBe('plain string reason');
     });
-    it('caps the reason at 200 characters', () => {
-      expect(formatBootFailureReason(new Error('x'.repeat(250)))).toBe('x'.repeat(200));
+    it('caps the reason at 2000 characters', () => {
+      expect(formatBootFailureReason(new Error('x'.repeat(2050)))).toBe('x'.repeat(2000));
     });
   });
 

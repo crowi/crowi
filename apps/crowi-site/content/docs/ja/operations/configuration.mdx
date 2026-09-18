@@ -30,8 +30,8 @@ cp .env.example .env
 
 API は起動時にこれらの環境変数をまとめて検証します。`PORT` / `MONGO_URI`
 (またはエイリアス) / `REDIS_URL` (またはエイリアス) / `CROWI_ENCRYPTION_KEY`
-の形式が不正な場合、検出できた問題をすべて含む 1 つのエラーメッセージと
-ともに起動が即座に失敗します。`CLIENT_URL` / `CROWI_MULTI_INSTANCE` /
+/ `CROWI_ARTIFACT_ORIGIN` の形式が不正な場合、検出できた問題をすべて含む
+1 つのエラーメッセージとともに起動が即座に失敗します。`CLIENT_URL` / `CROWI_MULTI_INSTANCE` /
 `NODE_ENV` / `JWT_ACCESS_TOKEN_TTL_SECONDS` / `JWT_REFRESH_TOKEN_TTL_SECONDS`
 / `COLLAB_MAX_EDITORS_PER_PAGE` / `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY`
 などの形式不正は起動を妨げず、起動ログに 1 箇所へまとめて warning として
@@ -118,6 +118,61 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 ブロックされ、スタイルが当たらない状態になります (plugin 自体は正常に
 動作しているため、api / Web のログにはエラーが出ません — ブラウザの
 コンソールで CSP violation を確認してください)。
+
+### HTML artifact の配信 (CROWI_ARTIFACT_ORIGIN)
+
+HTML artifact ページは、Crowi に到達できる security context では絶対に
+実行されてはいけません。配信モードは 2 つあり、どちらも既定では無効です。
+
+- **separate-origin (推奨)**: `CROWI_ARTIFACT_ORIGIN` に `CLIENT_URL` と
+  **異なる hostname** を設定します — 同じ hostname の別 port / scheme は
+  boot 時に拒否されます。cookie は origin ではなく host 単位でスコープ
+  されるためです。可能であれば別の registrable domain を用意してください
+  (例: `wiki.example.com` に対して `artifacts.example.net`)。その origin
+  は同じ api process へ到達できる必要があります(reverse proxy の設定、
+  またはその api を指す別の DNS レコード — api 自身はこれを検証できない
+  ため、下記の smoke check で確認します)。
+- **same-origin (明示的な opt-in)**: 環境変数ではなく **Admin > Artifact**
+  から有効化します。`CLIENT_URL` の設定が必須で、api がその同一 origin
+  配下(推奨のリバースプロキシ構成)で到達できることを前提とします。api を
+  別ホストで公開している場合は separate-origin 配信を使ってください。
+  複数 api instance 構成では、この設定の他 instance への伝播は
+  best-effort です — 無効化した後は、全 instance に確実に反映させるため
+  それぞれを再起動してください。
+
+same-origin 配信の `/_artifact-frame` は、request の `Host` header から artifact の期待 host を導出します。手前に reverse proxy を置く場合は、元の `Host` header をそのまま転送するよう設定してください(Caddy は既定でそのまま転送します。nginx では `proxy_set_header Host $host;` が必要です)。転送されないと、正当な same-origin artifact request が `Invalid or missing src.` として拒否されます。
+
+どちらのモードも設定していない場合、Crowi は通常どおり起動し、boot log に
+設定手順が表示されます。いずれかを有効にするまで artifact の書き込みは
+拒否されます(既存の artifact ページの閲覧は、実行可能なプレビューを
+除いて引き続き動作します)。
+
+署名付き artifact URL は `SECRET_TOKEN`(上記で必須)から導出される鍵で
+署名されます。専用の設定は不要です。
+
+`CROWI_ARTIFACT_ORIGIN` を設定したら、その origin が実際にこの Crowi
+instance へ到達しているか確認してください。
+
+```bash
+curl -fsS https://artifacts.example.net/api/app/info
+```
+
+この instance の `version` を含む `200` が返れば、routing は正しく設定
+されています(本ドキュメントの他の箇所でも使っている boot 確認と同じ
+smoke check です)。到達しない場合、artifact ページの保存自体は通常どおり
+行われますが、routing を直すまで配信できません(データは失われません)。
+
+artifact origin がこの api instance へ到達させる必要がある path prefix は `/api/artifact/`(sandbox 化された文書自体が fetch する、token 認証の配信 route)と `/api/pages/`(署名付き配信 URL を発行する route)の 2 つだけです — 推奨のリバースプロキシ構成では、他の `/api/*` の呼び出しと同様にこの 2 つも既に route されています。配信 response が cookie を発行することはありません — 60 秒だけ有効な署名付き URL が唯一の認証情報で、cookie は一切持ちません。
+
+artifact ページの HTML を添付ファイルとしてダウンロードする機能(`GET /pages/{id}/artifact-download`、通常のセッション/PAT 認証配下)は配信モードとは独立していて、上記のどちらのモードも設定していなくても動作します — 設定が必要なのは sandbox 化されたインライン プレビューだけです。
+
+署名付き配信 URL の token は query string(`?t=…`)に載って運ばれます。Crowi 自身の log にはこれを一切記録しませんが、artifact origin の手前に置く reverse proxy や CDN は既定で request URL 全体を access log に記録することがあります。`/api/artifact/` については query string を記録しないよう設定してください。漏れた log の 1 行が(有効期限内は)そのまま有効な配信 URL として再生されてしまいます。
+
+same-origin 配信には知っておくべき残余リスクがあります。artifact への
+request にも Crowi のセッション cookie が送られます(文書自体からは分かり
+ません)。また、reverse proxy や CDN が response header を除去・上書き
+すると、sandbox による保護が黙って失われます。Admin > Artifact の画面にも
+この 2 点をトグルの直前に表示しています。
 
 ## crowi.config.json
 

@@ -138,7 +138,12 @@ export function useUpdatePage() {
 
   return useMutation({
     mutationFn: async (data: UpdatePageRequest): Promise<PageWithRevision> => {
-      const response = await apiClient.pages.$put({ json: data });
+      // RFC-0020 — the PUT route now declares an optional
+      // `X-Crowi-Page-Content-Type` header (typed client requires the key
+      // even when empty). web never sends it: omitting the value keeps the
+      // page's current content-type kind, which is what the Markdown editor
+      // always wants.
+      const response = await apiClient.pages.$put({ json: data, header: {} });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;

@@ -1,5 +1,13 @@
 # @crowi/plugin-search-mongo
 
+## 0.1.0-alpha.4
+
+### Patch Changes
+
+- 0a8bff6: Viewing an HTML artifact page (RFC-0020) now reads and operates like the rest of Crowi instead of standing out as a special case. The whole page column — title, page actions, body, comments, backlinks, and attachments — widens to use the space the table-of-contents rail would otherwise occupy, and the app header widens to match. The page menu drops "Copy markdown" and "Make this a portal" (neither means anything for HTML) and replaces "Download markdown" with "Download HTML", which always saves the file as a browser download rather than opening it; history, rename, delete, like, watch, share, and comments all still work exactly as they do on a Markdown page. Page lists, the sidebar tree, and search suggestions mark an artifact page with a small icon next to its title (not a status pill, since being an artifact is a permanent trait of the page, not a temporary state).
+
+  Search treats an artifact page's HTML body as non-text: it is excluded from the search index on every backend (the built-in MongoDB search, Elasticsearch, and OpenSearch), so a keyword that only appears inside the markup will not match it, and a result row for it only ever shows a snippet when its path is the match. The page itself is still fully findable by its path and title.
+
 ## 0.1.0-alpha.3
 
 ### Patch Changes

@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { PagerSchema, PageUserSchema, RevisionSchema } from './page';
+import { PageContentTypeSchema, PagerSchema, PageUserSchema, RevisionSchema } from './page';
 
 /**
  * Revision meta schema - lightweight (no body) for list endpoints.
@@ -30,6 +30,9 @@ export const RevisionMetaSchema = z.object({
   // history UI shows an "app" chip for the token paths.
   editVia: z.enum(['web', 'oauth', 'pat']).optional(),
   createdAt: z.string(),
+  // RFC-0020 — this Revision's own content discriminator (missing stored
+  // value normalizes to 'markdown'). See `PageContentTypeSchema`.
+  contentType: PageContentTypeSchema,
 });
 export type RevisionMeta = z.infer<typeof RevisionMetaSchema>;
 

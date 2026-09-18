@@ -143,6 +143,20 @@ crowi search "release notes"   # --profile なしで almoha に対して実行�
 リクエストスキーマで検証されるため、不正な path などは往復せずローカルで
 明確なエラーになります。
 
+### artifact ページを書く (`--type`)
+
+`create` / `update` は `--type markdown` または `--type artifact` でページの種別を宣言できます。省略するとサーバの既定に従います — `create` は markdown のページになり、`update` は現在の種別をそのまま保ちます。`--type` を省略した update が artifact ページを markdown に戻すことはありません。いずれの場合も種別は `--file` の拡張子や本文の中身から推測されません。`--type artifact` を指定するときの本文は、**単一の自己完結 HTML document** である必要があります — 外部の script / stylesheet / image / module を参照せず、相対パスも使わず、バイナリは `data:` URI で埋め込みます。
+
+`edit` は artifact ページでも markdown ページと同じように使えます。`.md` ではなく `.html` の一時ファイルを開く (エディタのシンタックスハイライトが本文と噛み合う) だけで、保存時にページの種別が変わることはありません。
+
+artifact の書き込みが拒否されると終了コード `6` (invalid) になり、サーバの固定メッセージに規則の識別子と理由が付いて表示されます:
+
+```console
+$ crowi create /demo --type artifact --file page.html
+crowi: This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)
+target: script[type]
+```
+
 ### `edit` の競合 (409)
 
 `edit` / `update` はページの `revision_id` を送って楽観ロックします。編集中に

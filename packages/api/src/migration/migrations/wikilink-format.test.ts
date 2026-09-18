@@ -413,6 +413,32 @@ describe('migration/wikilink-format — framework wiring', () => {
     expect(report?.counts?.occurrences).toBe(2);
   });
 
+  it('AC-SC-10 (RFC-0020 §1): an artifact Page containing a close-tag-shaped candidate is excluded from isPending / detect / apply, and Markdown pages are still processed', async () => {
+    await Page.createPage(`${PATH_PREFIX}/artifact-with-candidate`, 'see </docs/api> here, but this body is artifact HTML', admin, { contentType: 'artifact' });
+    const markdownPage = await Page.createPage(`${PATH_PREFIX}/markdown-with-candidate`, 'see </docs/api> here', admin, {});
+    // A legacy row that predates the contentType field (missing-kind, not
+    // explicit 'markdown') — the walker must still treat it as Markdown.
+    await Revision.updateOne({ _id: markdownPage.revision._id }, { $unset: { contentType: '' } });
+    await Page.updateOne({ _id: markdownPage._id }, { $unset: { contentType: '' } });
+
+    const runner = new MigrationRunner(crowi);
+    // isPending is still true — the co-existing Markdown page pends.
+    expect(await runner.isPending(wikilinkFormat)).toBe(true);
+
+    const report = await runner.detect(wikilinkFormat);
+    expect(report?.counts?.pages).toBe(1);
+    expect(report?.counts?.occurrences).toBe(1);
+
+    const revisionCountBefore = await Revision.countDocuments({ path: { $regex: `^${PATH_PREFIX}/artifact-with-candidate` } });
+    await runner.apply(wikilinkFormat);
+    const revisionCountAfter = await Revision.countDocuments({ path: { $regex: `^${PATH_PREFIX}/artifact-with-candidate` } });
+    expect(revisionCountAfter).toBe(revisionCountBefore);
+
+    const artifactReloaded = await Page.findOne({ path: `${PATH_PREFIX}/artifact-with-candidate` }).populate('revision');
+    expect(artifactReloaded.revision.body).toBe('see </docs/api> here, but this body is artifact HTML');
+    expect(await runner.isPending(wikilinkFormat)).toBe(false);
+  });
+
   it('rewrites the body via the updatePage path and records the application', async () => {
     const created = await Page.createPage(`${PATH_PREFIX}/rewrite`, 'see </docs/api> for the API', admin, {});
     const pageId = created._id;
@@ -525,6 +551,10 @@ describe('migration/wikilink-format — framework wiring', () => {
       expect(new Date(after.updatedAt).toISOString()).toBe(PAST.toISOString());
       expect(String(after.lastUpdateUser)).toBe(String(author._id));
       expect(String(after.lastUpdateUser)).not.toBe(String(admin._id));
+      // RFC-0020 §1 (AC-SC-4) — the new Revision pointer and the Page hint
+      // are co-written in the SAME preserveTimestamps save.
+      expect(after.contentType).toBe('markdown');
+      expect(after.revision.contentType).toBe('markdown');
     });
 
     it('(iv) the search-index path sees the ORIGINAL updatedAt (no Mongo/index divergence)', async () => {

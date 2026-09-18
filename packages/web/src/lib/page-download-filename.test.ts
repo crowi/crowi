@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toMarkdownFileName } from './page-download-filename';
+import { toHtmlFileName, toMarkdownFileName } from './page-download-filename';
 
 describe('toMarkdownFileName', () => {
   it('uses the last path segment for a normal page', () => {
@@ -63,5 +63,34 @@ describe('toMarkdownFileName', () => {
     const result = toMarkdownFileName(`/foo/${name}`, 'fallback-id');
     expect(result).toBe(`${'a'.repeat(99)}😀.md`);
     expect(Array.from(result.replace(/\.md$/, ''))).toHaveLength(100);
+  });
+});
+
+// RFC-0020's "Download HTML" action — same derivation as `toMarkdownFileName`, `.html`
+// extension instead. Not a full re-run of every `toMarkdownFileName` case:
+// this confirms the shared `sanitizeBaseName` / length-cap behavior carries
+// over (the two functions call the same helper), not that the helper itself
+// works (already covered above).
+describe('toHtmlFileName', () => {
+  it('uses the last path segment for a normal page, with a .html extension', () => {
+    expect(toHtmlFileName('/foo/bar', 'fallback-id')).toBe('bar.html');
+  });
+
+  it('drops the trailing slash for a portal page', () => {
+    expect(toHtmlFileName('/foo/bar/', 'fallback-id')).toBe('bar.html');
+  });
+
+  it('falls back to the given id for the root path', () => {
+    expect(toHtmlFileName('/', 'page-id-123')).toBe('page-id-123.html');
+  });
+
+  it('sanitizes Windows-forbidden punctuation the same way toMarkdownFileName does', () => {
+    expect(toHtmlFileName('/foo/a\\b:c*d?e"f<g>h|i', 'fallback-id')).toBe('a-b-c-d-e-f-g-h-i.html');
+  });
+
+  it('truncates a base name longer than 100 characters, same cap as toMarkdownFileName', () => {
+    const longName = 'a'.repeat(150);
+    const result = toHtmlFileName(`/foo/${longName}`, 'fallback-id');
+    expect(result).toBe(`${'a'.repeat(100)}.html`);
   });
 });

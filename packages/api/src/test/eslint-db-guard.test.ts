@@ -44,15 +44,25 @@ interface LintResult {
 }
 interface ESLintInstance {
   lintText(code: string, options?: { filePath?: string }): Promise<LintResult[]>;
+  inspect(filePath: string): Promise<boolean>;
 }
 
-type RunnerMessage = { type: 'ready' | 'result' | 'error'; id: number; messages?: LintMessage[]; message?: string };
+type RunnerMessage = {
+  type: 'ready' | 'result' | 'inspection' | 'error';
+  id: number;
+  messages?: LintMessage[];
+  message?: string;
+  hasTypedParserProject?: boolean;
+};
+
+/** What a pending request resolves with: lint messages, or an inspection's answer. */
+type RunnerReply = { messages: LintMessage[]; hasTypedParserProject: boolean };
 
 class ForkedESLint implements ESLintInstance {
   private readonly child: ChildProcess;
   private readonly ready: Promise<void>;
   private nextId = 0;
-  private readonly pending = new Map<number, { resolve: (messages: LintMessage[]) => void; reject: (err: Error) => void }>();
+  private readonly pending = new Map<number, { resolve: (reply: RunnerReply) => void; reject: (err: Error) => void }>();
 
   constructor(cwd: string) {
     // Inherit stderr so a runner boot failure (bad require, config syntax
@@ -76,7 +86,7 @@ class ForkedESLint implements ESLintInstance {
     if (msg.type === 'error') {
       entry.reject(new Error(msg.message));
     } else {
-      entry.resolve(msg.messages ?? []);
+      entry.resolve({ messages: msg.messages ?? [], hasTypedParserProject: msg.hasTypedParserProject ?? false });
     }
   }
 
@@ -90,11 +100,22 @@ class ForkedESLint implements ESLintInstance {
   async lintText(code: string, options?: { filePath?: string }): Promise<LintResult[]> {
     await this.ready;
     const id = this.nextId++;
-    const messages = await new Promise<LintMessage[]>((resolve, reject) => {
+    const reply = await new Promise<RunnerReply>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       this.child.send({ type: 'lint', id, code, filePath: options?.filePath });
     });
-    return [{ messages }];
+    return [{ messages: reply.messages }];
+  }
+
+  /** Whether the resolved config asks for type-aware parsing at `filePath`. */
+  async inspect(filePath: string): Promise<boolean> {
+    await this.ready;
+    const id = this.nextId++;
+    const reply = await new Promise<RunnerReply>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.child.send({ type: 'inspect', id, filePath });
+    });
+    return reply.hasTypedParserProject;
   }
 
   kill(): void {
@@ -148,20 +169,16 @@ function dbGuardMessages(messages: LintMessage[]): LintMessage[] {
  * draws no test-file exception ("a direct .duplicate() call outside
  * src/util/redis-opts.ts is an ESLint error"), and no real test file needs
  * the raw call (a `FakeRedis` DEFINES a `duplicate()` method, it never
- * CALLS `.duplicate()` on something else). Unlike the DB guard above
- * (scoped to `**\/*.test.ts` / `src/test/**`, which never sets
- * `parserOptions.project`), this guard's `files: ['src/**\/*.ts']` glob
- * OVERLAPS the config object that DOES set `parserOptions.project` for
- * non-`.test.ts` source outside `src/test/**` — a virtual, on-disk-
- * nonexistent fixture path there throws a parser error ("TSConfig does not
- * include this file") instead of running the rule. So the non-test fixture
- * below points `filePath` at a REAL, already-tracked production file
- * instead of a `__fixture__` name; `code` is still the arbitrary text under
- * test (`lintText`'s `code` argument is independent of what's actually on
- * disk at `filePath`) — a virtual `.test.ts` / `src/test/**` path is fine
- * to keep using as a fixture for the test-file cases below, same as the DB
- * guard above, since both are exempt from the `parserOptions.project`
- * config regardless of this guard.
+ * CALLS `.duplicate()` on something else).
+ *
+ * The non-test fixture points `filePath` at a REAL, already-tracked
+ * production file rather than a `__fixture__` name. Nothing in the config
+ * requires that any more, but a real path costs nothing and keeps the
+ * fixture valid if type-aware parsing is ever introduced deliberately — a
+ * virtual path under one would throw "TSConfig does not include this file"
+ * instead of running the rule. `code` is still the arbitrary text under test
+ * (`lintText`'s `code` argument is independent of what is on disk at
+ * `filePath`).
  */
 const DUPLICATE_GUARD_FIXTURE_PATH = path.join(API_ROOT, 'src', 'util', 'redis-database.ts');
 const REDIS_OPTS_PATH = path.join(API_ROOT, 'src', 'util', 'redis-opts.ts');
@@ -187,6 +204,18 @@ beforeAll(async () => {
 
 afterAll(() => {
   eslint.kill();
+});
+
+describe('flat config cost (packages/api/eslint.config.mjs)', () => {
+  it('lints production source without asking for type-aware parsing', async () => {
+    // `parserOptions.project` builds a whole TypeScript Program for every
+    // lint of a production file — hundreds of megabytes resident — and not
+    // one rule enabled here reads type information. That cost once pushed
+    // this suite's warm-up past its hook timeout on a loaded CI runner.
+    // Introducing a type-aware rule means designing the cost back in, which
+    // starts by changing this assertion rather than discovering it in CI.
+    await expect(eslint.inspect(DUPLICATE_GUARD_FIXTURE_PATH)).resolves.toBe(false);
+  });
 });
 
 describe('B1 DB-bypass lint guard (packages/api/eslint.config.mjs)', () => {

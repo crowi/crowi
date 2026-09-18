@@ -77,6 +77,51 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
 > **Note**: サイト全体に HTTP Basic 認証をかけたい場合は、Crowi ではなく
 > **前段のリバースプロキシ側 (nginx など) で設定**してください。
 
+## Artifact
+
+`GET` / `PUT /admin/artifact` — HTML artifact ページの配信モードと設定です。
+2 つの配信モードと `CROWI_ARTIFACT_ORIGIN` 環境変数については
+[設定](./configuration) を参照してください。
+
+画面上部の status card は読み取り専用で、実際に有効な状態を表示します
+(直前に入力した値をそのまま echo するものではありません)。
+
+- **配信モード**: `separate-origin` / `same-origin` / `disabled`。
+- **artifact origin** / **Crowi origin**: CSP とページの shell が使う、
+  解決済みの origin。
+- **artifact の書き込み**: write path が現在 artifact の新規書き込みを
+  受け付けるかどうか — `disabled` モードでは artifact の書き込みはすべて
+  拒否されます。
+- 保存されている same-origin トグルの値と実際に有効な状態が異なるときは、
+  その理由が表示されます: `separate-origin` モードが優先されて有効になって
+  いる(設定自体は保存されているが覆い隠されている)場合と、`CLIENT_URL`
+  が未設定のため有効化できない場合の 2 種類です。
+
+status card の下のフォームは 2 つのセクションに分かれます。
+
+- **same-origin 配信**: wiki と同じ origin から artifact を配信する明示的な
+  opt-in トグルです。トグルの状態に関わらず、直前に常に次の 4 点が表示され
+  ます — artifact への request にも Crowi のセッション cookie が送られる
+  こと、reverse proxy や CDN が response header を除去すると保護が黙って
+  失われること、別ドメインを用意できるなら separate-origin 配信
+  (`CROWI_ARTIFACT_ORIGIN`) を優先すべきこと、same-origin 配信は api が
+  `CLIENT_URL` の origin 配下で到達できることを前提とすること(api を別
+  ホストで公開している場合は separate-origin 配信を使うこと)。
+  `CLIENT_URL` が未設定の環境で `sameOriginEnabled: true` を保存しようと
+  すると、DB に何も書き込まれる**前**に 400 で拒否されます。無効化する
+  (`false` に戻す) 操作が拒否されることはありません。`separate-origin`
+  モードが既に有効な状態で same-origin トグルを `true` に保存することは
+  受け付けられます(上記のモード優先順位のとおり、保存はされますが
+  inactive のままです)。
+- **コンテンツ**: Google Fonts を許可するか(artifact response の CSP
+  header の `style-src` / `font-src` に追加されます)と、artifact 本文の
+  上限バイト数(64 KB〜10 MB、既定 2 MB)です。
+
+複数 api instance 構成では、ここでの保存内容は他の instance へ
+best-effort で伝播します(他の管理設定と同じ `ConfigService` の publish
+機構です)。same-origin 配信を無効化した後は、伝播だけに頼らず全 instance
+を再起動して確実に反映させてください。
+
 ## Authentication
 
 認証方式に関する設定です。

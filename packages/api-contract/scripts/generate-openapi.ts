@@ -36,6 +36,7 @@ import jsYaml from 'js-yaml';
 
 import {
   adminAppRoutes,
+  adminArtifactRoutes,
   adminAuthRoutes,
   adminCryptoRoutes,
   adminMailRoutes,
@@ -46,6 +47,7 @@ import {
   adminStorageRoutes,
   adminUsersRoutes,
   appRoutes,
+  artifactRoutes,
   attachmentRoutes,
   autocompleteRoutes,
   backlinkRoutes,
@@ -360,6 +362,8 @@ const routeGroups = [
   // `packages/api/src/hono/index.ts:buildHonoApp`).
   pageRoutes,
   pagePreviewRoutes,
+  // Artifact URL minting route, registered after page-preview.
+  artifactRoutes,
   pageCollabRoutes,
   presenceRoutes,
   // Batch 6 — draft / autocomplete / attachment. The `/pages/drafts`
@@ -391,6 +395,11 @@ const routeGroups = [
   adminSearchRoutes,
   adminUsersRoutes,
   adminPluginsRoutes,
+  // The `/admin/artifact` GET/PUT routes are registered right after the
+  // Batch 9 admin sub-contracts to mirror the buildHonoApp chain
+  // (registerAdminArtifactRoutes runs right after registerAdminPluginsRoutes,
+  // before notification).
+  adminArtifactRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {

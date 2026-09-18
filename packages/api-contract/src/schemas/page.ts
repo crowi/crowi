@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { RevisionTypeSchema } from './collab';
+import { ApiErrorSchema } from './common';
 import { RenderedAstArtifactKeySchema, RenderedAstValueSchema } from './rendered-ast';
 import { UserPublicSchema } from './user-public';
 
@@ -32,6 +33,14 @@ export const PageTypeEnum = {
   USER: 'user',
   PUBLIC: 'public',
 } as const;
+
+// RFC-0020 — body content discriminator. Distinct from `RevisionTypeSchema`
+// (`snapshot | incremental`, the storage representation): this is what the
+// bytes ARE (Markdown source vs. sandboxed HTML artifact), not how they were
+// persisted. `Revision.contentType` is the authority; `Page.contentType` is
+// a denormalized list-view hint copied from the Page's current Revision.
+export const PageContentTypeSchema = z.enum(['markdown', 'artifact']);
+export type PageContentType = z.infer<typeof PageContentTypeSchema>;
 
 // User schema - minimal user information for page responses
 export const PageUserSchema = z.object({
@@ -133,6 +142,10 @@ export const RevisionSchema = z.object({
   // RFC-0010 — edit channel ('web' | 'oauth' | 'pat'); absent on
   // pre-RFC-0010 / collaborative / browser revisions.
   editVia: z.enum(['web', 'oauth', 'pat']).optional(),
+  // RFC-0020 — body content discriminator, authoritative for this Revision.
+  // Required on the wire; the serializer normalizes a missing stored value
+  // to 'markdown' (legacy rows predate this field).
+  contentType: PageContentTypeSchema,
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 
@@ -174,6 +187,11 @@ export const PageSchema = z.object({
   likerCount: z.number().int().nonnegative(),
   seenUsersCount: z.number().int().nonnegative(),
   isLiked: z.boolean(),
+  // RFC-0020 — denormalized list-view hint copied from the current
+  // Revision's `contentType` on the same Page document write. Not an
+  // independent authority: nested `revision.contentType` (when populated)
+  // is what determines render behavior for that specific Revision.
+  contentType: PageContentTypeSchema,
 });
 export type Page = z.infer<typeof PageSchema>;
 
@@ -292,6 +310,9 @@ export const PageChildSegmentSchema = z.object({
   isPage: z.boolean(),
   // True when a real portal page is saved at `path` (→ compass icon).
   hasPortal: z.boolean(),
+  // RFC-0020 — the kind of the page saved at the segment path itself
+  // (→ artifact icon). Present only when `isPage` is true.
+  contentType: PageContentTypeSchema.optional(),
   // Number of descendant content pages strictly under this segment
   // (excludes the segment's own page / portal docs). A rough "how much
   // lives here" hint; > 0 means the segment is an expandable directory.
@@ -469,6 +490,81 @@ export const PageRevisionErrorSchema = z.object({
     message: z.string(),
   }),
 });
+
+// RFC-0020 — the closed set of reasons `ingestHtmlArtifact` (packages/api's
+// artifact/ingest.ts) can reject a write with, plus the discriminator /
+// delivery-configuration reasons the write-path and delivery-policy leaves
+// add. This tuple is the single source of truth: `ingest.ts` imports the
+// type rather than redeclaring it, because `@crowi/api-contract` cannot
+// import from `@crowi/api` (the dependency runs the other way) so the HTTP
+// contract's union can only live here.
+export const ARTIFACT_INGEST_REJECTION_REASONS = [
+  'BODY_TOO_LARGE',
+  'DOM_LIMIT_EXCEEDED',
+  'HTML_PARSE_ERROR',
+  'DOCTYPE_INVALID',
+  'DOCUMENT_STRUCTURE_INVALID',
+  'ELEMENT_FORBIDDEN',
+  'INLINE_CODE_CONTENT_INVALID',
+  'ATTRIBUTE_FORBIDDEN',
+  'META_FORBIDDEN',
+  'EXTERNAL_REFERENCE',
+  'FONT_REFERENCE_FORBIDDEN',
+  'SCRIPT_TYPE_FORBIDDEN',
+  'MODULE_SPECIFIER_FORBIDDEN',
+  'CSS_PARSE_ERROR',
+  'CSS_AT_RULE_FORBIDDEN',
+  'CSS_FUNCTION_FORBIDDEN',
+  'CSS_STRING_ARGUMENT_FORBIDDEN',
+  'URL_FORBIDDEN',
+  'CSS_VALUE_NODE_LIMIT_EXCEEDED',
+  'CSS_VALUE_DEPTH_EXCEEDED',
+  'CSS_SOURCE_TOO_LARGE',
+  'NORMALIZER_MARKER_INVALID',
+  'NORMALIZATION_NOT_IDEMPOTENT',
+  'CONTENT_TYPE_INVALID',
+  'CONTENT_TYPE_CONFLICT',
+  'ARTIFACT_DELIVERY_NOT_CONFIGURED',
+] as const;
+export const ArtifactIngestRejectionReasonSchema = z.enum(ARTIFACT_INGEST_REJECTION_REASONS);
+export type ArtifactIngestRejectionReason = z.infer<typeof ArtifactIngestRejectionReasonSchema>;
+
+/**
+ * RFC-0020 — the write-only content-type declaration for POST/PUT `/pages`.
+ * Deliberately `z.string().optional()` rather than an enum: OpenAPIHono's
+ * shared `defaultHook` (`packages/api/src/hono/middleware/default-hook.ts`)
+ * collapses request-validation failures into a generic `VALIDATION_ERROR`
+ * that cannot carry a `reason` / `ruleId`, so an invalid value must reach
+ * the handler's own AI-D01 check (`readArtifactContentTypeDeclaration`)
+ * instead of failing schema validation. `revertToRevisionRoute` does not
+ * declare this header — a revert always uses the target Revision's own
+ * `contentType`.
+ */
+export const ArtifactContentTypeHeaderSchema = z.object({
+  'x-crowi-page-content-type': z.string().optional(),
+});
+
+/**
+ * RFC-0020 — the structured rejection envelope create/update/revert return
+ * for both `ingestHtmlArtifact` rule violations (`AI-R*`, 400/413) and the
+ * write-path's own discriminator / delivery-configuration checks (`AI-D01`
+ * header declaration, `AI-D02` kind conflict, `AI-D03` delivery not
+ * configured). `reason` is the closed `ARTIFACT_INGEST_REJECTION_REASONS`
+ * union above; `message` is a fixed per-reason string (never a parser/
+ * library message or author content); `target` is an optional bounded
+ * identifier (offending tag/attribute/rule name), never a value/URL/source
+ * excerpt.
+ */
+export const ArtifactWriteRejectionSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('ARTIFACT_WRITE_REJECTED'),
+    reason: ArtifactIngestRejectionReasonSchema,
+    ruleId: z.string().regex(/^AI-(R\d{2}[a-c]?|D0[1-3])$/),
+    message: z.string(),
+    target: z.string().optional(),
+  }),
+});
+export type ArtifactWriteRejection = z.infer<typeof ArtifactWriteRejectionSchema>;
 
 /**
  * RFC-0021 §5.3 — the `Idempotency-Key` a history-producing command requires:

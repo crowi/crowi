@@ -32,6 +32,7 @@ declare global {
 const BUILD_TIME_PUBLIC_ENV: Record<string, string | undefined> = {
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   NEXT_PUBLIC_COLLAB_URL: process.env.NEXT_PUBLIC_COLLAB_URL,
+  NEXT_PUBLIC_ARTIFACT_ORIGIN: process.env.NEXT_PUBLIC_ARTIFACT_ORIGIN,
 };
 
 /**

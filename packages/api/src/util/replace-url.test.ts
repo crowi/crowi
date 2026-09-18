@@ -119,10 +119,14 @@ describe('util/replace-url — runReplaceUrl (persistence)', () => {
     expect(summary.occurrences).toBe(2);
     expect(summary.failed).toBe(0);
 
-    const page = await Page.findById(created._id).select('revision').lean();
+    const page = await Page.findById(created._id).select('revision contentType').lean();
     expect(String(page?.revision)).not.toBe(origRevId); // new revision pointer
     const newRev = await Revision.findById(page?.revision).exec();
     expect(newRev?.body).toBe(`see ![s](${TO}/files/id1) and ${TO}/p`);
+    // RFC-0020 §1 (AC-SC-4) — the new Revision kind and the Page hint are
+    // co-written in the SAME save as the pointer.
+    expect(newRev?.contentType).toBe('markdown');
+    expect(page?.contentType).toBe('markdown');
     // Old revision is immutable and still holds the pre-replace body.
     const oldRev = await Revision.findById(origRevId).exec();
     expect(oldRev?.body).toContain(FROM);
@@ -241,5 +245,53 @@ describe('util/replace-url — runReplaceUrl (persistence)', () => {
 
     const page = await Page.findById(created._id).select('revision').lean();
     expect(String(page?.revision)).toBe(origRevId);
+  });
+
+  describe('RFC-0020 §1 — content type discriminator', () => {
+    it('AC-SC-12: excludes an artifact Page from dry-run matching, and the Markdown rewrite writes the hint in the same save as the pointer', async () => {
+      await Page.createPage(`${PATH_PREFIX}/artifact-excluded`, `<a href="${FROM}/x">x</a>`, creator, { contentType: 'artifact' });
+      const markdownCreated = await Page.createPage(`${PATH_PREFIX}/markdown-rewritten`, `x ${FROM}/y`, creator, {});
+
+      const dryRun = await runReplaceUrl(crowi, { from: FROM, to: TO, dryRun: true });
+      expect(dryRun.pagesMatched).toBe(1);
+      expect(dryRun.samples.map((s) => s.path)).not.toContain(`${PATH_PREFIX}/artifact-excluded`);
+
+      const summary = await runReplaceUrl(crowi, { from: FROM, to: TO, userEmail: operator.email });
+      expect(summary.pagesRewritten).toBe(1);
+
+      const artifactReloaded = await Page.findOne({ path: `${PATH_PREFIX}/artifact-excluded` }).populate('revision');
+      expect(artifactReloaded.contentType).toBe('artifact');
+      expect(artifactReloaded.revision.body).toBe(`<a href="${FROM}/x">x</a>`); // untouched
+
+      const markdownReloaded = await Page.findById(markdownCreated._id).lean();
+      expect(markdownReloaded?.contentType).toBe('markdown');
+      const newRev = await Revision.findById(markdownReloaded?.revision).exec();
+      expect(newRev?.body).toBe(`x ${TO}/y`);
+    });
+
+    it('AC-SC-12: a quiet re-read that finds the Page turned artifact since the scan is a no-op', async () => {
+      const created = await Page.createPage(`${PATH_PREFIX}/turned-artifact`, `x ${FROM}/y`, creator, {});
+      const before = await Page.findById(created._id).select('revision').lean();
+      const origRevId = String(before?.revision);
+
+      const dryRun = await runReplaceUrl(crowi, { from: FROM, to: TO, dryRun: true });
+      expect(dryRun.pagesMatched).toBe(1);
+
+      // Confirm-gate lets us flip the Page's kind between the scan and the
+      // quiet re-read `quietRewrite` performs right before touching the body.
+      const summary = await runReplaceUrl(crowi, {
+        from: FROM,
+        to: TO,
+        userEmail: operator.email,
+        confirm: async () => {
+          await Page.updateOne({ _id: created._id }, { $set: { contentType: 'artifact' } });
+          return true;
+        },
+      });
+      expect(summary.pagesRewritten).toBe(0);
+
+      const page = await Page.findById(created._id).select('revision').lean();
+      expect(String(page?.revision)).toBe(origRevId);
+    });
   });
 });

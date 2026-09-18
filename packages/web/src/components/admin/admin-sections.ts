@@ -8,6 +8,7 @@ import { m } from '@paraglide/messages.js';
  */
 export const ADMIN_SECTIONS = {
   app: () => m['admin.nav_app'](),
+  artifact: () => m['admin.nav_artifact'](),
   security: () => m['admin.nav_security'](),
   auth: () => m['admin.nav_auth'](),
   mail: () => m['admin.nav_mail'](),

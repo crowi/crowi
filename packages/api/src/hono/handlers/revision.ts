@@ -87,6 +87,9 @@ const revisionToMetaResponse = (revision: RevisionDocument) => {
     // absent (pre-RFC-0010 / collab / web) to keep the legacy shape.
     ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
+    // RFC-0020 §1 — this Revision's own kind; missing (legacy row)
+    // normalizes to 'markdown'.
+    contentType: revision.contentType ?? 'markdown',
   };
 };
 
@@ -134,7 +137,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           // DC-5: query by the immutable `page` id (already resolved above
           // via the grant check) rather than the mutable `path` string.
           const allRevisions = await Revision.find({ page: page._id })
-            .select('_id path author savedBy contributors editVia createdAt')
+            .select('_id path author savedBy contributors editVia createdAt contentType')
             .sort({ createdAt: -1 })
             .skip(offset)
             .limit(limit + 1)
@@ -257,21 +260,26 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           }
 
           const response = revisionToFullResponse(revision, { withMeta: false, withRenderedAst: false });
-          const obj = revision.toObject() as { meta?: RevisionMetaContent; renderedAst?: unknown; rendererVersion?: string };
-          const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
-            crowi,
-            obj.meta,
-            obj.renderedAst,
-            revision.body,
-            actorFromUser(user),
-            obj.rendererVersion,
-            page._id?.toString(),
-          );
-          response.meta = meta;
-          // RFC-0023 §9 — envelope for `X-Crowi-Ast-Version: 1`
-          // declarants, verbatim bare Root for everyone else.
-          response.renderedAst = pickRenderedAstShape(c.get('astVersion'), renderedAst) as FullRevisionResponse['renderedAst'];
-          response.renderedAstArtifactKey = renderedAstArtifactKey;
+          // RFC-0020 §1 — artifact HTML must never reach the Markdown
+          // renderer; single-revision detail returns just the saved body
+          // + kind for an artifact Revision, with no meta/AST fields.
+          if ((revision.contentType ?? 'markdown') === 'markdown') {
+            const obj = revision.toObject() as { meta?: RevisionMetaContent; renderedAst?: unknown; rendererVersion?: string };
+            const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
+              crowi,
+              obj.meta,
+              obj.renderedAst,
+              revision.body,
+              actorFromUser(user),
+              obj.rendererVersion,
+              page._id?.toString(),
+            );
+            response.meta = meta;
+            // RFC-0023 §9 — envelope for `X-Crowi-Ast-Version: 1`
+            // declarants, verbatim bare Root for everyone else.
+            response.renderedAst = pickRenderedAstShape(c.get('astVersion'), renderedAst) as FullRevisionResponse['renderedAst'];
+            response.renderedAstArtifactKey = renderedAstArtifactKey;
+          }
           varyOnAstVersion(c);
           return c.json({ revision: response }, 200);
         } catch (err) {

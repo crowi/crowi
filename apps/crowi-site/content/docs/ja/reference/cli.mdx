@@ -34,9 +34,9 @@ description: crowi コマンドのサブコマンド・フラグ・終了コー�
 | `search <query>` | 全文検索する | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
 | `get <path-or-id>` (別名 `cat`) | ページ本文を標準出力へ書き出す | `--revision <id>` | `pages:read` |
 | `ls [path]` | パス配下の子ページを一覧する | `--format <mode>` / `--template <tpl>` | `pages:read` |
-| `create <path>` | ページを作成する | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` | `pages:write` |
-| `edit <path>` | エディタで対話編集する | `--editor <bin>` / `--force` | `pages:write` |
-| `update <path>` | 本文を非対話で置き換える | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` | `pages:write` |
+| `create <path>` | ページを作成する | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` / `--type <kind>` | `pages:write` |
+| `edit <path>` | エディタで対話編集する (artifact ページでも使え、`.html` の一時ファイルを開く) | `--editor <bin>` / `--force` | `pages:write` |
+| `update <path>` | 本文を非対話で置き換える | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` / `--type <kind>` | `pages:write` |
 | `mv <old> <new>` | ページを移動 / リネームする | `--no-redirect` / `--recursive` | `pages:write` |
 | `rm <path>` | ページを削除する | `--completely` / `--force` | `pages:write` |
 | `watch status <path-or-id>` | ウォッチしているかを表示する | — | `pages:read` |
@@ -77,8 +77,19 @@ description: crowi コマンドのサブコマンド・フラグ・終了コー�
 | `3` | スコープ不足 (`--scope` を足して再ログインする) |
 | `4` | 対象が存在しない |
 | `5` | 編集競合 (`--force` で上書きできる) |
-| `6` | 引数不正 |
+| `6` | 引数不正 (artifact の書き込み拒否も含む — `400` / `413` / `422` はいずれもここに落ちる) |
 | `7` | サーバ利用不可 / 機能が無効 |
+
+## artifact ページ
+
+`create` / `update` は `--type <kind>` (`markdown` または `artifact`) でその書き込みのページ種別を宣言できます。省略するとサーバの既定 (create は markdown、update は現在の種別) が使われます — 種別はファイルの拡張子や本文の中身から推測されません。`edit` は artifact ページでも markdown ページと同じように使え、ページが既に持っている種別をそのまま保ちます。変わるのは `.md` ではなく `.html` の一時ファイルを開くという点だけで、エディタのシンタックスハイライトが本文と噛み合います。
+
+artifact の書き込みが拒否されると (`400` / `413` / `422`、いずれも終了コード `6`)、サーバの固定メッセージに規則の識別子と理由が付き、規則が該当箇所を特定できるときは `target` も付きます:
+
+```console
+crowi: This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)
+target: script[type]
+```
 
 ## 関連ページ
 

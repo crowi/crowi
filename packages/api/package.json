@@ -1,6 +1,6 @@
 {
   "name": "@crowi/api",
-  "version": "2.0.0-alpha.20",
+  "version": "2.0.0-alpha.21",
   "main": "dist/app.js",
   "types": "dist/app.d.ts",
   "bin": {
@@ -65,6 +65,7 @@
     "date-fns": "^2.1.0",
     "debug": "^4.4.3",
     "dotenv": "^16.5.0",
+    "es-module-lexer": "^2.1.0",
     "github-slugger": "^2.0.0",
     "hono": "^4.13.5",
     "hono-rate-limiter": "catalog:",
@@ -76,6 +77,9 @@
     "mongoose": "^9.7.3",
     "mongoose-paginate-v2": "^1.9.1",
     "openid-client": "^6.8.4",
+    "parse5": "8.0.1",
+    "postcss": "^8.5.23",
+    "postcss-value-parser": "^4.2.0",
     "redis": "^6.2.1",
     "remark-breaks": "^4.0.0",
     "remark-emoji": "^5.0.1",

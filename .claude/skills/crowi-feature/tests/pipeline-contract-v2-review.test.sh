@@ -3,6 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.claude/scripts/git-test-env.sh
+source "$SCRIPT_DIR/../../../scripts/git-test-env.sh"
 PIPELINE="$SCRIPT_DIR/../pipeline.workflow.js"
 
 fail() {

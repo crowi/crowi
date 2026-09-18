@@ -21,6 +21,13 @@ Search results are **limited to pages you can view**. Private pages you
 have no permission for (owner-only / restricted / specified-users) are
 filtered out by the search backend, so they never leak into your results.
 
+An HTML artifact page is indexed by path only — its HTML body is never
+indexed, on any search backend. You can still find an artifact page by
+searching its path, but a keyword that only appears inside the HTML will
+not match it. When a result row for an artifact page does show a
+snippet, it always highlights the matched path, never the HTML body —
+if the keyword doesn't also appear in the path, no snippet is shown.
+
 ## Narrowing the search scope
 
 On the search page you can narrow results in two ways in addition to the

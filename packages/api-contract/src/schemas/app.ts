@@ -62,6 +62,14 @@ import { CapabilitySchema } from './app-capabilities';
  * `<link rel="stylesheet">` per entry. Order is commit order (plugin
  * activation order); entries are deduped. Empty when no loaded plugin
  * registered a stylesheet.
+ *
+ * `artifactDelivery` is the public bootstrap slice of the HTML artifact
+ * delivery policy (§R 表):
+ * `enabled` is `deliveryMode !== 'disabled'`, `origin` is the resolved
+ * `artifactOrigin` (`null` when disabled). This is a public, unauthenticated
+ * endpoint, so only the delivery mode and origin are exposed here —
+ * `writeEnabled` / `settings` / `sameOriginInactiveReason` are admin-only
+ * (`GET /admin/artifact`, `GetArtifactSettingsResponseSchema`).
  */
 export const AppInfoResponseSchema = z.object({
   title: z.string().nullable(),
@@ -71,5 +79,6 @@ export const AppInfoResponseSchema = z.object({
   capabilities: z.array(CapabilitySchema),
   canSelfRegister: z.boolean(),
   rendererStylesheets: z.array(z.string()),
+  artifactDelivery: z.object({ enabled: z.boolean(), origin: z.string().nullable() }),
 });
 export type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;

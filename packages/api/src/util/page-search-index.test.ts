@@ -247,3 +247,72 @@ describe('indexPageInSearch — index-side status exclusion (feature-restricted-
     expect(driver.indexed[0]?.id).toBe(page._id);
   });
 });
+
+describe('indexPageInSearch — RFC-0020 artifact body exclusion (AC-CH-7)', () => {
+  const PATH_PREFIX = '/hono-page-search-index-artifact-test/';
+  let accessToken: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    const seeded = await createTestUser({
+      name: 'Page Search Index Artifact Tester',
+      username: 'pageSearchIndexArtifactTester',
+      email: 'page-search-index-artifact-tester@example.com',
+    });
+    accessToken = seeded.accessToken;
+    userId = seeded.user._id.toString();
+  });
+
+  afterEach(async () => {
+    const Page = crowi.model('Page');
+    await Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
+  });
+
+  /**
+   * Written directly through the models (not `createPageViaApi` /
+   * `Page.createPage`) so this test never depends on artifact delivery
+   * being configured or on the `create` page-event firing a real index
+   * call ahead of the `withMockDriver` wrapping below — this test is
+   * only about `indexPageInSearch`'s own body-emptying decision.
+   */
+  const createArtifactPage = async (path: string, body: string) => {
+    const Page = crowi.model('Page');
+    const Revision = crowi.model('Revision');
+    const page = await Page.create({ path, creator: userId, lastUpdateUser: userId, contentType: 'artifact' });
+    const revision = await Revision.create({ path, page: page._id, body, author: userId, contentType: 'artifact' });
+    page.revision = revision._id;
+    await page.save();
+    return page;
+  };
+
+  it('indexes an artifact page with an empty body, keeping path and meta', async () => {
+    const path = `${PATH_PREFIX}artifact`;
+    const page = await createArtifactPage(path, '<!doctype html><html><body>hi</body></html>');
+    const Page = crowi.model('Page');
+    const doc = await Page.findById(page._id).populate('revision').populate('creator');
+
+    const driver = buildMockDriver();
+    await withMockDriver(driver, async () => {
+      await indexPageInSearch(crowi, doc);
+    });
+
+    expect(driver.indexed).toHaveLength(1);
+    expect(driver.indexed[0]?.body).toBe('');
+    expect(driver.indexed[0]?.path).toBe(path);
+    expect(driver.indexed[0]?.meta?.granted_users).toEqual([]);
+  });
+
+  it('keeps indexing the body for a Markdown page (regression)', async () => {
+    const page = await createPageViaApi(accessToken, `${PATH_PREFIX}markdown`, '# hello world');
+    const Page = crowi.model('Page');
+    const doc = await Page.findById(page._id).populate('revision').populate('creator');
+
+    const driver = buildMockDriver();
+    await withMockDriver(driver, async () => {
+      await indexPageInSearch(crowi, doc);
+    });
+
+    expect(driver.indexed).toHaveLength(1);
+    expect(driver.indexed[0]?.body).toBe('# hello world');
+  });
+});

@@ -18,14 +18,16 @@ export function resolveEditor(explicit?: string): string {
 /**
  * Open `initial` content in the user's editor and return the edited result.
  *
- * Writes a temporary `*.md` file (so editors apply markdown syntax),
- * launches the editor inheriting the terminal's stdio, and on a clean exit
- * reads the file back. The temp file is always removed. A non-zero editor
- * exit (e.g. `:cq` in vim) aborts the edit with {@link CliError}.
+ * Writes a temporary `page.<extension>` file (so editors apply the matching
+ * syntax highlighting — markdown by default, or `html` for an artifact page,
+ * RFC-0020 §E table), launches the editor inheriting the terminal's stdio,
+ * and on a clean exit reads the file back. The temp file is always removed.
+ * A non-zero editor exit (e.g. `:cq` in vim) aborts the edit with
+ * {@link CliError}.
  */
-export async function editInEditor(initial: string, editorBin: string): Promise<string> {
+export async function editInEditor(initial: string, editorBin: string, extension = 'md'): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'crowi-edit-'));
-  const file = join(dir, 'page.md');
+  const file = join(dir, `page.${extension}`);
   try {
     await writeFile(file, initial, 'utf8');
     await runEditor(editorBin, file);

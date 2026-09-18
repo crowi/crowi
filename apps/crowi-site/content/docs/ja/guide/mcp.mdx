@@ -38,6 +38,14 @@ claude mcp add --transport http crowi https://wiki.example.com/api/mcp \
 
 `crowi_update_page` は、読み込んだときのリビジョンを一緒に渡す形で更新します。その間に誰かが同じページを更新していると競合エラーになるので、AI は読み直してからやり直します。
 
+### artifact ページを書く
+
+`crowi_create_page` / `crowi_update_page` は省略可能な `content_type` フィールド(`'markdown'` または `'artifact'`)を受け取ります。省略するとサーバの既定に従います — `crowi_create_page` は markdown のページになり、`crowi_update_page` は現在の種別をそのまま保ちます。`content_type` を省略した update が artifact ページを markdown に戻すことはありません。`'artifact'` を指定するときは、`body` が**単一の自己完結 HTML document** である必要があります — 外部の `<script>` / `<link>` / `<img>` / module を参照せず、相対パスも使わず、バイナリは `data:` URI で埋め込みます。種別は本文の中身から推測されないので、artifact のつもりのときは必ず明示してください。
+
+ページを読み取るとき (`crowi_get_page` / `crowi_get_revision`) も、結果の `content_type` にその種別が出ます。返ってきた本文が markdown なのか HTML なのかを、AI はそれを見て判断できます。
+
+artifact の書き込みが拒否されたときは、どの規則が発火したか (`ruleId`)・理由・(規則が特定できるときは)該当箇所 (`target`) を含むエラー結果が返るので、AI は「失敗した」以上の、次に直すべき手がかりを得られます。
+
 ## 覚えておくこと
 
 - **トークンはあなたの権限そのものです。** 見えないページは MCP からも見えません。逆に、あなたが編集できるページは書き込みスコープ付きのトークンで編集できます。

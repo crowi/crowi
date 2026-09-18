@@ -77,6 +77,20 @@ export const ALL_BOOT_STEPS: BootStep[] = [
     run: (crowi) => crowi.setupConfig(),
   },
   {
+    name: 'artifactPolicy',
+    layer: 'config',
+    // Right after `config` so
+    // the resolver reads the freshly-loaded in-memory `crowi` namespace;
+    // before `bootMigrations` per this file's own array-order-is-execution-
+    // order contract (an earlier position than `bootMigrations` is fine —
+    // this step never touches the DB beyond the config already loaded).
+    after: ['config'],
+    debugLabel: 'checkArtifactPolicy',
+    run: (crowi) => {
+      crowi.reportArtifactPolicyAtBoot();
+    },
+  },
+  {
     name: 'bootMigrations',
     layer: 'config',
     after: ['config'],
@@ -156,7 +170,17 @@ export const ALL_BOOT_STEPS: BootStep[] = [
  * the CLI skip" is readable in one place instead of re-derived from which
  * steps `initForCli()` happens to call.
  */
-export const CLI_SKIP_STEPS: ReadonlySet<string> = new Set(['redis', 'bootMigrations', 'relationUniqueIndexes', 'seedOAuthClients', 'mailer', 'lru']);
+export const CLI_SKIP_STEPS: ReadonlySet<string> = new Set([
+  'redis',
+  // The CLI never delivers
+  // artifacts and reserves stdout for command output, not boot notes.
+  'artifactPolicy',
+  'bootMigrations',
+  'relationUniqueIndexes',
+  'seedOAuthClients',
+  'mailer',
+  'lru',
+]);
 
 /**
  * Topologically sort `steps` by their `after` edges. Mirrors

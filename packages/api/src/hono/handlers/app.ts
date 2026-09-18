@@ -15,6 +15,7 @@
 import { API_SURFACE_VERSION, type AppInfoResponse, type Capability, DYNAMIC_CAPABILITIES, getAppInfoRoute, STATIC_CAPABILITIES } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
+import { resolveArtifactPolicySnapshot } from 'src/artifact/policy';
 import type Crowi from 'src/crowi';
 import { isLinkCardEnabled } from 'src/util/admin-config';
 
@@ -95,6 +96,16 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // optional-chain keeps this handler from throwing in a minimal test
     // harness that skips renderer setup.
     const rendererStylesheets = [...(crowi.renderer?.registry.getStylesheets() ?? [])];
+    // The public
+    // bootstrap slice of the artifact delivery policy (§R 表). This
+    // unauthenticated endpoint exposes only whether delivery is active and
+    // where; `writeEnabled` / `settings` / `sameOriginInactiveReason` are
+    // admin-only (`GET /admin/artifact`).
+    const artifactPolicySnapshot = resolveArtifactPolicySnapshot(crowi);
+    const artifactDelivery = {
+      enabled: artifactPolicySnapshot.deliveryMode !== 'disabled',
+      origin: artifactPolicySnapshot.artifactOrigin,
+    };
     return c.json(
       {
         title,
@@ -104,6 +115,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         capabilities: buildCapabilities(crowi),
         canSelfRegister,
         rendererStylesheets,
+        artifactDelivery,
       } satisfies AppInfoResponse,
       200,
     );

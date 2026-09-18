@@ -12,6 +12,7 @@
  * test in `admin/index.test.ts` (RFC open question 4).
  */
 export * from './app';
+export * from './artifact';
 export * from './auth';
 export * from './mail';
 export * from './page-deletion';

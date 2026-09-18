@@ -4,7 +4,7 @@ import { resolveBody } from '../lib/body-input';
 import { CliError, EXIT } from '../lib/http';
 import { info, render } from '../lib/output';
 import { normalisePath } from '../lib/page-ref';
-import { fetchCurrentPage, isRevisionConflict, putPage } from '../lib/page-write';
+import { fetchCurrentPage, isRevisionConflict, parseContentType, putPage } from '../lib/page-write';
 import { requireProfile } from './_shared';
 
 /**
@@ -14,7 +14,12 @@ import { requireProfile } from './_shared';
  * editor fallback; use `crowi edit` for that). The page must already exist;
  * its current `revision_id` is fetched first and sent for the optimistic-lock
  * check. On a 409 conflict the update ABORTS by default; `--force` re-fetches
- * the current revision and overwrites (never silently clobbers).
+ * the current revision and overwrites (never silently clobbers). `--type`
+ * declares the page kind (RFC-0020) for this write — omit it to keep the
+ * page's current kind; pass `--type artifact` only when `body` is a single
+ * self-contained HTML document (no external references, `data:` URIs for
+ * binaries). A mismatched `--type` against the page's actual current kind is
+ * rejected by the server, not the CLI.
  */
 export function registerUpdate(program: Command): void {
   program
@@ -24,8 +29,11 @@ export function registerUpdate(program: Command): void {
     .option('-f, --file <path>', 'read the new page body from a local file')
     .option('--stdin', 'read the new page body from standard input')
     .option('--force', 'on a revision conflict, re-fetch and overwrite instead of aborting')
-    .action(async (path: string, options: { message?: string; file?: string; stdin?: boolean; force?: boolean }, command: Command) => {
+    .option('--type <kind>', 'declare the page kind for this write: "markdown" or "artifact" (omit to keep the page\'s current kind)')
+    .action(async (path: string, options: { message?: string; file?: string; stdin?: boolean; force?: boolean; type?: string }, command: Command) => {
       const { profile, globals } = requireProfile(command);
+
+      const contentType = parseContentType(options.type);
 
       const body = await resolveBody(options);
       if (body === undefined) {
@@ -38,7 +46,7 @@ export function registerUpdate(program: Command): void {
       }
 
       try {
-        const result = await putPage(profile, { pageId: current.pageId, body, revisionId: current.revisionId });
+        const result = await putPage(profile, { pageId: current.pageId, body, revisionId: current.revisionId, contentType });
         render({ path: result.path, pageId: result.pageId, revisionId: result.revisionId }, () => `Updated ${result.path ?? normalisePath(path)}`, globals);
       } catch (err) {
         if (!isRevisionConflict(err)) {
@@ -49,13 +57,17 @@ export function registerUpdate(program: Command): void {
             exitCode: EXIT.CONFLICT,
           });
         }
-        // --force: re-read the latest revision_id and overwrite.
+        // --force: re-read the latest revision_id and overwrite. The SAME
+        // requested --type rides the retry (RFC-0020 §C-2b) — omitting it
+        // here would silently drop the caller's requested kind to "keep
+        // current kind" on the retry alone, letting a would-be artifact
+        // write succeed as markdown instead of being rejected.
         info('Revision conflict — re-fetching latest revision and overwriting (--force)…', globals);
         const latest = await fetchCurrentPage(profile, path);
         if (latest === null || latest.pageId === undefined) {
           throw new CliError(`page ${normalisePath(path)} disappeared during --force retry`, { exitCode: EXIT.NOT_FOUND });
         }
-        const result = await putPage(profile, { pageId: latest.pageId, body, revisionId: latest.revisionId });
+        const result = await putPage(profile, { pageId: latest.pageId, body, revisionId: latest.revisionId, contentType });
         render(
           { path: result.path, pageId: result.pageId, revisionId: result.revisionId },
           () => `Updated ${result.path ?? normalisePath(path)} (forced)`,

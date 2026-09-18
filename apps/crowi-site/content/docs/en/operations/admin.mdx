@@ -81,6 +81,50 @@ New-user registration settings.
 > **Note**: If you need a site-wide Basic-auth gate, configure it at the
 > **reverse proxy** in front of Crowi (e.g. nginx), not in Crowi itself.
 
+## Artifact
+
+`GET` / `PUT /admin/artifact` — HTML artifact page delivery mode and
+settings. See [Configuration](./configuration) for the two delivery modes
+and the `CROWI_ARTIFACT_ORIGIN` environment variable.
+
+The status card at the top is read-only and reflects the effective state —
+it never echoes back what you last typed:
+
+- **Delivery mode**: `separate-origin` / `same-origin` / `disabled`.
+- **Artifact origin** / **Crowi origin**: the resolved origins CSP and the
+  page shell use.
+- **Artifact writes**: whether the write path currently accepts new artifact
+  content — `disabled` mode rejects every artifact write.
+- An inactive-reason note appears when the stored same-origin toggle is not
+  what is actually active: `separate-origin` mode is active instead (the
+  setting is stored but shadowed), or `CLIENT_URL` is not set (the setting
+  cannot activate at all).
+
+Below the status card, the form has two sections:
+
+- **Same-origin delivery**: an explicit toggle to serve artifacts from the
+  same origin as the wiki. Four things are always shown next to it,
+  regardless of the toggle's state — the Crowi session cookie still reaches
+  artifact requests, a reverse proxy or CDN that strips response headers
+  silently removes the protection, separate-origin delivery
+  (`CROWI_ARTIFACT_ORIGIN`) is preferred when you can host a second domain,
+  and same-origin delivery assumes the api is reachable under the
+  `CLIENT_URL` origin (use separate-origin delivery if the api is published
+  on a separate host). Saving `sameOriginEnabled: true` with no `CLIENT_URL`
+  configured is rejected with a 400 **before** anything is written to the
+  database; turning it back off is never rejected. When `separate-origin`
+  mode is already active, saving the same-origin toggle to `true` is
+  accepted (it is simply stored inactive, per the mode-priority rule above).
+- **Content**: whether to allow Google Fonts (`style-src` /
+  `font-src` additions in the artifact response's CSP header) and the
+  maximum artifact payload size, from 64 KB to 10 MB (default 2 MB).
+
+With more than one api instance, a saved change here propagates to the
+others on a best-effort basis (the same `ConfigService` publish every other
+admin setting uses). After disabling same-origin delivery, restart every
+instance to be sure it has taken effect everywhere rather than relying on
+propagation alone.
+
 ## Authentication
 
 Settings related to the authentication method.

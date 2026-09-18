@@ -134,6 +134,7 @@ describe('Routes /api/bookmarks (Hono)', () => {
       expect(res.body.bookmark._id).toBeDefined();
       expect(res.body.bookmark.page._id).toBe(page._id);
       expect(res.body.bookmark.page.path).toBe(page.path);
+      expect(res.body.bookmark.page.contentType).toBe('markdown');
       expect(res.body.bookmark.user).toBe(userId);
 
       const Bookmark = crowi.model('Bookmark');
@@ -157,6 +158,17 @@ describe('Routes /api/bookmarks (Hono)', () => {
       expect(res.body.bookmark.page.likerCount).toBe(1);
       expect(res.body.bookmark.page.isLiked).toBe(true);
       expect(res.body.bookmark.page.seenUsersCount).toBe(0);
+    });
+
+    it('AC-SC-6: the nested Page carries the artifact hint (RFC-0020 §1)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}artifact-hint`, '<html></html>');
+      const Page = crowi.model('Page');
+      await Page.updateOne({ _id: page._id }, { $set: { contentType: 'artifact' } });
+
+      const res = await request(app).post('/api/bookmarks').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.bookmark.page.contentType).toBe('artifact');
     });
 
     it('returns { bookmark: null } when user has no grant on the page', async () => {
