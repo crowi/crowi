@@ -1,4 +1,5 @@
 import { PageGrantEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { PropsWithChildren, ReactElement } from 'react';
@@ -187,6 +188,19 @@ describe('PageHeader — expanded state', () => {
     renderHeader(<PageHeader page={makePage({ isLiked: true })} sticky showActions />);
     const likeButton = screen.getByRole('button', { name: 'いいねを取り消す' });
     expect(likeButton.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('puts an artifact kind chip above the title of an artifact revision', () => {
+    const base = makePage();
+    renderHeader(<PageHeader page={{ ...base, revision: { ...base.revision, contentType: 'artifact' } }} sticky showActions />);
+    const chip = screen.getByText(m['page.artifact.kind_label']());
+    const title = screen.getByRole('heading', { level: 1 });
+    expect(chip.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows no artifact kind chip for a Markdown revision', () => {
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.queryByText(m['page.artifact.kind_label']())).toBeNull();
   });
 
   it('renders no placeholder and no compact bar when sticky is disabled', () => {

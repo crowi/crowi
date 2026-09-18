@@ -923,6 +923,7 @@
   "page.artifact.delivery_unavailable_body": "この server では HTML artifact の配信が設定されていません。ページメニューから HTML をダウンロードできます。",
   "page.artifact.delivery_unavailable_title": "このページはここでは実行できません",
   "page.artifact.iframe_title": "sandbox 化されたページの内容",
+  "page.artifact.kind_label": "アーティファクト",
   "page.artifact.mint_failed_body": "実行の準備中に問題が発生しました。",
   "page.artifact.mint_failed_title": "実行を開始できませんでした",
   "page.artifact.origin_mismatch_body": "この server の HTML artifact 配信設定が api と web で一致していません。管理者に連絡してください。",

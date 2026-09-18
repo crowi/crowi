@@ -5,6 +5,7 @@ import { m } from '@paraglide/messages.js';
 import { Compass, Edit2 } from 'lucide-react';
 import Link from 'next/link';
 import { GrantChip } from '@/components/grant-chip';
+import { KindTag } from '@/components/kind-tag';
 import { PageDisplayUserBadge } from '@/components/page-display-user-badge';
 import { BookmarkButton } from '@/components/page-view/bookmark-button';
 import { PageActionsMenu } from '@/components/page-view/page-actions-menu';
@@ -104,12 +105,7 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
  * fallback header so the two read as the same kind of surface.
  */
 export function PortalTag() {
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-secondary px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-wider text-primary">
-      <Compass className="h-3 w-3" aria-hidden="true" />
-      {m['page_list.portal_label']()}
-    </span>
-  );
+  return <KindTag icon={Compass} label={m['page_list.portal_label']()} />;
 }
 
 /**

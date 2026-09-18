@@ -923,6 +923,7 @@
   "page.artifact.delivery_unavailable_body": "HTML artifact delivery isn't configured on this server. You can download the page's HTML instead from the page menu.",
   "page.artifact.delivery_unavailable_title": "This page can't run here",
   "page.artifact.iframe_title": "Sandboxed page content",
+  "page.artifact.kind_label": "Artifact",
   "page.artifact.mint_failed_body": "Something went wrong preparing this page to run.",
   "page.artifact.mint_failed_title": "Couldn't start this page",
   "page.artifact.origin_mismatch_body": "This server's HTML artifact delivery configuration doesn't match between the api and the web app. Contact an administrator.",
