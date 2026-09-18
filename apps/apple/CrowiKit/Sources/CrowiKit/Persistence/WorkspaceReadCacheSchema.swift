@@ -14,7 +14,11 @@ public enum WorkspaceReadCacheSchema {
     /// store's `CachedRevisionSummary` rows would otherwise decode to `[]`
     /// forever rather than repopulating, since nothing else ever bumps this
     /// marker for them. Drop-and-rebuild (§7.3) instead.
-    public static let schemaVersion = 3
+    ///
+    /// Bumped to 4 when `CachedPage` gained `contentType` (RFC-0020): an old
+    /// row would otherwise cold-paint an artifact page's HTML source as
+    /// Markdown until the network read replaced it.
+    public static let schemaVersion = 4
 
     public static let models: [any PersistentModel.Type] = [
         CachedPage.self,

@@ -34,6 +34,9 @@ public struct PageRevisionLenient: Sendable, Equatable {
     /// it is a freshness diagnostic, never a rendering switch (parent spec
     /// design judgment 1).
     public let renderedAst: RenderedAstDecodeOutcome?
+    /// RFC-0020 — authoritative for THIS revision. `nil` on a bare-id row
+    /// and on a server that predates the field.
+    public let contentType: PageContentType?
 
     /// Explicit `public` memberwise init: Swift's auto-synthesized one is
     /// `internal` even for an all-`public`-property struct, which would
@@ -42,11 +45,12 @@ public struct PageRevisionLenient: Sendable, Equatable {
     /// `CachedPage` SwiftData row for the cold-start fast-path display
     /// (which always passes `renderedAst: nil` — the AST is online-only,
     /// wire-contract design §16).
-    public init(id: String?, body: String?, createdAt: String?, renderedAst: RenderedAstDecodeOutcome? = nil) {
+    public init(id: String?, body: String?, createdAt: String?, renderedAst: RenderedAstDecodeOutcome? = nil, contentType: PageContentType? = nil) {
         self.id = id
         self.body = body
         self.createdAt = createdAt
         self.renderedAst = renderedAst
+        self.contentType = contentType
     }
 
     static func decode(_ object: Any?) -> PageRevisionLenient? {
@@ -58,7 +62,8 @@ public struct PageRevisionLenient: Sendable, Equatable {
             id: dict["_id"] as? String,
             body: dict["body"] as? String,
             createdAt: dict["createdAt"] as? String,
-            renderedAst: dict["renderedAst"].map { RenderedAstEnvelopeDecoder.decode(responseValue: $0) }
+            renderedAst: dict["renderedAst"].map { RenderedAstEnvelopeDecoder.decode(responseValue: $0) },
+            contentType: PageContentType.decode(dict["contentType"])
         )
     }
 }
@@ -87,6 +92,16 @@ public struct PageLenient: Sendable, Equatable {
     /// The generated-avatar seed. Optional like every other field added after
     /// this type was already being cached as JSON.
     public let lastUpdateUserUsername: String?
+    /// RFC-0020 — a list-view hint the server copies from the current
+    /// revision. `revision.contentType` wins whenever the revision is
+    /// populated; see `displayedContentType`.
+    public let contentType: PageContentType?
+
+    /// What the reader must render this page as. Markdown when neither the
+    /// revision nor the page says otherwise.
+    public var displayedContentType: PageContentType {
+        revision?.contentType ?? contentType ?? .markdown
+    }
 
     /// `true` when this row's `revision` is either absent or a bare id with
     /// no `body` — the §8 signal that a detail `GET` is required before the
@@ -124,7 +139,8 @@ public struct PageLenient: Sendable, Equatable {
         liker: [String]?,
         lastUpdateUserName: String? = nil,
         lastUpdateUserUsername: String? = nil,
-        lastUpdateUserImage: String? = nil
+        lastUpdateUserImage: String? = nil,
+        contentType: PageContentType? = nil
     ) {
         self.id = id
         self.path = path
@@ -138,6 +154,7 @@ public struct PageLenient: Sendable, Equatable {
         self.lastUpdateUserName = lastUpdateUserName
         self.lastUpdateUserUsername = lastUpdateUserUsername
         self.lastUpdateUserImage = lastUpdateUserImage
+        self.contentType = contentType
     }
 
     static func decode(_ object: [String: Any]) -> PageLenient? {
@@ -155,7 +172,8 @@ public struct PageLenient: Sendable, Equatable {
             liker: object["liker"] as? [String],
             lastUpdateUserName: lastUpdateUser?["name"] as? String,
             lastUpdateUserUsername: lastUpdateUser?["username"] as? String,
-            lastUpdateUserImage: lastUpdateUser?["image"] as? String
+            lastUpdateUserImage: lastUpdateUser?["image"] as? String,
+            contentType: PageContentType.decode(object["contentType"])
         )
     }
 }
@@ -282,6 +300,14 @@ public struct PageChildSegmentLenient: Sendable, Equatable, Codable {
     public let updaterName: String?
     public let updaterImage: String?
     public let updaterUsername: String?
+    /// RFC-0020 — the kind of the page saved at the segment path itself; the
+    /// server sends it only when `isPage`. Kept as the raw string so an
+    /// unrecognized value can never fail the cached-blob decode.
+    public let contentType: String?
+
+    public var isArtifactPage: Bool {
+        isPage && PageContentType.decode(contentType) == .artifact
+    }
 }
 
 public struct ListPageChildrenResponseLenient: Sendable, Equatable {
@@ -304,7 +330,8 @@ public struct ListPageChildrenResponseLenient: Sendable, Equatable {
                 lastUpdatedAt: dict["lastUpdatedAt"] as? String,
                 updaterName: updater?["name"] as? String,
                 updaterImage: updater?["image"] as? String,
-                updaterUsername: updater?["username"] as? String
+                updaterUsername: updater?["username"] as? String,
+                contentType: dict["contentType"] as? String
             )
         }
         return ListPageChildrenResponseLenient(children: children)

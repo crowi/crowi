@@ -1,9 +1,12 @@
 import CrowiKit
 import SwiftUI
 
-/// RFC-0023 Phase 4 — the shared page-body render, the SAME two-path branch
-/// for every detail-fetched body (`PageReaderView`, `PageTreeView`'s portal
-/// section):
+/// RFC-0023 Phase 4 — the shared page-body render, the SAME branch for every
+/// detail-fetched body (`PageReaderView`, `PageTreeView`'s portal section,
+/// a past revision in `RevisionHistoryView`). An RFC-0020 HTML artifact is
+/// decided first and never reaches either Markdown path: its body is HTML
+/// that only runs inside the server's sandbox (`ArtifactBodyView`). For
+/// everything else:
 ///   - the server returned a v1 envelope (`X-Crowi-Ast-Version: 1` was
 ///     declared by the detail GET and the RESPONSE independently proved
 ///     to be typed) → native AST rendering (`RenderedAstView`);
@@ -22,6 +25,12 @@ import SwiftUI
 /// stays on the canonical display derivative).
 struct PageBodyView: View {
     let session: WorkspaceSession
+    /// Required at every call site rather than defaulted: a forgotten one
+    /// would render an artifact's HTML source as Markdown.
+    let contentType: PageContentType
+    /// What an artifact's delivery URL is minted for. Unused for Markdown.
+    let pageId: String
+    let revisionId: String?
     /// The detail response's decode outcome — anything but `.envelope`
     /// (including `nil`, the cache-painted case) renders the raw body.
     let renderedAst: RenderedAstDecodeOutcome?
@@ -49,7 +58,9 @@ struct PageBodyView: View {
             confidentialNotice: session.confidential
         )
         Group {
-            if case .envelope(let document)? = renderedAst {
+            if contentType == .artifact {
+                ArtifactBodyView(session: session, pageId: pageId, revisionId: revisionId)
+            } else if case .envelope(let document)? = renderedAst {
                 RenderedAstView(
                     document: document,
                     imageLoader: session.imageCache,

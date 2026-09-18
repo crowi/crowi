@@ -70,7 +70,7 @@ struct PageTreeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if let portalBody {
+                if let portalPage, let portalBody {
                     // RFC-0023 Phase 4 — the portal body takes the same
                     // AST-first / raw-body-fallback branch as the reader
                     // (fetched through the same `GetPageResponseLenient`
@@ -80,7 +80,10 @@ struct PageTreeView: View {
                     // anchors work.
                     PageBodyView(
                         session: session,
-                        renderedAst: portalPage?.revision?.renderedAst,
+                        contentType: portalPage.displayedContentType,
+                        pageId: portalPage.id,
+                        revisionId: portalPage.revision?.id,
+                        renderedAst: portalPage.revision?.renderedAst,
                         rawBody: portalBody,
                         sourcePath: path,
                         onSelectDestination: onSelect
@@ -108,6 +111,7 @@ struct PageTreeView: View {
                                 updaterUsername: page.lastUpdateUserUsername,
                                 likeCount: page.displayLikeCount,
                                 commentCount: page.displayCommentCount,
+                                isArtifact: page.displayedContentType == .artifact,
                                 loader: session.imageCache
                             )
                         }
@@ -237,7 +241,7 @@ struct PageTreeView: View {
             Button {
                 onSelect(.page(path: String(child.path.dropLast())))
             } label: {
-                label(for: child, systemImage: "doc.text")
+                label(for: child, systemImage: child.isArtifactPage ? CrowiPageRow.artifactSystemImage : "doc.text")
             }
             .buttonStyle(.plain)
         } else {

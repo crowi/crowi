@@ -33,6 +33,10 @@ public final class CachedPage {
     public var likerCount: Int
     public var seenUsersCount: Int
     public var updatedAt: String?
+    /// RFC-0020 `PageContentType` raw value. Persisted so a cold paint of an
+    /// artifact page never shows its HTML source as Markdown before the
+    /// network read lands. `nil` reads as Markdown.
+    public var contentType: String?
     public var cachedAt: Date
 
     public init(
@@ -45,6 +49,7 @@ public final class CachedPage {
         likerCount: Int,
         seenUsersCount: Int,
         updatedAt: String?,
+        contentType: String? = nil,
         cachedAt: Date = Date()
     ) {
         self.pageId = pageId
@@ -56,6 +61,7 @@ public final class CachedPage {
         self.likerCount = likerCount
         self.seenUsersCount = seenUsersCount
         self.updatedAt = updatedAt
+        self.contentType = contentType
         self.cachedAt = cachedAt
     }
 
@@ -70,6 +76,7 @@ public final class CachedPage {
         self.likerCount = page.likerCount ?? self.likerCount
         self.seenUsersCount = page.seenUsersCount ?? self.seenUsersCount
         self.updatedAt = page.updatedAt
+        self.contentType = (page.revision?.contentType ?? page.contentType)?.rawValue ?? self.contentType
         self.cachedAt = cachedAt
     }
 }
@@ -93,7 +100,8 @@ extension CachedPage {
                 commentCount: page.commentCount ?? 0,
                 likerCount: page.likerCount ?? 0,
                 seenUsersCount: page.seenUsersCount ?? 0,
-                updatedAt: page.updatedAt
+                updatedAt: page.updatedAt,
+                contentType: (page.revision?.contentType ?? page.contentType)?.rawValue
             ))
         }
     }
@@ -118,13 +126,18 @@ extension CachedPage {
         PageLenient(
             id: pageId,
             path: path,
-            revision: body.map { PageRevisionLenient(id: revisionId, body: $0, createdAt: nil, renderedAst: nil) },
+            revision: body.map { PageRevisionLenient(id: revisionId, body: $0, createdAt: nil, renderedAst: nil, contentType: cachedContentType) },
             status: status,
             commentCount: commentCount,
             likerCount: likerCount,
             seenUsersCount: seenUsersCount,
             updatedAt: updatedAt,
-            liker: nil
+            liker: nil,
+            contentType: cachedContentType
         )
+    }
+
+    private var cachedContentType: PageContentType? {
+        PageContentType.decode(contentType)
     }
 }

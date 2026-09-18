@@ -129,6 +129,7 @@ struct RecentlyUpdatedHomeView: View {
                                 updaterUsername: page.lastUpdateUserUsername,
                                 likeCount: page.displayLikeCount,
                                 commentCount: page.displayCommentCount,
+                                isArtifact: page.displayedContentType == .artifact,
                                 loader: session.imageCache
                             )
                         }

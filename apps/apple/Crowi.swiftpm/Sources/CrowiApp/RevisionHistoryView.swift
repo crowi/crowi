@@ -25,6 +25,7 @@ struct RevisionHistoryView: View {
         let id: String
         let body: String
         let renderedAst: RenderedAstDecodeOutcome?
+        let contentType: PageContentType
     }
 
     @State private var entries: [PageHistoryEntryLenient] = []
@@ -89,6 +90,9 @@ struct RevisionHistoryView: View {
                     // rather than dismissing the sheet unexpectedly.
                     PageBodyView(
                         session: session,
+                        contentType: revision.contentType,
+                        pageId: pageId,
+                        revisionId: revision.id,
                         renderedAst: revision.renderedAst,
                         rawBody: revision.body,
                         sourcePath: pagePath,
@@ -293,7 +297,8 @@ struct RevisionHistoryView: View {
             selectedRevision = SelectedRevision(
                 id: revisionId,
                 body: response.revision.body ?? "",
-                renderedAst: response.revision.renderedAst
+                renderedAst: response.revision.renderedAst,
+                contentType: response.revision.contentType ?? .markdown
             )
         } catch {
             errorMessage = "Couldn't load this revision."

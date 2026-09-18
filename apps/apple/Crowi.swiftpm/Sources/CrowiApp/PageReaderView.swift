@@ -90,6 +90,9 @@ struct PageReaderView: View {
                         header(for: page)
                         PageBodyView(
                             session: session,
+                            contentType: page.displayedContentType,
+                            pageId: page.id,
+                            revisionId: page.revision?.id,
                             renderedAst: page.revision?.renderedAst,
                             rawBody: body,
                             sourcePath: path,
@@ -240,12 +243,17 @@ struct PageReaderView: View {
     @ToolbarContentBuilder
     private func pageActions(proxy: ScrollViewProxy) -> some ToolbarContent {
         ToolbarItemGroup(placement: .bottomBar) {
-            Button {
-                showEditor = true
-            } label: {
-                Label("Edit", systemImage: "square.and.pencil")
+            // RFC-0020 gives an HTML artifact no editing surface anywhere
+            // (the web has none either, and the collaborative editor refuses
+            // one); it is written over MCP or the CLI.
+            if page?.displayedContentType != .artifact {
+                Button {
+                    showEditor = true
+                } label: {
+                    Label("Edit", systemImage: "square.and.pencil")
+                }
+                .disabled(page == nil)
             }
-            .disabled(page == nil)
 
             Button {
                 Task { await engagement?.toggleBookmark() }

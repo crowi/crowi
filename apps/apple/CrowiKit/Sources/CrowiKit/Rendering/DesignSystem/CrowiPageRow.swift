@@ -22,7 +22,12 @@ public struct CrowiPageRow: View {
     private let updaterUsername: String?
     private let likeCount: Int
     private let commentCount: Int
+    private let isArtifact: Bool
     private let loader: any WorkspaceImageFetching
+
+    /// RFC-0020's HTML artifact mark, shared with the page tree's leaf chip
+    /// so a page reads as the same kind of thing wherever it is listed.
+    public static let artifactSystemImage = "chevron.left.forwardslash.chevron.right"
 
     @ScaledMetric(relativeTo: .headline) private var avatarSize: CGFloat = CrowiMetrics.leadingChipSize
     @ScaledMetric(relativeTo: .caption) private var reactionGlyphSize: CGFloat = 12
@@ -35,6 +40,7 @@ public struct CrowiPageRow: View {
         updaterUsername: String? = nil,
         likeCount: Int = 0,
         commentCount: Int = 0,
+        isArtifact: Bool = false,
         loader: any WorkspaceImageFetching
     ) {
         self.path = path
@@ -44,6 +50,7 @@ public struct CrowiPageRow: View {
         self.updaterUsername = updaterUsername
         self.likeCount = likeCount
         self.commentCount = commentCount
+        self.isArtifact = isArtifact
         self.loader = loader
     }
 
@@ -73,6 +80,12 @@ public struct CrowiPageRow: View {
             VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     PageRowTitleLabel(path: path)
+                    if isArtifact {
+                        Image(systemName: Self.artifactSystemImage)
+                            .font(.system(size: reactionGlyphSize))
+                            .foregroundStyle(CrowiTheme.mutedForeground)
+                            .accessibilityLabel("HTML artifact page")
+                    }
                     // Pinned to the title line and to the trailing edge, as
                     // the web list draws them — a page's activity belongs
                     // beside its name, not buried in the meta line under it.
