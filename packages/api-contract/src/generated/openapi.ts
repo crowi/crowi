@@ -12718,9 +12718,8 @@ export interface paths {
                                 confidential: string;
                             };
                             isUploadable: boolean;
-                            registrationMode: {
-                                [key: string]: string;
-                            };
+                            /** @enum {string} */
+                            registrationMode: "Open" | "Resricted" | "Closed";
                             setupChecklistDismissed: boolean;
                         };
                     };
@@ -18569,9 +18568,8 @@ export interface components {
                 confidential: string;
             };
             isUploadable: boolean;
-            registrationMode: {
-                [key: string]: string;
-            };
+            /** @enum {string} */
+            registrationMode: "Open" | "Resricted" | "Closed";
             setupChecklistDismissed: boolean;
         };
         UpdateAppSettingsRequest: {

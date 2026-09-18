@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { RegistrationModeSchema } from './security';
 
 /**
  * GET response: the current `app:*` config slice (plus a few read-only
@@ -22,11 +23,11 @@ export const GetAppSettingsResponseSchema = z.object({
    */
   isUploadable: z.boolean(),
   /**
-   * The Open / Restricted / Closed → open / restricted / closed mapping the
-   * legacy admin controller exposed. Useful for the UI to render the current
-   * registration mode label without knowing the internal capitalisation.
+   * The current `security:registrationMode` value. Label mapping (e.g.
+   * "Restricted (admin approval required)") is the UI's job, not this
+   * endpoint's — see `admin.security.mode_*_label` on the web side.
    */
-  registrationMode: z.record(z.string(), z.string()),
+  registrationMode: RegistrationModeSchema,
   /**
    * Whether the admin has dismissed the initial-setup checklist on the
    * dashboard. Persisted server-side (`app:setupChecklistDismissed`) so the
