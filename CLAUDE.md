@@ -156,6 +156,10 @@ Required / commonly-set:
   When unset, the web app derives it from `window.location.host` and
   `NEXT_PUBLIC_API_URL`, so leave it blank if `/collab/*` is reverse-proxied
   to the same host as the api.
+- `LOG_LEVEL` — structured-log (RFC-0025) severity floor, default `info`
+  (`debug` / `info` / `warn` / `error`). `DEBUG` does not move this floor —
+  a `debug`-level record additionally needs its namespace selected via
+  `DEBUG`, same as any other `debug`-package trace.
 
 Search backend connection settings (Elasticsearch / OpenSearch URL, index
 name, analyzer, etc.) live in the plugin Config namespace and are edited

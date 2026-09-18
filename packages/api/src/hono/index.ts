@@ -15,6 +15,7 @@
  * `@crowi/api-contract`.
  */
 import type { Context, Next } from 'hono';
+import { requestId } from 'hono/request-id';
 import type Crowi from 'src/crowi';
 import { attachMcp } from '../mcp/attach';
 import { createPluginContext } from '../plugin/plugin-context';
@@ -47,6 +48,8 @@ import { registerBookmarkRoutes } from './handlers/bookmark';
 import { registerCommentRoutes } from './handlers/comment';
 import { registerDraftRoutes } from './handlers/draft';
 import { registerEmailChangeRoutes } from './handlers/email-change';
+import { registerFederatedAuthRoutes } from './handlers/federated-auth';
+import { registerFederatedRegistrationRoutes } from './handlers/federated-registration';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerMeRoutes } from './handlers/me';
@@ -55,18 +58,17 @@ import { registerOAuthRoutes } from './handlers/oauth';
 import { registerOAuthSessionRoutes } from './handlers/oauth-session';
 import { registerPageRoutes } from './handlers/page';
 import { registerPageCollabRoutes } from './handlers/page-collab';
+import { registerPageHistoryRoutes } from './handlers/page-history';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
 import { registerPasswordResetRoutes } from './handlers/password-reset';
 import { registerPresenceRoutes } from './handlers/presence';
-import { registerPageHistoryRoutes } from './handlers/page-history';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/token-auth';
-import { registerFederatedAuthRoutes } from './handlers/federated-auth';
-import { registerFederatedRegistrationRoutes } from './handlers/federated-registration';
 import { registerUserRoutes } from './handlers/user';
 import { createAstNegotiation } from './middleware/ast-negotiation';
 import { createCors } from './middleware/cors';
+import { createRequestScope, REQUEST_ID_HEADER } from './middleware/request-scope';
 import { createSecurityHeaders } from './middleware/security-headers';
 
 export type { CrowiHonoBindings } from './app';
@@ -139,6 +141,24 @@ const mountPluginRoutes = (app: ReturnType<typeof createHonoApp>, crowi: Crowi):
  */
 export const buildHonoApp = (crowi: Crowi) => {
   const base = createHonoApp();
+  // RFC-0025 §9 Phase 2 — canonical request ID + request-scope ALS.
+  // Installed FIRST, outermost of every other app-wide middleware: every
+  // module-logger record produced downstream (security headers, CORS,
+  // AST negotiation, plugin/route/MCP dispatch, `honoOnError`) must fall
+  // inside the same `AsyncLocalStorage.run()` continuation to carry this
+  // request's canonical ID. Hono's own `requestId()` validates/preserves
+  // an inbound `X-Request-Id` or generates one; `createRequestScope()`
+  // reads that value into the ALS scope and owns the response-start /
+  // error diagnostics (`hono/middleware/request-scope.ts`).
+  //
+  // `requestId(...)` is called inline (not through a local wrapper) on
+  // purpose: `hono/middleware/request-scope.ts`'s exported surface is
+  // spec-fixed to `REQUEST_ID_HEADER` / `deriveRouteTemplate` /
+  // `createRequestScope` only, so these two options are deliberately
+  // restated at each call site instead of centralized behind a 4th
+  // export there.
+  base.use('*', requestId({ headerName: REQUEST_ID_HEADER, limitLength: 128 }));
+  base.use('*', createRequestScope());
   // RFC-0006 Phase 6 Sub-batch D — Hono is the sole HTTP host, so
   // this CORS apply is the only CORS layer in the process. The Express
   // bridge that previously also ran `cors()` is gone.

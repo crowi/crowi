@@ -26,7 +26,7 @@ orchestrator instead of a file. Copy `.env.example` and edit it.
 cp .env.example .env
 ```
 
-The API validates all of these environment variables together at boot. If
+The API validates, together at boot, every value it can validate at boot. Some values, however, are interpreted only when actually used rather than at boot — `LOG_LEVEL` is one of these, and an invalid value there is reported at the first logging admission rather than in the boot-time consolidated report. If
 `PORT`, `MONGO_URI` (or an alias), `REDIS_URL` (or an alias),
 `CROWI_ENCRYPTION_KEY`, or `CROWI_ARTIFACT_ORIGIN` is malformed, boot fails
 immediately with a single error message listing every problem found. A
@@ -55,6 +55,16 @@ flagged as a likely typo ("did you mean `XXX`?") in the same warning report
 — this never fails boot, since the heuristic is allowed false positives.
 Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
 `CI`, `GITHUB_*`, `npm_*`, etc.) are never flagged.
+
+**Structured logging**: records that go through the api's
+structured logger — on both stdout and stderr — are one-line-per-record
+NDJSON. Each record carries a request id correlating it to the HTTP request
+it was emitted during. Pretty-printing, collection, and retention are an
+operator's own responsibility (see [Environment variables](../reference/env)
+for `LOG_LEVEL`). The boot-time progress display (the boot reporter), the
+`@@crowi:fail` marker, and any `console.*` call that does not go through the
+structured logger fall outside this and stay plain text — the api process's
+entire output cannot be assumed to be strict NDJSON.
 
 ### The list of variables
 

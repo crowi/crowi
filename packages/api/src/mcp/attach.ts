@@ -100,7 +100,7 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
       return c.json(jsonRpcError(JSONRPC_AUTH_REQUIRED, 'MCP requires a Bearer Authorization header.'), 401);
     }
 
-    const dispatch = makeDispatch(app, authorization);
+    const dispatch = makeDispatch(app, authorization, c.get('requestId'));
     const server = buildMcpServer({ dispatch });
 
     const transport = new StreamableHTTPTransport({

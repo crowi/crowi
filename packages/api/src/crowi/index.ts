@@ -20,9 +20,12 @@ import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type AttachedPresence, attachPresenceServer } from 'src/presence/attach';
 import { createRenderer, type Renderer } from 'src/renderer';
 import { MailService } from 'src/service/mail';
-import { type BootLayer, type BootReporter, createBootReporter, formatBootFailureReason, formatFailMarker } from 'src/util/boot-reporter';
+import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
 import { type ArtifactDeliveryEnv, validateEnv } from 'src/util/env-schema';
+import { createLogRecord, type LogRecord } from 'src/util/logger';
+import { writeFatal } from 'src/util/logger-sink';
+import { normalizeProcessFailureReason } from 'src/util/process-failure-reason';
 import { buildRedisOpts, redisReconnectForever } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
 import LRU from '../service/lru';
@@ -38,6 +41,34 @@ type Events = { [K in keyof typeof events]: InstanceType<(typeof events)[K]> };
 
 const debug = Debug('crowi:crowi');
 const bootDebug = Debug('crowi:boot');
+
+/**
+ * RFC-0025 process-boundary D-P4 — the marker and the E-P1 reduced record
+ * both need the SAME execution-free reason string, derived from `err`
+ * without touching any of its object machinery. This is a thin, named
+ * wrapper (not a duplicate) around the shared `normalizeProcessFailureReason`
+ * so both call sites below read as "the marker's reason", not a generic
+ * process-failure string.
+ */
+function normalizeFailMarkerReason(err: unknown): string {
+  return normalizeProcessFailureReason(err);
+}
+
+/**
+ * Best-effort synchronous stdout write for the `@@crowi:fail` marker
+ * (D-P4). A synchronous throw is caught and discarded so it can never skip
+ * the fatal-record handoff that follows; a `false` return (backpressure) is
+ * likewise ignored — no callback, `error` listener, or `drain` wait is
+ * added, since the immediately-following fatal write terminates the
+ * process before any of those could ever fire.
+ */
+function writeFailMarkerBestEffort(reason: string): void {
+  try {
+    process.stdout.write(`${formatFailMarker('api', reason)}\n`);
+  } catch {
+    // See this function's doc comment.
+  }
+}
 
 /**
  * Emit a `crowi:boot` log after each init phase so we can tell which step
@@ -275,10 +306,11 @@ class Crowi {
 
     // A step throwing (DB/Redis down is the common dev case) rejects out of
     // init(); without this guard the spinner interval keeps redrawing the same
-    // line — overwriting the fatal stack `exitOnError` prints — and the hidden
-    // cursor never comes back. Stop the spinner before the rejection
-    // propagates. `dispose()` is idempotent, so `exitOnError` calling it again
-    // is harmless.
+    // line — corrupting the machine-readable fatal record `exitOnError` hands
+    // off, and the terminal display around it — and the hidden cursor never
+    // comes back. Stop the spinner before the rejection propagates.
+    // `dispose()` is idempotent, so `exitOnError` calling it again is
+    // harmless.
     try {
       await this.runInitLayers(reporter);
     } catch (err) {
@@ -950,22 +982,38 @@ class Crowi {
   // Arrow property so `this` stays bound when passed as
   // `.catch(crowi.exitOnError)` from `app.ts` (the bare method would lose
   // `this` and the dispose() below would throw).
-  exitOnError = (err) => {
-    debug('Critical error occured.');
+  exitOnError = (err: unknown): void => {
     // Tear the boot reporter down *first*: stop the spinner interval and
-    // restore the cursor so the fatal stack trace below isn't overwritten /
-    // the terminal isn't left cursorless. Idempotent — the init()/start()
-    // try-path may already have disposed.
+    // restore the cursor so the machine-readable fatal record handed off
+    // below isn't overwritten / the terminal isn't left cursorless.
+    // Idempotent — the init()/start() try-path may already have disposed.
     this.bootReporter?.dispose();
+    const reason = normalizeFailMarkerReason(err);
     // Machine-readable failure marker (own stdout line, mirrors the readiness
     // marker). `scripts/dev.mjs` watches for this to tear the whole dev tree
     // (api · web · deps) down — otherwise `tsx watch` survives the crash and
     // web keeps serving against a dead api. Harmless in prod (a grep-able line
-    // before exit). Reason is the first line of the error, length-capped.
-    process.stdout.write(`${formatFailMarker('api', formatBootFailureReason(err))}\n`);
-    console.error(err);
-    console.error(err.stack);
-    process.exit(1);
+    // before exit).
+    writeFailMarkerBestEffort(reason);
+    // RFC-0025 process-boundary D-P2/D-P4 — reduced record derived ONLY from
+    // the execution-free `reason` above until the guarded full-record
+    // attempt below (if any) replaces it; `finally` hands off exactly one of
+    // the two, so a factory failure can never skip the handoff.
+    let record: LogRecord = {
+      timestamp: '1970-01-01T00:00:00.000Z',
+      level: 'error',
+      namespace: 'crowi:process',
+      message: 'fatal API startup error',
+      data: { reduced: true, reason },
+    };
+    try {
+      record = createLogRecord('error', 'crowi:process', 'fatal API startup error', { error: err });
+    } catch {
+      // Factory failure keeps the reduced record derived above — `err` is
+      // never read a second time.
+    } finally {
+      writeFatal(record);
+    }
   };
 }
 
