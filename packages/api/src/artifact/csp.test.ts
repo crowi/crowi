@@ -9,6 +9,7 @@ import {
   GOOGLE_FONTS_STYLE_ORIGIN,
   parseArtifactDigestContent,
 } from './csp';
+import { ARTIFACT_HEIGHT_REPORTER_SCRIPT } from './height-reporter';
 import type { ArtifactPolicySnapshot } from './policy';
 
 // ---------------------------------------------------------------------------
@@ -308,9 +309,9 @@ describe('buildArtifactContentSecurityPolicy', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const scriptTokens = scripts.map(sha256Token);
+      const scriptTokens = [ARTIFACT_HEIGHT_REPORTER_SCRIPT, ...scripts].map(sha256Token);
       const styleTokens = styles.map(sha256Token);
-      const scriptSrc = scriptTokens.length === 0 ? "script-src 'none'" : `script-src ${scriptTokens.map((t) => `'${t}'`).join(' ')}`;
+      const scriptSrc = `script-src ${scriptTokens.map((t) => `'${t}'`).join(' ')}`;
       let styleSrc: string;
       if (styleTokens.length === 0) {
         styleSrc = font ? `style-src ${GOOGLE_FONTS_STYLE_ORIGIN}` : "style-src 'none'";

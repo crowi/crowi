@@ -1,6 +1,6 @@
 'use client';
 
-import type { PageWithRevision } from '@crowi/api-contract';
+import { ARTIFACT_HEIGHT_MESSAGE_TYPE, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -9,6 +9,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { env } from '@/lib/runtime-env';
 import { useAppInfo } from '@/lib/use-app-info';
 import { ArtifactUrlUnavailableFailure, useMintArtifactUrl } from '@/lib/use-artifact-url';
+import { cn } from '@/lib/utils';
 
 interface ArtifactViewProps {
   page: PageWithRevision;
@@ -62,6 +63,54 @@ function FailureAlert({ reason, canRetry, onRetry }: { reason: FailureReason; ca
         )}
       </AlertDescription>
     </Alert>
+  );
+}
+
+/**
+ * Past this the frame stops growing and scrolls inside instead. The height
+ * comes from code the artifact's author controls, so it needs some bound.
+ */
+const MAX_ARTIFACT_FRAME_HEIGHT = 100_000;
+
+function readReportedHeight(data: unknown): number | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const { type, height } = data as { type?: unknown; height?: unknown };
+  if (type !== ARTIFACT_HEIGHT_MESSAGE_TYPE || typeof height !== 'number' || !Number.isFinite(height) || height <= 0) return null;
+  return Math.min(Math.ceil(height), MAX_ARTIFACT_FRAME_HEIGHT);
+}
+
+/**
+ * The outer iframe, sized to the artifact's content height once the
+ * artifact reports it (delivery appends a reporter to every served
+ * artifact). Until then — or if it never does — it keeps a fixed
+ * viewport-relative height and the artifact scrolls inside it.
+ */
+function ArtifactFrame({ src }: { src: string }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      // The artifact runs on an opaque origin (its `event.origin` is
+      // "null"), so the sender is recognised by window identity instead:
+      // the one frame inside `/_artifact-frame`, which this iframe loads.
+      const artifactWindow = frameRef.current?.contentWindow?.frames[0];
+      if (!artifactWindow || event.source !== artifactWindow) return;
+      const reported = readReportedHeight(event.data);
+      if (reported !== null) setHeight(reported);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  return (
+    <iframe
+      ref={frameRef}
+      src={src}
+      title={m['page.artifact.iframe_title']()}
+      className={cn('w-full', height === null && 'h-[70vh] min-h-[480px]')}
+      style={height === null ? undefined : { height }}
+    />
   );
 }
 
@@ -212,11 +261,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   if (effectiveState === 'running' && runningUrl) {
     return (
       <div className="space-y-2">
-        <iframe
-          src={`/_artifact-frame?src=${encodeURIComponent(runningUrl)}`}
-          title={m['page.artifact.iframe_title']()}
-          className="h-[70vh] min-h-[480px] w-full"
-        />
+        <ArtifactFrame key={runningUrl} src={`/_artifact-frame?src=${encodeURIComponent(runningUrl)}`} />
         <div className="text-sm text-muted-foreground">
           <p>{m['page.artifact.sandbox_notice_generated']()}</p>
           <p>{m['page.artifact.sandbox_notice_input_note']()}</p>

@@ -2,6 +2,7 @@ import Debug from 'debug';
 import { DEFAULT_ARTIFACT_MAX_BYTES } from 'src/artifact/constants';
 import { buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from 'src/artifact/csp';
 import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, resolveArtifactTokenKey } from 'src/artifact/delivery';
+import { ARTIFACT_HEIGHT_REPORTER_SCRIPT } from 'src/artifact/height-reporter';
 import { ingestHtmlArtifact } from 'src/artifact/ingest';
 import * as artifactPolicy from 'src/artifact/policy';
 import { STATUS_DRAFT, STATUS_RENAMING } from 'src/models/page';
@@ -341,7 +342,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(res.status).toBe(200);
     });
 
-    test('AC-DL-3 / AC-DL-4: a URL minted by the mint route serves the exact stored bytes with the full response header set', async () => {
+    test('AC-DL-3 / AC-DL-4: a URL minted by the mint route serves the exact stored bytes followed by the height reporter, with the full response header set', async () => {
       await enableArtifactDelivery();
       const body = await ingestedBody(VALID_ARTIFACT_HTML);
       const page = await createArtifactPage(`${PATH_PREFIX}full-flow`, body);
@@ -356,14 +357,15 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
         .parse(bufferParser);
       expect(res.status).toBe(200);
       // AC-DL-3 requires a byte-exact match, not merely equal decoded
-      // strings — compare the raw response `Buffer` against the stored
+      // strings — compare the raw response `Buffer` against the expected
       // bytes' own UTF-8 encoding.
-      expect(Buffer.compare(res.body as Buffer, Buffer.from(body, 'utf8'))).toBe(0);
+      const served = `${body}<script>${ARTIFACT_HEIGHT_REPORTER_SCRIPT}</script>`;
+      expect(Buffer.compare(res.body as Buffer, Buffer.from(served, 'utf8'))).toBe(0);
 
       expect(res.headers['content-type']).toBe('text/html; charset=utf-8');
       expect(res.headers['referrer-policy']).toBe('no-referrer');
       expect(res.headers['cache-control']).toBe('no-store');
-      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(body, 'utf8')));
+      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(served, 'utf8')));
       expect(res.headers['set-cookie']).toBeUndefined();
       expect(res.headers['x-frame-options']).toBeUndefined();
       // Global middleware adds exactly 1 occurrence — the route itself must not duplicate it.

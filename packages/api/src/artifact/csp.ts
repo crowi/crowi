@@ -1,7 +1,7 @@
 /**
  * Pure digest-marker extraction and CSP header assembly for HTML artifact
- * responses. Both functions are string-only: no HTML parser, no crypto, no
- * DB, no HTTP. `./constants` supplies the reserved marker names (never
+ * responses. Both functions are string-only: no HTML parser, no DB, no
+ * HTTP. `./constants` supplies the reserved marker names (never
  * `./ingest`, which would pull parse5/PostCSS into every process that loads
  * this module — see that module's own doc comment).
  *
@@ -11,6 +11,7 @@
  */
 
 import { ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME, countOccurrences } from './constants';
+import { ARTIFACT_HEIGHT_REPORTER_DIGEST } from './height-reporter';
 import type { ArtifactPolicySnapshot } from './policy';
 
 // ---------------------------------------------------------------------------
@@ -109,7 +110,8 @@ const FORBIDDEN_CONTENT_CHAR_PATTERN = /['";<]/;
 /**
  * §G-2 / §G-3 — parses a marker's `content` into its token list, or `null`
  * if it violates the grammar (empty is valid: an empty script/style marker
- * means "0 inline scripts/styles" — §D 表 renders that as `'none'`).
+ * means "0 inline scripts/styles" — §D 表 renders an empty style list as
+ * `'none'`, and an empty script list as the height reporter's digest alone).
  */
 export function parseArtifactDigestContent(content: string): readonly string[] | null {
   if (content === '') return [];
@@ -150,7 +152,9 @@ export function buildArtifactContentSecurityPolicy(markers: ArtifactDigestMarker
   const styleTokens = parseArtifactDigestContent(markers.styleDigests);
   if (scriptTokens === null || styleTokens === null) return policyError('DIGEST_TOKEN_INVALID');
 
-  const scriptSrc = scriptTokens.length === 0 ? "script-src 'none'" : `script-src ${quoteTokens(scriptTokens)}`;
+  // Delivery appends the height reporter to every served artifact, so its
+  // digest leads the list even when the author's document has no scripts.
+  const scriptSrc = `script-src ${quoteTokens([ARTIFACT_HEIGHT_REPORTER_DIGEST, ...scriptTokens])}`;
 
   let styleSrc: string;
   if (styleTokens.length === 0) {

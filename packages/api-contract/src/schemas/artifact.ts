@@ -11,6 +11,13 @@ export const MintArtifactUrlRequestSchema = z
   .strict();
 export type MintArtifactUrlRequest = z.infer<typeof MintArtifactUrlRequestSchema>;
 
+/**
+ * `type` of the `{ type, height }` message the delivery route's height
+ * reporter posts from inside a served artifact to the wiki page embedding
+ * it, so the page can size the frame to the artifact's content height.
+ */
+export const ARTIFACT_HEIGHT_MESSAGE_TYPE = 'crowi:artifact-height';
+
 export const MintArtifactUrlResponseSchema = z.object({
   url: z.string(),
   expiresAt: z.string(),

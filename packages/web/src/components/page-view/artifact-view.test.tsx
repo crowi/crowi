@@ -1,4 +1,4 @@
-import type { AppInfoResponse, PageWithRevision } from '@crowi/api-contract';
+import { ARTIFACT_HEIGHT_MESSAGE_TYPE, type AppInfoResponse, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -510,6 +510,74 @@ describe('ArtifactView', () => {
       expect(screen.queryByRole('button', { name: m['page.artifact.retry_button']() })).toBeNull();
       expect(document.body.textContent).not.toContain(mismatchedOrigin);
       expectNoConsoleLeak(consoleSpies, mismatchedOrigin);
+    });
+  });
+
+  describe('the frame takes the height the artifact reports', () => {
+    /**
+     * Renders a running artifact and stands in for what `/_artifact-frame`
+     * loads: one nested frame, whose window is the only sender whose
+     * height reports count.
+     */
+    async function renderRunningFrame() {
+      mockAppInfo({ data: ENABLED_APP_INFO });
+      mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+      render(createElement(ArtifactView, { page: makePage() }));
+      await flush();
+      const frame = document.querySelector('iframe');
+      if (!frame?.contentDocument) throw new Error('the outer frame did not render');
+      // jsdom never loads the outer frame's `src`, so its document is empty.
+      const outerDocument = frame.contentDocument;
+      const artifactFrame = outerDocument.createElement('iframe');
+      (outerDocument.documentElement ?? outerDocument.appendChild(outerDocument.createElement('html'))).appendChild(artifactFrame);
+      if (!artifactFrame.contentWindow) throw new Error('the nested frame has no window');
+      return { frame, artifactWindow: artifactFrame.contentWindow };
+    }
+
+    function post(source: Window, data: unknown) {
+      act(() => {
+        window.dispatchEvent(new MessageEvent('message', { data, source }));
+      });
+    }
+
+    it('keeps the fixed fallback height until a report arrives', async () => {
+      const { frame } = await renderRunningFrame();
+      expect(frame.className).toContain('h-[70vh]');
+      expect(frame.style.height).toBe('');
+    });
+
+    it('sizes the frame to a report from the artifact window and drops the fallback height', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400.4 });
+      expect(frame.style.height).toBe('2401px');
+      expect(frame.className).not.toContain('h-[70vh]');
+      expect(frame.className).not.toContain('min-h-');
+    });
+
+    it('ignores a report from any other window', async () => {
+      const { frame } = await renderRunningFrame();
+      post(window, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+      if (!frame.contentWindow) throw new Error('the outer frame has no window');
+      post(frame.contentWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+      expect(frame.style.height).toBe('');
+    });
+
+    it.each([
+      ['another message type', { type: 'something-else', height: 2400 }],
+      ['a non-numeric height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: '2400' }],
+      ['a zero height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 0 }],
+      ['an infinite height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: Number.POSITIVE_INFINITY }],
+      ['a bare number', 2400],
+    ])('ignores %s', async (_label, data) => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, data);
+      expect(frame.style.height).toBe('');
+    });
+
+    it('caps an oversized report so a runaway artifact cannot stretch the page without bound', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 10_000_000 });
+      expect(frame.style.height).toBe('100000px');
     });
   });
 });
