@@ -2,12 +2,14 @@
 
 import { ARTIFACT_HEIGHT_MESSAGE_TYPE, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { Fullscreen, Maximize2, Minimize2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { env } from '@/lib/runtime-env';
 import { useAppInfo } from '@/lib/use-app-info';
+import { pageDisplayName } from '@/lib/page-path';
 import { ArtifactUrlUnavailableFailure, useMintArtifactUrl } from '@/lib/use-artifact-url';
 import { cn } from '@/lib/utils';
 
@@ -80,14 +82,27 @@ function readReportedHeight(data: unknown): number | null {
 }
 
 /**
- * The outer iframe, sized to the artifact's content height once the
- * artifact reports it (delivery appends a reporter to every served
- * artifact). Until then — or if it never does — it keeps a fixed
+ * A running artifact: the outer iframe, the sandbox notice under it, and the
+ * maximise control. Inline, the frame is sized to the artifact's content
+ * height once the artifact reports it (delivery appends a reporter to every
+ * served artifact); until then — or if it never does — it keeps a fixed
  * viewport-relative height and the artifact scrolls inside it.
+ *
+ * Maximising restyles this same block into a viewport-filling overlay
+ * instead of moving the iframe into a dialog: moving an iframe reloads it,
+ * which would drop whatever the reader did inside the artifact and, once the
+ * one-minute signed URL has expired, fail to load at all.
  */
-function ArtifactFrame({ src }: { src: string }) {
+function RunningArtifact({ src, title }: { src: string; title: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const [height, setHeight] = useState<number | null>(null);
+  const [maximized, setMaximized] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  // iPhone Safari cannot put an arbitrary element into full screen; there the
+  // overlay is as far as it goes.
+  const fullscreenAvailable = typeof document !== 'undefined' && document.fullscreenEnabled === true;
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -103,14 +118,80 @@ function ArtifactFrame({ src }: { src: string }) {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
+  useEffect(() => {
+    const onFullscreenChange = () => setFullscreen(document.fullscreenElement != null && document.fullscreenElement === containerRef.current);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!maximized) return;
+    const root = document.documentElement;
+    const previousOverflow = root.style.overflow;
+    root.style.overflow = 'hidden';
+    // Escape in full screen belongs to the browser, which leaves full screen
+    // first; the overlay closes on the next one.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && document.fullscreenElement == null) setMaximized(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      root.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [maximized]);
+
+  const toggleMaximized = () => {
+    if (maximized && document.fullscreenElement != null && document.fullscreenElement === containerRef.current) void document.exitFullscreen();
+    setMaximized(!maximized);
+  };
+
+  const toggleFullscreen = () => {
+    if (fullscreen) void document.exitFullscreen();
+    // A refused request (the browser's own policy) leaves the overlay as it is.
+    else void containerRef.current?.requestFullscreen().catch(() => undefined);
+  };
+
   return (
-    <iframe
-      ref={frameRef}
-      src={src}
-      title={m['page.artifact.iframe_title']()}
-      className={cn('w-full', height === null && 'h-[70vh] min-h-[480px]')}
-      style={height === null ? undefined : { height }}
-    />
+    <div
+      ref={containerRef}
+      role={maximized ? 'dialog' : undefined}
+      aria-modal={maximized || undefined}
+      aria-label={maximized ? title : undefined}
+      className={cn(maximized ? 'fixed inset-0 z-50 flex flex-col bg-background' : 'space-y-2')}
+      data-testid="artifact-running"
+    >
+      {/* Tab past the last control wraps to the first and back, so focus
+          cannot reach the page hidden behind the overlay. The frame's own
+          content is cross-origin, so its keystrokes never reach a handler
+          here; these stops catch focus as it leaves the frame instead. */}
+      {maximized && <span tabIndex={0} data-testid="artifact-focus-start" onFocus={() => frameRef.current?.focus()} />}
+      <div className={cn('flex items-center justify-end gap-1', maximized && 'shrink-0 border-b px-4 py-2')}>
+        {maximized && <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{title}</h2>}
+        {maximized && fullscreenAvailable && (
+          <Button variant="ghost" size="sm" onClick={toggleFullscreen} className="text-muted-foreground hover:text-foreground">
+            <Fullscreen className="mr-1 h-4 w-4" />
+            {fullscreen ? m['page.artifact.exit_fullscreen']() : m['page.artifact.enter_fullscreen']()}
+          </Button>
+        )}
+        <Button ref={toggleRef} variant="ghost" size="sm" onClick={toggleMaximized} className="text-muted-foreground hover:text-foreground">
+          {maximized ? <Minimize2 className="mr-1 h-4 w-4" /> : <Maximize2 className="mr-1 h-4 w-4" />}
+          {maximized ? m['page.artifact.restore']() : m['page.artifact.maximize']()}
+        </Button>
+      </div>
+      <iframe
+        ref={frameRef}
+        src={src}
+        title={m['page.artifact.iframe_title']()}
+        className={cn('w-full', maximized ? 'min-h-0 flex-1' : height === null && 'h-[70vh] min-h-[480px]')}
+        style={maximized || height === null ? undefined : { height }}
+      />
+      <div className={cn('text-sm text-muted-foreground', maximized && 'shrink-0 border-t px-4 py-2')}>
+        <p>{m['page.artifact.sandbox_notice_generated']()}</p>
+        <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
+      </div>
+      {maximized && <span tabIndex={0} data-testid="artifact-focus-end" onFocus={() => toggleRef.current?.focus()} />}
+    </div>
   );
 }
 
@@ -259,15 +340,7 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   }, [shouldAutoRun, handleRun]);
 
   if (effectiveState === 'running' && runningUrl) {
-    return (
-      <div className="space-y-2">
-        <ArtifactFrame key={runningUrl} src={`/_artifact-frame?src=${encodeURIComponent(runningUrl)}`} />
-        <div className="text-sm text-muted-foreground">
-          <p>{m['page.artifact.sandbox_notice_generated']()}</p>
-          <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
-        </div>
-      </div>
-    );
+    return <RunningArtifact key={runningUrl} src={`/_artifact-frame?src=${encodeURIComponent(runningUrl)}`} title={pageDisplayName(page.path) || page.path} />;
   }
 
   // Loading app info and minting both normally resolve within a few hundred
