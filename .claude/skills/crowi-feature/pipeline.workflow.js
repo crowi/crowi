@@ -211,7 +211,11 @@ function codexReviewerPrompt(p, attempt) {
     `yourself — your only judgments are pass/fail of commands and copying data.\n\n` +
     `STEP 1 — objective gates. First list the pending work: \`git status --porcelain\` (this ` +
     `includes untracked files — a brand-new file must count). Then run each gate with Bash from ` +
-    `the repo root, in order (generous timeouts):\n` +
+    `the repo root, in order, passing the Bash tool's own timeout parameter set to 600000 ` +
+    `(10 minutes, its maximum) on every gate call — do not rely on the tool's default (120000ms), ` +
+    `and do not estimate a smaller number yourself: the full api test suite alone routinely runs ` +
+    `past 180s once a feature has added tests across multiple phases, and a gate that SIGTERMs a ` +
+    `passing run is a false NEEDS_WORK, not a real failure:\n` +
     `  (a) if any pending file is under packages/api-contract/: pnpm --filter @crowi/api-contract ` +
     `build. Then check OpenAPI freshness WITHOUT calling \`pnpm check:openapi\` directly — that ` +
     `script's freshness signal is \`git status --porcelain\` against git HEAD (its own header ` +
