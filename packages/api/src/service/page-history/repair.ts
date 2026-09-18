@@ -364,7 +364,16 @@ export interface UnsequencedRevisionScanResult {
 /** `migrationOwner` tag this repair path stamps on the outbox entries it claims — distinguishes its writes from a future Phase 2 migration worker's. */
 const REPAIR_MIGRATION_OWNER = 'repair:scanUnsequencedRevisions';
 
-/** Bounds the claim retry loop below — Phase 1 has no concurrent claimant, so this only guards against a pathological repeated CAS loss. */
+/**
+ * Bounds the claim retry loop below. Losing the CAS is the ordinary way this
+ * scan yields to a concurrent claimant of the same Page's slot — another
+ * repair scan, `allocateContentSequence`, or a page-event command — and
+ * draining a foreign occupant before retrying spends an attempt too. A lost
+ * attempt commits nothing, so giving up is always safe: the Revision is
+ * simply deferred (`null`) to a later scan. The bound exists so an operator-
+ * invoked scan finishes even on a Page under a steady stream of live writes
+ * instead of spinning against them.
+ */
 const MAX_CLAIM_ATTEMPTS = 3;
 
 /**
