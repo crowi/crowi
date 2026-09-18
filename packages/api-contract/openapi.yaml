@@ -4694,9 +4694,11 @@ components:
         isUploadable:
           type: boolean
         registrationMode:
-          type: object
-          additionalProperties:
-            type: string
+          type: string
+          enum:
+            - Open
+            - Resricted
+            - Closed
         setupChecklistDismissed:
           type: boolean
       required:
@@ -27026,9 +27028,11 @@ paths:
                   isUploadable:
                     type: boolean
                   registrationMode:
-                    type: object
-                    additionalProperties:
-                      type: string
+                    type: string
+                    enum:
+                      - Open
+                      - Resricted
+                      - Closed
                   setupChecklistDismissed:
                     type: boolean
                 required:
