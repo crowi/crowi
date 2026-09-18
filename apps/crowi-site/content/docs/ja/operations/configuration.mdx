@@ -28,7 +28,7 @@ compose / オーケストレータから変数を注入します。`.env.example
 cp .env.example .env
 ```
 
-API は起動時にこれらの環境変数をまとめて検証します。`PORT` / `MONGO_URI`
+API は、起動時に検証できる値をまとめて起動時に検証します。一方、値によっては起動時ではなく実際に使われる時点で解釈されるものもあります(`LOG_LEVEL` がそれで、不正な値は起動時の一括検証ではなく最初にログを出力しようとした時点で報告されます)。`PORT` / `MONGO_URI`
 (またはエイリアス) / `REDIS_URL` (またはエイリアス) / `CROWI_ENCRYPTION_KEY`
 / `CROWI_ARTIFACT_ORIGIN` の形式が不正な場合、検出できた問題をすべて含む
 1 つのエラーメッセージとともに起動が即座に失敗します。`CLIENT_URL` / `CROWI_MULTI_INSTANCE` /
@@ -54,6 +54,8 @@ placeholder 値のいずれかであれば、`NODE_ENV` や `CROWI_MULTI_INSTANC
 `XXX` では?」という形で warning を出します(fail にはなりません — 誤検知
 を許容するヒューリスティックです)。`PATH` / `CI` / `GITHUB_*` / `npm_*`
 など上記プレフィックスを持たない一般的な OS/CI 環境変数は対象外です。
+
+構造化ログについて: api の構造化ロガーを経由するレコードは、標準出力・標準エラー出力ともに 1 行 1 レコードの NDJSON です。各レコードは、受け取った HTTP リクエストとの相関に使う request id を持ちます。プリティプリント・収集・保管は運用者側の責務です (`LOG_LEVEL` の詳細は [環境変数](../reference/env) を参照)。起動時の進捗表示 (boot reporter)、`@@crowi:fail` マーカー、構造化ロガーを経由しない `console.*` 呼び出しはこの対象外でプレーンテキストのまま出力されるため、api のプロセス全出力をそのまま厳密な NDJSON パーサへ渡せるとは限りません。
 
 ### 変数の一覧
 
