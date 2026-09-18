@@ -317,9 +317,15 @@ export async function hasOperationCompletionEvidence(
   const evidence = await crowi.model('PageHistoryEvent').exists({ page: operation.page, operationId: eventOperationId, kind }).read('primary');
   if (evidence != null) return true;
 
-  // Subtree members are grouped under the root id, so projection-only success
-  // would lose the distinction between this member and another subtree move.
-  if (operation.command === 'subtree_rename_member') return false;
+  // A member record with fromPath === toPath never named a move (subtree
+  // rename writes one when the page could not be carried — see
+  // `commands/subtree-rename.ts`'s `moveAllowed`), so the page's position can
+  // never prove it: sitting at that one path is indistinguishable from never
+  // having been touched. Every other member is provable the same way a
+  // single-page rename already is below: an untracked page has no event to
+  // lose the distinction of, so its position with the transition released is
+  // the only evidence that can exist.
+  if (operation.command === 'subtree_rename_member' && operation.fromPath === operation.toPath) return false;
   if (page == null || page.historyTracking?.state === 'ready' || page.historyTracking?.state === 'migrating') return false;
   return classifyResume(page, expectationOf(operation)).decision === 'already-settled';
 }
