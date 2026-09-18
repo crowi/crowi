@@ -68,6 +68,10 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
   const layout = { scrollbar: 0, vhExtra: undefined as number | undefined, ...initial };
   const posted: number[] = [];
   let observerCallback: (() => void) | null = null;
+  let mutationCallback: (() => void) | null = null;
+  let mutationOptions: MutationObserverInit | null = null;
+  let loadListener: (() => void) | null = null;
+  const frameCallbacks: (() => void)[] = [];
 
   const contentHeight = () => (layout.vhExtra === undefined ? layout.content : Math.max(layout.frame, layout.content) + layout.vhExtra);
   const scroller = {
@@ -89,6 +93,9 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
     get innerHeight() {
       return layout.frame;
     },
+    addEventListener: (type: string, listener: () => void) => {
+      if (type === 'load') loadListener = listener;
+    },
   };
   const document = {
     documentElement: { getBoundingClientRect: () => ({ height: contentHeight() }) },
@@ -101,17 +108,39 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
     }
     observe() {}
   }
+  class MutationObserver {
+    constructor(callback: () => void) {
+      mutationCallback = callback;
+    }
+    observe(_target: unknown, options: MutationObserverInit) {
+      mutationOptions = options;
+    }
+  }
+  const requestAnimationFrame = (callback: () => void) => {
+    frameCallbacks.push(callback);
+  };
 
-  new Function('window', 'document', 'ResizeObserver', ARTIFACT_HEIGHT_REPORTER_SCRIPT)(window, document, ResizeObserver);
+  new Function('window', 'document', 'ResizeObserver', 'MutationObserver', 'requestAnimationFrame', ARTIFACT_HEIGHT_REPORTER_SCRIPT)(
+    window,
+    document,
+    ResizeObserver,
+    MutationObserver,
+    requestAnimationFrame,
+  );
 
   const fire = () => observerCallback?.();
+  const mutate = () => mutationCallback?.();
+  const load = () => loadListener?.();
+  const runFrame = () => {
+    for (const callback of frameCallbacks.splice(0)) callback();
+  };
   // What the page does on a report: resize the frame, which re-lays the
   // document out and fires the observer again.
   const applyLastReport = () => {
     layout.frame = posted.at(-1) ?? layout.frame;
     fire();
   };
-  return { layout, posted, fire, applyLastReport };
+  return { layout, posted, fire, mutate, load, runFrame, mutationOptions: () => mutationOptions, applyLastReport };
 }
 
 describe('the reporter running inside the artifact', () => {
@@ -138,6 +167,31 @@ describe('the reporter running inside the artifact', () => {
     expect(reporter.posted).toEqual([3015]);
     reporter.applyLastReport();
     expect(reporter.posted).toEqual([3015]);
+  });
+
+  it('re-measures after a DOM change that resizes neither observed box (content taken out of flow)', () => {
+    const reporter = runReporter({ content: 3000, frame: 630 });
+    reporter.fire();
+    reporter.applyLastReport();
+    // An absolutely positioned panel grows: the scroll height changes, the
+    // root and body boxes do not, so no resize notification arrives.
+    reporter.layout.content = 4000;
+    reporter.mutate();
+    reporter.mutate();
+    expect(reporter.posted).toEqual([3000]);
+    reporter.runFrame();
+    expect(reporter.posted).toEqual([3000, 4000]);
+    expect(reporter.mutationOptions()).toEqual({ attributes: true, characterData: true, childList: true, subtree: true });
+  });
+
+  it('re-measures once the document has finished loading', () => {
+    const reporter = runReporter({ content: 3000, frame: 630 });
+    reporter.fire();
+    reporter.applyLastReport();
+    reporter.layout.content = 3500;
+    reporter.load();
+    reporter.runFrame();
+    expect(reporter.posted).toEqual([3000, 3500]);
   });
 
   it('stops growing a document that is sized from the viewport instead of chasing it forever', () => {

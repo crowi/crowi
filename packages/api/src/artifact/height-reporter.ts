@@ -23,6 +23,11 @@ import { ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
 // never converges. When the viewport has grown since the last report and the
 // overflow is unchanged, the report is withheld and the rest stays scrollable
 // inside the frame.
+//
+// Content taken out of flow (absolutely positioned, transformed) changes the
+// scroll height without resizing the root or body box, so the resize
+// observer alone misses it; DOM changes and the end of loading schedule a
+// re-measure for the next frame as well.
 export const ARTIFACT_HEIGHT_REPORTER_SCRIPT = `(function () {
   var target = window.parent.parent;
   var root = document.documentElement;
@@ -42,9 +47,20 @@ export const ARTIFACT_HEIGHT_REPORTER_SCRIPT = `(function () {
     sentViewport = viewport;
     target.postMessage({ type: ${JSON.stringify(ARTIFACT_HEIGHT_MESSAGE_TYPE)}, height: height }, '*');
   }
+  var scheduled = false;
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(function () {
+      scheduled = false;
+      report();
+    });
+  }
   var observer = new ResizeObserver(report);
   observer.observe(root);
   if (document.body) observer.observe(document.body);
+  new MutationObserver(schedule).observe(root, { attributes: true, characterData: true, childList: true, subtree: true });
+  window.addEventListener('load', schedule);
 })();`;
 
 /** CSP hash-source token (without quotes) matching exactly {@link ARTIFACT_HEIGHT_REPORTER_SCRIPT}. */
