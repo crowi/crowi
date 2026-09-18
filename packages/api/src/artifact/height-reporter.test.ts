@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
-
 import { ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
-import type { DefaultTreeAdapterTypes } from 'parse5';
+import { sha256Token } from 'src/test/artifact-fixtures';
 
-import { ARTIFACT_HEIGHT_REPORTER_DIGEST, ARTIFACT_HEIGHT_REPORTER_SCRIPT, appendArtifactHeightReporter } from './height-reporter';
-import { ingestHtmlArtifact, loadParse5Runtime } from './ingest';
+import { prepareArtifactDelivery } from './delivery';
+import { ARTIFACT_HEIGHT_REPORTER_SCRIPT, appendArtifactHeightReporter } from './height-reporter';
+import { ingestHtmlArtifact, loadParse5Runtime, walkArtifactTree } from './ingest';
+import type { ArtifactPolicySnapshot } from './policy';
 
 async function ingested(html: string): Promise<string> {
   const result = await ingestHtmlArtifact(html, { source: 'author', allowWebFonts: false, maxBytes: 2 * 1024 * 1024 });
@@ -12,33 +12,62 @@ async function ingested(html: string): Promise<string> {
   return Buffer.from(result.bytes).toString('utf8');
 }
 
-function findElement(node: DefaultTreeAdapterTypes.ParentNode, tagName: string): DefaultTreeAdapterTypes.Element | null {
-  for (const child of node.childNodes) {
-    if ('tagName' in child) {
-      if (child.tagName === tagName) return child;
-      const nested = findElement(child, tagName);
-      if (nested) return nested;
-    }
-  }
-  return null;
-}
+const PLAIN_HTML = '<!doctype html><html><head><title>t</title></head><body><p>hi</p></body></html>';
 
-describe('appendArtifactHeightReporter', () => {
-  it('leaves the stored bytes intact and adds the reporter after them', async () => {
-    const body = await ingested('<!doctype html><html><head><title>t</title></head><body><p>hi</p></body></html>');
-    const served = appendArtifactHeightReporter(body);
-    expect(served.startsWith(body)).toBe(true);
-    expect(served.slice(body.length)).toBe(`<script>${ARTIFACT_HEIGHT_REPORTER_SCRIPT}</script>`);
+const SNAPSHOT: ArtifactPolicySnapshot = Object.freeze({
+  deliveryMode: 'separate-origin',
+  artifactOrigin: 'https://artifacts.example.net',
+  crowiOrigin: 'https://wiki.example.com',
+  writeEnabled: true,
+  allowWebFonts: false,
+  maxBytes: 2 * 1024 * 1024,
+});
+
+const scriptSrcOf = (header: string) => header.split('; ').find((directive) => directive.startsWith('script-src'));
+
+describe('prepareArtifactDelivery', () => {
+  it('serves the stored bytes intact, followed by the reporter', async () => {
+    const stored = await ingested(PLAIN_HTML);
+    const result = prepareArtifactDelivery(stored, SNAPSHOT);
+    if (!result.ok) throw new Error(`unexpected ${result.code}`);
+    expect(result.body).toBe(`${stored}<script>${ARTIFACT_HEIGHT_REPORTER_SCRIPT}</script>`);
   });
 
+  it('authorises the reporter alone for a document without scripts of its own', async () => {
+    const result = prepareArtifactDelivery(await ingested(PLAIN_HTML), SNAPSHOT);
+    if (!result.ok) throw new Error(`unexpected ${result.code}`);
+    expect(scriptSrcOf(result.header)).toBe(`script-src '${sha256Token(ARTIFACT_HEIGHT_REPORTER_SCRIPT)}'`);
+  });
+
+  it("authorises the reporter ahead of the document's own scripts", async () => {
+    const own = "console.log('own');";
+    const result = prepareArtifactDelivery(
+      await ingested(`<!doctype html><html><head><title>t</title><script>${own}</script></head><body></body></html>`),
+      SNAPSHOT,
+    );
+    if (!result.ok) throw new Error(`unexpected ${result.code}`);
+    expect(scriptSrcOf(result.header)).toBe(`script-src '${sha256Token(ARTIFACT_HEIGHT_REPORTER_SCRIPT)}' '${sha256Token(own)}'`);
+  });
+
+  it('fails with the policy error when the stored bytes carry no digest markers', () => {
+    expect(prepareArtifactDelivery('<html><head></head><body></body></html>', SNAPSHOT)).toMatchObject({ ok: false, code: 'MARKER_MISSING' });
+  });
+
+  it('fails with the policy error when delivery is disabled', async () => {
+    const stored = await ingested(PLAIN_HTML);
+    expect(prepareArtifactDelivery(stored, { ...SNAPSHOT, deliveryMode: 'disabled' })).toMatchObject({ ok: false, code: 'DELIVERY_DISABLED' });
+  });
+});
+
+describe('appendArtifactHeightReporter', () => {
   it.each([
-    ['a plain document', '<!doctype html><html><head><title>t</title></head><body><p>hi</p></body></html>'],
+    ['a plain document', PLAIN_HTML],
     ['a document whose trailing comment contains "</body>"', '<!doctype html><html><head><title>t</title></head><body><p>hi</p></body><!-- </body> --></html>'],
   ])('%s parses with the reporter as the last child of <body>, text unchanged', async (_label, html) => {
     const { parse } = loadParse5Runtime();
     const document = parse(appendArtifactHeightReporter(await ingested(html)));
-    const body = findElement(document, 'body');
-    const last = body?.childNodes.at(-1);
+    const body = [...walkArtifactTree(document)].find((node) => 'tagName' in node && node.tagName === 'body');
+    const last = body && 'childNodes' in body ? body.childNodes.at(-1) : undefined;
     expect(last && 'tagName' in last ? last.tagName : null).toBe('script');
     const text = last && 'childNodes' in last ? last.childNodes.map((node) => ('value' in node ? node.value : '')).join('') : null;
     expect(text).toBe(ARTIFACT_HEIGHT_REPORTER_SCRIPT);
@@ -49,11 +78,6 @@ describe('ARTIFACT_HEIGHT_REPORTER_SCRIPT', () => {
   it('cannot end its own <script> element early or open a comment, which would change the hashed text', () => {
     expect(ARTIFACT_HEIGHT_REPORTER_SCRIPT.toLowerCase()).not.toContain('</script');
     expect(ARTIFACT_HEIGHT_REPORTER_SCRIPT).not.toContain('<!--');
-  });
-
-  it('is authorised by the exported digest', () => {
-    const expected = `sha256-${createHash('sha256').update(Buffer.from(ARTIFACT_HEIGHT_REPORTER_SCRIPT, 'utf8')).digest('base64')}`;
-    expect(ARTIFACT_HEIGHT_REPORTER_DIGEST).toBe(expected);
   });
 });
 
@@ -71,7 +95,7 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
   let mutationCallback: (() => void) | null = null;
   let mutationOptions: MutationObserverInit | null = null;
   let loadListener: (() => void) | null = null;
-  const frameCallbacks: (() => void)[] = [];
+  const timers: (() => void)[] = [];
 
   const contentHeight = () => (layout.vhExtra === undefined ? layout.content : Math.max(layout.frame, layout.content) + layout.vhExtra);
   const scroller = {
@@ -116,23 +140,23 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
       mutationOptions = options;
     }
   }
-  const requestAnimationFrame = (callback: () => void) => {
-    frameCallbacks.push(callback);
+  const setTimeout = (callback: () => void) => {
+    timers.push(callback);
   };
 
-  new Function('window', 'document', 'ResizeObserver', 'MutationObserver', 'requestAnimationFrame', ARTIFACT_HEIGHT_REPORTER_SCRIPT)(
+  new Function('window', 'document', 'ResizeObserver', 'MutationObserver', 'setTimeout', ARTIFACT_HEIGHT_REPORTER_SCRIPT)(
     window,
     document,
     ResizeObserver,
     MutationObserver,
-    requestAnimationFrame,
+    setTimeout,
   );
 
   const fire = () => observerCallback?.();
   const mutate = () => mutationCallback?.();
   const load = () => loadListener?.();
-  const runFrame = () => {
-    for (const callback of frameCallbacks.splice(0)) callback();
+  const runTimers = () => {
+    for (const callback of timers.splice(0)) callback();
   };
   // What the page does on a report: resize the frame, which re-lays the
   // document out and fires the observer again.
@@ -140,7 +164,7 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
     layout.frame = posted.at(-1) ?? layout.frame;
     fire();
   };
-  return { layout, posted, fire, mutate, load, runFrame, mutationOptions: () => mutationOptions, applyLastReport };
+  return { layout, posted, fire, mutate, load, runTimers, mutationOptions: () => mutationOptions, applyLastReport };
 }
 
 describe('the reporter running inside the artifact', () => {
@@ -179,7 +203,7 @@ describe('the reporter running inside the artifact', () => {
     reporter.mutate();
     reporter.mutate();
     expect(reporter.posted).toEqual([3000]);
-    reporter.runFrame();
+    reporter.runTimers();
     expect(reporter.posted).toEqual([3000, 4000]);
     expect(reporter.mutationOptions()).toEqual({ attributes: true, characterData: true, childList: true, subtree: true });
   });
@@ -190,7 +214,7 @@ describe('the reporter running inside the artifact', () => {
     reporter.applyLastReport();
     reporter.layout.content = 3500;
     reporter.load();
-    reporter.runFrame();
+    reporter.runTimers();
     expect(reporter.posted).toEqual([3000, 3500]);
   });
 

@@ -528,8 +528,8 @@ describe('ArtifactView', () => {
       if (!frame?.contentDocument) throw new Error('the outer frame did not render');
       // jsdom never loads the outer frame's `src`, so its document is empty.
       const outerDocument = frame.contentDocument;
-      const artifactFrame = outerDocument.createElement('iframe');
-      (outerDocument.documentElement ?? outerDocument.appendChild(outerDocument.createElement('html'))).appendChild(artifactFrame);
+      const root = outerDocument.appendChild(outerDocument.createElement('html'));
+      const artifactFrame = root.appendChild(outerDocument.createElement('iframe'));
       if (!artifactFrame.contentWindow) throw new Error('the nested frame has no window');
       return { frame, artifactWindow: artifactFrame.contentWindow };
     }

@@ -12,9 +12,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 import { Types } from 'mongoose';
 
-import { buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from 'src/artifact/csp';
-import { artifactDownloadFilename, resolveArtifactTokenKey, verifyArtifactToken } from 'src/artifact/delivery';
-import { appendArtifactHeightReporter } from 'src/artifact/height-reporter';
+import { artifactDownloadFilename, prepareArtifactDelivery, resolveArtifactTokenKey, verifyArtifactToken } from 'src/artifact/delivery';
 import { resolveArtifactPolicySnapshot } from 'src/artifact/policy';
 import { resolveTargetRevision } from 'src/artifact/revision-lookup';
 import type Crowi from 'src/crowi';
@@ -102,20 +100,17 @@ export const registerArtifactStreamRoutes = (app: OpenAPIHono<CrowiHonoBindings>
     const snapshot = resolveArtifactPolicySnapshot(crowi);
     if (snapshot.deliveryMode === 'disabled') return finish('V-5', notFoundResponse(), loadedPageId, loadedRevisionId);
 
-    const markersResult = extractArtifactDigestMarkers(revision.body);
-    if (!markersResult.ok) return finish('V-6', serveFailedResponse(), loadedPageId, loadedRevisionId);
-    const cspResult = buildArtifactContentSecurityPolicy(markersResult.markers, snapshot);
-    if (!cspResult.ok) return finish('V-6', serveFailedResponse(), loadedPageId, loadedRevisionId);
+    const delivery = prepareArtifactDelivery(revision.body, snapshot);
+    if (!delivery.ok) return finish('V-6', serveFailedResponse(), loadedPageId, loadedRevisionId);
 
-    const servedBody = appendArtifactHeightReporter(revision.body);
     const headers: Record<string, string> = {
       'Content-Type': 'text/html; charset=utf-8',
-      'Content-Security-Policy': cspResult.header,
+      'Content-Security-Policy': delivery.header,
       'Referrer-Policy': 'no-referrer',
       'Cache-Control': 'no-store',
-      'Content-Length': String(Buffer.byteLength(servedBody, 'utf8')),
+      'Content-Length': String(Buffer.byteLength(delivery.body, 'utf8')),
     };
-    return finish('ok', new Response(servedBody, { status: 200, headers }), loadedPageId, loadedRevisionId);
+    return finish('ok', new Response(delivery.body, { status: 200, headers }), loadedPageId, loadedRevisionId);
   });
 
   app.get('/pages/:id{[0-9a-fA-F]{24}}/artifact-download', async (c) => {

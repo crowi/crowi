@@ -57,7 +57,7 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
         {/* Row 1 — location overline + PORTAL tag (left) · actions (right) */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
           <PortalOverline path={page.path} />
-          <PortalTag />
+          <KindTag icon={Compass} label={m['page_list.portal_label']()} />
           {/* Sharing posture (lock / link chip) for a non-public portal —
               restored from the shared page header so a restricted portal
               still signals it is not public. */}
@@ -97,15 +97,6 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
       </div>
     </TooltipProvider>
   );
-}
-
-/**
- * The small "PORTAL" pill (compass glyph + label) that sits at the end of
- * the overline. Shared by the live portal header and the no-document
- * fallback header so the two read as the same kind of surface.
- */
-export function PortalTag() {
-  return <KindTag icon={Compass} label={m['page_list.portal_label']()} />;
 }
 
 /**

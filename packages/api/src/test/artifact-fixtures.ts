@@ -5,6 +5,13 @@
  * register each other's `describe` blocks twice.
  */
 
+import { createHash } from 'node:crypto';
+
+/** The CSP hash-source token (without quotes) an inline block with this exact text needs. */
+export function sha256Token(text: string): string {
+  return `sha256-${createHash('sha256').update(Buffer.from(text, 'utf8')).digest('base64')}`;
+}
+
 /**
  * Builds a document that passes every rule in `ARTIFACT_INGEST_RULES`:
  * one inline `<script>`, one inline `<style>`, a `charset` meta, and a

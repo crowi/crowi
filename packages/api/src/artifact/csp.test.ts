@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { sha256Token } from 'src/test/artifact-fixtures';
 import { ingestHtmlArtifact } from './ingest';
 import { ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME } from './constants';
 import {
@@ -9,7 +9,6 @@ import {
   GOOGLE_FONTS_STYLE_ORIGIN,
   parseArtifactDigestContent,
 } from './csp';
-import { ARTIFACT_HEIGHT_REPORTER_SCRIPT } from './height-reporter';
 import type { ArtifactPolicySnapshot } from './policy';
 
 // ---------------------------------------------------------------------------
@@ -18,10 +17,6 @@ import type { ArtifactPolicySnapshot } from './policy';
 // hand-written marker strings) so the extraction contract tracks the core
 // leaf's real serialization form.
 // ---------------------------------------------------------------------------
-
-function sha256Token(text: string): string {
-  return `sha256-${createHash('sha256').update(Buffer.from(text, 'utf8')).digest('base64')}`;
-}
 
 function buildArtifactHtml(opts: { scripts?: string[]; styles?: string[]; extraHead?: string; extraBody?: string }): string {
   const styles = (opts.styles ?? []).map((s) => `<style>${s}</style>`).join('\n');
@@ -309,9 +304,9 @@ describe('buildArtifactContentSecurityPolicy', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const scriptTokens = [ARTIFACT_HEIGHT_REPORTER_SCRIPT, ...scripts].map(sha256Token);
+      const scriptTokens = scripts.map(sha256Token);
       const styleTokens = styles.map(sha256Token);
-      const scriptSrc = `script-src ${scriptTokens.map((t) => `'${t}'`).join(' ')}`;
+      const scriptSrc = scriptTokens.length === 0 ? "script-src 'none'" : `script-src ${scriptTokens.map((t) => `'${t}'`).join(' ')}`;
       let styleSrc: string;
       if (styleTokens.length === 0) {
         styleSrc = font ? `style-src ${GOOGLE_FONTS_STYLE_ORIGIN}` : "style-src 'none'";

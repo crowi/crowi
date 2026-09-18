@@ -5,9 +5,10 @@
  * artifact runs sandboxed on an opaque origin, so nothing outside it can
  * measure its layout — the report has to come from within.
  *
- * The script is a constant, so its digest is too: `csp.ts` authorises it
- * by that digest alongside the author's own inline scripts, and the stored
- * bytes stay the author's (the download route serves them untouched).
+ * The script is a constant, so its digest is too: delivery authorises it
+ * by that digest alongside the author's own inline scripts
+ * (`prepareArtifactDelivery`), and the stored bytes stay the author's (the
+ * download route serves them untouched).
  */
 import { createHash } from 'node:crypto';
 
@@ -27,7 +28,10 @@ import { ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
 // Content taken out of flow (absolutely positioned, transformed) changes the
 // scroll height without resizing the root or body box, so the resize
 // observer alone misses it; DOM changes and the end of loading schedule a
-// re-measure for the next frame as well.
+// re-measure as well. That re-measure runs on a coarse timer rather than in
+// an animation frame: a read there forces layout ahead of the frame's own,
+// which an artifact animating its DOM would pay every frame, while a timer
+// reads between frames, when layout is usually clean.
 export const ARTIFACT_HEIGHT_REPORTER_SCRIPT = `(function () {
   var target = window.parent.parent;
   var root = document.documentElement;
@@ -51,10 +55,10 @@ export const ARTIFACT_HEIGHT_REPORTER_SCRIPT = `(function () {
   function schedule() {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(function () {
+    setTimeout(function () {
       scheduled = false;
       report();
-    });
+    }, 100);
   }
   var observer = new ResizeObserver(report);
   observer.observe(root);

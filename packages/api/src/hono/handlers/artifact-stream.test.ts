@@ -1,8 +1,7 @@
 import Debug from 'debug';
 import { DEFAULT_ARTIFACT_MAX_BYTES } from 'src/artifact/constants';
 import { buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from 'src/artifact/csp';
-import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, resolveArtifactTokenKey } from 'src/artifact/delivery';
-import { ARTIFACT_HEIGHT_REPORTER_SCRIPT } from 'src/artifact/height-reporter';
+import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, prepareArtifactDelivery, resolveArtifactTokenKey } from 'src/artifact/delivery';
 import { ingestHtmlArtifact } from 'src/artifact/ingest';
 import * as artifactPolicy from 'src/artifact/policy';
 import { STATUS_DRAFT, STATUS_RENAMING } from 'src/models/page';
@@ -356,27 +355,22 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
         .buffer(true)
         .parse(bufferParser);
       expect(res.status).toBe(200);
+      const expected = prepareArtifactDelivery(body, artifactPolicy.resolveArtifactPolicySnapshot(crowi));
+      if (!expected.ok) throw new Error('fixture unexpectedly fails delivery preparation');
       // AC-DL-3 requires a byte-exact match, not merely equal decoded
       // strings — compare the raw response `Buffer` against the expected
       // bytes' own UTF-8 encoding.
-      const served = `${body}<script>${ARTIFACT_HEIGHT_REPORTER_SCRIPT}</script>`;
-      expect(Buffer.compare(res.body as Buffer, Buffer.from(served, 'utf8'))).toBe(0);
+      expect(Buffer.compare(res.body as Buffer, Buffer.from(expected.body, 'utf8'))).toBe(0);
 
       expect(res.headers['content-type']).toBe('text/html; charset=utf-8');
       expect(res.headers['referrer-policy']).toBe('no-referrer');
       expect(res.headers['cache-control']).toBe('no-store');
-      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(served, 'utf8')));
+      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(expected.body, 'utf8')));
       expect(res.headers['set-cookie']).toBeUndefined();
       expect(res.headers['x-frame-options']).toBeUndefined();
       // Global middleware adds exactly 1 occurrence — the route itself must not duplicate it.
       expect(res.headers['x-content-type-options']).toBe('nosniff');
-
-      const snapshot = artifactPolicy.resolveArtifactPolicySnapshot(crowi);
-      const markers = extractArtifactDigestMarkers(body);
-      if (!markers.ok) throw new Error('fixture unexpectedly has no digest markers');
-      const csp = buildArtifactContentSecurityPolicy(markers.markers, snapshot);
-      if (!csp.ok) throw new Error('fixture unexpectedly fails CSP assembly');
-      expect(res.headers['content-security-policy']).toBe(csp.header);
+      expect(res.headers['content-security-policy']).toBe(expected.header);
     });
 
     test('AC-DL-7: the serve route success logs only pageId/revisionId/outcome — never the token, its payload segment, or the secret', async () => {
