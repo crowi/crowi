@@ -148,8 +148,8 @@ module.exports = {
       testEnvironment: './src/test/crowi-environment.js',
       // Resolved before `setupFilesAfterEnv`, and before any application
       // module import — the logger's severity floor is read lazily on first
-      // use (brief §9.1), so this is the only hook early enough to fix it
-      // ahead of the 100+ boot-heavy suites in this project.
+      // use, so this is the only hook early enough to fix it ahead of the
+      // 100+ boot-heavy suites in this project.
       setupFiles: ['./src/test/logging-env.ts'],
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],

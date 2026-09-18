@@ -43,21 +43,9 @@ const debug = Debug('crowi:crowi');
 const bootDebug = Debug('crowi:boot');
 
 /**
- * RFC-0025 process-boundary D-P4 — the marker and the E-P1 reduced record
- * both need the SAME execution-free reason string, derived from `err`
- * without touching any of its object machinery. This is a thin, named
- * wrapper (not a duplicate) around the shared `normalizeProcessFailureReason`
- * so both call sites below read as "the marker's reason", not a generic
- * process-failure string.
- */
-function normalizeFailMarkerReason(err: unknown): string {
-  return normalizeProcessFailureReason(err);
-}
-
-/**
- * Best-effort synchronous stdout write for the `@@crowi:fail` marker
- * (D-P4). A synchronous throw is caught and discarded so it can never skip
- * the fatal-record handoff that follows; a `false` return (backpressure) is
+ * Best-effort synchronous stdout write for the `@@crowi:fail` marker. A
+ * synchronous throw is caught and discarded so it can never skip the
+ * fatal-record handoff that follows; a `false` return (backpressure) is
  * likewise ignored — no callback, `error` listener, or `drain` wait is
  * added, since the immediately-following fatal write terminates the
  * process before any of those could ever fire.
@@ -988,17 +976,17 @@ class Crowi {
     // below isn't overwritten / the terminal isn't left cursorless.
     // Idempotent — the init()/start() try-path may already have disposed.
     this.bootReporter?.dispose();
-    const reason = normalizeFailMarkerReason(err);
+    const reason = normalizeProcessFailureReason(err);
     // Machine-readable failure marker (own stdout line, mirrors the readiness
     // marker). `scripts/dev.mjs` watches for this to tear the whole dev tree
     // (api · web · deps) down — otherwise `tsx watch` survives the crash and
     // web keeps serving against a dead api. Harmless in prod (a grep-able line
     // before exit).
     writeFailMarkerBestEffort(reason);
-    // RFC-0025 process-boundary D-P2/D-P4 — reduced record derived ONLY from
-    // the execution-free `reason` above until the guarded full-record
-    // attempt below (if any) replaces it; `finally` hands off exactly one of
-    // the two, so a factory failure can never skip the handoff.
+    // Reduced record derived ONLY from the execution-free `reason` above
+    // until the guarded full-record attempt below (if any) replaces it;
+    // `finally` hands off exactly one of the two, so a factory failure can
+    // never skip the handoff.
     let record: LogRecord = {
       timestamp: '1970-01-01T00:00:00.000Z',
       level: 'error',

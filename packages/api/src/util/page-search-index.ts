@@ -153,12 +153,11 @@ async function refetchPopulated(crowi: Crowi, id: string): Promise<PageLike | nu
  * call: this function's own refetch and the "document is already gone"
  * remove branch sit OUTSIDE of `indexPageInSearch`'s internal try/catch, so
  * without this one they would be uncontained too. Every production call
- * site (`hono/handlers/page.ts:1084`, `:1255`, `:1432`, `:1504`) hands the
- * returned promise to `crowi.trackSideEffect()` (`crowi/index.ts`), which
- * registers it in a set with a `.finally()` but never handles a rejection
- * itself — an uncaught rejection escaping this fire-and-forget call would
- * terminate the api process on what is otherwise a transient Mongo/ES
- * error.
+ * site hands the returned promise to `crowi.trackSideEffect()`
+ * (`crowi/index.ts`), which registers it in a set with a `.finally()` but
+ * never handles a rejection itself — an uncaught rejection escaping this
+ * fire-and-forget call would terminate the api process on what is
+ * otherwise a transient Mongo/ES error.
  */
 export async function indexPageInSearchById(crowi: Crowi, id: string): Promise<void> {
   try {

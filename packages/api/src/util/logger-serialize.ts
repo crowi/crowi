@@ -1,6 +1,6 @@
 import type { LogData, LogLevel, LogRecord } from './logger';
 
-// Row ids from the design brief §7 — the ONLY definition of these numbers.
+// The ONLY definition of these numbers.
 // Every limit below is measured in bytes after UTF-8 encoding.
 const LIM = {
   message: 2048,
@@ -35,15 +35,15 @@ const VALID_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error'];
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 // Fixed, precomputed, cannot fail — the last-resort output when even
-// fallback-record construction fails (brief §7.5). The epoch timestamp is
-// deliberate: formatting "now" is itself code that can fail, and a terminal
-// fallback must not depend on it.
+// fallback-record construction fails. The epoch timestamp is deliberate:
+// formatting "now" is itself code that can fail, and a terminal fallback
+// must not depend on it.
 const TERMINAL_FALLBACK_TEXT =
   '{"timestamp":"1970-01-01T00:00:00.000Z","level":"error","namespace":"crowi:logger","message":"log record serialization failed","data":{"fallback":true,"terminal":true}}\n';
 
 const sharedEncoder = new TextEncoder();
 // Fixed-size literal, not caller input — encoding it once at module load is
-// not the unbounded-input case §7.1 guards against.
+// not the unbounded-input case `encodeBoundedString` guards against.
 const TRUNCATION_MARKER_BYTES = sharedEncoder.encode('…[truncated]');
 
 /**
@@ -51,9 +51,9 @@ const TRUNCATION_MARKER_BYTES = sharedEncoder.encode('…[truncated]');
  * copying the whole (potentially caller-controlled, unbounded) input.
  * `TextEncoder.prototype.encodeInto` writes into a fixed-capacity
  * destination and never splits a multi-byte sequence, so the allocation is
- * bounded by `limit` rather than by the input (brief §7.1). Not exported —
- * every LIM-message/LIM-stack/LIM-string/LIM-name/LIM-request-id path goes
- * through this one helper (D-4).
+ * bounded by `limit` rather than by the input. Every
+ * `LIM.message`/`LIM.stack`/`LIM.string`/`LIM.name`/`LIM.requestId` path
+ * goes through this one helper.
  */
 function encodeBoundedString(value: string, limit: number): Buffer {
   const probe = new Uint8Array(limit);
@@ -77,7 +77,7 @@ class BudgetExceededError extends Error {}
  * Accumulates JSON bytes and aborts (throws `BudgetExceededError`) the
  * moment its running total exceeds `limit`. JSON-escaping an already-bounded
  * string can inflate up to ~6x (each byte becoming `\u00XX`), so even
- * individually-bounded fields can overflow `LIM-data`/`LIM-record` when
+ * individually-bounded fields can overflow `LIM.data`/`LIM.record` when
  * combined — this is checked incrementally rather than after building an
  * intermediate value, so a pathological record is never fully materialized.
  */
@@ -139,7 +139,7 @@ function isPlainContainer(value: unknown): value is Record<string, unknown> | un
   return typeof value === 'object' && value !== null;
 }
 
-/** A bounded `String(value)`, per brief §7.6: `[Unstringifiable]` if the conversion itself throws. */
+/** A bounded `String(value)`: `[Unstringifiable]` if the conversion itself throws. */
 function boundedSafeDescription(value: unknown): Buffer {
   try {
     return encodeBoundedString(String(value), LIM.message);
@@ -148,21 +148,12 @@ function boundedSafeDescription(value: unknown): Buffer {
   }
 }
 
-/** Reads an own property by ordinary access, wrapped so a throwing accessor yields `undefined` rather than escaping. */
-function readOwnProperty(obj: object, key: string): unknown {
-  try {
-    return (obj as Record<string, unknown>)[key];
-  } catch {
-    return undefined;
-  }
-}
-
 /**
- * Error normalization (brief §7.2, §7.4). `stack` is an own ACCESSOR on
- * every Error instance (probe F-5), so the generic own-data-descriptor rule
- * would silently omit it forever — this path reads `name`/`message`/`stack`
- * by ORDINARY property access instead, each independently guarded so a
- * hostile subclass's throwing getter drops only that one field.
+ * Error normalization. `stack` is an own ACCESSOR on every Error instance,
+ * so the generic own-data-descriptor rule would silently omit it forever —
+ * this path reads `name`/`message`/`stack` by ORDINARY property access
+ * instead, each independently guarded so a hostile subclass's throwing
+ * getter drops only that one field.
  */
 function writeErrorShape(writer: BoundedWriter, error: Error, includeStack: boolean, causeDepthRemaining: number): void {
   writer.syntax('{');
@@ -176,8 +167,8 @@ function writeErrorShape(writer: BoundedWriter, error: Error, includeStack: bool
 
   // Each field is read independently so a hostile subclass's throwing
   // getter on one field drops only that field rather than the whole shape
-  // (brief §7.2, AC-C22) — a non-string read (thrown or wrong type) is
-  // treated as absent, never coerced to a placeholder.
+  // — a non-string read (thrown or wrong type) is treated as absent, never
+  // coerced to a placeholder.
   const name = safeRead(() => error.name);
   if (typeof name === 'string') emitField('name', () => writer.jsonString(encodeBoundedString(name, LIM.name)));
 
@@ -185,7 +176,7 @@ function writeErrorShape(writer: BoundedWriter, error: Error, includeStack: bool
   if (typeof message === 'string') emitField('message', () => writer.jsonString(encodeBoundedString(message, LIM.message)));
 
   // Only the OUTERMOST error carries `stack` — never a cause, never an
-  // aggregate member (brief §7.4/`LIM-stack`).
+  // aggregate member.
   if (includeStack) {
     const stack = safeRead(() => error.stack);
     if (typeof stack === 'string') emitField('stack', () => writer.jsonString(encodeBoundedString(stack, LIM.stack)));
@@ -193,8 +184,8 @@ function writeErrorShape(writer: BoundedWriter, error: Error, includeStack: bool
 
   // `causeDepthRemaining < 0` marks a true leaf (an aggregate member): no
   // further `cause` chaining and no own `errors` list, even if the member
-  // happens to be an AggregateError itself — "shallow: name and bounded
-  // message only" (brief §7.4).
+  // happens to be an AggregateError itself — a member is shallow: name and
+  // bounded message only.
   if (causeDepthRemaining > 0) {
     const cause = safeRead(() => (error as { cause?: unknown }).cause);
     if (cause !== undefined) emitField('cause', () => writeCauseShape(writer, cause, causeDepthRemaining - 1));
@@ -263,7 +254,7 @@ function safeRead<T>(fn: () => T): T | undefined {
   }
 }
 
-/** The error slot at `data.error`: an Error normalizes fully; anything else becomes `NonErrorThrow` (brief §7.4). */
+/** The error slot at `data.error`: an Error normalizes fully; anything else becomes `NonErrorThrow`. */
 function writeErrorSlot(writer: BoundedWriter, value: unknown): void {
   if (value instanceof Error) {
     writeErrorShape(writer, value, true, LIM.cause);
@@ -273,9 +264,9 @@ function writeErrorSlot(writer: BoundedWriter, value: unknown): void {
 }
 
 /**
- * Traverses one arbitrary value under the rules of brief §7.2/§7.3/§7.6/§7.8.
+ * Traverses one arbitrary value within the `LIM` bounds.
  * `isTopLevelErrorSlot` selects the `data.error` exemption: ANY value there
- * becomes error-shaped (brief §6, §7.4), never the generic table.
+ * becomes error-shaped, never the generic table.
  */
 function writeValue(writer: BoundedWriter, value: unknown, depth: number, state: TraversalState, isTopLevelErrorSlot: boolean): void {
   if (isTopLevelErrorSlot) {
@@ -398,7 +389,8 @@ function writeObject(writer: BoundedWriter, obj: Record<string, unknown>, depth:
     if (descriptor !== undefined && (descriptor.get !== undefined || descriptor.set !== undefined)) {
       writer.jsonString(encodeBoundedString(MARKER.accessor, LIM.string));
     } else {
-      writeValue(writer, readOwnProperty(obj, key), depth + 1, state, false);
+      const entryValue = safeRead(() => obj[key]);
+      writeValue(writer, entryValue, depth + 1, state, false);
     }
     wroteEntry = true;
   }
@@ -415,7 +407,8 @@ function writeObject(writer: BoundedWriter, obj: Record<string, unknown>, depth:
     if (wroteEntry) writer.syntax(',');
     writer.jsonString(encodeBoundedString('error', LIM.string));
     writer.syntax(':');
-    writeValue(writer, readOwnProperty(obj, 'error'), depth + 1, state, true);
+    const errorValue = safeRead(() => obj.error);
+    writeValue(writer, errorValue, depth + 1, state, true);
     wroteEntry = true;
   }
 
@@ -423,9 +416,8 @@ function writeObject(writer: BoundedWriter, obj: Record<string, unknown>, depth:
 }
 
 function writeData(writer: BoundedWriter, data: LogData): void {
-  const state: TraversalState = { nodeCount: 0, visited: new Set() };
-  state.nodeCount += 1; // the `data` object itself is one container (brief §7.8)
-  state.visited.add(data);
+  // The `data` object itself is one container.
+  const state: TraversalState = { nodeCount: 1, visited: new Set<object>([data]) };
   writeObject(writer, data as Record<string, unknown>, 0, state, true);
 }
 
@@ -447,10 +439,10 @@ function normalizeMessage(message: unknown): Buffer {
 
 /**
  * A serialization/traversal failure keeps the ORIGINAL level, bounded
- * namespace, and the request id carried by the record being serialized
- * (brief §7.5). This never reads the ALS request scope — a direct or late
- * call would otherwise correlate the fallback to whatever request chain the
- * CALLER happens to be on, not the record that actually failed.
+ * namespace, and the request id carried by the record being serialized.
+ * This never reads the ALS request scope — a direct or late call would
+ * otherwise correlate the fallback to whatever request chain the CALLER
+ * happens to be on, not the record that actually failed.
  */
 function buildFallback(record: LogRecord): Buffer {
   const writer = new BoundedWriter(LIM.fallback);
@@ -473,9 +465,9 @@ function buildFallback(record: LogRecord): Buffer {
 
 /**
  * Always returns one bounded valid JSON object followed by exactly one LF.
- * Never throws (brief §5.3). Every call returns a freshly allocated Buffer,
- * including the terminal fallback, so a caller mutating the result cannot
- * corrupt a later call (brief §7.5).
+ * Never throws. Every call returns a freshly allocated Buffer, including
+ * the terminal fallback, so a caller mutating the result cannot corrupt a
+ * later call.
  */
 export const serializeLogRecord = (record: LogRecord): Buffer => {
   try {
@@ -487,7 +479,7 @@ export const serializeLogRecord = (record: LogRecord): Buffer => {
     const data = safeRead(() => record.data);
 
     let dataBuffer: Buffer | undefined;
-    if (data !== undefined && typeof data === 'object' && data !== null) {
+    if (typeof data === 'object' && data !== null) {
       const dataWriter = new BoundedWriter(LIM.data);
       writeData(dataWriter, data);
       dataBuffer = dataWriter.toBuffer();

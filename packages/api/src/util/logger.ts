@@ -32,7 +32,7 @@ const SEVERITY: Readonly<Record<LogLevel, number>> = { debug: 0, info: 1, warn: 
 // Space, tab, CR, LF, FF, VT — deliberately NOT `\s`, which in a JS RegExp
 // also matches non-ASCII whitespace such as U+00A0 (non-breaking space).
 // Accepting that here would silently admit an NBSP-padded value that
-// operators cannot distinguish from a typo (brief §9).
+// operators cannot distinguish from a typo.
 const ASCII_WHITESPACE_EDGES = /^[ \t\r\n\f\v]+|[ \t\r\n\f\v]+$/g;
 
 const isLogLevel = (value: string): value is LogLevel => value === 'debug' || value === 'info' || value === 'warn' || value === 'error';
@@ -60,8 +60,8 @@ export const createLogRecord = (level: LogLevel, namespace: string, message: str
 
 // Resolved lazily on first admission check and memoized for the process —
 // never at module-evaluation time. `packages/api/src/app.ts` imports the
-// whole `src/crowi` graph before calling `dotenv.config()` (probe F-8), so a
-// module-level read here would silently ignore an operator's cwd `.env`.
+// whole `src/crowi` graph before calling `dotenv.config()`, so a module-level
+// read here would silently ignore an operator's cwd `.env`.
 let cachedFloor: LogLevel | undefined;
 
 function resolveFloor(): LogLevel {
@@ -86,7 +86,7 @@ function isAdmitted(level: LogLevel, namespace: string): boolean {
   if (SEVERITY[level] < SEVERITY[floor]) return false;
   // `DEBUG` only narrows which debug namespaces are admitted once the floor
   // itself already allows 'debug'; it never suppresses info/warn/error and
-  // never admits debug below a higher floor (brief §6).
+  // never admits debug below a higher floor.
   if (level === 'debug' && !Debug.enabled(namespace)) return false;
   return true;
 }
@@ -97,10 +97,10 @@ function emit(level: LogLevel, namespace: string, message: string, data?: LogDat
     const record = createLogRecord(level, namespace, message, data);
     productionSink.write(record);
   } catch {
-    // Logger methods never throw or reject caller code (brief §5.1): a
-    // fatal-boundary caller depends on that guarantee to reach `writeFatal`
-    // unconditionally, so a metadata-construction failure here is contained
-    // rather than propagated.
+    // Logger methods never throw or reject caller code: a fatal-boundary
+    // caller depends on that guarantee to reach `writeFatal` unconditionally,
+    // so a metadata-construction failure here is contained rather than
+    // propagated.
   }
 }
 

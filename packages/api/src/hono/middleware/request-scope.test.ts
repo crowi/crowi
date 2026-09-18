@@ -29,9 +29,6 @@ import { honoOnError } from './error-handler';
 import { createRequestScope, REQUEST_ID_HEADER } from './request-scope';
 import { createSecurityHeaders } from './security-headers';
 
-// `request-scope.ts` deliberately exports no `requestId()` wrapper (its
-// surface is spec-fixed to 3 symbols) — restated inline here, same as
-// production (`hono/index.ts`).
 const localRequestId = () => requestId({ headerName: REQUEST_ID_HEADER, limitLength: 128 });
 
 /**

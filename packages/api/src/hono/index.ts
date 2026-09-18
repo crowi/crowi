@@ -150,13 +150,6 @@ export const buildHonoApp = (crowi: Crowi) => {
   // an inbound `X-Request-Id` or generates one; `createRequestScope()`
   // reads that value into the ALS scope and owns the response-start /
   // error diagnostics (`hono/middleware/request-scope.ts`).
-  //
-  // `requestId(...)` is called inline (not through a local wrapper) on
-  // purpose: `hono/middleware/request-scope.ts`'s exported surface is
-  // spec-fixed to `REQUEST_ID_HEADER` / `deriveRouteTemplate` /
-  // `createRequestScope` only, so these two options are deliberately
-  // restated at each call site instead of centralized behind a 4th
-  // export there.
   base.use('*', requestId({ headerName: REQUEST_ID_HEADER, limitLength: 128 }));
   base.use('*', createRequestScope());
   // RFC-0006 Phase 6 Sub-batch D — Hono is the sole HTTP host, so

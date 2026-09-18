@@ -6,21 +6,14 @@
  * completes with the canonical `X-Request-Id` Hono's own `requestId()`
  * middleware (installed right before this one, `hono/index.ts`, by
  * importing `requestId` from `hono/request-id` directly) already
- * validated or generated. `packages/api/src/hono/app.ts` is not touched —
- * importing `requestId` from `hono/request-id` augments Hono's global
- * `ContextVariableMap` with `RequestIdVariables`, so `c.get('requestId')`
- * is already typed everywhere in this program without a
- * `CrowiHonoBindings` edit.
+ * validated or generated. Importing `requestId` from `hono/request-id`
+ * augments Hono's global `ContextVariableMap` with `RequestIdVariables`, so
+ * `c.get('requestId')` is already typed everywhere in this program without
+ * a `CrowiHonoBindings` edit.
  *
- * This module's new TypeScript surface is spec-fixed to exactly
- * `REQUEST_ID_HEADER` / `deriveRouteTemplate` / `createRequestScope` — no
- * 4th export. Every call site (production and every test harness) that
- * needs Hono's own `requestId()` imports it from `hono/request-id` and
- * calls `requestId({ headerName: REQUEST_ID_HEADER, limitLength: 128 })`
- * inline, restating the same two options rather than centralizing them
- * behind a helper here. Do not "reuse" that restatement back into a
- * shared factory in this file — the export surface is spec-fixed and a
- * 4th export is out of scope.
+ * Call sites build
+ * `requestId({ headerName: REQUEST_ID_HEADER, limitLength: 128 })` inline
+ * on purpose; this module exports no wrapper for it.
  */
 import type { Context, MiddlewareHandler } from 'hono';
 import { matchedRoutes } from 'hono/route';
@@ -36,8 +29,7 @@ const PREFLIGHT_ROUTE = '<preflight>';
 const logger = createLogger('crowi:hono:request');
 
 /**
- * The single normative route-template derivation rule. No other module
- * may restate this differently.
+ * The single normative route-template derivation rule.
  *
  * 1. A finalized CORS preflight (`OPTIONS` + final status 204) is reported
  *    as `<preflight>` without reading `matchedRoutes(c)`.
@@ -60,10 +52,6 @@ const logger = createLogger('crowi:hono:request');
  * client input, and the record's `method`/`status` disambiguate it — a
  * hardcoded list of `.all()`/`.use()` paths would be fragile against the
  * next route registered, so this is recorded rather than special-cased.
- *
- * Deliberately unused as inputs: raw pathname, decoded URL, query,
- * `routePath(c)`, `c.req.routeIndex`, method inequality, handler arity,
- * dispatch index, a hardcoded path list, `basePath`.
  */
 export const deriveRouteTemplate = (c: Context): string => {
   if (c.finalized === true && c.req.method === 'OPTIONS' && c.res.status === 204) {

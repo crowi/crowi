@@ -1,7 +1,7 @@
 import type { LogData, LogLevel, LogRecord } from './logger';
 import { serializeLogRecord } from './logger-serialize';
 
-/** Row ids from the design brief §8/§13 — the only definitions of these numbers. */
+/** The only definitions of these numbers. */
 const SINK_BUDGET = 1_048_576;
 const SINK_WINDOW_MS = 60_000;
 const FATAL_ATTEMPTS = 16;
@@ -85,11 +85,11 @@ class RecordSinkImpl implements RecordSink {
   private readonly stderr: StreamState;
 
   /**
-   * Single runtime-wide fence (brief §8.4/D-5). Every write callback, drain
-   * handler, error handler, and summary timer captures this value when
-   * registered; `dispose()` bumps it so a late arrival becomes a no-op
-   * without needing every listener individually removed (the `error`
-   * listener specifically cannot be removed — see `dispose()`).
+   * Single runtime-wide fence. Every write callback, drain handler, error
+   * handler, and summary timer captures this value when registered;
+   * `dispose()` bumps it so a late arrival becomes a no-op without needing
+   * every listener individually removed (the `error` listener specifically
+   * cannot be removed — see `dispose()`).
    */
   private generation = 0;
 
@@ -111,10 +111,10 @@ class RecordSinkImpl implements RecordSink {
     const drainHandler = (): void => {
       if (generation !== this.generation) return;
       // Clearing `blocked` FIRST is load-bearing: a stream can go blocked
-      // with an empty FIFO (probe F-6 — the very first oversized chunk
-      // returns `false`), so draining the queue before clearing the flag
-      // would find nothing to do and leave the direct-write gate closed for
-      // the rest of the process (brief §8.1).
+      // with an empty FIFO (the very first oversized chunk returns `false`),
+      // so draining the queue before clearing the flag would find nothing to
+      // do and leave the direct-write gate closed for the rest of the
+      // process.
       state.blocked = false;
       this.flush(state);
     };
@@ -125,7 +125,7 @@ class RecordSinkImpl implements RecordSink {
     // issued before `dispose()` can still fail afterwards, and a Node
     // `EventEmitter` with no `error` listener throws rather than dropping
     // the event. The generation fence (captured here, at construction) is
-    // what silences a late arrival instead (brief §8.4).
+    // what silences a late arrival instead.
     state.stream.on('error', (err: NodeJS.ErrnoException) => {
       if (generation !== this.generation) return;
       const kind: ErrorKind = err?.code === 'EPIPE' ? 'epipe' : 'event';
@@ -138,7 +138,7 @@ class RecordSinkImpl implements RecordSink {
 
     // The level is read exactly once and travels as data — reading it a
     // second time would let a hostile getter answer differently for
-    // routing than for the envelope (brief §7.7/§8.1).
+    // routing than for the envelope.
     const rawLevel = safeReadField(() => record.level);
     const level: LogLevel = isLogLevel(rawLevel) ? rawLevel : 'error';
     const namespace = safeReadField(() => record.namespace);
@@ -179,13 +179,13 @@ class RecordSinkImpl implements RecordSink {
     if (offset < buffer.length) ok = false;
 
     if (!ok && offset < buffer.length) {
-      // brief §13.1 fixes this fallback attempt to descriptor 2 literally,
-      // independent of `primaryFd`: it is the last resort after the primary
-      // descriptor (which may not even BE 2) has already failed.
+      // This fallback attempt targets descriptor 2 literally, independent of
+      // `primaryFd`: it is the last resort after the primary descriptor
+      // (which may not even BE 2) has already failed.
       try {
         this.deps.writeSync(2, buffer, offset, buffer.length - offset);
       } catch {
-        // Best-effort; the outcome is ignored either way (brief §13.1).
+        // Best-effort; the outcome is ignored either way.
       }
     }
 
@@ -196,10 +196,7 @@ class RecordSinkImpl implements RecordSink {
     this.disposed = true;
     this.generation += 1;
     for (const state of [this.stdout, this.stderr]) {
-      if (state.summaryTimer !== undefined) {
-        this.deps.clearTimeout(state.summaryTimer);
-        state.summaryTimer = undefined;
-      }
+      this.clearSummaryTimer(state);
       state.fifo = [];
       state.queuedBytes = 0;
       state.stream.removeListener('drain', state.drainHandler);
@@ -272,27 +269,34 @@ class RecordSinkImpl implements RecordSink {
 
   private armSummaryTimer(state: StreamState): void {
     // stderr is the only summary destination; once it is broken, no timer
-    // on either stream can ever be delivered, so none is armed (brief
-    // §8.2/§8.3 — a later drop on either stream must not re-arm one).
+    // on either stream can ever be delivered, so none is armed — a later
+    // drop on either stream must not re-arm one.
     if (this.stderr.broken) return;
     if (state.summaryTimer !== undefined) return;
     const generation = this.generation;
-    // brief §8.2 states the deadline as `nextSummaryAt = now() + SINK-window`
-    // at every arm, computed fresh each time rather than by advancing a
-    // stale deadline. With a relative-delay timer API the delay this derives
-    // to is always `SINK_WINDOW_MS` — the read cannot change WHEN the timer
-    // fires. It stays here so the injected monotonic clock is the actual,
-    // observable source of the schedule (the drop-summary cadence tests
-    // assert it is read once per arm/rearm, not left as a dead dependency),
-    // and so this call site is where a future switch to an interval-based or
-    // accumulated-deadline design — which COULD reintroduce the catch-up
-    // burst this section forbids — would have to change this arithmetic.
+    // The deadline is `nextSummaryAt = now() + SINK_WINDOW_MS` at every arm,
+    // computed fresh each time rather than by advancing a stale deadline.
+    // With a relative-delay timer API the delay this derives to is always
+    // `SINK_WINDOW_MS` — the read cannot change WHEN the timer fires. It
+    // stays here so the injected monotonic clock is the actual, observable
+    // source of the schedule (the drop-summary cadence tests assert it is
+    // read once per arm/rearm, not left as a dead dependency), and so this
+    // call site is where a future switch to an interval-based or
+    // accumulated-deadline design — which COULD reintroduce a catch-up burst
+    // of summaries — would have to change this arithmetic.
     const attemptedAt = this.deps.now();
     const nextSummaryAt = attemptedAt + SINK_WINDOW_MS;
     const delayMs = nextSummaryAt - attemptedAt;
     const timer = this.deps.setTimeout(() => this.attemptSummary(state, generation), delayMs);
     timer.unref?.();
     state.summaryTimer = timer;
+  }
+
+  private clearSummaryTimer(state: StreamState): void {
+    if (state.summaryTimer !== undefined) {
+      this.deps.clearTimeout(state.summaryTimer);
+      state.summaryTimer = undefined;
+    }
   }
 
   private attemptSummary(state: StreamState, generation: number): void {
@@ -322,15 +326,14 @@ class RecordSinkImpl implements RecordSink {
       return;
     }
     // Refused: counters and window survive; a fresh deadline is computed
-    // from the current attempt rather than advancing the old one (brief
-    // §8.2), and `armSummaryTimer` itself refuses to arm once stderr is
-    // broken.
+    // from the current attempt rather than advancing the old one, and
+    // `armSummaryTimer` itself refuses to arm once stderr is broken.
     this.armSummaryTimer(state);
   }
 
   private markBroken(name: StreamName, errorKind: ErrorKind): void {
     const state = this.streamState(name);
-    if (state.broken) return; // idempotent — only the first transition has effects (probe F-7)
+    if (state.broken) return; // idempotent — only the first transition has effects
 
     state.broken = true;
     for (const entry of state.fifo) {
@@ -341,18 +344,15 @@ class RecordSinkImpl implements RecordSink {
     state.blocked = false;
     // A stream's OWN pending drop-summary timer is not cancelled here: the
     // summary it will eventually build always targets stderr, independent
-    // of whether THIS stream is broken (brief §8.2/§8.3) — only stderr
-    // breaking invalidates every summary timer, handled below.
+    // of whether THIS stream is broken — only stderr breaking invalidates
+    // every summary timer, handled below.
 
     if (name === 'stderr') {
       // stderr is the only summary destination: an armed timer on EITHER
       // stream can now only wake up, find no route, and re-arm forever.
-      // Cancel both and leave them cancelled (brief §8.3).
+      // Cancel both and leave them cancelled.
       for (const target of [this.stdout, this.stderr]) {
-        if (target.summaryTimer !== undefined) {
-          this.deps.clearTimeout(target.summaryTimer);
-          target.summaryTimer = undefined;
-        }
+        this.clearSummaryTimer(target);
       }
       return;
     }
@@ -360,7 +360,7 @@ class RecordSinkImpl implements RecordSink {
     // stdout broke and stderr is (so far) healthy: offer exactly one
     // non-recursive diagnostic. If this write itself fails, it re-enters
     // `markBroken('stderr', ...)`, which is idempotent and — because it is
-    // stderr breaking — offers no further diagnostic (brief §8.3).
+    // stderr breaking — offers no further diagnostic.
     if (!this.stderr.broken) {
       const record: LogRecord = {
         timestamp: new Date().toISOString(),

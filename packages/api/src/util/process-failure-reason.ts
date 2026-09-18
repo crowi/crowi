@@ -1,14 +1,14 @@
 import { types } from 'node:util';
 
 /**
- * Fixed fallback for any input shape this module does not admit — RFC-0025
- * process-boundary contract D-P2. Never interpolated with the original
- * value; the whole point of this literal is to describe a failure whose
- * *shape itself* could not be trusted enough to read.
+ * Fixed fallback for any input shape this module does not admit. Never
+ * interpolated with the original value; the whole point of this literal is
+ * to describe a failure whose *shape itself* could not be trusted enough to
+ * read.
  */
 const UNKNOWN_PROCESS_FAILURE = 'unknown process failure';
 
-/** First-line / length cap — D-P2. Bounded work regardless of input size. */
+/** First-line / length cap. Bounded work regardless of input size. */
 const MAX_REASON_LENGTH = 200;
 
 /**
@@ -27,10 +27,10 @@ function primitiveCandidate(value: unknown): string | undefined {
  * `util.types.isNativeError` classifies by an internal engine tag, not by
  * walking the prototype chain (`instanceof` semantics) — verified against a
  * `Proxy` with a throwing `getPrototypeOf` trap, which this returns `false`
- * for without ever invoking the trap (D-P2 R-R6). Once classified as a
- * native Error, only an OWN, DATA `message` descriptor is read (`'value' in
- * descriptor`, never `.get`) — an inherited or accessor `message` (R-R7/R-R8)
- * is rejected without invoking anything.
+ * for without ever invoking the trap. Once classified as a native Error,
+ * only an OWN, DATA `message` descriptor is read (`'value' in descriptor`,
+ * never `.get`) — an inherited or accessor `message` is rejected without
+ * invoking anything.
  */
 function nativeErrorCandidate(value: unknown): string | undefined {
   if (!types.isNativeError(value)) return undefined;
@@ -43,12 +43,12 @@ function nativeErrorCandidate(value: unknown): string | undefined {
  * Collapse an arbitrary thrown/rejected value into a bounded, single-line
  * reason string without executing or coercing any of the caller's object
  * machinery (getters, `Symbol.toPrimitive`, `toString()`, prototype-chain
- * traps) — RFC-0025 process-boundary D-P2/D-P4. Shared by the marker
- * derivation (`crowi/index.ts`'s `exitOnError`) and the fatal-record reduced
- * path (`process-boundary.ts`); NOT used by `util/boot-reporter.ts`'s
- * `formatBootFailureReason`, which keeps a different, execution-capable
- * contract for the ordinary (non-fatal-path) boot marker — see that
- * function's doc comment for why the two do not merge.
+ * traps). Shared by the marker derivation (`crowi/index.ts`'s
+ * `exitOnError`) and the fatal-record reduced path (`process-boundary.ts`);
+ * NOT used by `util/boot-reporter.ts`'s `formatBootFailureReason`, which
+ * keeps a different, execution-capable contract for the ordinary
+ * (non-fatal-path) boot marker — see that function's doc comment for why
+ * the two do not merge.
  *
  * Bounded work: the candidate string is sliced to {@link MAX_REASON_LENGTH}
  * code units FIRST, and the first-line search runs only inside that bounded

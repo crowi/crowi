@@ -17,12 +17,12 @@ import { createShutdownHandler, installProcessFatalHandlers } from 'src/util/pro
 // load .env
 dotenv.config();
 
-// RFC-0025 process-boundary D-P1 — installed before `new Crowi(...)` so both
-// SIGINT/SIGTERM wrappers below are armed before init/start even begins.
-// This does NOT catch a synchronous constructor failure (see
-// `createCrowiOrExit`'s own doc comment) — only later async faults
-// (init/start rejections, and any `uncaughtException`/`unhandledRejection`
-// this process receives once running).
+// Installed before `new Crowi(...)` so both SIGINT/SIGTERM wrappers below
+// are armed before init/start even begins. This does NOT catch a
+// synchronous constructor failure (see `createCrowiOrExit`'s own doc
+// comment) — only later async faults (init/start rejections, and any
+// `uncaughtException`/`unhandledRejection` this process receives once
+// running).
 installProcessFatalHandlers();
 
 /**
@@ -50,17 +50,7 @@ function createCrowiOrExit(): Crowi {
 
 const crowi = createCrowiOrExit();
 
-// RFC-0003 — graceful shutdown for the embedded Hocuspocus (and presence /
-// notifications) engines, wired via the RFC-0025 process-boundary handler
-// (`util/process-boundary.ts`). Two routes fire the same shared, one-shot
-// handler:
-//   - `SIGINT` (Ctrl-C in dev / orchestrator stop)
-//   - `SIGTERM` (docker stop / systemd / k8s)
-// `shutdown()` flushes pending Y.Doc checkpoints before dropping
-// connections — without this hook, an unsaved-debounce window's worth of
-// edits would be lost on every process restart. It calls `process.exit(0)`
-// itself once every attachment has been attempted (its own doc comment
-// explains the unconditional yield right before that attachment work).
+// Graceful shutdown on SIGINT/SIGTERM — see `createShutdownHandler` in `util/process-boundary.ts`.
 const shutdown = createShutdownHandler(crowi);
 process.on('SIGINT', () => {
   void shutdown('SIGINT');

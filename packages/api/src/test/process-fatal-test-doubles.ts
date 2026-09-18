@@ -8,11 +8,12 @@
  */
 
 /**
- * D-P7's F-R1/F-R2/F-R3 as an IN-PROCESS double: unlike the child fixture's
- * (`util/process-boundary-child-fixture.ts`) genuinely-non-returning F-R3
- * hook, every hook here records its own invocation and throws a distinctive
- * sentinel immediately — the reason derivation never touches any of them in
- * a correct implementation, so `hookCalls()` staying `0` is the assertion;
+ * The three reason-derivation faults as an IN-PROCESS double: unlike the
+ * child fixture's (`util/process-boundary-child-fixture.ts`)
+ * genuinely-non-returning `Symbol.toPrimitive` hook, every hook here
+ * records its own invocation and throws a distinctive sentinel immediately
+ * — the reason derivation never touches any of them in a correct
+ * implementation, so `hookCalls()` staying `0` is the assertion;
  * if the implementation ever DID call one, the sentinel fails the case
  * immediately instead of hanging (no in-process timer could fire while a
  * genuinely non-returning hook spins).

@@ -3,8 +3,8 @@ import type { LogRecord } from './logger';
 import { createRecordSink, type RecordSink } from './logger-sink-runtime';
 
 /**
- * Lazily constructed and memoized on first use (brief §5.5). Import alone
- * must not create the runtime, attach a stream listener, or schedule a
+ * Lazily constructed and memoized on first use. Import alone must not
+ * create the runtime, attach a stream listener, or schedule a
  * timer — a CLI, a migration, or a test importing this module never writes
  * through it and must not inherit listeners on shared process streams, and
  * eager construction at import would capture `process.stderr.fd` before a
