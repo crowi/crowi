@@ -25,12 +25,11 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceBoolean, coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { coerceBoolean, coerceString, getCrowiConfigNamespace, readRegistrationMode } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
 import { INTERNAL_ERROR_BODY } from '../_helpers/errors';
-import { registrationMode } from 'src/models/config';
 
 const debug = Debug('crowi:hono:handlers:admin:app');
 
@@ -54,7 +53,7 @@ export const registerAdminAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
             confidential: coerceString(crowiNs['app:confidential']),
           },
           isUploadable,
-          registrationMode,
+          registrationMode: readRegistrationMode(crowi),
           setupChecklistDismissed: coerceBoolean(crowiNs['app:setupChecklistDismissed']),
         },
         200,

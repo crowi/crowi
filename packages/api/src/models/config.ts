@@ -21,12 +21,6 @@ export interface ConfigDocument extends Document {
   value: string;
 }
 
-export const registrationMode: Record<string, any> = {
-  [SECURITY_REGISTRATION_MODE_OPEN]: 'open',
-  [SECURITY_REGISTRATION_MODE_RESTRICTED]: 'restricted',
-  [SECURITY_REGISTRATION_MODE_CLOSED]: 'closed',
-};
-
 export function isRequiredThirdPartyAuth(config: Config): boolean {
   return !!config.crowi['auth:requireThirdPartyAuth'];
 }
