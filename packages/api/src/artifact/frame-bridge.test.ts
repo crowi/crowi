@@ -1,13 +1,14 @@
 import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
 import { sha256Token } from 'src/test/artifact-fixtures';
 
+import { DEFAULT_ARTIFACT_MAX_BYTES } from './constants';
 import { prepareArtifactDelivery } from './delivery';
 import { ARTIFACT_FRAME_BRIDGE_SCRIPT, appendArtifactFrameBridge } from './frame-bridge';
 import { ingestHtmlArtifact, loadParse5Runtime, walkArtifactTree } from './ingest';
 import type { ArtifactPolicySnapshot } from './policy';
 
 async function ingested(html: string): Promise<string> {
-  const result = await ingestHtmlArtifact(html, { source: 'author', allowWebFonts: false, maxBytes: 2 * 1024 * 1024 });
+  const result = await ingestHtmlArtifact(html, { source: 'author', allowWebFonts: false, maxBytes: DEFAULT_ARTIFACT_MAX_BYTES });
   if (!result.ok) throw new Error(`fixture unexpectedly rejected: ${JSON.stringify(result.rejection)}`);
   return Buffer.from(result.bytes).toString('utf8');
 }
@@ -20,7 +21,7 @@ const SNAPSHOT: ArtifactPolicySnapshot = Object.freeze({
   crowiOrigin: 'https://wiki.example.com',
   writeEnabled: true,
   allowWebFonts: false,
-  maxBytes: 2 * 1024 * 1024,
+  maxBytes: DEFAULT_ARTIFACT_MAX_BYTES,
 });
 
 const scriptSrcOf = (header: string) => header.split('; ').find((directive) => directive.startsWith('script-src'));

@@ -11,7 +11,6 @@
  * here explain *why* a given line exists, not what the table already says.
  */
 
-import { createHash } from 'node:crypto';
 import { createJiti } from 'jiti';
 import postcss from 'postcss';
 import valueParser from 'postcss-value-parser';
@@ -25,6 +24,7 @@ import {
   ARTIFACT_STYLE_DIGEST_META_NAME,
   countOccurrences,
 } from './constants';
+import { sha256DigestToken } from './csp';
 
 // ---------------------------------------------------------------------------
 // Namespaces (hardcoded rather than read from the loaded parse5 module: the
@@ -842,7 +842,7 @@ function computeArtifactDigests(document: DefaultTreeAdapterTypes.Document): { s
     if (!isHtmlOrSvgNamespace(node.namespaceURI)) continue;
     if (node.tagName !== 'script' && node.tagName !== 'style') continue;
     const text = concatenateTextChildren(node);
-    const digest = `sha256-${createHash('sha256').update(Buffer.from(text, 'utf8')).digest('base64')}`;
+    const digest = sha256DigestToken(text);
     if (node.tagName === 'script') scriptDigests.push(digest);
     else styleDigests.push(digest);
   }

@@ -12,9 +12,9 @@
  * (`prepareArtifactDelivery`), and the stored bytes stay the author's (the
  * download route serves them untouched).
  */
-import { createHash } from 'node:crypto';
-
 import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
+
+import { sha256DigestToken } from './csp';
 
 // Posts to `parent.parent` because the artifact sits two frames below the
 // wiki page (page → `/_artifact-frame` → artifact). `clientHeight` of the
@@ -80,7 +80,7 @@ export const ARTIFACT_FRAME_BRIDGE_SCRIPT = `(function () {
 })();`;
 
 /** CSP hash-source token (without quotes) matching exactly {@link ARTIFACT_FRAME_BRIDGE_SCRIPT}. */
-export const ARTIFACT_FRAME_BRIDGE_DIGEST = `sha256-${createHash('sha256').update(ARTIFACT_FRAME_BRIDGE_SCRIPT, 'utf8').digest('base64')}`;
+export const ARTIFACT_FRAME_BRIDGE_DIGEST = sha256DigestToken(ARTIFACT_FRAME_BRIDGE_SCRIPT);
 
 /**
  * Appended after the whole stored document rather than spliced before

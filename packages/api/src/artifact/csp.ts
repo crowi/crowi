@@ -1,14 +1,17 @@
 /**
  * Pure digest-marker extraction and CSP header assembly for HTML artifact
  * responses. Both functions are string-only: no HTML parser, no crypto, no
- * DB, no HTTP. `./constants` supplies the reserved marker names (never
- * `./ingest`, which would pull parse5/PostCSS into every process that loads
- * this module — see that module's own doc comment).
+ * DB, no HTTP. The one hash here is `sha256DigestToken`, which produces the
+ * tokens those markers carry. `./constants` supplies the reserved marker
+ * names (never `./ingest`, which would pull parse5/PostCSS into every process
+ * that loads this module — see that module's own doc comment).
  *
  * `<meta http-equiv="Content-Security-Policy">` is NOT used anywhere here —
  * `buildArtifactContentSecurityPolicy` only returns the string a caller puts
  * in the `Content-Security-Policy` HTTP response header.
  */
+
+import { createHash } from 'node:crypto';
 
 import { ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME, countOccurrences } from './constants';
 import type { ArtifactPolicySnapshot } from './policy';
@@ -98,6 +101,11 @@ export function extractArtifactDigestMarkers(body: string): ArtifactDigestMarker
 
 /** §G-1 — `sha256-` + the standard (not base64url) base64 encoding of a 32-byte SHA-256 digest, which is always exactly 43 chars + 1 `=` pad char. */
 export const ARTIFACT_DIGEST_TOKEN_PATTERN = /^sha256-[A-Za-z0-9+/]{43}=$/;
+
+/** The CSP hash-source token (without quotes) for an inline script or style whose text is `text`, hashed as UTF-8. */
+export function sha256DigestToken(text: string): string {
+  return `sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}`;
+}
 
 /** Any ASCII control character (0x00-0x1F, 0x7F) — covers tab/CR/LF/FF as a subset. Deliberately matches control characters (that's the point of the check). */
 // eslint-disable-next-line no-control-regex
