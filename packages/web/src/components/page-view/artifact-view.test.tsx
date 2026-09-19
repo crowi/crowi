@@ -641,6 +641,16 @@ describe('ArtifactView', () => {
       expect(document.activeElement).toBe(maximizeButton());
     });
 
+    it('leaves focus in an inline artifact on an Escape the artifact forwards', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      act(() => frame.focus());
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(frame);
+    });
+
     it('ignores a forwarded Escape from any other window', async () => {
       await renderRunningFrame();
       fireEvent.click(maximizeButton());

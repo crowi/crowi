@@ -74,6 +74,17 @@ function FailureAlert({ reason, canRetry, onRetry }: { reason: FailureReason; ca
  */
 const MAX_ARTIFACT_FRAME_HEIGHT = 100_000;
 
+/**
+ * The artifact runs on an opaque origin (its `event.origin` is "null"), so
+ * the sender is recognised by window identity instead: the one frame inside
+ * `/_artifact-frame`, which `frame` loads.
+ */
+function isFromArtifact(frame: HTMLIFrameElement | null, event: MessageEvent): boolean {
+  const artifactWindow = frame?.contentWindow?.frames[0];
+  if (!artifactWindow) return false;
+  return event.source === artifactWindow;
+}
+
 function isForwardedEscape(data: unknown): boolean {
   return typeof data === 'object' && data !== null && (data as { type?: unknown }).type === ARTIFACT_ESCAPE_MESSAGE_TYPE;
 }
@@ -105,38 +116,22 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
   const [maximized, setMaximized] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
-  // Focus goes back to the control that opened the overlay: on an Escape
-  // pressed inside the artifact it would otherwise stay in the frame, and on
-  // one pressed on the full screen control it would be dropped when that
-  // control unmounts.
-  const restoreFromEscape = useCallback(() => {
-    setMaximized(false);
-    toggleRef.current?.focus();
-  }, []);
   // iPhone Safari cannot put an arbitrary element into full screen; there the
   // overlay is as far as it goes.
   const fullscreenAvailable = typeof document !== 'undefined' && document.fullscreenEnabled === true;
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      // The artifact runs on an opaque origin (its `event.origin` is
-      // "null"), so the sender is recognised by window identity instead:
-      // the one frame inside `/_artifact-frame`, which this iframe loads.
-      const artifactWindow = frameRef.current?.contentWindow?.frames[0];
-      if (!artifactWindow || event.source !== artifactWindow) return;
-      if (isForwardedEscape(event.data)) {
-        if (document.fullscreenElement == null) restoreFromEscape();
-        return;
-      }
+      if (!isFromArtifact(frameRef.current, event)) return;
       const reported = readReportedHeight(event.data);
       if (reported !== null) setHeight(reported);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [restoreFromEscape]);
+  }, []);
 
   useEffect(() => {
-    const onFullscreenChange = () => setFullscreen(document.fullscreenElement != null && document.fullscreenElement === containerRef.current);
+    const onFullscreenChange = () => setFullscreen(document.fullscreenElement === containerRef.current);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
@@ -147,19 +142,34 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
     const previousOverflow = root.style.overflow;
     root.style.overflow = 'hidden';
     // Escape in full screen belongs to the browser, which leaves full screen
-    // first; the overlay closes on the next one.
+    // first; the overlay closes on the next one. Focus goes back to the
+    // control that opened the overlay: on an Escape pressed inside the
+    // artifact it would otherwise stay in the frame, and on one pressed on
+    // the full screen control it would be dropped when that control unmounts.
+    const restoreFromEscape = () => {
+      if (document.fullscreenElement != null) return;
+      setMaximized(false);
+      toggleRef.current?.focus();
+    };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && document.fullscreenElement == null) restoreFromEscape();
+      if (event.key === 'Escape') restoreFromEscape();
+    };
+    // Keys pressed inside the artifact never reach this page; the artifact
+    // forwards the Escapes it leaves unhandled instead.
+    const onMessage = (event: MessageEvent) => {
+      if (isFromArtifact(frameRef.current, event) && isForwardedEscape(event.data)) restoreFromEscape();
     };
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('message', onMessage);
     return () => {
       root.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('message', onMessage);
     };
-  }, [maximized, restoreFromEscape]);
+  }, [maximized]);
 
   const toggleMaximized = () => {
-    if (maximized && document.fullscreenElement != null && document.fullscreenElement === containerRef.current) void document.exitFullscreen();
+    if (fullscreen) void document.exitFullscreen();
     setMaximized(!maximized);
   };
 
