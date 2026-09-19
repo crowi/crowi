@@ -627,6 +627,7 @@ describe('ArtifactView', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(document.documentElement.style.overflow).toBe('');
+      expect(document.activeElement).toBe(maximizeButton());
     });
 
     it('restores on an Escape forwarded from inside the artifact, where the page cannot hear keys', async () => {
@@ -637,6 +638,7 @@ describe('ArtifactView', () => {
 
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(document.documentElement.style.overflow).toBe('');
+      expect(document.activeElement).toBe(maximizeButton());
     });
 
     it('ignores a forwarded Escape from any other window', async () => {

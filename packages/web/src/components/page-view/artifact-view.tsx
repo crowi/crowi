@@ -104,6 +104,15 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
   const [height, setHeight] = useState<number | null>(null);
   const [maximized, setMaximized] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+
+  // Focus goes back to the control that opened the overlay: on an Escape
+  // pressed inside the artifact it would otherwise stay in the frame, and on
+  // one pressed on the full screen control it would be dropped when that
+  // control unmounts.
+  const restoreFromEscape = useCallback(() => {
+    setMaximized(false);
+    toggleRef.current?.focus();
+  }, []);
   // iPhone Safari cannot put an arbitrary element into full screen; there the
   // overlay is as far as it goes.
   const fullscreenAvailable = typeof document !== 'undefined' && document.fullscreenEnabled === true;
@@ -116,7 +125,7 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
       const artifactWindow = frameRef.current?.contentWindow?.frames[0];
       if (!artifactWindow || event.source !== artifactWindow) return;
       if (isForwardedEscape(event.data)) {
-        if (document.fullscreenElement == null) setMaximized(false);
+        if (document.fullscreenElement == null) restoreFromEscape();
         return;
       }
       const reported = readReportedHeight(event.data);
@@ -124,7 +133,7 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [restoreFromEscape]);
 
   useEffect(() => {
     const onFullscreenChange = () => setFullscreen(document.fullscreenElement != null && document.fullscreenElement === containerRef.current);
@@ -140,14 +149,14 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
     // Escape in full screen belongs to the browser, which leaves full screen
     // first; the overlay closes on the next one.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && document.fullscreenElement == null) setMaximized(false);
+      if (event.key === 'Escape' && document.fullscreenElement == null) restoreFromEscape();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
       root.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [maximized]);
+  }, [maximized, restoreFromEscape]);
 
   const toggleMaximized = () => {
     if (maximized && document.fullscreenElement != null && document.fullscreenElement === containerRef.current) void document.exitFullscreen();
