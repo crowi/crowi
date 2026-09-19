@@ -29,17 +29,16 @@ skill。単発 (`/crowi-orchestrate`) でも動く。6 系統 (A〜F) を順に�
 
 ## 運用モード: watch(推奨・event-driven)と /loop(polling)
 
-**watch モード(推奨)**: `.claude/scripts/orchestrate-watch.sh` を persistent Monitor で
-常駐させる。bash がトークンゼロで監視し続け、モデルは event が来たときだけ起きる
-(/loop は変化のない tick にもトークンを使い、セッションが寝ている間の event は
-拾えない — その逆)。
+**watch モード(推奨)**: `.claude/scripts/orchestrate-watch.sh --until-event` を background Bash で動かす。bash がトークンゼロで監視し、新しい event を出したところで終了するので、モデルはその終了通知で 1 回だけ起きる(/loop は変化のない tick にもトークンを使い、セッションが寝ている間の event は拾えない — その逆)。
 
-起動(main セッションで 1 回。TaskList に同名 Monitor が既にあれば張り直さない):
+起動(main セッション。すでに動いていれば二重に起動しない):
 
 ```
-Monitor({ command: 'bash .claude/scripts/orchestrate-watch.sh',
-          description: 'orchestrate watch (A/C/D/E/F lanes)', persistent: true })
+Bash({ command: 'pgrep -f "^bash .*orchestrate-watch.sh --until-event" >/dev/null && echo already-running || exec bash .claude/scripts/orchestrate-watch.sh --until-event',
+       description: 'orchestrate watch (A/C/D/E/F lanes)', run_in_background: true })
 ```
+
+終了通知が来たら、出力の各行を下表どおりに処理し、同じコマンドで起動し直す。**Monitor では張らない**: Claude Code 2.1.271 以降の Monitor は最長 30 分で必ず期限切れになり(`persistent` は廃止)、期限切れのたびに何も起きていなくてもモデルを起こす。
 
 event → 対応(各 lane の実行手順・鉄則は下記の従来定義のまま):
 
@@ -54,10 +53,7 @@ event → 対応(各 lane の実行手順・鉄則は下記の従来定義のま
 B(spec groom)は分析仕事なので watch に含めない — 単発 `/crowi-orchestrate` で
 on-demand 実行する。
 
-注意: watcher の dedup はプロセス寿命(= セッション)内のみ。張り直し直後は現況を
-1 回再発火しうるが、act 前の裏取りが冪等性を担保する。script は state ファイルを
-**読むだけ**(書き込みはモデルが act するときに従来どおり行う)。/loop モードも
-従来どおり使える(watch が張れない環境の fallback)。
+注意: 一度出した event は `.feature-state/orchestrate-watch.seen` に記録され、起動し直しても再通知されない(`READY_TO_INTEGRATE` は signal の headSha ごとなので、手直しして立て直した signal は再び通知される)。セッションを起動し直したときの現況把握は、この通知ではなく state ファイルを直接読んで行う(crowi-role-manager 起動手順 4)。script が書くのはこの seen ファイルだけで、lane の state ファイルは**読むだけ**(書き込みはモデルが act するときに従来どおり行う)。/loop モードも従来どおり使える(watch が動かせない環境の fallback)。
 
 ## A. integrate watcher (行動系)
 

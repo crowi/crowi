@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# orchestrate-watch.test.sh — smoke tests for orchestrate-watch.sh's lane E
-# "longLived" stall-threshold branch (feature-worktree-extra-gates).
+# orchestrate-watch.test.sh — smoke tests for orchestrate-watch.sh: lane E's
+# "longLived" stall threshold, the dedup record that keeps a restarted
+# watcher from re-emitting known events, and --until-event.
 #
 # Wired into CI (`pnpm test:scripts:sh`) and the pre-push claude-scripts
 # lefthook job. Run it manually after touching orchestrate-watch.sh's lane E:
@@ -128,6 +129,72 @@ assert_stalled longlived-stalled yes \
 assert_stalled longlived-false-stale yes \
   "longLived: false explicitly still uses the normal ORCH_STALL_DAYS threshold" \
   "longlived-false-stale should have been reported STALLED (normal threshold)"
+
+# run_once — one --once pass against the fixture repo, output on stdout.
+run_once() {
+  PATH="$SAFE_PATH" ORCH_ROOT="$ROOT" ORCH_STALL_DAYS=3 ORCH_STALL_DAYS_LONG=14 \
+    "$BASH_BIN" "$SCRIPT" --once 2>&1
+}
+
+# ---------------------------------------------------------------------------
+section "restart: events already emitted are not emitted again"
+OUT="$(run_once)"
+if echo "$OUT" | grep -q '^STALLED: '; then
+  fail "a restarted watcher re-emitted STALLED events it had already emitted: $(echo "$OUT" | grep '^STALLED: ' | tr '\n' ' ')"
+else
+  ok "a restarted watcher stays quiet about STALLED events it already emitted"
+fi
+
+# ---------------------------------------------------------------------------
+section "lane A: READY_TO_INTEGRATE is emitted once per signalled head"
+ready_json() {
+  printf '{"status": "READY_TO_INTEGRATE", "readyForMerge": {"headSha": "%s"}}\n' "$2" >"$ROOT/.feature-state/tasks/$1.json"
+}
+ready_json ready-feature aaaa
+OUT="$(run_once)"
+echo "$OUT" | grep -q '^READY_TO_INTEGRATE: ready-feature$' \
+  && ok "a new READY_TO_INTEGRATE signal is emitted" \
+  || fail "READY_TO_INTEGRATE: ready-feature should have been emitted"
+OUT="$(run_once)"
+echo "$OUT" | grep -q '^READY_TO_INTEGRATE: ready-feature$' \
+  && fail "the same READY_TO_INTEGRATE signal was emitted again after a restart" \
+  || ok "the same READY_TO_INTEGRATE signal is not emitted again after a restart"
+ready_json ready-feature bbbb
+OUT="$(run_once)"
+echo "$OUT" | grep -q '^READY_TO_INTEGRATE: ready-feature$' \
+  && ok "a re-signal at a new head is emitted again" \
+  || fail "a re-signal at a new headSha should have been emitted"
+
+# ---------------------------------------------------------------------------
+section "--until-event: exits on a new event, keeps watching otherwise"
+ready_json until-feature cccc
+UNTIL_OUT="$WORK/until.out"
+PATH="$SAFE_PATH" ORCH_ROOT="$ROOT" ORCH_WATCH_INTERVAL=1 \
+  "$BASH_BIN" "$SCRIPT" --until-event >"$UNTIL_OUT" 2>&1 &
+UNTIL_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  kill -0 "$UNTIL_PID" 2>/dev/null || break
+  sleep 1
+done
+if kill -0 "$UNTIL_PID" 2>/dev/null; then
+  kill "$UNTIL_PID" 2>/dev/null
+  fail "--until-event did not exit after emitting a new event"
+else
+  grep -q '^READY_TO_INTEGRATE: until-feature$' "$UNTIL_OUT" \
+    && ok "--until-event exits after emitting a new event" \
+    || fail "--until-event exited without emitting the new event: $(cat "$UNTIL_OUT")"
+fi
+
+PATH="$SAFE_PATH" ORCH_ROOT="$ROOT" ORCH_WATCH_INTERVAL=1 \
+  "$BASH_BIN" "$SCRIPT" --until-event >"$UNTIL_OUT" 2>&1 &
+UNTIL_PID=$!
+sleep 4
+if kill -0 "$UNTIL_PID" 2>/dev/null; then
+  kill "$UNTIL_PID" 2>/dev/null
+  ok "--until-event keeps watching while nothing new happens"
+else
+  fail "--until-event exited with nothing new to report: $(cat "$UNTIL_OUT")"
+fi
 
 echo
 echo "== $PASS passed, $FAIL failed =="

@@ -14,7 +14,7 @@ description: crowi の manager ロールでセッションを起動/再起動し
 ## 起動手順(上から順に実行)
 
 1. **agmsg を manager として確立する**: agmsg skill の `actas` 手順に従い `manager` として振る舞う(whoami 確認 → 未登録/別ロールなら actas manager)。SessionStart hook が Monitor 起動指示(AGMSG-DIRECTIVE)を出していれば、その agmsg inbox monitor を先に張ってよいが、**受信を manager 宛に限定する actas を必ず通す**。
-2. **常駐 watcher を張り直す**: `orchestrate-watch.sh` を persistent Monitor で常駐させる(`Monitor({ command: 'bash .claude/scripts/orchestrate-watch.sh', description: 'orchestrate watch (A/C/D/E lanes)', persistent: true })`)。これが worktree 側の `READY_TO_INTEGRATE` signal と REVIEW_THRESHOLD を拾う正チャネル。**compaction / 再起動で Monitor は消える**ので、agmsg inbox monitor と併せて必ず張り直す(TaskList に既存があれば張り直さない)。
+2. **orchestrate watcher を起動する**: crowi-orchestrate「運用モード: watch」のコマンドで `orchestrate-watch.sh --until-event` を background Bash で起動する(すでに動いていれば二重に起動しない)。これが worktree 側の `READY_TO_INTEGRATE` signal と REVIEW_THRESHOLD を拾う正チャネル。新しい event を出すと終了して 1 回だけ通知が来るので、処理したら同じコマンドで起動し直す。**Monitor では張らない**(Claude Code 2.1.271 以降は最長 30 分で期限切れになり、そのたびに何も起きていなくてもセッションを起こす)。
 3. **inbox を確認する**: `~/.agents/skills/agmsg/scripts/inbox.sh crowi manager` を実行し、planner からの spec 引き渡し・reviewer の verdict・impl からの完了報告を把握して要点をユーザーに1行ずつ報告する。
 4. **稼働状態を把握する**(state ファイルを実際に読む):
    - `git worktree list` — 稼働中の worktree(= 進行中 or 統合待ちの feature)。
@@ -37,8 +37,9 @@ description: crowi の manager ロールでセッションを起動/再起動し
 
 ## 運用 gotcha(manager 固有・ハマりどころ)
 
-- **再起動で watcher が消える**: compaction / `/clear` / version 更新のたびに agmsg inbox monitor と orchestrate-watch の両方が停止する。起動手順 2 で必ず張り直す。「Monitor stopped」通知は旧 watcher のクリーンアップなので張り直しの合図。
-- **同一 event の重複発火**: 再起動後、旧 watcher の残存 task-id からも同じ `READY_TO_INTEGRATE` が届くことがある。**同じ worktree を二重 integrate しない**(integrate 完了で signal file を消せば止まる)。
+- **再起動で watcher が消える**: compaction / `/clear` / version 更新のたびに agmsg inbox monitor と orchestrate watcher の両方が停止する。起動手順 1・2 で起動し直す。「Monitor stopped」通知は旧 watcher のクリーンアップなので起動し直しの合図。
+- **agmsg の inbox monitor は 30 分で期限切れになる**: agmsg は Monitor で受信するため、Claude Code 2.1.271 以降は最長 30 分で期限切れ通知が来る。報告文は書かずに張り直すだけにする(`timeout_ms: 1800000` を明示。省略すると 5 分で切れる)。
+- **既知 event は再通知されない**: orchestrate watcher は一度出した event を `.feature-state/orchestrate-watch.seen` に記録するので、起動し直しても同じ `READY_TO_INTEGRATE` は来ない。それでも **同じ worktree を二重 integrate しない**(統合済みの task は signal file を消した時点で対象から外れる)。起動直後の現況は通知ではなく起動手順 4 で state ファイルから把握する。
 - **integrate 前の裏取りは必須**: signal は premature に立つこともある。`git -C <wt> status --porcelain`(clean)/ 先行 commit / task status / worktree session idle を確認してから merge。**`cd <wt>` は zsh の chpwd auto-ls を誤発火させ stdout を汚す**ので `git -C` を使う。
 - **main-write lock**: integrate / main-direct commit の前に取得し、完了・中断のどの経路でも必ず解放。busy は奪わず保持者を報告(CLAUDE.md「main write lock」が正本)。
 - **integrate Step 8 の grep と rm は別 Bash 呼び出し**: stale spec/task 掃除の「参照チェック(Call A)」と「rm(Call B)」を1コマンドに連結しない(散文の注意では2度破られた実績あり — 構造で分離)。

@@ -242,14 +242,7 @@ cd <worktree-abs-path> && claude
 
 worktree 側の完了は `/crowi-complete-feature` が `.feature-state/tasks/<id>.json` に立てる
 `READY_TO_INTEGRATE` signal で伝わる(shared store 経由 = agmsg 等のチーム基盤に依存しない
-repo-native の契約)。ただし signal は **push されない**ので、kickoff した main セッションは
-`orchestrate-watch.sh` を Monitor で常駐させて検知する(TaskList に「orchestrate watch」が
-既にあれば張り直さない。event 対応表は crowi-orchestrate の「運用モード: watch」節が正本):
-
-```
-Monitor({ command: 'bash .claude/scripts/orchestrate-watch.sh',
-          description: 'orchestrate watch (A/C/D/E lanes)', persistent: true })
-```
+repo-native の契約)。ただし signal は **push されない**ので、kickoff した main セッションは `orchestrate-watch.sh --until-event` を background Bash で動かして検知する。起動コマンド・起動し直しの手順・event 対応表は crowi-orchestrate の「運用モード: watch」節が正本(すでに動いていれば二重に起動しない。Monitor では張らない)。
 
 signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 / main clean)をして
 `/integrate-worktree <id>` へ。agmsg の完了通知(handoff skill の任意送信)は
