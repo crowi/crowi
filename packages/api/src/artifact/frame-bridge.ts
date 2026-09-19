@@ -1,9 +1,11 @@
 /**
  * The one piece of code delivery adds to a served artifact: a fixed inline
- * script that reports the document's content height to the wiki page, so
- * the page can grow the frame to fit instead of scrolling inside it. The
- * artifact runs sandboxed on an opaque origin, so nothing outside it can
- * measure its layout — the report has to come from within.
+ * script that tells the wiki page what only the artifact's own document can
+ * see. It reports the document's content height, so the page can grow the
+ * frame to fit instead of scrolling inside it, and it forwards Escape, so a
+ * maximized frame can be restored while focus is inside it. The artifact runs
+ * sandboxed on an opaque origin, so the page can neither measure its layout
+ * nor hear its key events.
  *
  * The script is a constant, so its digest is too: delivery authorises it
  * by that digest alongside the author's own inline scripts
@@ -12,7 +14,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import { ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
+import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
 
 // Posts to `parent.parent` because the artifact sits two frames below the
 // wiki page (page → `/_artifact-frame` → artifact). `clientHeight` of the
@@ -32,7 +34,11 @@ import { ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
 // an animation frame: a read there forces layout ahead of the frame's own,
 // which an artifact animating its DOM would pay every frame, while a timer
 // reads between frames, when layout is usually clean.
-export const ARTIFACT_HEIGHT_REPORTER_SCRIPT = `(function () {
+//
+// Escape is forwarded only if the artifact did not cancel it. The check waits
+// for a timer because the artifact may have its own listener registered after
+// this one, which cancels the key only once this listener has already run.
+export const ARTIFACT_FRAME_BRIDGE_SCRIPT = `(function () {
   var target = window.parent.parent;
   var root = document.documentElement;
   var sentHeight = -1;
@@ -65,10 +71,16 @@ export const ARTIFACT_HEIGHT_REPORTER_SCRIPT = `(function () {
   if (document.body) observer.observe(document.body);
   new MutationObserver(schedule).observe(root, { attributes: true, characterData: true, childList: true, subtree: true });
   window.addEventListener('load', schedule);
+  window.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') return;
+    setTimeout(function () {
+      if (!event.defaultPrevented) target.postMessage({ type: ${JSON.stringify(ARTIFACT_ESCAPE_MESSAGE_TYPE)} }, '*');
+    }, 0);
+  });
 })();`;
 
-/** CSP hash-source token (without quotes) matching exactly {@link ARTIFACT_HEIGHT_REPORTER_SCRIPT}. */
-export const ARTIFACT_HEIGHT_REPORTER_DIGEST = `sha256-${createHash('sha256').update(ARTIFACT_HEIGHT_REPORTER_SCRIPT, 'utf8').digest('base64')}`;
+/** CSP hash-source token (without quotes) matching exactly {@link ARTIFACT_FRAME_BRIDGE_SCRIPT}. */
+export const ARTIFACT_FRAME_BRIDGE_DIGEST = `sha256-${createHash('sha256').update(ARTIFACT_FRAME_BRIDGE_SCRIPT, 'utf8').digest('base64')}`;
 
 /**
  * Appended after the whole stored document rather than spliced before
@@ -76,6 +88,6 @@ export const ARTIFACT_HEIGHT_REPORTER_DIGEST = `sha256-${createHash('sha256').up
  * the script lands as body's last child whatever the document ends with,
  * and no string search can be fooled by a `</body>` inside a comment.
  */
-export function appendArtifactHeightReporter(body: string): string {
-  return `${body}<script>${ARTIFACT_HEIGHT_REPORTER_SCRIPT}</script>`;
+export function appendArtifactFrameBridge(body: string): string {
+  return `${body}<script>${ARTIFACT_FRAME_BRIDGE_SCRIPT}</script>`;
 }

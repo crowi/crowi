@@ -1,6 +1,6 @@
 'use client';
 
-import { ARTIFACT_HEIGHT_MESSAGE_TYPE, type PageWithRevision } from '@crowi/api-contract';
+import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Fullscreen, Maximize2, Minimize2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -74,6 +74,10 @@ function FailureAlert({ reason, canRetry, onRetry }: { reason: FailureReason; ca
  */
 const MAX_ARTIFACT_FRAME_HEIGHT = 100_000;
 
+function isForwardedEscape(data: unknown): boolean {
+  return typeof data === 'object' && data !== null && (data as { type?: unknown }).type === ARTIFACT_ESCAPE_MESSAGE_TYPE;
+}
+
 function readReportedHeight(data: unknown): number | null {
   if (typeof data !== 'object' || data === null) return null;
   const { type, height } = data as { type?: unknown; height?: unknown };
@@ -84,9 +88,9 @@ function readReportedHeight(data: unknown): number | null {
 /**
  * A running artifact: the outer iframe, the sandbox notice under it, and the
  * maximise control. Inline, the frame is sized to the artifact's content
- * height once the artifact reports it (delivery appends a reporter to every
- * served artifact); until then — or if it never does — it keeps a fixed
- * viewport-relative height and the artifact scrolls inside it.
+ * height once the artifact reports it (delivery appends a frame bridge to
+ * every served artifact); until then — or if it never does — it keeps a
+ * fixed viewport-relative height and the artifact scrolls inside it.
  *
  * Maximising restyles this same block into a viewport-filling overlay
  * instead of moving the iframe into a dialog: moving an iframe reloads it,
@@ -111,6 +115,10 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
       // the one frame inside `/_artifact-frame`, which this iframe loads.
       const artifactWindow = frameRef.current?.contentWindow?.frames[0];
       if (!artifactWindow || event.source !== artifactWindow) return;
+      if (isForwardedEscape(event.data)) {
+        if (document.fullscreenElement == null) setMaximized(false);
+        return;
+      }
       const reported = readReportedHeight(event.data);
       if (reported !== null) setHeight(reported);
     };

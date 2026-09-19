@@ -1,8 +1,8 @@
-import { ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
+import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
 import { sha256Token } from 'src/test/artifact-fixtures';
 
 import { prepareArtifactDelivery } from './delivery';
-import { ARTIFACT_HEIGHT_REPORTER_SCRIPT, appendArtifactHeightReporter } from './height-reporter';
+import { ARTIFACT_FRAME_BRIDGE_SCRIPT, appendArtifactFrameBridge } from './frame-bridge';
 import { ingestHtmlArtifact, loadParse5Runtime, walkArtifactTree } from './ingest';
 import type { ArtifactPolicySnapshot } from './policy';
 
@@ -26,27 +26,27 @@ const SNAPSHOT: ArtifactPolicySnapshot = Object.freeze({
 const scriptSrcOf = (header: string) => header.split('; ').find((directive) => directive.startsWith('script-src'));
 
 describe('prepareArtifactDelivery', () => {
-  it('serves the stored bytes intact, followed by the reporter', async () => {
+  it('serves the stored bytes intact, followed by the frame bridge', async () => {
     const stored = await ingested(PLAIN_HTML);
     const result = prepareArtifactDelivery(stored, SNAPSHOT);
     if (!result.ok) throw new Error(`unexpected ${result.code}`);
-    expect(result.body).toBe(`${stored}<script>${ARTIFACT_HEIGHT_REPORTER_SCRIPT}</script>`);
+    expect(result.body).toBe(`${stored}<script>${ARTIFACT_FRAME_BRIDGE_SCRIPT}</script>`);
   });
 
-  it('authorises the reporter alone for a document without scripts of its own', async () => {
+  it('authorises the frame bridge alone for a document without scripts of its own', async () => {
     const result = prepareArtifactDelivery(await ingested(PLAIN_HTML), SNAPSHOT);
     if (!result.ok) throw new Error(`unexpected ${result.code}`);
-    expect(scriptSrcOf(result.header)).toBe(`script-src '${sha256Token(ARTIFACT_HEIGHT_REPORTER_SCRIPT)}'`);
+    expect(scriptSrcOf(result.header)).toBe(`script-src '${sha256Token(ARTIFACT_FRAME_BRIDGE_SCRIPT)}'`);
   });
 
-  it("authorises the reporter ahead of the document's own scripts", async () => {
+  it("authorises the frame bridge ahead of the document's own scripts", async () => {
     const own = "console.log('own');";
     const result = prepareArtifactDelivery(
       await ingested(`<!doctype html><html><head><title>t</title><script>${own}</script></head><body></body></html>`),
       SNAPSHOT,
     );
     if (!result.ok) throw new Error(`unexpected ${result.code}`);
-    expect(scriptSrcOf(result.header)).toBe(`script-src '${sha256Token(ARTIFACT_HEIGHT_REPORTER_SCRIPT)}' '${sha256Token(own)}'`);
+    expect(scriptSrcOf(result.header)).toBe(`script-src '${sha256Token(ARTIFACT_FRAME_BRIDGE_SCRIPT)}' '${sha256Token(own)}'`);
   });
 
   it('fails with the policy error when the stored bytes carry no digest markers', () => {
@@ -59,42 +59,44 @@ describe('prepareArtifactDelivery', () => {
   });
 });
 
-describe('appendArtifactHeightReporter', () => {
+describe('appendArtifactFrameBridge', () => {
   it.each([
     ['a plain document', PLAIN_HTML],
     ['a document whose trailing comment contains "</body>"', '<!doctype html><html><head><title>t</title></head><body><p>hi</p></body><!-- </body> --></html>'],
-  ])('%s parses with the reporter as the last child of <body>, text unchanged', async (_label, html) => {
+  ])('%s parses with the frame bridge as the last child of <body>, text unchanged', async (_label, html) => {
     const { parse } = loadParse5Runtime();
-    const document = parse(appendArtifactHeightReporter(await ingested(html)));
+    const document = parse(appendArtifactFrameBridge(await ingested(html)));
     const body = [...walkArtifactTree(document)].find((node) => 'tagName' in node && node.tagName === 'body');
     const last = body && 'childNodes' in body ? body.childNodes.at(-1) : undefined;
     expect(last && 'tagName' in last ? last.tagName : null).toBe('script');
     const text = last && 'childNodes' in last ? last.childNodes.map((node) => ('value' in node ? node.value : '')).join('') : null;
-    expect(text).toBe(ARTIFACT_HEIGHT_REPORTER_SCRIPT);
+    expect(text).toBe(ARTIFACT_FRAME_BRIDGE_SCRIPT);
   });
 });
 
-describe('ARTIFACT_HEIGHT_REPORTER_SCRIPT', () => {
+describe('ARTIFACT_FRAME_BRIDGE_SCRIPT', () => {
   it('cannot end its own <script> element early or open a comment, which would change the hashed text', () => {
-    expect(ARTIFACT_HEIGHT_REPORTER_SCRIPT.toLowerCase()).not.toContain('</script');
-    expect(ARTIFACT_HEIGHT_REPORTER_SCRIPT).not.toContain('<!--');
+    expect(ARTIFACT_FRAME_BRIDGE_SCRIPT.toLowerCase()).not.toContain('</script');
+    expect(ARTIFACT_FRAME_BRIDGE_SCRIPT).not.toContain('<!--');
   });
 });
 
 /**
- * Runs the reporter against hand-driven layout numbers. `content` is the
+ * Runs the frame bridge against hand-driven layout numbers. `content` is the
  * document's own height; `frame` is the iframe height (= `innerHeight`);
  * `scrollbar` is a horizontal scrollbar's thickness, which `clientHeight`
  * loses. `vhExtra` models a `min-height: 100vh` body with that much padding
  * on top: the document is then never shorter than the frame plus `vhExtra`.
  */
-function runReporter(initial: { content: number; frame: number; scrollbar?: number; vhExtra?: number }) {
+function runBridge(initial: { content: number; frame: number; scrollbar?: number; vhExtra?: number }) {
   const layout = { scrollbar: 0, vhExtra: undefined as number | undefined, ...initial };
   const posted: number[] = [];
+  let escapes = 0;
   let observerCallback: (() => void) | null = null;
   let mutationCallback: (() => void) | null = null;
   let mutationOptions: MutationObserverInit | null = null;
   let loadListener: (() => void) | null = null;
+  const keydownListeners: ((event: { key: string; defaultPrevented: boolean }) => void)[] = [];
   const timers: (() => void)[] = [];
 
   const contentHeight = () => (layout.vhExtra === undefined ? layout.content : Math.max(layout.frame, layout.content) + layout.vhExtra);
@@ -107,9 +109,12 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
     },
   };
   const target = {
-    postMessage: (message: { type: string; height: number }) => {
-      expect(message.type).toBe(ARTIFACT_HEIGHT_MESSAGE_TYPE);
-      posted.push(message.height);
+    postMessage: (message: { type: string; height?: number }) => {
+      if (message.type === ARTIFACT_ESCAPE_MESSAGE_TYPE) escapes += 1;
+      else {
+        expect(message.type).toBe(ARTIFACT_HEIGHT_MESSAGE_TYPE);
+        posted.push(message.height ?? Number.NaN);
+      }
     },
   };
   const window = {
@@ -117,8 +122,9 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
     get innerHeight() {
       return layout.frame;
     },
-    addEventListener: (type: string, listener: () => void) => {
-      if (type === 'load') loadListener = listener;
+    addEventListener: (type: string, listener: (event: { key: string; defaultPrevented: boolean }) => void) => {
+      if (type === 'load') loadListener = () => listener({ key: '', defaultPrevented: false });
+      if (type === 'keydown') keydownListeners.push(listener);
     },
   };
   const document = {
@@ -144,7 +150,7 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
     timers.push(callback);
   };
 
-  new Function('window', 'document', 'ResizeObserver', 'MutationObserver', 'setTimeout', ARTIFACT_HEIGHT_REPORTER_SCRIPT)(
+  new Function('window', 'document', 'ResizeObserver', 'MutationObserver', 'setTimeout', ARTIFACT_FRAME_BRIDGE_SCRIPT)(
     window,
     document,
     ResizeObserver,
@@ -158,81 +164,113 @@ function runReporter(initial: { content: number; frame: number; scrollbar?: numb
   const runTimers = () => {
     for (const callback of timers.splice(0)) callback();
   };
+  // `handledByArtifact` stands for one of the artifact's own listeners,
+  // registered after the bridge, cancelling the key once the bridge has
+  // already seen it.
+  const press = (key: string, { handledByArtifact = false } = {}) => {
+    const event = { key, defaultPrevented: false };
+    for (const listener of keydownListeners) listener(event);
+    if (handledByArtifact) event.defaultPrevented = true;
+  };
   // What the page does on a report: resize the frame, which re-lays the
   // document out and fires the observer again.
   const applyLastReport = () => {
     layout.frame = posted.at(-1) ?? layout.frame;
     fire();
   };
-  return { layout, posted, fire, mutate, load, runTimers, mutationOptions: () => mutationOptions, applyLastReport };
+  return { layout, posted, escapes: () => escapes, fire, mutate, load, press, runTimers, mutationOptions: () => mutationOptions, applyLastReport };
 }
 
-describe('the reporter running inside the artifact', () => {
+describe('the frame bridge reporting height from inside the artifact', () => {
   it('reports the content height and stays quiet once the frame fits it', () => {
-    const reporter = runReporter({ content: 3000, frame: 630 });
-    reporter.fire();
-    expect(reporter.posted).toEqual([3000]);
-    reporter.applyLastReport();
-    expect(reporter.posted).toEqual([3000]);
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.fire();
+    expect(bridge.posted).toEqual([3000]);
+    bridge.applyLastReport();
+    expect(bridge.posted).toEqual([3000]);
   });
 
   it('reports a shorter height when the content shrinks below the frame', () => {
-    const reporter = runReporter({ content: 3000, frame: 630 });
-    reporter.fire();
-    reporter.applyLastReport();
-    reporter.layout.content = 1200;
-    reporter.fire();
-    expect(reporter.posted).toEqual([3000, 1200]);
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.fire();
+    bridge.applyLastReport();
+    bridge.layout.content = 1200;
+    bridge.fire();
+    expect(bridge.posted).toEqual([3000, 1200]);
   });
 
   it('adds a horizontal scrollbar back so the content fits above it', () => {
-    const reporter = runReporter({ content: 3000, frame: 630, scrollbar: 15 });
-    reporter.fire();
-    expect(reporter.posted).toEqual([3015]);
-    reporter.applyLastReport();
-    expect(reporter.posted).toEqual([3015]);
+    const bridge = runBridge({ content: 3000, frame: 630, scrollbar: 15 });
+    bridge.fire();
+    expect(bridge.posted).toEqual([3015]);
+    bridge.applyLastReport();
+    expect(bridge.posted).toEqual([3015]);
   });
 
   it('re-measures after a DOM change that resizes neither observed box (content taken out of flow)', () => {
-    const reporter = runReporter({ content: 3000, frame: 630 });
-    reporter.fire();
-    reporter.applyLastReport();
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.fire();
+    bridge.applyLastReport();
     // An absolutely positioned panel grows: the scroll height changes, the
     // root and body boxes do not, so no resize notification arrives.
-    reporter.layout.content = 4000;
-    reporter.mutate();
-    reporter.mutate();
-    expect(reporter.posted).toEqual([3000]);
-    reporter.runTimers();
-    expect(reporter.posted).toEqual([3000, 4000]);
-    expect(reporter.mutationOptions()).toEqual({ attributes: true, characterData: true, childList: true, subtree: true });
+    bridge.layout.content = 4000;
+    bridge.mutate();
+    bridge.mutate();
+    expect(bridge.posted).toEqual([3000]);
+    bridge.runTimers();
+    expect(bridge.posted).toEqual([3000, 4000]);
+    expect(bridge.mutationOptions()).toEqual({ attributes: true, characterData: true, childList: true, subtree: true });
   });
 
   it('re-measures once the document has finished loading', () => {
-    const reporter = runReporter({ content: 3000, frame: 630 });
-    reporter.fire();
-    reporter.applyLastReport();
-    reporter.layout.content = 3500;
-    reporter.load();
-    reporter.runTimers();
-    expect(reporter.posted).toEqual([3000, 3500]);
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.fire();
+    bridge.applyLastReport();
+    bridge.layout.content = 3500;
+    bridge.load();
+    bridge.runTimers();
+    expect(bridge.posted).toEqual([3000, 3500]);
   });
 
   it('stops growing a document that is sized from the viewport instead of chasing it forever', () => {
-    const reporter = runReporter({ content: 0, frame: 630, vhExtra: 48 });
-    reporter.fire();
-    for (let i = 0; i < 5; i++) reporter.applyLastReport();
-    expect(reporter.posted).toEqual([678]);
+    const bridge = runBridge({ content: 0, frame: 630, vhExtra: 48 });
+    bridge.fire();
+    for (let i = 0; i < 5; i++) bridge.applyLastReport();
+    expect(bridge.posted).toEqual([678]);
   });
 
   it('still reports a real content change after withholding a viewport-driven one', () => {
-    const reporter = runReporter({ content: 0, frame: 630, vhExtra: 48 });
-    reporter.fire();
-    reporter.applyLastReport();
-    reporter.layout.content = 3000;
-    reporter.fire();
-    for (let i = 0; i < 5; i++) reporter.applyLastReport();
+    const bridge = runBridge({ content: 0, frame: 630, vhExtra: 48 });
+    bridge.fire();
+    bridge.applyLastReport();
+    bridge.layout.content = 3000;
+    bridge.fire();
+    for (let i = 0; i < 5; i++) bridge.applyLastReport();
     // Grows to the content, then withholds the viewport-driven step after it.
-    expect(reporter.posted).toEqual([678, 3048, 3096]);
+    expect(bridge.posted).toEqual([678, 3048, 3096]);
+  });
+});
+
+describe('the frame bridge forwarding Escape from inside the artifact', () => {
+  it('forwards Escape to the page once the artifact has had its turn at it', () => {
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.press('Escape');
+    expect(bridge.escapes()).toBe(0);
+    bridge.runTimers();
+    expect(bridge.escapes()).toBe(1);
+  });
+
+  it('keeps an Escape the artifact handled itself', () => {
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.press('Escape', { handledByArtifact: true });
+    bridge.runTimers();
+    expect(bridge.escapes()).toBe(0);
+  });
+
+  it('forwards no other key', () => {
+    const bridge = runBridge({ content: 3000, frame: 630 });
+    bridge.press('Enter');
+    bridge.runTimers();
+    expect(bridge.escapes()).toBe(0);
   });
 });

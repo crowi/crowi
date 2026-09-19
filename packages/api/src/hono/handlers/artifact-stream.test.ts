@@ -341,7 +341,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(res.status).toBe(200);
     });
 
-    test('AC-DL-3 / AC-DL-4: a URL minted by the mint route serves the exact stored bytes followed by the height reporter, with the full response header set', async () => {
+    test('AC-DL-3 / AC-DL-4: a URL minted by the mint route serves the exact stored bytes followed by the frame bridge, with the full response header set', async () => {
       await enableArtifactDelivery();
       const body = await ingestedBody(VALID_ARTIFACT_HTML);
       const page = await createArtifactPage(`${PATH_PREFIX}full-flow`, body);

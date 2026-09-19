@@ -1,4 +1,4 @@
-import { ARTIFACT_HEIGHT_MESSAGE_TYPE, type AppInfoResponse, type PageWithRevision } from '@crowi/api-contract';
+import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE, type AppInfoResponse, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -586,6 +586,7 @@ describe('ArtifactView', () => {
 
     afterEach(() => {
       Reflect.deleteProperty(document, 'fullscreenEnabled');
+      Reflect.deleteProperty(document, 'fullscreenElement');
       document.documentElement.style.overflow = '';
     });
 
@@ -626,6 +627,35 @@ describe('ArtifactView', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(document.documentElement.style.overflow).toBe('');
+    });
+
+    it('restores on an Escape forwarded from inside the artifact, where the page cannot hear keys', async () => {
+      const { artifactWindow } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.documentElement.style.overflow).toBe('');
+    });
+
+    it('ignores a forwarded Escape from any other window', async () => {
+      await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      post(window, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('leaves a forwarded Escape to the browser while in full screen', async () => {
+      const { artifactWindow } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+      Object.defineProperty(document, 'fullscreenElement', { value: screen.getByRole('dialog'), configurable: true });
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.getByRole('dialog')).toBeTruthy();
     });
 
     it('wraps focus that leaves the overlay back into it', async () => {
