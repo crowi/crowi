@@ -896,8 +896,9 @@ const EditorPane = function EditorPane({
       linkCardEnabled={linkCardEnabled}
       // `[&_.cm-scroller]:scroll-auto` overrides `<html class="scroll-smooth">`
       // — required for scroll sync, otherwise programmatic scrolls
-      // animate over several frames and re-emit `scroll` events past
-      // the rAF lock window in `useScrollSync`, causing ping-pong sync.
+      // animate over several frames and emit `scroll` events at
+      // intermediate positions that `useScrollSync` can't tell apart from
+      // user input, causing ping-pong sync.
       className={editorClassName}
     />
   );
