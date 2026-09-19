@@ -1,4 +1,4 @@
-import type { AppInfoResponse, PageWithRevision } from '@crowi/api-contract';
+import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE, type AppInfoResponse, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -143,6 +143,32 @@ afterEach(() => {
   mintArtifactUrlRequest.mockReset();
 });
 
+/**
+ * Renders a running artifact and stands in for what `/_artifact-frame`
+ * loads: one nested frame, whose window is the only sender whose
+ * height reports count.
+ */
+async function renderRunningFrame() {
+  mockAppInfo({ data: ENABLED_APP_INFO });
+  mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+  render(createElement(ArtifactView, { page: makePage() }));
+  await flush();
+  const frame = document.querySelector('iframe');
+  if (!frame?.contentDocument) throw new Error('the outer frame did not render');
+  // jsdom never loads the outer frame's `src`, so its document is empty.
+  const outerDocument = frame.contentDocument;
+  const root = outerDocument.appendChild(outerDocument.createElement('html'));
+  const artifactFrame = root.appendChild(outerDocument.createElement('iframe'));
+  if (!artifactFrame.contentWindow) throw new Error('the nested frame has no window');
+  return { frame, artifactWindow: artifactFrame.contentWindow };
+}
+
+function post(source: Window, data: unknown) {
+  act(() => {
+    window.dispatchEvent(new MessageEvent('message', { data, source }));
+  });
+}
+
 describe('ArtifactView', () => {
   it('AC-SH-1: auto-mints as soon as delivery is confirmed enabled, showing only the preparing spinner until the mint resolves', () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
@@ -243,7 +269,7 @@ describe('ArtifactView', () => {
     expect(inputNoteContainer?.parentElement).toBe(iframe?.parentElement);
   });
 
-  it('AC-SH-5: the running state offers no controls — only the frame and the notice', async () => {
+  it('AC-SH-5: the running state offers no run or stop control — its one control maximizes the frame', async () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
     mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
     render(createElement(ArtifactView, { page: makePage() }));
@@ -251,7 +277,7 @@ describe('ArtifactView', () => {
     await flush();
 
     expect(document.querySelectorAll('iframe')).toHaveLength(1);
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([m['page.artifact.maximize']()]);
   });
 
   it('AC-SH-5: retrying after a failed mint mints again rather than reusing anything from the failed attempt', async () => {
@@ -510,6 +536,158 @@ describe('ArtifactView', () => {
       expect(screen.queryByRole('button', { name: m['page.artifact.retry_button']() })).toBeNull();
       expect(document.body.textContent).not.toContain(mismatchedOrigin);
       expectNoConsoleLeak(consoleSpies, mismatchedOrigin);
+    });
+  });
+
+  describe('the frame takes the height the artifact reports', () => {
+    it('keeps the fixed fallback height until a report arrives', async () => {
+      const { frame } = await renderRunningFrame();
+      expect(frame.className).toContain('h-[70vh]');
+      expect(frame.style.height).toBe('');
+    });
+
+    it('sizes the frame to a report from the artifact window and drops the fallback height', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400.4 });
+      expect(frame.style.height).toBe('2401px');
+      expect(frame.className).not.toContain('h-[70vh]');
+      expect(frame.className).not.toContain('min-h-');
+    });
+
+    it('ignores a report from any other window', async () => {
+      const { frame } = await renderRunningFrame();
+      post(window, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+      if (!frame.contentWindow) throw new Error('the outer frame has no window');
+      post(frame.contentWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+      expect(frame.style.height).toBe('');
+    });
+
+    it.each([
+      ['another message type', { type: 'something-else', height: 2400 }],
+      ['a non-numeric height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: '2400' }],
+      ['a zero height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 0 }],
+      ['an infinite height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: Number.POSITIVE_INFINITY }],
+      ['a bare number', 2400],
+    ])('ignores %s', async (_label, data) => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, data);
+      expect(frame.style.height).toBe('');
+    });
+
+    it('caps an oversized report so a runaway artifact cannot stretch the page without bound', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 10_000_000 });
+      expect(frame.style.height).toBe('100000px');
+    });
+  });
+  describe('maximizing the running artifact', () => {
+    const maximizeButton = () => screen.getByRole('button', { name: m['page.artifact.maximize']() });
+    const restoreButton = () => screen.getByRole('button', { name: m['page.artifact.restore']() });
+
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'fullscreenEnabled');
+      Reflect.deleteProperty(document, 'fullscreenElement');
+      document.documentElement.style.overflow = '';
+    });
+
+    it('restyles the same frame into a viewport-filling dialog instead of moving (and so reloading) it', async () => {
+      const { frame } = await renderRunningFrame();
+      const src = frame.getAttribute('src');
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      fireEvent.click(maximizeButton());
+
+      const dialog = screen.getByRole('dialog', { name: 'agent-output' });
+      expect(dialog.getAttribute('aria-modal')).toBe('true');
+      expect(dialog.className).toContain('fixed');
+      expect(dialog.className.split(' ')).toContain('m-0');
+      expect(dialog.contains(frame)).toBe(true);
+      expect(document.querySelector('iframe')).toBe(frame);
+      expect(frame.getAttribute('src')).toBe(src);
+    });
+
+    it('fills the overlay while maximized and takes the reported height back when restored', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+
+      fireEvent.click(maximizeButton());
+      expect(frame.style.height).toBe('');
+      expect(frame.className).toContain('flex-1');
+
+      fireEvent.click(restoreButton());
+      expect(frame.style.height).toBe('2400px');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('keeps the page behind from scrolling, and Escape restores', async () => {
+      await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+      expect(document.documentElement.style.overflow).toBe('hidden');
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.documentElement.style.overflow).toBe('');
+      expect(document.activeElement).toBe(maximizeButton());
+    });
+
+    it('restores on an Escape forwarded from inside the artifact, where the page cannot hear keys', async () => {
+      const { artifactWindow } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.documentElement.style.overflow).toBe('');
+      expect(document.activeElement).toBe(maximizeButton());
+    });
+
+    it('ignores a forwarded Escape from any other window', async () => {
+      await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      post(window, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('leaves a forwarded Escape to the browser while in full screen', async () => {
+      const { artifactWindow } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+      Object.defineProperty(document, 'fullscreenElement', { value: screen.getByRole('dialog'), configurable: true });
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('wraps focus that leaves the overlay back into it', async () => {
+      const { frame } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      act(() => screen.getByTestId('artifact-focus-end').focus());
+      expect(document.activeElement).toBe(restoreButton());
+      act(() => screen.getByTestId('artifact-focus-start').focus());
+      expect(document.activeElement).toBe(frame);
+    });
+
+    it('offers full screen only inside the overlay, and only where the browser supports it', async () => {
+      await renderRunningFrame();
+      const fullscreenButton = () => screen.queryByRole('button', { name: m['page.artifact.enter_fullscreen']() });
+      fireEvent.click(maximizeButton());
+      expect(fullscreenButton()).toBeNull();
+      fireEvent.click(restoreButton());
+
+      Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+      expect(fullscreenButton()).toBeNull();
+      fireEvent.click(maximizeButton());
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const dialog = screen.getByRole('dialog');
+      dialog.requestFullscreen = requestFullscreen;
+
+      const button = fullscreenButton();
+      if (!button) throw new Error('no full screen button');
+      fireEvent.click(button);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
     });
   });
 });

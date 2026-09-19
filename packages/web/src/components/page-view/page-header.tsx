@@ -3,10 +3,11 @@
 import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { ArrowUp, Edit2 } from 'lucide-react';
+import { ArrowUp, Edit2, LayoutFreeform } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { GrantChip } from '@/components/grant-chip';
+import { KindTag } from '@/components/kind-tag';
 import { Button } from '@/components/ui/button';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { pageDisplayName } from '@/lib/page-path';
@@ -175,6 +176,7 @@ export function PageHeader({
   // dotmenu and edit button stay so the creator can still operate on
   // the draft.
   const isDraft = page.status === PageStatusEnum.DRAFT;
+  const isArtifact = page.revision?.contentType === 'artifact';
   const pageTitle = getPageTitle(page.path);
 
   const editButton = onEdit && (
@@ -303,16 +305,23 @@ export function PageHeader({
           )}
 
       {showTitle ? (
-        // Mobile stacks the chip + edit button onto their own row below
-        // the title and right-aligns them so the title gets the full
-        // width to wrap into; from `md` up everything sits on one row.
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
-          <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground md:flex-1 md:min-w-0">{pageTitle}</h1>
-          {/* md+ only — mobile keeps the title row bare (chip + edit
-              live next to the breadcrumb on mobile). */}
-          <div className="hidden md:flex shrink-0 items-center justify-end gap-3 empty:hidden">
-            {page.grant != null && <GrantChip grant={page.grant} />}
-            {editButton}
+        <div className="space-y-2">
+          {isArtifact && (
+            <div className="flex">
+              <KindTag icon={LayoutFreeform} label={m['page.artifact.kind_label']()} />
+            </div>
+          )}
+          {/* Mobile stacks the chip + edit button onto their own row below
+              the title and right-aligns them so the title gets the full
+              width to wrap into; from `md` up everything sits on one row. */}
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+            <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground md:flex-1 md:min-w-0">{pageTitle}</h1>
+            {/* md+ only — mobile keeps the title row bare (chip + edit
+                live next to the breadcrumb on mobile). */}
+            <div className="hidden md:flex shrink-0 items-center justify-end gap-3 empty:hidden">
+              {page.grant != null && <GrantChip grant={page.grant} />}
+              {editButton}
+            </div>
           </div>
         </div>
       ) : (
