@@ -599,6 +599,7 @@ describe('ArtifactView', () => {
       const dialog = screen.getByRole('dialog', { name: 'agent-output' });
       expect(dialog.getAttribute('aria-modal')).toBe('true');
       expect(dialog.className).toContain('fixed');
+      expect(dialog.className.split(' ')).toContain('m-0');
       expect(dialog.contains(frame)).toBe(true);
       expect(document.querySelector('iframe')).toBe(frame);
       expect(frame.getAttribute('src')).toBe(src);

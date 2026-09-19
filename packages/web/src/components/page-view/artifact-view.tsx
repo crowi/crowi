@@ -158,7 +158,9 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
       role={maximized ? 'dialog' : undefined}
       aria-modal={maximized || undefined}
       aria-label={maximized ? title : undefined}
-      className={cn(maximized ? 'fixed inset-0 z-50 flex flex-col bg-background' : 'space-y-2')}
+      // `m-0`: the page body spaces its children with margins, and an
+      // inherited margin would leave a strip of the page showing.
+      className={cn(maximized ? 'fixed inset-0 z-50 m-0 flex flex-col bg-background' : 'space-y-2')}
       data-testid="artifact-running"
     >
       {/* Tab past the last control wraps to the first and back, so focus
