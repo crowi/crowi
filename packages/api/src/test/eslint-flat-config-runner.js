@@ -47,7 +47,10 @@ async function handle(msg) {
       // Only whether type-aware parsing is switched on travels back: the guard
       // suite asserts on that alone, and the rest of a resolved config is a
       // large object that would turn any config edit into a test edit.
-      process.send({ type: 'inspection', id: msg.id, hasTypedParserProject: config?.languageOptions?.parserOptions?.project != null });
+      // `projectService` switches on the same Program-building cost as
+      // `project`, so either one counts.
+      const parserOptions = config?.languageOptions?.parserOptions;
+      process.send({ type: 'inspection', id: msg.id, hasTypedParserProject: Boolean(parserOptions?.project || parserOptions?.projectService) });
     } catch (err) {
       process.send({
         type: 'error',

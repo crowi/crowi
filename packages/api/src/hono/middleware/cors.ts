@@ -38,6 +38,8 @@ import { cors } from 'hono/cors';
 
 import type Crowi from 'src/crowi';
 
+import { REQUEST_ID_HEADER } from './request-scope';
+
 const debug = Debug('crowi:hono:middleware:cors');
 
 /**
@@ -103,5 +105,11 @@ export const createCors = (crowi: Crowi): MiddlewareHandler => {
     // failing preflight. `X-Crowi-Page-Content-Type` (RFC-0020) is the
     // POST/PUT /pages artifact write discriminator.
     allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Crowi-Ast-Version', 'X-Crowi-Page-Content-Type'],
+    // RFC-0025 §9 Phase 2 — readability, not request permission: a
+    // browser may READ the response header carrying the canonical request
+    // ID, but this does not grant it permission to SEND the same header
+    // name as a cross-origin request header (that stays governed by
+    // `allowHeaders` above, unchanged).
+    exposeHeaders: [REQUEST_ID_HEADER],
   });
 };

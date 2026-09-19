@@ -1528,6 +1528,58 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       expect(new Set(finalSequences).size).toBe(finalSequences.length); // still no duplicates after convergence
     });
 
+    test('a scan whose Revision re-check is overtaken by a COMPLETE concurrent claim of the same Revision neither burns a sequence nor leaves an unmaterializable outbox entry', async () => {
+      const page = await createReadyPage('/repair/claim-recheck-overtaken', 'v0');
+      const target = await Revision.findOne({ page: page._id }).exec();
+
+      // Deterministic version of the interleaving the live two-scan test
+      // above only hits under load: scan A has just re-read `target`'s
+      // `historySequence` (still unset) inside its claim loop, and before A
+      // issues anything else a second scan runs its whole claim cycle for
+      // the same Revision to completion (CAS, materialize, drain). The hook
+      // fires on the first `Revision.findById(target)` the outer scan
+      // issues — the claim loop's own re-check — and runs the competing
+      // scan right there, so A resumes against a Page whose allocator has
+      // moved and whose outbox slot is empty again.
+      let injected = false;
+      let competing: Awaited<ReturnType<typeof scanUnsequencedRevisions>> | undefined;
+      const originalFindById = Revision.findById.bind(Revision);
+      const spy = jest.spyOn(Revision, 'findById').mockImplementation((id, ...rest) => {
+        const query = originalFindById(id, ...rest);
+        if (injected || String(id) !== String(target._id)) {
+          return query;
+        }
+        const originalExec = query.exec.bind(query);
+        query.exec = async (...execArgs) => {
+          const execResult = await originalExec(...execArgs);
+          injected = true;
+          competing = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+          return execResult;
+        };
+        return query;
+      });
+
+      let result: Awaited<ReturnType<typeof scanUnsequencedRevisions>>;
+      try {
+        result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(injected).toBe(true);
+      expect(competing?.repaired.filter((r) => r.pageId.equals(page._id)).map((r) => r.assignedSequence)).toEqual([1]);
+
+      expect(result.failed.filter((f) => f.pageId === String(page._id))).toEqual([]);
+      expect(result.blocked.some((b) => b.pageId.equals(page._id))).toBe(false);
+      expect(result.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
+
+      const reloadedRevision = await Revision.findById(target._id).lean();
+      expect(reloadedRevision.historySequence).toBe(1);
+      const reloadedPage = await Page.findById(page._id);
+      expect(reloadedPage.pendingHistoryEntry).toBeUndefined();
+      expect(reloadedPage.historySequence).toBe(1); // the losing claim burned no allocator increment
+    });
+
     test("a Page whose allocator counter and Revision are advanced by a CONCURRENT claim between this scan's batch fetch and its per-page turn is not falsely blocked (codex review attempt 5/2, AC-7/8)", async () => {
       const page = await createReadyPage('/repair/counter-race-not-falsely-blocked', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();

@@ -6899,10 +6899,12 @@
             "type": "boolean"
           },
           "registrationMode": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+            "type": "string",
+            "enum": [
+              "Open",
+              "Resricted",
+              "Closed"
+            ]
           },
           "setupChecklistDismissed": {
             "type": "boolean"
@@ -40700,10 +40702,12 @@
                       "type": "boolean"
                     },
                     "registrationMode": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                      "type": "string",
+                      "enum": [
+                        "Open",
+                        "Resricted",
+                        "Closed"
+                      ]
                     },
                     "setupChecklistDismissed": {
                       "type": "boolean"

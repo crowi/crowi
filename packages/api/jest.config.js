@@ -146,6 +146,11 @@ module.exports = {
       // automatically so no test depends on a leftover spy.
       restoreMocks: true,
       testEnvironment: './src/test/crowi-environment.js',
+      // Resolved before `setupFilesAfterEnv`, and before any application
+      // module import — the logger's severity floor is read lazily on first
+      // use, so this is the only hook early enough to fix it ahead of the
+      // 100+ boot-heavy suites in this project.
+      setupFiles: ['./src/test/logging-env.ts'],
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],
       // Redis smoke files run in the dedicated `redis-smoke` project below
@@ -153,8 +158,9 @@ module.exports = {
       // and the full per-file Crowi boot + scratch-Mongo create/drop cycle
       // is pure waste for them. `crowi/index.smoke.test.ts` is the one
       // exception (it exercises the real boot path via the singleton), so
-      // the lookbehind keeps it here.
-      testPathIgnorePatterns: ['(?<!crowi/index)\\.smoke\\.test\\.ts$'],
+      // the lookbehind keeps it here. `*.unit.test.ts` files run in the
+      // `unit` project below instead, which boots none of Crowi/Mongo/Hono.
+      testPathIgnorePatterns: ['(?<!crowi/index)\\.smoke\\.test\\.ts$', '\\.unit\\.test\\.ts$'],
       moduleNameMapper: {
         '^src/(.*)': '<rootDir>/src/$1',
         '^client/(.*)': '<rootDir>/client/$1',
@@ -180,6 +186,34 @@ module.exports = {
         ],
       },
       transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+))'],
+    },
+    {
+      displayName: 'unit',
+      preset: 'ts-jest',
+      // Kept identical to the sibling projects: the root-level declaration
+      // does not reach a project entry (see the module-doc comment at the
+      // top of this file), so each project sets its own.
+      restoreMocks: true,
+      // Plain node environment, no `setup.ts`: these files exercise pure
+      // library modules through injected dependencies — no Crowi boot, no
+      // Mongo, no Hono.
+      testEnvironment: 'node',
+      // Selects membership by PATTERN, not by an enumerated file list — a
+      // later phase adding a pure unit file needs no change here.
+      testMatch: ['<rootDir>/src/**/*.unit.test.ts'],
+      moduleNameMapper: {
+        '^src/(.*)': '<rootDir>/src/$1',
+        '^client/(.*)': '<rootDir>/client/$1',
+        '^common/(.*)': '<rootDir>/common/$1',
+      },
+      transform: {
+        '^.+\\.tsx?$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+          },
+        ],
+      },
     },
     {
       displayName: 'redis-smoke',

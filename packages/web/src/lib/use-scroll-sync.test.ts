@@ -196,15 +196,39 @@ describe('useScrollSync — sliding reference', () => {
     });
   });
 
+  // A browser dispatches the scroll a sync write causes in the NEXT frame's
+  // scroll steps, after the animation-frame callbacks of the frame in which
+  // the sync handler ran. These cases replay that order: run the pending
+  // frame first, then deliver the event.
   describe('recursion guard (no oscillation)', () => {
-    it('absorbs a reflected preview scroll fired while the editor->preview lock is still held', () => {
-      renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
-      scrollEditorTo(EDITOR_MAX / 2);
-      const previewScrollTopAfterForward = previewContainer.scrollTop;
+    let frameQueue: FrameRequestCallback[];
 
-      // Simulate the browser's own reflected 'scroll' event firing on the
-      // preview BEFORE the next animation frame clears the lock — this must
-      // be a no-op (early return), not a reflex back into the editor.
+    beforeEach(() => {
+      frameQueue = [];
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        frameQueue.push(cb);
+        return frameQueue.length;
+      });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function flushFrame() {
+      const callbacks = frameQueue;
+      frameQueue = [];
+      act(() => {
+        for (const cb of callbacks) cb(performance.now());
+      });
+    }
+
+    it('does not bounce a forward sync back into the editor', () => {
+      renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+      scrollEditorTo(EDITOR_MAX / 4);
+      const previewScrollTopAfterForward = previewContainer.scrollTop;
+      flushFrame();
+
       act(() => {
         previewContainer.dispatchEvent(new Event('scroll'));
       });
@@ -213,22 +237,42 @@ describe('useScrollSync — sliding reference', () => {
       expect(previewContainer.scrollTop).toBe(previewScrollTopAfterForward);
     });
 
-    it('absorbs a reflected editor scroll fired while the preview->editor lock is still held', () => {
+    it('does not bounce a reverse sync back into the preview', () => {
       renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
       // Give the editor pane a non-trivial, non-pinned scrollTop so a
       // leaked reflex would visibly move the preview to a computably
       // different position, not coincidentally land on the same spot.
       editorScrollDOM.scrollTop = EDITOR_MAX / 4;
       scrollPreviewTo(PREVIEW_MAX / 2);
-      const previewScrollTopAfterReverse = previewContainer.scrollTop; // untouched by reverse sync
+      const previewScrollTopAfterReverse = previewContainer.scrollTop;
+      flushFrame();
 
       act(() => {
         editorScrollDOM.dispatchEvent(new Event('scroll'));
       });
 
-      // Blocked by the lock: the reflected event must not drive a forward
-      // sync (which would have overwritten previewContainer.scrollTop).
       expect(previewContainer.scrollTop).toBe(previewScrollTopAfterReverse);
+    });
+
+    it('still follows the preview when the user scrolls it away from where a forward sync left it', () => {
+      renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+      scrollEditorTo(EDITOR_MAX / 4);
+      flushFrame();
+
+      scrollPreviewTo(PREVIEW_MAX / 2);
+
+      expect(editorRef.current?.scrollToLineProgressAt).toHaveBeenCalledTimes(1);
+    });
+
+    it('still follows the editor when the user scrolls it away from where a reverse sync left it', () => {
+      renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+      editorScrollDOM.scrollTop = EDITOR_MAX / 4;
+      scrollPreviewTo(PREVIEW_MAX / 2);
+      flushFrame();
+
+      scrollEditorTo(EDITOR_MAX);
+
+      expect(previewContainer.scrollTop).toBe(PREVIEW_MAX);
     });
   });
 

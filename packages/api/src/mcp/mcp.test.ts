@@ -375,8 +375,8 @@ describe('MCP server (/api/mcp)', () => {
       const dispatchModule = await import('./dispatch');
       const inits: DispatchInit[] = [];
       const original = dispatchModule.makeDispatch;
-      const spy = jest.spyOn(dispatchModule, 'makeDispatch').mockImplementation((honoAppArg, authorization) => {
-        const real = original(honoAppArg, authorization);
+      const spy = jest.spyOn(dispatchModule, 'makeDispatch').mockImplementation((honoAppArg, authorization, requestId) => {
+        const real = original(honoAppArg, authorization, requestId);
         return async (method, path, init) => {
           inits.push(init ?? {});
           return real(method, path, init);
@@ -482,7 +482,7 @@ describe('MCP server (/api/mcp)', () => {
         .mockResolvedValue(new Response(JSON.stringify({ page: { _id: 'p1' } }), { status: 200, headers: { 'content-type': 'application/json' } }));
       const fakeHonoApp = { request: requestMock } as unknown as Parameters<typeof dispatchModule.makeDispatch>[0];
 
-      const dispatch = dispatchModule.makeDispatch(fakeHonoApp, 'Bearer real-token');
+      const dispatch = dispatchModule.makeDispatch(fakeHonoApp, 'Bearer real-token', 'test-request-id');
       // A JSON body is required to exercise the `content-type` strip — a
       // bodyless GET never sets `content-type` at all (either forged or
       // real), so it can't tell "stripped" apart from "never applied". A
@@ -801,10 +801,11 @@ describe('MCP server (/api/mcp)', () => {
 
     it('a rejected credential never reaches dispatch — the dispatcher is never constructed and a mutating tool call has no side effect (AC-7)', async () => {
       // `attach.ts`'s `app.all('/mcp', ...)` handler only calls
-      // `makeDispatch(app, authorization)` AFTER `createMcpAuth` lets the
-      // request through — asserting the dispatcher factory itself was never
-      // invoked proves dispatch never runs, rather than only inferring it
-      // from the absence of a downstream side effect.
+      // `makeDispatch(app, authorization, c.get('requestId'))` AFTER
+      // `createMcpAuth` lets the request through — asserting the
+      // dispatcher factory itself was never invoked proves dispatch never
+      // runs, rather than only inferring it from the absence of a
+      // downstream side effect.
       const dispatchModule = await import('./dispatch');
       const spy = jest.spyOn(dispatchModule, 'makeDispatch');
       try {
