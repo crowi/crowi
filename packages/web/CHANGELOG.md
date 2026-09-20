@@ -1,5 +1,24 @@
 # @crowi/web
 
+## 2.0.0-alpha.22
+
+### Minor Changes
+
+- 0b2ea32: An HTML artifact page now grows to fit its content, so the page scrolls as one document instead of showing a second scrollbar inside the artifact's frame, and the page title carries an "Artifact" pill above it, like the one a portal carries in its header.
+
+  To make the height measurable, the artifact delivery route (`GET /api/artifact/{pageId}/{revisionId}`) now appends one fixed script after the stored document that reports the document's height to the page, and its `Content-Security-Policy` always authorises that script by hash — so `script-src` is no longer `'none'` for an artifact without scripts of its own. The stored HTML is unchanged, and the download route still returns exactly what was stored. A document that sizes itself from the viewport (for example `min-height: 100vh` plus padding) stops growing the frame after one step and scrolls the remainder inside it; until the first report arrives, the frame keeps its previous fixed height.
+
+- b687b99: An HTML artifact page can now be maximized to fill the browser window, for artifacts wider than the page column, and from there switched to full screen where the browser supports full screen for page elements (not on iPhone). The artifact keeps its state across both: its frame is restyled in place, never reloaded. Escape or the Restore button returns to the normal page; Escape works even while focus is inside the artifact, forwarded by the script artifact delivery appends, unless the artifact handles Escape itself. The sandboxed-content notice stays visible while maximized.
+
+### Patch Changes
+
+- 746d2c1: The App admin page's status card now shows the actual configured registration mode (Open / Restricted / Closed) instead of always displaying the literal string "open", and Restricted is now correctly described as requiring admin approval rather than being invitation-only, matching the Security admin page's labels and wording.
+- e61d490: Fixed scroll sync between the editor and the preview on the edit page running away: scrolling down no longer keeps both panes scrolling far past where you stopped, and scrolling up in either pane is no longer pushed back down.
+- ec48b94: Shorten the settings security tab label in Japanese and English to fit narrow screens and describe security and integration settings collectively.
+- Updated dependencies [746d2c1]
+- Updated dependencies [0b2ea32]
+  - @crowi/api-contract@2.0.0-alpha.22
+
 ## 2.0.0-alpha.21
 
 ### Minor Changes
