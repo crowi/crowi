@@ -860,7 +860,7 @@
   "me.profile_picture.upload_pending": "アップロード中...",
   "me.subheading": "アカウント設定とプロフィールを管理",
   "me.tab_profile": "プロフィール",
-  "me.tab_security": "パスワード/APIトークン/アカウント連携",
+  "me.tab_security": "セキュリティ・連携",
   "notifications.action_comment": "コメント",
   "notifications.action_like": "いいね",
   "notifications.action_mention": "メンション",
