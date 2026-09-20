@@ -856,7 +856,7 @@
   "me.profile_picture.upload_pending": "Uploading...",
   "me.subheading": "Manage your account settings and profile",
   "me.tab_profile": "Profile",
-  "me.tab_security": "Password / API tokens / Linked accounts",
+  "me.tab_security": "Security & integrations",
   "notifications.action_comment": "commented on",
   "notifications.action_like": "liked",
   "notifications.action_mention": "mentioned you in",
