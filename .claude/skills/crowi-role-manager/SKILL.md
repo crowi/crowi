@@ -13,8 +13,15 @@ description: crowi の manager ロールでセッションを起動/再起動し
 
 ## 起動手順(上から順に実行)
 
-1. **agmsg を manager として確立する**: agmsg skill の `actas` 手順に従い `manager` として振る舞う(whoami 確認 → 未登録/別ロールなら actas manager)。SessionStart hook が Monitor 起動指示(AGMSG-DIRECTIVE)を出していれば、その agmsg inbox monitor を先に張ってよいが、**受信を manager 宛に限定する actas を必ず通す**。
-2. **orchestrate watcher を起動する**: crowi-orchestrate「運用モード: watch」のコマンドで `orchestrate-watch.sh --until-event` を background Bash で起動する(すでに動いていれば二重に起動しない)。これが worktree 側の `READY_TO_INTEGRATE` signal と REVIEW_THRESHOLD を拾う正チャネル。新しい event を出すと終了して 1 回だけ通知が来るので、処理したら同じコマンドで起動し直す。**Monitor では張らない**(Claude Code 2.1.271 以降は最長 30 分で期限切れになり、そのたびに何も起きていなくてもセッションを起こす)。
+1. **agmsg を manager として確立する**: agmsg skill の `actas` 手順に従い `manager` として振る舞う(whoami 確認 → 未登録/別ロールなら actas manager)。**受信を manager 宛に限定する actas を必ず通す**。actas が張った agmsg inbox monitor は手順 2 で置き換えるので、ここで張り直さない(SessionStart hook の AGMSG-DIRECTIVE も同じ扱い)。
+2. **watcher を起動する**: agmsg の受信と orchestrate の event を 1 本で見る `manager-watch.sh` を background Bash で起動する。actas が Monitor を張っていれば先に TaskStop し、以後 Monitor では張らない(Claude Code 2.1.271 以降は最長 30 分で期限切れになり、そのたびに何も起きていなくてもセッションを起こす。`persistent` は廃止済み)。
+
+```
+Bash({ command: 'pgrep -f "^bash .*manager-watch.sh" >/dev/null && echo already-running || exec bash .claude/scripts/manager-watch.sh "$CLAUDE_CODE_SESSION_ID"',
+       description: 'manager watch (agmsg inbox + orchestrate lanes)', run_in_background: true })
+```
+
+   新しい event か agmsg の新着が来ると、その内容を出して終了する。**終了通知を受けたら、対応する前に必ず同じコマンドで起動し直す**(起動し直しを忘れると以後どの signal も届かない — 実際に 1 度、statusless のまま数時間気づかなかった)。event 対応表は crowi-orchestrate の「運用モード: watch」節が正本。
 3. **inbox を確認する**: `~/.agents/skills/agmsg/scripts/inbox.sh crowi manager` を実行し、planner からの spec 引き渡し・reviewer の verdict・impl からの完了報告を把握して要点をユーザーに1行ずつ報告する。
 4. **稼働状態を把握する**(state ファイルを実際に読む):
    - `git worktree list` — 稼働中の worktree(= 進行中 or 統合待ちの feature)。
@@ -37,8 +44,8 @@ description: crowi の manager ロールでセッションを起動/再起動し
 
 ## 運用 gotcha(manager 固有・ハマりどころ)
 
-- **再起動で watcher が消える**: compaction / `/clear` / version 更新のたびに agmsg inbox monitor と orchestrate watcher の両方が停止する。起動手順 1・2 で起動し直す。「Monitor stopped」通知は旧 watcher のクリーンアップなので起動し直しの合図。
-- **agmsg の inbox monitor は 30 分で期限切れになる**: agmsg は Monitor で受信するため、Claude Code 2.1.271 以降は最長 30 分で期限切れ通知が来る。報告文は書かずに張り直すだけにする(`timeout_ms: 1800000` を明示。省略すると 5 分で切れる)。
+- **再起動で watcher が消える**: compaction / `/clear` / version 更新のたびに watcher が停止する。起動手順 2 で起動し直す。「Monitor stopped」通知は agmsg が張った旧 watcher のクリーンアップなので、起動し直しの合図。
+- **event を処理したら必ず起動し直す**: `manager-watch.sh` は 1 event で終了する。作業に入る前に起動し直すこと。止まったままだと signal も agmsg も届かず、しかも**静かなので気づけない**(実際に数時間気づかなかった)。長い作業の前後では `pgrep -f manager-watch.sh` で生存を確認する。
 - **既知 event は再通知されない**: orchestrate watcher は一度出した event を `.feature-state/orchestrate-watch.seen` に記録するので、起動し直しても同じ `READY_TO_INTEGRATE` は来ない。それでも **同じ worktree を二重 integrate しない**(統合済みの task は signal file を消した時点で対象から外れる)。起動直後の現況は通知ではなく起動手順 4 で state ファイルから把握する。
 - **integrate 前の裏取りは必須**: signal は premature に立つこともある。`git -C <wt> status --porcelain`(clean)/ 先行 commit / task status / worktree session idle を確認してから merge。**`cd <wt>` は zsh の chpwd auto-ls を誤発火させ stdout を汚す**ので `git -C` を使う。
 - **main-write lock**: integrate / main-direct commit の前に取得し、完了・中断のどの経路でも必ず解放。busy は奪わず保持者を報告(CLAUDE.md「main write lock」が正本)。
