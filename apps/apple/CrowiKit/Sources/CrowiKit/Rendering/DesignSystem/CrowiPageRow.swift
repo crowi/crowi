@@ -25,9 +25,6 @@ public struct CrowiPageRow: View {
     private let isArtifact: Bool
     private let loader: any WorkspaceImageFetching
 
-    /// RFC-0020's HTML artifact mark, shared with the page tree's leaf chip
-    /// so a page reads as the same kind of thing wherever it is listed.
-    public static let artifactSystemImage = "chevron.left.forwardslash.chevron.right"
 
     @ScaledMetric(relativeTo: .headline) private var avatarSize: CGFloat = CrowiMetrics.leadingChipSize
     @ScaledMetric(relativeTo: .caption) private var reactionGlyphSize: CGFloat = 12
@@ -81,8 +78,7 @@ public struct CrowiPageRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     PageRowTitleLabel(path: path)
                     if isArtifact {
-                        Image(systemName: Self.artifactSystemImage)
-                            .font(.system(size: reactionGlyphSize))
+                        CrowiArtifactGlyph(size: reactionGlyphSize)
                             .foregroundStyle(CrowiTheme.mutedForeground)
                             .accessibilityLabel("HTML artifact page")
                     }

@@ -84,11 +84,22 @@ public struct CrowiRowChevron: View {
 /// the scaled size so an enlarged chip stays the same squircle rather than
 /// flattening into a rounded square.
 public struct CrowiRowChip: View {
-    private let systemImage: String
+    /// What sits inside the chip: a system symbol, or the drawn artifact
+    /// mark (`CrowiArtifactGlyph` — no system symbol has that shape).
+    public enum Glyph: Sendable, Equatable {
+        case systemImage(String)
+        case artifact
+    }
+
+    private let glyph: Glyph
     @ScaledMetric(relativeTo: .headline) private var size: CGFloat = CrowiMetrics.leadingChipSize
 
     public init(systemImage: String) {
-        self.systemImage = systemImage
+        self.glyph = .systemImage(systemImage)
+    }
+
+    public init(glyph: Glyph) {
+        self.glyph = glyph
     }
 
     public var body: some View {
@@ -96,10 +107,17 @@ public struct CrowiRowChip: View {
             .fill(CrowiTheme.muted)
             .frame(width: size, height: size)
             .overlay {
-                Image(systemName: systemImage)
-                    // Design: a 17px glyph inside the 34px chip.
-                    .font(.system(size: size * 0.5, weight: .medium))
-                    .foregroundStyle(CrowiTheme.mutedForeground)
+                // Design: a 17px glyph inside the 34px chip.
+                Group {
+                    switch glyph {
+                    case .systemImage(let name):
+                        Image(systemName: name)
+                            .font(.system(size: size * 0.5, weight: .medium))
+                    case .artifact:
+                        CrowiArtifactGlyph(size: size * 0.5)
+                    }
+                }
+                .foregroundStyle(CrowiTheme.mutedForeground)
             }
             .accessibilityHidden(true)
     }

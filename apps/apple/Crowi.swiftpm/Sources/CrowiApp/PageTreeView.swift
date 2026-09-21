@@ -234,26 +234,26 @@ struct PageTreeView: View {
             Button {
                 onSelect(.pageTree(path: child.path, hasPortal: child.hasPortal))
             } label: {
-                label(for: child, systemImage: child.hasPortal ? "folder.fill" : "folder")
+                label(for: child, glyph: .systemImage(child.hasPortal ? "folder.fill" : "folder"))
             }
             .buttonStyle(.plain)
         } else if child.isPage {
             Button {
                 onSelect(.page(path: String(child.path.dropLast())))
             } label: {
-                label(for: child, systemImage: child.isArtifactPage ? CrowiPageRow.artifactSystemImage : "doc.text")
+                label(for: child, glyph: child.isArtifactPage ? .artifact : .systemImage("doc.text"))
             }
             .buttonStyle(.plain)
         } else {
             // Neither a page nor a directory — nothing to open, so no
             // chevron either: the affordance has to mean something.
-            label(for: child, systemImage: "questionmark.folder", showsChevron: false)
+            label(for: child, glyph: .systemImage("questionmark.folder"), showsChevron: false)
         }
     }
 
-    private func label(for child: PageChildSegmentLenient, systemImage: String, showsChevron: Bool = true) -> some View {
+    private func label(for child: PageChildSegmentLenient, glyph: CrowiRowChip.Glyph, showsChevron: Bool = true) -> some View {
         CrowiRow(showsChevron: showsChevron) {
-            CrowiRowChip(systemImage: systemImage)
+            CrowiRowChip(glyph: glyph)
         } content: {
             VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
                 // The RAW segment, not a display name — see this view's doc

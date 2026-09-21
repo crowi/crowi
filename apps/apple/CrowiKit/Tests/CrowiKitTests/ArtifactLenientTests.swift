@@ -228,3 +228,26 @@ final class ArtifactLenientTests: XCTestCase {
         XCTAssertEqual(ArtifactNavigationPolicy.decide(requestURL: downgraded, deliveryURL: delivery, isMainFrame: true, isLinkActivation: false), .cancel)
     }
 }
+
+/// The drawn artifact mark: the web's icon is the reference, so its geometry
+/// is pinned rather than eyeballed.
+final class CrowiArtifactGlyphTests: XCTestCase {
+    func testTheGlyphIsThreeSquaresInTheWebsOwnPositions() {
+        let path = CrowiArtifactGlyphShape().path(in: CGRect(x: 0, y: 0, width: 24, height: 24))
+
+        var subpaths = 0
+        path.forEach { element in
+            if case .move = element { subpaths += 1 }
+        }
+        XCTAssertEqual(subpaths, 3, "three squares, the fourth position deliberately empty")
+        // 7-unit squares at (3,3), (14,4) and (4,14) span 3...21 both ways.
+        XCTAssertEqual(path.boundingRect, CGRect(x: 3, y: 3, width: 18, height: 18))
+    }
+
+    /// Drawn at whatever size it is given, keeping the web's proportions.
+    func testTheGlyphScalesWithItsFrame() {
+        let path = CrowiArtifactGlyphShape().path(in: CGRect(x: 0, y: 0, width: 48, height: 48))
+
+        XCTAssertEqual(path.boundingRect, CGRect(x: 6, y: 6, width: 36, height: 36))
+    }
+}
