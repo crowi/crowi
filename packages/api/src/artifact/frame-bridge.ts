@@ -21,11 +21,25 @@ import { sha256DigestToken } from './csp';
 // scrolling element is the viewport minus any horizontal scrollbar, which
 // the reported height adds back so the content fits above the bar.
 //
-// A document sized from the viewport (`min-height: 100vh` plus padding, say)
-// overflows by the same amount at every frame height, so growing the frame
-// never converges. When the viewport has grown since the last report and the
-// overflow is unchanged, the report is withheld and the rest stays scrollable
-// inside the frame.
+// A document that grows with the viewport (`min-height: 100vh` plus padding,
+// a stack of `100vh` slides, `min-height: 110vh`) is still overflowing after
+// the frame grows to fit it, so following it never converges. A report is
+// withheld when the viewport has grown since the last report and the overflow
+// has not shrunk; the rest stays scrollable inside the frame. What was
+// withheld is remembered apart from what was sent: the same measurement taken
+// again at the same viewport (the mutation timer and `load` re-measure without
+// the viewport moving) must stay withheld, which comparing against the last
+// report alone cannot tell from a real change. A different height at the same
+// viewport is a real change and is reported. A duplicate of the last report
+// still refreshes the viewport and overflow it is compared against, so a
+// frame that has since grown is not judged against its pre-growth baseline.
+//
+// Known gap: if content leaves the flow and grows by more than the previous
+// overflow before any measurement is taken at the newly grown frame size, that
+// growth reads like the viewport-driven kind and is withheld. The content stays
+// scrollable. It is reported again only once the viewport changes, or a
+// measurement at the same viewport reads a height other than the withheld one;
+// a measurement at an unchanged viewport and the same height stays withheld.
 //
 // Content taken out of flow (absolutely positioned, transformed) changes the
 // scroll height without resizing the root or body box, so the resize
@@ -44,17 +58,31 @@ export const ARTIFACT_FRAME_BRIDGE_SCRIPT = `(function () {
   var sentHeight = -1;
   var sentOverflow = 0;
   var sentViewport = 0;
+  var withheldHeight = -1;
+  var withheldViewport = -1;
   function report() {
     var scroller = document.scrollingElement || root;
     var viewport = scroller.clientHeight;
     var content = Math.ceil(Math.max(root.getBoundingClientRect().height, scroller.scrollHeight > viewport ? scroller.scrollHeight : 0));
     var overflow = content - viewport;
     var height = content + window.innerHeight - viewport;
-    if (height === sentHeight) return;
-    if (overflow > 0 && overflow === sentOverflow && viewport > sentViewport) return;
+    if (height === sentHeight) {
+      sentOverflow = overflow;
+      sentViewport = viewport;
+      return;
+    }
+    if (viewport === withheldViewport) {
+      if (height === withheldHeight) return;
+    } else if (sentHeight >= 0 && overflow > 0 && overflow >= sentOverflow && viewport > sentViewport) {
+      withheldHeight = height;
+      withheldViewport = viewport;
+      return;
+    }
     sentHeight = height;
     sentOverflow = overflow;
     sentViewport = viewport;
+    withheldHeight = -1;
+    withheldViewport = -1;
     target.postMessage({ type: ${JSON.stringify(ARTIFACT_HEIGHT_MESSAGE_TYPE)}, height: height }, '*');
   }
   var scheduled = false;

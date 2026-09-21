@@ -13,6 +13,9 @@ async function ingested(html: string): Promise<string> {
   return Buffer.from(result.bytes).toString('utf8');
 }
 
+// Mirrors the page's cap on the frame height (`artifact-view.tsx`), which lives in the web package.
+const MAX_ARTIFACT_FRAME_HEIGHT = 100_000;
+
 const PLAIN_HTML = '<!doctype html><html><head><title>t</title></head><body><p>hi</p></body></html>';
 
 const SNAPSHOT: ArtifactPolicySnapshot = Object.freeze({
@@ -88,9 +91,11 @@ describe('ARTIFACT_FRAME_BRIDGE_SCRIPT', () => {
  * `scrollbar` is a horizontal scrollbar's thickness, which `clientHeight`
  * loses. `vhExtra` models a `min-height: 100vh` body with that much padding
  * on top: the document is then never shorter than the frame plus `vhExtra`.
+ * `vhScale` models a document that is that many viewports tall (plus `vhExtra`),
+ * so its overflow grows with every frame resize instead of staying fixed.
  */
-function runBridge(initial: { content: number; frame: number; scrollbar?: number; vhExtra?: number }) {
-  const layout = { scrollbar: 0, vhExtra: undefined as number | undefined, ...initial };
+function runBridge(initial: { content: number; frame: number; scrollbar?: number; vhExtra?: number; vhScale?: number }) {
+  const layout = { scrollbar: 0, vhExtra: undefined as number | undefined, vhScale: undefined as number | undefined, ...initial };
   const posted: number[] = [];
   let escapes = 0;
   let observerCallback: (() => void) | null = null;
@@ -100,7 +105,10 @@ function runBridge(initial: { content: number; frame: number; scrollbar?: number
   const keydownListeners: ((event: { key: string; defaultPrevented: boolean }) => void)[] = [];
   const timers: (() => void)[] = [];
 
-  const contentHeight = () => (layout.vhExtra === undefined ? layout.content : Math.max(layout.frame, layout.content) + layout.vhExtra);
+  const contentHeight = () => {
+    if (layout.vhScale !== undefined) return Math.ceil(layout.frame * layout.vhScale) + (layout.vhExtra ?? 0);
+    return layout.vhExtra === undefined ? layout.content : Math.max(layout.frame, layout.content) + layout.vhExtra;
+  };
   const scroller = {
     get clientHeight() {
       return layout.frame - layout.scrollbar;
@@ -249,6 +257,68 @@ describe('the frame bridge reporting height from inside the artifact', () => {
     for (let i = 0; i < 5; i++) bridge.applyLastReport();
     // Grows to the content, then withholds the viewport-driven step after it.
     expect(bridge.posted).toEqual([678, 3048, 3096]);
+  });
+
+  it('stops a document whose content scales with the viewport instead of growing to the cap', () => {
+    const bridge = runBridge({ content: 0, frame: 630, vhScale: 3, vhExtra: 16 });
+    bridge.fire();
+    for (let i = 0; i < 20; i++) bridge.applyLastReport();
+    expect(bridge.posted).toHaveLength(1);
+    expect(bridge.posted.at(-1)).toBeLessThan(MAX_ARTIFACT_FRAME_HEIGHT);
+  });
+
+  it('stops a document that is slightly taller than the viewport at every size', () => {
+    const bridge = runBridge({ content: 0, frame: 630, vhScale: 1.1 });
+    bridge.fire();
+    for (let i = 0; i < 100; i++) bridge.applyLastReport();
+    expect(bridge.posted).toHaveLength(1);
+    expect(bridge.posted.at(-1)).toBeLessThan(MAX_ARTIFACT_FRAME_HEIGHT);
+  });
+
+  it.each([
+    ['100vh + 40px', { vhExtra: 40 }],
+    ['3 x 100vh + 16px', { vhScale: 3, vhExtra: 16 }],
+  ])('keeps withholding when a mutation timer re-measures the same viewport (%s)', (_label, sizing) => {
+    const bridge = runBridge({ content: 0, frame: 630, ...sizing });
+    bridge.fire();
+    for (let i = 0; i < 10; i++) {
+      bridge.applyLastReport();
+      bridge.mutate();
+      bridge.runTimers();
+      bridge.load();
+      bridge.runTimers();
+    }
+    expect(bridge.posted).toHaveLength(1);
+  });
+
+  it.each([
+    ['100vh + 40px', { vhExtra: 40 }],
+    ['3 x 100vh + 16px', { vhScale: 3, vhExtra: 16 }],
+  ])('does not ratchet the height after maximize and restore (%s)', (_label, sizing) => {
+    const bridge = runBridge({ content: 0, frame: 630, ...sizing });
+    bridge.fire();
+    bridge.applyLastReport();
+    const settled = bridge.layout.frame;
+    // Maximize and restore resize the frame without a report from the artifact.
+    for (const frame of [1400, settled, 900, settled]) {
+      bridge.layout.frame = frame;
+      bridge.fire();
+    }
+    expect(bridge.posted).toHaveLength(1);
+    expect(bridge.layout.frame).toBe(settled);
+  });
+
+  it('reports a large out-of-flow increase once a measurement has settled the new viewport', () => {
+    const bridge = runBridge({ content: 2400, frame: 630 });
+    bridge.fire();
+    expect(bridge.posted).toEqual([2400]);
+    bridge.layout.frame = 2400;
+    bridge.mutate();
+    bridge.runTimers();
+    bridge.layout.content = 8400;
+    bridge.mutate();
+    bridge.runTimers();
+    expect(bridge.posted).toEqual([2400, 8400]);
   });
 });
 
