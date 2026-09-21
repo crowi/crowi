@@ -184,8 +184,31 @@ module.exports = {
             useESM: false,
           },
         ],
+        // `@faker-js/faker` >= 10 is ESM-only (`"type": "module"`, no CJS
+        // build), and `setup.ts` pulls it into every file of this project.
+        // Jest 30's native `require(esm)` does NOT rescue it here: jest-runtime
+        // gates that path on `vm.SourceTextModule.prototype.hasAsyncGraph`,
+        // and `vm.SourceTextModule` only exists when node runs with
+        // `--experimental-vm-modules` — a flag that would also switch every
+        // suite (and the `.mjs` / `@scalar` files above) onto jest's
+        // experimental ESM loader, disable its require-outside-test guard,
+        // and print an ExperimentalWarning per worker. Down-compiling faker
+        // to CJS the same way as `@scalar` keeps the runtime unchanged and
+        // works from every entry point that reads this config.
+        '.+@faker-js/faker/.+\\.js$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+            useESM: false,
+          },
+        ],
       },
-      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+))'],
+      // The leading `.*` in the lookahead alternatives is load-bearing under
+      // pnpm: the real path is `node_modules/.pnpm/@faker-js+faker@<v>/
+      // node_modules/@faker-js/faker/...`, so the `@faker-js/` segment sits
+      // after the SECOND `node_modules/`, and a pattern anchored to the first
+      // would still ignore the file.
+      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+|.*@faker-js/.+))'],
     },
     {
       displayName: 'unit',
