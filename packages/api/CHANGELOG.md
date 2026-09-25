@@ -1,5 +1,12 @@
 # @crowi/api
 
+## 2.0.0-alpha.23
+
+### Patch Changes
+
+- c9e05ae: Artifacts whose height scales with the viewport, such as a stack of full-screen slides, no longer make the frame grow endlessly up to its cap; the frame stops at the height it first reached and the content scrolls inside it.
+  - @crowi/api-contract@2.0.0-alpha.23
+
 ## 2.0.0-alpha.22
 
 ### Minor Changes
