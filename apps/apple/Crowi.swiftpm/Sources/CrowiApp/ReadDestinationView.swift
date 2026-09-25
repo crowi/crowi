@@ -35,6 +35,8 @@ struct ReadDestinationView: View {
             // rather than pushing — which is the same seam every other row
             // uses, and without it the settings are unreachable on iPad.
             ProfileView(session: session, username: username, onSelectDestination: onSelect)
+        case .userPages(let username, let kind):
+            UserPageListView(session: session, username: username, kind: kind, onSelectDestination: onSelect)
         case .recentlyViewed:
             RecentlyViewedView(session: session, onSelectDestination: onSelect)
         case .createPage(let originPath):

@@ -99,3 +99,64 @@ public struct RecentlyViewedPagesResponseLenient: Sendable, Equatable {
         return try decode(data)
     }
 }
+
+/// The page lists a profile links to. Both are the target user's own
+/// actions, keyed by username.
+public enum UserPageListKind: String, Sendable, Hashable, CaseIterable {
+    /// `GET /user/{username}/bookmarks` — `{ bookmarks: [{ page }], pager, total }`.
+    case bookmarks
+    /// `GET /user/{username}/pages` — `{ pages, pager, total }`, pages the
+    /// user created.
+    case created
+
+    var endpoint: String {
+        switch self {
+        case .bookmarks: "bookmarks"
+        case .created: "pages"
+        }
+    }
+}
+
+public struct UserPageListResponseLenient: Sendable, Equatable {
+    public let pages: [PageLenient]
+    public let total: Int?
+    /// The offset to ask for next, `nil` once the list is exhausted. Taken
+    /// from the server's pager rather than counted from `pages`: the
+    /// bookmarks endpoint drops rows whose page has since been deleted, so
+    /// a slice can hold fewer pages than it paged over.
+    public let nextOffset: Int?
+
+    public static func decode(_ data: Data, kind: UserPageListKind) throws -> UserPageListResponseLenient {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ProfileLenientDecodeError.notAnObject
+        }
+        let rawPages: [[String: Any]]
+        switch kind {
+        case .bookmarks:
+            rawPages = (object["bookmarks"] as? [[String: Any]] ?? []).compactMap { $0["page"] as? [String: Any] }
+        case .created:
+            rawPages = object["pages"] as? [[String: Any]] ?? []
+        }
+        let pager = object["pager"] as? [String: Any]
+        return UserPageListResponseLenient(
+            pages: rawPages.compactMap(PageLenient.decode),
+            total: object["total"] as? Int,
+            nextOffset: pager?["next"] as? Int
+        )
+    }
+
+    public static func fetch(
+        username: String,
+        kind: UserPageListKind,
+        limit: Int,
+        offset: Int,
+        using client: AuthenticatedAPIClient
+    ) async throws -> UserPageListResponseLenient {
+        let (data, status) = try await client.get(
+            "user/\(username)/\(kind.endpoint)",
+            query: [URLQueryItem(name: "limit", value: String(limit)), URLQueryItem(name: "offset", value: String(offset))]
+        )
+        guard status.isSuccessfulHTTPStatus else { throw ProfileLenientDecodeError.httpError(status: status) }
+        return try decode(data, kind: kind)
+    }
+}

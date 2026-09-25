@@ -69,23 +69,9 @@ struct ProfileView: View {
                 } else {
                     header
                     CrowiStatStrip(stats)
-                    if let bookmarksCount {
-                        CrowiCard {
-                            CrowiRow(showsChevron: false) {
-                                CrowiRowChip(systemImage: "bookmark")
-                            } content: {
-                                HStack {
-                                    Text("Bookmarks")
-                                        .font(CrowiTypography.rowTitle)
-                                        .foregroundStyle(CrowiTheme.foreground)
-                                    Spacer(minLength: 8)
-                                    Text(bookmarksCount, format: .number)
-                                        .font(CrowiTypography.rowMeta)
-                                        .foregroundStyle(CrowiTheme.mutedForeground)
-                                }
-                            }
-                        }
-                        .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
+                    if let displayUsername {
+                        pageLists(username: displayUsername)
+                            .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
                     }
                 }
             }
@@ -139,6 +125,47 @@ struct ProfileView: View {
         .padding(.horizontal, CrowiMetrics.screenHorizontalMargin)
         .padding(.top, CrowiMetrics.screenTitleTopPadding)
         .padding(.bottom, CrowiMetrics.sectionHeaderTopPadding)
+    }
+
+    /// The lists the stat strip counts, one row each. Shown once the
+    /// username is known (the own profile learns it from `/me`); a row whose
+    /// count the server did not report still opens its list, it just shows
+    /// no number.
+    private func pageLists(username: String) -> some View {
+        CrowiCard {
+            pageListRow(username: username, kind: .bookmarks, title: "Bookmarks", systemImage: "bookmark", count: bookmarksCount)
+            CrowiRowSeparator()
+            pageListRow(username: username, kind: .created, title: "Pages", systemImage: "doc.text", count: createdPagesCount)
+        }
+    }
+
+    @ViewBuilder
+    private func pageListRow(username: String, kind: UserPageListKind, title: String, systemImage: String, count: Int?) -> some View {
+        let row = CrowiRow(showsChevron: onSelectDestination != nil) {
+            CrowiRowChip(systemImage: systemImage)
+        } content: {
+            HStack {
+                Text(title)
+                    .font(CrowiTypography.rowTitle)
+                    .foregroundStyle(CrowiTheme.foreground)
+                Spacer(minLength: 8)
+                if let count {
+                    Text(count, format: .number)
+                        .font(CrowiTypography.rowMeta)
+                        .foregroundStyle(CrowiTheme.mutedForeground)
+                }
+            }
+        }
+        if let onSelectDestination {
+            Button {
+                onSelectDestination(.userPages(username: username, kind: kind))
+            } label: {
+                row
+            }
+            .buttonStyle(.plain)
+        } else {
+            row
+        }
     }
 
     /// Only the counts the server actually reported — see the type's doc

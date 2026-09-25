@@ -1,3 +1,4 @@
+import CrowiKit
 import Foundation
 
 /// RFC-0016 §9/feature-ios-phase1-read — every destination the read surface
@@ -16,6 +17,10 @@ enum ReadDestination: Hashable {
     case revisionHistory(pageId: String, pagePath: String)
     /// `nil` username = the signed-in user's own profile (`GET /me`).
     case profile(username: String?)
+    /// A profile's page list (bookmarked or created). Always carries a
+    /// resolved username: the own profile learns its username from `/me`
+    /// before it can link here.
+    case userPages(username: String, kind: UserPageListKind)
     case recentlyViewed
     /// `feature-ios-phase2-write` — the create-page form. `originPath` is
     /// the location the user was at when they tapped "New Page" (the home's
