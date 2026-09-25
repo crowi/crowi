@@ -14,7 +14,7 @@ description: crowi の manager ロールでセッションを起動/再起動し
 ## 起動手順(上から順に実行)
 
 1. **agmsg を manager として確立する**: agmsg skill の `actas` 手順に従い `manager` として振る舞う(whoami 確認 → 未登録/別ロールなら actas manager)。**受信を manager 宛に限定する actas を必ず通す**。actas が張った agmsg inbox monitor は手順 2 で置き換えるので、ここで張り直さない(SessionStart hook の AGMSG-DIRECTIVE も同じ扱い)。
-2. **watcher を起動する**: agmsg の受信と orchestrate の event を 1 本で見る `manager-watch.sh` を background Bash で起動する。actas が Monitor を張っていれば先に TaskStop し、以後 Monitor では張らない(Claude Code 2.1.271 以降は最長 30 分で期限切れになり、そのたびに何も起きていなくてもセッションを起こす。`persistent` は廃止済み)。
+2. **watcher を起動する**: agmsg の受信と orchestrate の event を 1 本で見る `manager-watch.sh` を background Bash で起動する。actas が Monitor を張っていれば先に TaskStop し、以後 Monitor では張らない(Claude Code 2.1.271 以降は最長 30 分で期限切れになり、そのたびに何も起きていなくてもセッションを起こす。`persistent` は廃止済みで、期限を持たない background Bash がその代替にあたる)。
 
 ```
 Bash({ command: 'pgrep -f "^bash .*manager-watch.sh" >/dev/null && echo already-running || exec bash .claude/scripts/manager-watch.sh "$CLAUDE_CODE_SESSION_ID"',
@@ -44,6 +44,7 @@ Bash({ command: 'pgrep -f "^bash .*manager-watch.sh" >/dev/null && echo already-
 
 ## 運用 gotcha(manager 固有・ハマりどころ)
 
+- **agmsg の delivery mode が `turn` でも watcher を止めない**: turn の Stop hook (`check-inbox.sh`) は whoami が返す**先頭の role** を購読先にする。この project には role が複数登録されていて先頭は `manager` ではないので、turn だけにすると manager 宛が 1 通も届かないまま無言で滞留する。`manager-watch.sh` は `watch.sh` に `manager` を明示して渡すのでこの取り違えが起きない。watcher が生きている間は Stop hook が pidfile を見て配信を譲るため、mode が `turn` でも二重配信にはならない。
 - **再起動で watcher が消える**: compaction / `/clear` / version 更新のたびに watcher が停止する。起動手順 2 で起動し直す。「Monitor stopped」通知は agmsg が張った旧 watcher のクリーンアップなので、起動し直しの合図。
 - **event を処理したら必ず起動し直す**: `manager-watch.sh` は 1 event で終了する。作業に入る前に起動し直すこと。止まったままだと signal も agmsg も届かず、しかも**静かなので気づけない**(実際に数時間気づかなかった)。長い作業の前後では `pgrep -f manager-watch.sh` で生存を確認する。
 - **既知 event は再通知されない**: orchestrate watcher は一度出した event を `.feature-state/orchestrate-watch.seen` に記録するので、起動し直しても同じ `READY_TO_INTEGRATE` は来ない。それでも **同じ worktree を二重 integrate しない**(統合済みの task は signal file を消した時点で対象から外れる)。起動直後の現況は通知ではなく起動手順 4 で state ファイルから把握する。
