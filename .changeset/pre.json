@@ -50,6 +50,7 @@
     "artifact-chrome",
     "artifact-clients",
     "artifact-delivery",
+    "artifact-frame-height-runaway",
     "artifact-frame-height",
     "artifact-maximize",
     "artifact-shell",
