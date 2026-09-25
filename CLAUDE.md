@@ -295,7 +295,7 @@ timing, port/process reuse) rather than a straightforward deterministic
 regression, **do not diagnose the root cause and design the fix by reasoning
 inline in a Claude Sonnet session.** Stop, and hand the investigation +
 countermeasure design to Codex at `--tier sol` (`.claude/scripts/codex-run.sh
---tier sol`, `gpt-5.6-sol`, high effort) or a Fable-model subagent (`Agent`
+--tier sol`, the top-ranked codex model at high effort) or a Fable-model subagent (`Agent`
 with `model: "fable"`). Claude's job is to execute/glue/gate the design that
 comes back — write the repro, apply the fix, run the gates, commit — not to
 originate the root-cause theory itself.
