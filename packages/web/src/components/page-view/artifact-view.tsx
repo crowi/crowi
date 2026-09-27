@@ -208,16 +208,22 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
           {maximized ? m['page.artifact.restore']() : m['page.artifact.maximize']()}
         </Button>
       </div>
-      <iframe
-        ref={frameRef}
-        src={src}
-        title={m['page.artifact.iframe_title']()}
-        className={cn('w-full', maximized ? 'min-h-0 flex-1' : height === null && 'h-[70vh] min-h-[480px]')}
-        style={maximized || height === null ? undefined : { height }}
-      />
-      <div className={cn('text-sm text-muted-foreground', maximized && 'shrink-0 border-t px-4 py-2')}>
-        <p>{m['page.artifact.sandbox_notice_generated']()}</p>
-        <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
+      {/* Maximized, the frame takes exactly the height under the title bar
+          and the notice follows it inside one scroll region: a footer held at
+          the bottom of the screen ate a large share of a phone's height for as
+          long as the overlay stayed open. */}
+      <div className={cn(maximized ? 'min-h-0 flex-1 overflow-y-auto' : 'space-y-2')}>
+        <iframe
+          ref={frameRef}
+          src={src}
+          title={m['page.artifact.iframe_title']()}
+          className={cn('w-full', maximized ? 'block h-full' : height === null && 'h-[70vh] min-h-[480px]')}
+          style={maximized || height === null ? undefined : { height }}
+        />
+        <div className={cn('text-sm text-muted-foreground', maximized && 'border-t px-4 py-2')}>
+          <p>{m['page.artifact.sandbox_notice_generated']()}</p>
+          <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
+        </div>
       </div>
       {maximized && <span tabIndex={0} data-testid="artifact-focus-end" onFocus={() => toggleRef.current?.focus()} />}
     </div>

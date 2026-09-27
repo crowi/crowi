@@ -612,7 +612,14 @@ describe('ArtifactView', () => {
 
       fireEvent.click(maximizeButton());
       expect(frame.style.height).toBe('');
-      expect(frame.className).toContain('flex-1');
+      // The frame fills the scroll region under the title bar, so the
+      // sandbox notice sits below it and scrolls into view instead of
+      // pinning itself to the bottom of the screen.
+      const scroller = frame.parentElement as HTMLElement;
+      expect(scroller.className.split(' ')).toEqual(expect.arrayContaining(['flex-1', 'overflow-y-auto']));
+      expect(frame.className.split(' ')).toContain('h-full');
+      const notice = screen.getByText(m['page.artifact.sandbox_notice_generated']());
+      expect(scroller.contains(notice)).toBe(true);
 
       fireEvent.click(restoreButton());
       expect(frame.style.height).toBe('2400px');
