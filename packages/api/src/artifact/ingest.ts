@@ -1626,9 +1626,10 @@ function isHtmlLinkHref(namespace: string, tagName: string, attrName: string): b
   return namespace === HTML_NS && (tagName === 'a' || tagName === 'area') && attrName === 'href';
 }
 
-function checkHtmlUrlAttr(namespace: string, tagName: string, attrName: string, value: string): boolean /* true = OK */ {
+function checkHtmlUrlAttr(namespace: string, tagName: string, attrName: string, value: string, allowPageLinks: boolean): boolean /* true = OK */ {
   const cls = classifyArtifactUrlValue(value);
-  if (isHtmlLinkHref(namespace, tagName, attrName)) return isFragmentOnlyOk(cls) || parseArtifactPageLink(value) !== null;
+  // Under a non-open shadow root only the in-document fragment form of a link survives.
+  if (isHtmlLinkHref(namespace, tagName, attrName)) return isFragmentOnlyOk(cls) || (allowPageLinks && parseArtifactPageLink(value) !== null);
   // The map is addressed by `#name` in the same document only; a relative or external map would be a resource reference.
   if (namespace === HTML_NS && tagName === 'img' && attrName === 'usemap') return isFragmentOnlyOk(cls);
   if ((tagName === 'img' && attrName === 'src') || (tagName === 'video' && attrName === 'poster')) return isDataOnlyOk(cls);
@@ -1647,7 +1648,7 @@ function checkHtmlUrlAttr(namespace: string, tagName: string, attrName: string, 
  */
 function isNonOpenShadowTemplate(node: ArtifactTreeNode): boolean {
   if (!isTemplateLike(node)) return false;
-  const mode = (node.attrs as ArtifactAttribute[]).find((attr) => !attr.namespace && attr.name === 'shadowrootmode');
+  const mode = findAttr(node.attrs as ArtifactAttribute[], (attr) => !attr.namespace && attr.name === 'shadowrootmode');
   return mode !== undefined && mode.value.toLowerCase() !== 'open';
 }
 
@@ -1686,12 +1687,7 @@ function checkGenericHtmlUrlAttrs(
     if (skipHrefLike && isHrefLikeAttr(attr)) continue; // already judged by the MathML href branch above.
     if (!HTML_URL_ATTRS.has(attr.name)) continue;
     if (node.tagName === 'link' && attr.name === 'href' && isGoogleFontsStylesheetLinkElement(node)) continue; // AI-R12 decides.
-    // Under a non-open shadow root only the in-document fragment form of a link survives.
-    const ok =
-      !allowPageLinks && isHtmlLinkHref(node.namespaceURI, node.tagName, attr.name)
-        ? isFragmentOnlyOk(classifyArtifactUrlValue(attr.value))
-        : checkHtmlUrlAttr(node.namespaceURI, node.tagName, attr.name, attr.value);
-    if (ok) continue;
+    if (checkHtmlUrlAttr(node.namespaceURI, node.tagName, attr.name, attr.value, allowPageLinks)) continue;
     return { target: elementAttributeTarget(node.tagName, attr.name) };
   }
   return null;

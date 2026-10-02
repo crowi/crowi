@@ -38,8 +38,10 @@ const USER_TAB_PREFIXES = ['bookmarks', 'comments', 'activities', 'pages', 'rece
  * shows the user's home page). System routes, backend and static namespaces,
  * names the model refuses to create, and ObjectId shortcuts (whose redirector
  * grants access) are refused. The reserved prefixes mirror
- * `Page.isCreatableName` in `packages/api/src/models/page.ts`; the two
- * packages share no dependency to import one from the other.
+ * `Page.isCreatableName` in `packages/api/src/models/page.ts`, but this
+ * copy matches case-insensitively and also refuses a bare `/-` and a
+ * trailing `/edit/`, which the model accepts, so the two are not
+ * interchangeable.
  */
 export function isSafeArtifactPagePath(pagePath: string): boolean {
   if (!isCanonicalPagePath(pagePath)) return false;
