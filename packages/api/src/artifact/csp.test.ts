@@ -86,7 +86,7 @@ describe('extractArtifactDigestMarkers', () => {
   it('X-5: extracts both markers from a real ingested document (0 scripts, 0 styles)', async () => {
     const body = await ingestValidArtifact(buildArtifactHtml({}));
     const result = extractArtifactDigestMarkers(body);
-    expect(result).toEqual({ ok: true, markers: { scriptDigests: '', styleDigests: '' } });
+    expect(result).toEqual({ ok: true, markers: { scriptDigests: '', styleDigests: '' }, headCloseIndex: body.indexOf('</head>') });
   });
 
   it('X-5: extracts both markers from a real ingested document (1 script, 1 style) matching independently-computed digests', async () => {
@@ -94,7 +94,11 @@ describe('extractArtifactDigestMarkers', () => {
     const styleText = 'body { color: rebeccapurple; }';
     const body = await ingestValidArtifact(buildArtifactHtml({ scripts: [scriptText], styles: [styleText] }));
     const result = extractArtifactDigestMarkers(body);
-    expect(result).toEqual({ ok: true, markers: { scriptDigests: sha256Token(scriptText), styleDigests: sha256Token(styleText) } });
+    expect(result).toEqual({
+      ok: true,
+      markers: { scriptDigests: sha256Token(scriptText), styleDigests: sha256Token(styleText) },
+      headCloseIndex: body.indexOf('</head>'),
+    });
   });
 
   it('X-5: extracts multiple digests per kind (2 scripts, 3 styles), space-joined in document order', async () => {
@@ -105,6 +109,7 @@ describe('extractArtifactDigestMarkers', () => {
     expect(result).toEqual({
       ok: true,
       markers: { scriptDigests: scripts.map(sha256Token).join(' '), styleDigests: styles.map(sha256Token).join(' ') },
+      headCloseIndex: body.indexOf('</head>'),
     });
   });
 
@@ -123,6 +128,17 @@ describe('extractArtifactDigestMarkers', () => {
     // The SVG script text is escaped on the wire (`&lt;` -> `<`) before hashing.
     expect(result.markers.scriptDigests).toBe([sha256Token('if (a < b) { c(); }'), sha256Token(templateScript)].join(' '));
     expect(result.markers.styleDigests).toBe(sha256Token(svgStyle));
+  });
+
+  it('X-4: returns the index of the </head> that directly follows the style marker, also for a body with comments before the doctype', async () => {
+    const plain = await ingestValidArtifact(buildArtifactHtml({}));
+    const withLeadingComments = await ingestValidArtifact(`<!-- a --><!-- b --><!doctype html>${buildArtifactHtml({}).replace(/^<!doctype html>/i, '')}`);
+    for (const body of [plain, withLeadingComments]) {
+      const result = extractArtifactDigestMarkers(body);
+      if (!result.ok) throw new Error(`unexpected ${result.code}`);
+      expect(body.startsWith('</head>', result.headCloseIndex)).toBe(true);
+      expect(body.slice(0, result.headCloseIndex)).toMatch(new RegExp(`name="${ARTIFACT_STYLE_DIGEST_META_NAME}">$`));
+    }
   });
 
   describe('P-1: MARKER_MISSING', () => {

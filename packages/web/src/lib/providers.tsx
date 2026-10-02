@@ -7,6 +7,7 @@ import { AuthSync } from './auth-sync';
 import { ConnectionProvider, useConnection } from './connection-context';
 import { getConnectionErrorHandlers, setConnectionErrorHandlers } from './connection-error-ref';
 import { isNetworkError, isServerErrorStatus } from './is-network-error';
+import { installParentInputClock } from './parent-input-clock';
 
 /**
  * Extract an HTTP status from a thrown error, if it carries one.
@@ -77,6 +78,13 @@ function createQueryClient(): QueryClient {
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
+
+  // Installed for the whole app's lifetime, ahead of any artifact page: the
+  // click that navigates to an artifact page must already be on record when
+  // the artifact first speaks.
+  useEffect(() => {
+    installParentInputClock();
+  }, []);
 
   return (
     <ThemeProvider>

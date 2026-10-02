@@ -529,6 +529,11 @@ describe('MCP server (/api/mcp)', () => {
         expect(description).toContain('self-contained HTML');
         expect(description.toLowerCase()).toContain('no external');
         expect(description).toContain('data:');
+        // Page links are allowed relative to the artifact's page, while resource paths stay forbidden.
+        expect(description).toContain('no relative resource paths');
+        expect(description).toContain('`href` may be a page path, relative to');
+        expect(description).toContain('`%25`');
+        expect(description).toContain('`100%done` is rejected');
       }
       // Negative checks alone would pass on an emptied-out description too —
       // assert the replacement text actually mentions the discriminator.

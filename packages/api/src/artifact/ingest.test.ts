@@ -586,6 +586,175 @@ describe('ingestHtmlArtifact', () => {
     });
   });
 
+  describe('AC-AIL-1: internal page links (a / area href, img usemap)', () => {
+    const ACCEPTED_LINKS = [
+      '/team/guide',
+      './guide',
+      '../guide#overview',
+      'guide',
+      '/',
+      'my page',
+      '資料#章+1',
+      '/discount/100%25off',
+      '/team/section:1',
+      './section:1',
+      '/team/section%3A1',
+    ];
+    const REJECTED_LINKS = [
+      '100%done',
+      '100%off',
+      '%ZZ',
+      '%2G',
+      '100%',
+      '/guide?edit=1',
+      '//evil.example/guide',
+      'https://evil.example/guide',
+      'javascript:alert(1)',
+      'section:1',
+      '/a//b',
+      '/%2fadmin',
+      '/%C0%AF',
+    ];
+
+    async function ingestBothPasses(body: string) {
+      const author = await ingestValid({ body });
+      if (!author.ok) return { author, stored: author };
+      const stored = await ingestHtmlArtifact(Buffer.from(author.bytes).toString('utf8'), storedOptions());
+      return { author, stored };
+    }
+
+    it.each(ACCEPTED_LINKS)('accepts a[href] and area[href] = %s in source and normalized passes, and round-trips', async (href) => {
+      const body = `<a href="${href}">x</a><map name="m"><area href="${href}" shape="rect" coords="0,0,8,8"></map><img src="data:image/png;base64,AAAA" usemap="#m">`;
+      const { author, stored } = await ingestBothPasses(body);
+      expectAccepted(author);
+      expectAccepted(stored);
+      expect(Buffer.from(stored.bytes)).toEqual(Buffer.from(author.bytes));
+      expect(Buffer.from(author.bytes).toString('utf8')).toContain(`href="${href}"`);
+    });
+
+    it.each(REJECTED_LINKS)('rejects a[href] = %s with AI-R11 / EXTERNAL_REFERENCE', async (href) => {
+      expectRejected(await ingestValid({ body: `<a href="${href}">x</a>` }), 'AI-R11', 'EXTERNAL_REFERENCE');
+      expectRejected(await ingestValid({ body: `<map name="m"><area href="${href}"></map>` }), 'AI-R11', 'EXTERNAL_REFERENCE');
+    });
+
+    it('keeps an HTML-entity href as the same link after normalization', async () => {
+      const { author, stored } = await ingestBothPasses('<a href="/team/&#x67;uide">x</a>');
+      expectAccepted(author);
+      expectAccepted(stored);
+      expect(Buffer.from(author.bytes).toString('utf8')).toContain('href="/team/guide"');
+    });
+
+    it('allows img[usemap] only as a same-document fragment', async () => {
+      expectAccepted(await ingestValid({ body: '<img src="data:image/png;base64,AAAA" usemap="#m">' }));
+      for (const value of ['', 'map.html#m', '/m#m', 'https://evil.example/#m', 'm']) {
+        expectRejected(await ingestValid({ body: `<img src="data:image/png;base64,AAAA" usemap="${value}">` }), 'AI-R11', 'EXTERNAL_REFERENCE');
+      }
+    });
+
+    it('does not extend the page-link allowance to other namespaces or resource attributes', async () => {
+      const rejected = [
+        '<svg xmlns="http://www.w3.org/2000/svg"><a href="/team/guide"><text>x</text></a></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><use href="/team/guide"/></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><image href="/team/guide"/></svg>',
+        '<math xmlns="http://www.w3.org/1998/Math/MathML"><mi href="/team/guide">a</mi></math>',
+        '<img src="/team/guide">',
+        '<img src="guide.png">',
+        '<link rel="stylesheet" href="/team/guide">',
+      ];
+      for (const body of rejected) expectRejected(await ingestValid({ body }), 'AI-R11', 'EXTERNAL_REFERENCE');
+      expectRejected(await ingestValid({ body: '<script src="/team/guide"></script>' }), 'AI-R11', 'EXTERNAL_REFERENCE');
+      expectRejected(await ingestValid({ style: 'a{background:url(/team/guide)}' }), 'AI-R19', 'URL_FORBIDDEN');
+      expectAccepted(await ingestValid({ body: '<svg xmlns="http://www.w3.org/2000/svg"><use href="#g"/></svg><img src="data:image/png;base64,AAAA">' }));
+    });
+
+    it.each([
+      ['closed', 'shadowrootmode="closed"', false],
+      ['invalid', 'shadowrootmode="bogus"', false],
+      ['open', 'shadowrootmode="open"', true],
+    ])('a page link under a declarative shadow root (%s) is %s', async (_label, attr, allowed) => {
+      const body = `<div><template ${attr}><a href="/team/guide">x</a></template></div>`;
+      const { author, stored } = await ingestBothPasses(body);
+      if (allowed) {
+        expectAccepted(author);
+        expectAccepted(stored);
+      } else {
+        expectRejected(author, 'AI-R11', 'EXTERNAL_REFERENCE');
+        // The same stored body must also be refused when it is re-ingested as a stored revision.
+        const storedDirect = await ingestHtmlArtifact(validArtifactHtml({ body }), storedOptions());
+        expectRejected(storedDirect, 'AI-R11', 'EXTERNAL_REFERENCE');
+      }
+    });
+
+    it('still allows a fragment link under a closed shadow root, and nested templates inherit the restriction', async () => {
+      expectAccepted(await ingestValid({ body: '<template shadowrootmode="closed"><a href="#x">x</a></template>' }));
+      const nested = '<template shadowrootmode="closed"><template shadowrootmode="open"><area href="/team/guide"></template></template>';
+      expectRejected(await ingestValid({ body: nested }), 'AI-R11', 'EXTERNAL_REFERENCE');
+    });
+
+    describe('AI-R11 run directly in every source × pass context', () => {
+      const rule = ARTIFACT_INGEST_RULES.find((r) => r.id === 'AI-R11')!;
+      const CONTEXTS = [
+        ['author', 'source'],
+        ['author', 'normalized'],
+        ['stored-revision', 'source'],
+        ['stored-revision', 'normalized'],
+      ] as const;
+
+      // The ingest pipeline stops at the first failing pass, so a source-pass
+      // rejection never reaches the normalized pass; parsing the serialized
+      // tree here is what puts the normalized context under test.
+      async function runAiR11(body: string, source: (typeof CONTEXTS)[number][0], pass: (typeof CONTEXTS)[number][1]) {
+        const sourceParsed = parseArtifactDocument(validArtifactHtml({ body }), 'source');
+        if (!('document' in sourceParsed)) throw new Error('expected a parsed source document');
+        const input = pass === 'source' ? validArtifactHtml({ body }) : serializeArtifactTree(sourceParsed.document);
+        const parsed = pass === 'source' ? sourceParsed : parseArtifactDocument(input, 'normalized');
+        if (!('document' in parsed)) throw new Error('expected a parsed document');
+        const context: ArtifactRuleContext = {
+          pass,
+          source,
+          input,
+          options: source === 'author' ? authorOptions() : storedOptions(),
+          parsed,
+          ownership: { exemptReservedMarker: pass === 'normalized' },
+        };
+        expect(rule.passes).toContain(pass);
+        expect(rule.sources).toContain(source);
+        return rule.check(context, rule);
+      }
+
+      const REJECTED_BODIES = [
+        ...REJECTED_LINKS.map((href) => `<a href="${href}">x</a>`),
+        ...REJECTED_LINKS.map((href) => `<map name="m"><area href="${href}"></map>`),
+        ...['', 'map.html#m', '/m#m', 'https://evil.example/#m', 'm'].map((v) => `<img src="data:image/png;base64,AAAA" usemap="${v}">`),
+        '<div><template shadowrootmode="closed"><a href="/team/guide">x</a></template></div>',
+        '<div><template shadowrootmode="closed"><map name="m"><area href="guide"></map></template></div>',
+        '<div><template shadowrootmode="bogus"><a href="./guide">x</a></template></div>',
+        '<div><template shadowrootmode="bogus"><map name="m"><area href="/team/guide"></map></template></div>',
+        '<div><template shadowrootmode="closed"><template shadowrootmode="open"><area href="/team/guide"></template></template></div>',
+      ];
+
+      const ACCEPTED_BODIES = [
+        ...ACCEPTED_LINKS.map((href) => `<a href="${href}">x</a><map name="m"><area href="${href}"></map><img src="data:image/png;base64,AAAA" usemap="#m">`),
+        '<div><template shadowrootmode="open"><a href="/team/guide">x</a><map name="m"><area href="guide"></map></template></div>',
+        '<div><template shadowrootmode="closed"><a href="#x">x</a><map name="m"><area href="#y"></map></template></div>',
+      ];
+
+      it.each(CONTEXTS)('rejects every forbidden href / usemap / non-open shadow-root link in the %s × %s context', async (source, pass) => {
+        for (const body of REJECTED_BODIES) {
+          const failure = await runAiR11(body, source, pass);
+          expect({ body, failure }).toEqual({ body, failure: expect.objectContaining({ target: expect.any(String) }) });
+        }
+        expect(rule.result.reason).toBe('EXTERNAL_REFERENCE');
+      });
+
+      it.each(CONTEXTS)('accepts the page links, fragment usemap and open shadow-root links in the %s × %s context', async (source, pass) => {
+        for (const body of ACCEPTED_BODIES) {
+          expect({ body, failure: await runAiR11(body, source, pass) }).toEqual({ body, failure: null });
+        }
+      });
+    });
+  });
+
   describe('AC-AI-6: script type / module specifiers', () => {
     it.each(['', 'text/javascript', 'application/javascript', 'module'])('accepts inline script type=%s', async (type) => {
       const body = type === '' ? '<script>1;</script>' : `<script type="${type}">1;</script>`;

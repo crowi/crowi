@@ -1,15 +1,24 @@
 'use client';
 
-import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE, type PageWithRevision } from '@crowi/api-contract';
+import {
+  ARTIFACT_ESCAPE_MESSAGE_TYPE,
+  ARTIFACT_HEIGHT_MESSAGE_TYPE,
+  type ArtifactNavigateMessage,
+  ArtifactNavigateMessageSchema,
+  type PageWithRevision,
+} from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Fullscreen, Maximize2, Minimize2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { type ArtifactNavigationTarget, resolveArtifactNavigation } from '@/lib/artifact-navigation';
 import { env } from '@/lib/runtime-env';
 import { useAppInfo } from '@/lib/use-app-info';
 import { pageDisplayName } from '@/lib/page-path';
+import { isParentInputQuiet } from '@/lib/parent-input-clock';
 import { ArtifactUrlUnavailableFailure, useMintArtifactUrl } from '@/lib/use-artifact-url';
 import { cn } from '@/lib/utils';
 
@@ -97,6 +106,43 @@ function readReportedHeight(data: unknown): number | null {
 }
 
 /**
+ * Whether the reader is acting inside this artifact's frame right now. The
+ * artifact's document cannot be observed from here, so this relies on two
+ * parent-side facts: a transient user activation is live, and the document's
+ * focus sits on the outer frame element. Either alone is not enough — an
+ * arrival click or typing in a comment box leaves an activation behind, and
+ * a frame that merely loaded has no focus.
+ */
+function isReaderActingInFrame(frame: HTMLIFrameElement | null): boolean {
+  if (!frame) return false;
+  if (typeof navigator === 'undefined' || navigator.userActivation?.isActive !== true) return false;
+  return document.hasFocus() && document.activeElement === frame;
+}
+
+type Disposition = ArtifactNavigateMessage['disposition'];
+
+interface PendingNavigation {
+  target: ArtifactNavigationTarget;
+  disposition: Disposition;
+}
+
+/**
+ * Follows a resolved wiki link. The target was produced by the resolver, but
+ * the same-origin, query-free shape is checked again right here because this
+ * is the one place a URL leaves for the router or a new tab.
+ */
+function followArtifactLink(target: ArtifactNavigationTarget, disposition: Disposition, push: (href: string) => void): void {
+  const url = new URL(target.href, window.location.origin);
+  if (url.origin !== window.location.origin || url.search !== '') return;
+  try {
+    if (disposition === 'new-tab') window.open(url.href, '_blank', 'noopener');
+    else push(target.href);
+  } catch {
+    // A refused popup or a failed route change is not reported back to the artifact.
+  }
+}
+
+/**
  * A running artifact: the outer iframe, the sandbox notice under it, and the
  * maximise control. Inline, the frame is sized to the artifact's content
  * height once the artifact reports it (delivery appends a frame bridge to
@@ -108,7 +154,8 @@ function readReportedHeight(data: unknown): number | null {
  * which would drop whatever the reader did inside the artifact and, once the
  * one-minute signed URL has expired, fail to load at all.
  */
-function RunningArtifact({ src, title }: { src: string; title: string }) {
+function RunningArtifact({ src, title, pagePath }: { src: string; title: string; pagePath: string }) {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -120,15 +167,44 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
   // overlay is as far as it goes.
   const fullscreenAvailable = typeof document !== 'undefined' && document.fullscreenEnabled === true;
 
-  useEffect(() => {
+  // A link the reader may not have activated inside the artifact (see
+  // `isParentInputQuiet`), held until the reader confirms it.
+  const [pending, setPending] = useState<PendingNavigation | null>(null);
+
+  // Registered in a layout effect so that, when the page path changes while the
+  // frame stays mounted, the old listener is gone and the new one (reading the
+  // new path) is in place within the same commit. Every check and the
+  // navigation itself run synchronously inside the handler: nothing may sit
+  // between the activation / focus check and the action it authorises.
+  useLayoutEffect(() => {
+    const navigate = (data: unknown) => {
+      const message = ArtifactNavigateMessageSchema.safeParse(data);
+      if (!message.success) return;
+      const target = resolveArtifactNavigation(pagePath, message.data.href);
+      if (!target) return;
+      if (!isReaderActingInFrame(frameRef.current)) return;
+      if (isParentInputQuiet()) followArtifactLink(target, message.data.disposition, (href) => router.push(href));
+      else setPending({ target, disposition: message.data.disposition });
+    };
     const onMessage = (event: MessageEvent) => {
       if (!isFromArtifact(frameRef.current, event)) return;
       const reported = readReportedHeight(event.data);
       if (reported !== null) setHeight(reported);
+      else navigate(event.data);
     };
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      // A held link was resolved against the path this listener read.
+      setPending(null);
+    };
+  }, [pagePath, router]);
+
+  const confirmPending = () => {
+    if (!pending) return;
+    followArtifactLink(pending.target, pending.disposition, (href) => router.push(href));
+    setPending(null);
+  };
 
   useEffect(() => {
     const onFullscreenChange = () => setFullscreen(document.fullscreenElement === containerRef.current);
@@ -220,6 +296,23 @@ function RunningArtifact({ src, title }: { src: string; title: string }) {
           className={cn('w-full', maximized ? 'block h-full' : height === null && 'h-[70vh] min-h-[480px]')}
           style={maximized || height === null ? undefined : { height }}
         />
+        {pending && (
+          <div
+            role="group"
+            aria-label={m['page.artifact.navigate_confirm_label']()}
+            className={cn('flex flex-wrap items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm', maximized && 'mx-4 mt-2')}
+            data-testid="artifact-navigate-confirm"
+          >
+            <span className="text-muted-foreground">{m['page.artifact.navigate_confirm_label']()}</span>
+            <span className="min-w-0 flex-1 break-all font-medium text-foreground">{pending.target.pagePath}</span>
+            <Button size="sm" onClick={confirmPending}>
+              {pending.disposition === 'new-tab' ? m['page.artifact.navigate_confirm_open_new_tab']() : m['page.artifact.navigate_confirm_open']()}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPending(null)}>
+              {m['page.artifact.navigate_confirm_dismiss']()}
+            </Button>
+          </div>
+        )}
         <div className={cn('text-sm text-muted-foreground', maximized && 'border-t px-4 py-2')}>
           <p>{m['page.artifact.sandbox_notice_generated']()}</p>
           <p>{m['page.artifact.sandbox_notice_input_note']()}</p>
@@ -375,7 +468,14 @@ export function ArtifactView({ page }: ArtifactViewProps) {
   }, [shouldAutoRun, handleRun]);
 
   if (effectiveState === 'running' && runningUrl) {
-    return <RunningArtifact key={runningUrl} src={`/_artifact-frame?src=${encodeURIComponent(runningUrl)}`} title={pageDisplayName(page.path) || page.path} />;
+    return (
+      <RunningArtifact
+        key={runningUrl}
+        src={`/_artifact-frame?src=${encodeURIComponent(runningUrl)}`}
+        title={pageDisplayName(page.path) || page.path}
+        pagePath={page.path}
+      />
+    );
   }
 
   // Loading app info and minting both normally resolve within a few hundred

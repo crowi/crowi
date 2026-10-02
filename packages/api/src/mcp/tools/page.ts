@@ -89,7 +89,7 @@ const RevertToRevisionShape = {
  * server default: markdown on create, the page's current kind on update.
  */
 const ARTIFACT_DESCRIPTION_NOTE =
-  "When `content_type` is 'artifact', `body` MUST be a single self-contained HTML document: no external script/stylesheet/image/module references and no relative paths — embed any binary asset as a `data:` URI.";
+  "When `content_type` is 'artifact', `body` MUST be a single self-contained HTML document: no external script/stylesheet/image/module references and no relative resource paths — embed any binary asset as a `data:` URI. Links to other wiki pages are the one exception: an HTML `a` / `area` `href` may be a page path, relative to the artifact's own page (`/team/guide`, `./guide`, `../guide#section`, `guide`). A literal `%` in a page name must be written `%25` in the `href` (`100%25done` for the page `100%done`); `100%done` is rejected.";
 const ContentTypeField = z
   .enum(['markdown', 'artifact'])
   .optional()

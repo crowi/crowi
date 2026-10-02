@@ -1,6 +1,7 @@
 import Debug from 'debug';
 import { DEFAULT_ARTIFACT_MAX_BYTES } from 'src/artifact/constants';
 import { buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from 'src/artifact/csp';
+import { ARTIFACT_FRAME_BRIDGE_SCRIPT, ARTIFACT_NAVIGATION_GUARD_SCRIPT } from 'src/artifact/frame-bridge';
 import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, prepareArtifactDelivery, resolveArtifactTokenKey } from 'src/artifact/delivery';
 import { ingestHtmlArtifact } from 'src/artifact/ingest';
 import * as artifactPolicy from 'src/artifact/policy';
@@ -361,6 +362,8 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       // strings — compare the raw response `Buffer` against the expected
       // bytes' own UTF-8 encoding.
       expect(Buffer.compare(res.body as Buffer, Buffer.from(expected.body, 'utf8'))).toBe(0);
+      expect(expected.body).toContain(`<script>${ARTIFACT_NAVIGATION_GUARD_SCRIPT}</script></head>`);
+      expect(expected.body.endsWith(`<script>${ARTIFACT_FRAME_BRIDGE_SCRIPT}</script>`)).toBe(true);
 
       expect(res.headers['content-type']).toBe('text/html; charset=utf-8');
       expect(res.headers['referrer-policy']).toBe('no-referrer');
