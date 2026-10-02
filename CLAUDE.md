@@ -288,6 +288,8 @@ When it is close, do not weigh how likely the finding is — ask **whether the
 person who hits it can get back to a good state, on their own or through an
 admin**. If they can, drop it.
 
+**Mixed replicas are an operating procedure, not a runtime mechanism.** A deployment runs one or a few api replicas. When a change is only safe if every replica runs the same build or sees the same switch (an authorization arm, a cutover, a data migration), the answer is the maintenance procedure: stop the replicas, run the migration if one is needed, start them again. Do not design heartbeats, fleet version or closure proofs, live-replica admission, or two-phase flip fences, and do not raise their absence as a finding. A spec states the procedure and the one window it leaves (an operator who skips it) for operators, and stops there.
+
 ### Flaky test / CI-infra root cause: delegate the investigation+design, don't reason it out inline
 When a CI failure turns out to be flaky/nondeterministic or CI-infra-shaped
 (turbo build/task-graph races, jest harness/worker behavior, GHA runner

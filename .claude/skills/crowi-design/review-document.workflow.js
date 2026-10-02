@@ -53,6 +53,17 @@ const ACCEPT_FALLBACK = A.acceptFallback === true
 const isRfc = OUTPUT === 'rfc'
 const SPEC_CONTRACT = '.claude/skills/_shared/spec-contract.md'
 const SPEC_VALIDATOR = '.claude/skills/_shared/validate-implementation-spec.sh'
+// Codex writers and reviewers do not read CLAUDE.md, so its severity calibration has to travel in the
+// prompts; without it, a multi-replica finding gets answered with a runtime fleet mechanism every time.
+const DEPLOYMENT_SCALE =
+  `DEPLOYMENT SCALE — crowi is a small internal tool: a few to a few hundred users, one or a few api ` +
+  `replicas. A problem that needs a rare race, that a maintenance window or an announcement would avoid, and ` +
+  `that an admin can repair is not blocking. Never drop data loss or corruption, a defect an ordinary ` +
+  `operation reaches, a wrong result the user cannot tell is wrong, an authorization bypass or a secret ` +
+  `exposure. Anything that is only safe when every replica runs the same build or sees the same switch is ` +
+  `handled by the maintenance procedure (stop the replicas, run the migration if needed, start them): do not ` +
+  `design heartbeats, fleet version or closure proofs, live-replica admission or two-phase flip fences, and do ` +
+  `not report their absence. The document states the procedure and the window it leaves for operators.`
 
 // Fail fast BEFORE any agent runs or any file is written. Guards the dogfooding
 // failure: string-encoded args -> undefined slug -> the writer overwrote an
@@ -313,6 +324,7 @@ function lensPrompt(l, doc) {
     `an out-of-scope declaration that is self-contradictory (the doc relies on the very thing it excludes).\n` +
     `Pre-existing problems in the repository that this design neither introduced nor worsened go in ` +
     `preexisting[] (still code-grounded, file:line) — they are valuable, but they do not block THIS doc.\n` +
+    `${DEPLOYMENT_SCALE}\n` +
     `Be adversarial and code-grounded: do NOT rubber-stamp, anchor every claim with file:line, ` +
     `read dependency code if needed. Analysis only — do NOT edit the document. Return ` +
     `verdict=ISSUES with a concrete blocking[] list when material problems remain, else ` +
@@ -462,6 +474,7 @@ const writerBody =
   `forbid the feature's own substance, you have misread it: re-read the brief and record the tension in ` +
   `residualOpenQuestions rather than designing the substance away.\n` +
   `Read the approved design brief at ${BRIEF}. Apply the locked human decisions:\n${DECISIONS}\n\n` +
+  `${DEPLOYMENT_SCALE}\n\n` +
   `${writeInstructions}\n` +
   `AUDIENCE — write the document to stand on its own when read cold from the repo by ` +
   (isRfc ? `an external OSS contributor ` : `the implementer (and crowi-feature) `) +
@@ -569,6 +582,8 @@ for (let attempt = 1; attempt <= MAX; attempt++) {
     `EXCEPTION — rebuttal: if a blocking finding is itself factually wrong, refute it against real ` +
     `code (file:line), do NOT apply it, and return it in rebutted[] with the evidence. Appeasing a ` +
     `wrong finding by adding caveats to the document is forbidden.\n` +
+    `A finding that asks for a runtime fleet mechanism is answered under this rule, not by building one:\n` +
+    `${DEPLOYMENT_SCALE}\n` +
     `Keep the document's format / schema intact.` +
     (isRfc ? ` ` : ` Keep status: draft and implementation_ready: false; only the finalizer may mark it ready. `) +
     `Return wrote=true, the (unchanged) doc path, any ` +
