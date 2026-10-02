@@ -7,12 +7,16 @@
  * sandboxed on an opaque origin, so the page can neither measure its layout
  * nor hear its key events.
  *
- * The script is a constant, so its digest is too: delivery authorises it
- * by that digest alongside the author's own inline scripts
+ * A second fixed script, the navigation guard, sits right before `</head>`
+ * and turns the reader's activation of a page link into a message to the
+ * wiki page, which decides whether and where to navigate.
+ *
+ * Both scripts are constants, so their digests are too: delivery authorises
+ * them by those digests alongside the author's own inline scripts
  * (`prepareArtifactDelivery`), and the stored bytes stay the author's (the
  * download route serves them untouched).
  */
-import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE } from '@crowi/api-contract';
+import { ARTIFACT_ESCAPE_MESSAGE_TYPE, ARTIFACT_HEIGHT_MESSAGE_TYPE, ARTIFACT_LINK_MAX_LENGTH, ARTIFACT_NAVIGATE_MESSAGE_TYPE } from '@crowi/api-contract';
 
 import { sha256DigestToken } from './csp';
 
@@ -109,6 +113,94 @@ export const ARTIFACT_FRAME_BRIDGE_SCRIPT = `(function () {
 
 /** CSP hash-source token (without quotes) matching exactly {@link ARTIFACT_FRAME_BRIDGE_SCRIPT}. */
 export const ARTIFACT_FRAME_BRIDGE_DIGEST = sha256DigestToken(ARTIFACT_FRAME_BRIDGE_SCRIPT);
+
+// Runs before the stored body's own markup is parsed, so a link the stored
+// document declares is intercepted from the moment it is rendered. A link an
+// author script creates before this one runs, or a script that navigates the
+// frame itself, is outside what this can guard.
+//
+// The href is read with getAttribute only: `.href` would resolve against the
+// artifact's opaque-origin URL. Whether a click is on a link is decided by
+// walking the event path inward-out and stopping at the first element that
+// has an activation behaviour of its own (a form control, a label, a summary,
+// an SVG / MathML `a`, an editable region) — those keep their native
+// behaviour and are never turned into navigation.
+//
+// The preventDefault on a recognised page link happens before any check of
+// trust or intent, so a refused click still cannot navigate the frame itself.
+// `defaultPrevented` is read on entry: an earlier capture listener that
+// cancelled the event vetoes the message, but a later author preventDefault
+// cannot recall one already sent. This listener never stops propagation.
+export const ARTIFACT_NAVIGATION_GUARD_SCRIPT = `(function () {
+  var HTML_NS = 'http://www.w3.org/1999/xhtml';
+  var BLOCKING_TAGS = { input: 1, label: 1, select: 1, textarea: 1, summary: 1 };
+  function eventPath(event) {
+    if (typeof event.composedPath === 'function') {
+      var composed = event.composedPath();
+      if (composed && composed.length > 0) return composed;
+    }
+    var path = [];
+    for (var node = event.target; node; node = node.parentNode || node.host) path.push(node);
+    return path;
+  }
+  function findNavigationLink(event) {
+    var path = eventPath(event);
+    for (var i = 0; i < path.length; i++) {
+      var el = path[i];
+      if (!el || el.nodeType !== 1) continue;
+      var isHtml = el.namespaceURI === HTML_NS;
+      if (isHtml ? BLOCKING_TAGS[el.localName] === 1 : el.localName === 'a') return null;
+      if (el.isContentEditable === true) return null;
+      if (isHtml && (el.localName === 'a' || el.localName === 'area') && el.hasAttribute('href')) return el;
+    }
+    return null;
+  }
+  function handleLinkActivation(event) {
+    var alreadyPrevented = event.defaultPrevented;
+    var link = findNavigationLink(event);
+    if (!link) return;
+    var href = link.getAttribute('href');
+    var fragmentOnly = href.replace(/^[\\t\\n\\f\\r ]+|[\\t\\n\\f\\r ]+$/g, '').charAt(0) === '#';
+    var linkTarget = (link.getAttribute('target') || '').toLowerCase();
+    var plainTarget = linkTarget === '' || linkTarget === '_self';
+    if (event.type !== 'click') {
+      event.preventDefault();
+      return;
+    }
+    if (link.hasAttribute('download') || event.shiftKey || event.altKey || (!plainTarget && linkTarget !== '_blank')) {
+      event.preventDefault();
+      return;
+    }
+    if (fragmentOnly) {
+      if (!(event.button === 0 && !event.metaKey && !event.ctrlKey && plainTarget)) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    if (!event.isTrusted || alreadyPrevented || event.button !== 0 || href.length < 1 || href.length > ${ARTIFACT_LINK_MAX_LENGTH}) return;
+    if (window.parent === window) return;
+    var disposition = event.metaKey || event.ctrlKey || linkTarget === '_blank' ? 'new-tab' : 'same-tab';
+    try {
+      window.parent.parent.postMessage({ type: ${JSON.stringify(ARTIFACT_NAVIGATE_MESSAGE_TYPE)}, href: href, disposition: disposition }, '*');
+    } catch (error) {}
+  }
+  document.addEventListener('click', handleLinkActivation, true);
+  document.addEventListener('auxclick', handleLinkActivation, true);
+  document.addEventListener('contextmenu', handleLinkActivation, true);
+})();`;
+
+/** CSP hash-source token (without quotes) matching exactly {@link ARTIFACT_NAVIGATION_GUARD_SCRIPT}. */
+export const ARTIFACT_NAVIGATION_GUARD_DIGEST = sha256DigestToken(ARTIFACT_NAVIGATION_GUARD_SCRIPT);
+
+/**
+ * Splices the guard in at `headCloseIndex`, the `</head>` that
+ * `extractArtifactDigestMarkers` verified directly after the style digest
+ * marker. That index comes from string-position extraction on this same body,
+ * so a `</head>` inside a comment or raw-text element cannot be mistaken for
+ * it. The result is not meant to be fed back to marker extraction.
+ */
+export function insertArtifactNavigationGuard(body: string, headCloseIndex: number): string {
+  return `${body.slice(0, headCloseIndex)}<script>${ARTIFACT_NAVIGATION_GUARD_SCRIPT}</script>${body.slice(headCloseIndex)}`;
+}
 
 /**
  * Appended after the whole stored document rather than spliced before

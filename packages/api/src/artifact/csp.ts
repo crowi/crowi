@@ -47,7 +47,8 @@ function policyError(code: ArtifactPolicyErrorCode): ArtifactPolicyError {
 
 export type ArtifactDigestMarkers = Readonly<{ scriptDigests: string; styleDigests: string }>;
 
-export type ArtifactDigestMarkersResult = { readonly ok: true; readonly markers: ArtifactDigestMarkers } | ArtifactPolicyError;
+/** `headCloseIndex` is the UTF-16 index of the `</head>` that X-4 confirmed right after the style marker. */
+export type ArtifactDigestMarkersResult = { readonly ok: true; readonly markers: ArtifactDigestMarkers; readonly headCloseIndex: number } | ArtifactPolicyError;
 
 /**
  * §X 表 — takes the exact serialization form the core ingest leaf produces
@@ -92,7 +93,7 @@ export function extractArtifactDigestMarkers(body: string): ArtifactDigestMarker
   if (!body.startsWith('</head>', afterStyleTail)) return policyError('MARKER_MALFORMED');
 
   // X-5
-  return { ok: true, markers: { scriptDigests: scriptContent, styleDigests: styleContent } };
+  return { ok: true, markers: { scriptDigests: scriptContent, styleDigests: styleContent }, headCloseIndex: afterStyleTail };
 }
 
 // ---------------------------------------------------------------------------

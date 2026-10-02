@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { sha256Token, validArtifactHtml } from 'src/test/artifact-fixtures';
 import { withSecretTokenEnv } from 'src/test/secret-token-env';
 import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 import {
@@ -11,7 +12,11 @@ import {
   mintArtifactToken,
   resolveArtifactTokenKey,
   verifyArtifactToken,
+  prepareArtifactDelivery,
 } from './delivery';
+import { ARTIFACT_FRAME_BRIDGE_SCRIPT, ARTIFACT_NAVIGATION_GUARD_SCRIPT } from './frame-bridge';
+import { ingestHtmlArtifact } from './ingest';
+import type { ArtifactPolicySnapshot } from './policy';
 
 const EXPECTED = { pageId: '507f1f77bcf86cd799439011', revisionId: '507f191e810c19729de860ea' } as const;
 
@@ -201,5 +206,41 @@ describe('artifact delivery token', () => {
     it('falls back to "artifact" for the root path', () => {
       expect(artifactDownloadFilename('/')).toBe('artifact.html');
     });
+  });
+});
+
+describe('prepareArtifactDelivery', () => {
+  const snapshot: ArtifactPolicySnapshot = Object.freeze({
+    deliveryMode: 'separate-origin',
+    artifactOrigin: 'https://artifacts.example.net',
+    crowiOrigin: 'https://wiki.example.com',
+    writeEnabled: true,
+    allowWebFonts: false,
+    maxBytes: 2 * 1024 * 1024,
+  });
+
+  async function stored(html: string): Promise<string> {
+    const result = await ingestHtmlArtifact(html, { source: 'author', allowWebFonts: false, maxBytes: snapshot.maxBytes });
+    if (!result.ok) throw new Error('fixture rejected');
+    return Buffer.from(result.bytes).toString('utf8');
+  }
+
+  it.each([
+    ['an ordinary document', validArtifactHtml({ body: '<a href="/team/guide">x</a>' })],
+    ['a document with comments before the doctype', `<!-- a --><!-- b -->${validArtifactHtml()}`],
+  ])('delivers %s with one guard before </head>, the bridge at the end, and both digests in the CSP', async (_label, html) => {
+    const body = await stored(html);
+    const result = prepareArtifactDelivery(body, snapshot);
+    if (!result.ok) throw new Error(`unexpected ${result.code}`);
+    const guardTag = `<script>${ARTIFACT_NAVIGATION_GUARD_SCRIPT}</script>`;
+    expect(result.body.split(guardTag)).toHaveLength(2);
+    expect(result.body.indexOf(`${guardTag}</head>`)).toBeGreaterThan(0);
+    expect(result.body.endsWith(`<script>${ARTIFACT_FRAME_BRIDGE_SCRIPT}</script>`)).toBe(true);
+    expect(result.header).toContain(`'${sha256Token(ARTIFACT_NAVIGATION_GUARD_SCRIPT)}'`);
+    expect(result.header).toContain(`'${sha256Token(ARTIFACT_FRAME_BRIDGE_SCRIPT)}'`);
+  });
+
+  it('fails closed with the existing marker error when the markers are missing', () => {
+    expect(prepareArtifactDelivery('<html><head></head><body></body></html>', snapshot)).toMatchObject({ ok: false, code: 'MARKER_MISSING' });
   });
 });

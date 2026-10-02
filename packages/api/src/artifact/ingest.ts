@@ -16,7 +16,7 @@ import postcss from 'postcss';
 import valueParser from 'postcss-value-parser';
 import { init as esModuleLexerInit, parse as parseEsModules, ImportType } from 'es-module-lexer';
 import type { DefaultTreeAdapterMap, DefaultTreeAdapterTypes, TreeAdapter } from 'parse5';
-import type { ArtifactIngestRejectionReason } from '@crowi/api-contract';
+import { parseArtifactPageLink, type ArtifactIngestRejectionReason } from '@crowi/api-contract';
 import {
   ARTIFACT_HARD_MAX_BYTES,
   ARTIFACT_MIN_MAX_BYTES,
@@ -1622,15 +1622,48 @@ function elementAttributeTarget(tagName: string, attrName: string): string {
   return truncateArtifactIdentifier(`${tagName}[${attrName}]`);
 }
 
-function checkHtmlUrlAttr(tagName: string, attrName: string, value: string): boolean /* true = OK */ {
+function isHtmlLinkHref(namespace: string, tagName: string, attrName: string): boolean {
+  return namespace === HTML_NS && (tagName === 'a' || tagName === 'area') && attrName === 'href';
+}
+
+function checkHtmlUrlAttr(namespace: string, tagName: string, attrName: string, value: string): boolean /* true = OK */ {
   const cls = classifyArtifactUrlValue(value);
-  if ((tagName === 'a' || tagName === 'area') && attrName === 'href') return isFragmentOnlyOk(cls);
+  if (isHtmlLinkHref(namespace, tagName, attrName)) return isFragmentOnlyOk(cls) || parseArtifactPageLink(value) !== null;
+  // The map is addressed by `#name` in the same document only; a relative or external map would be a resource reference.
+  if (namespace === HTML_NS && tagName === 'img' && attrName === 'usemap') return isFragmentOnlyOk(cls);
   if ((tagName === 'img' && attrName === 'src') || (tagName === 'video' && attrName === 'poster')) return isDataOnlyOk(cls);
   // Every other HTML URL-bearing (tag, attr) combination is rejected
   // outright: scheme-agnostic for the explicitly-listed dangerous
   // attributes, and "no allowance exists" by default for everything else
   // (allow is enumerate, deny is default).
   return false;
+}
+
+/**
+ * Whether a `<template>` is a declarative shadow root host whose mode is not
+ * `open` (`closed`, or a value the browser would leave as an inert template).
+ * Page links beneath one cannot be seen by the frame bridge's event-path
+ * walk, so they are refused at ingest instead of being silently dropped.
+ */
+function isNonOpenShadowTemplate(node: ArtifactTreeNode): boolean {
+  if (!isTemplateLike(node)) return false;
+  const mode = (node.attrs as ArtifactAttribute[]).find((attr) => !attr.namespace && attr.name === 'shadowrootmode');
+  return mode !== undefined && mode.value.toLowerCase() !== 'open';
+}
+
+/** `walkArtifactTree` that also reports whether the node sits under a non-open declarative shadow root. */
+function* walkWithShadowContext(
+  root: DefaultTreeAdapterTypes.Document | DefaultTreeAdapterTypes.DocumentFragment,
+): Generator<{ node: ArtifactTreeNode; underNonOpenShadow: boolean }> {
+  const stack: { node: ArtifactTreeNode; underNonOpenShadow: boolean }[] = [...root.childNodes].reverse().map((node) => ({ node, underNonOpenShadow: false }));
+  while (stack.length > 0) {
+    const entry = stack.pop()!;
+    yield entry;
+    const { node } = entry;
+    const childFlag = entry.underNonOpenShadow || isNonOpenShadowTemplate(node);
+    const children = isTemplateLike(node) ? node.content.childNodes : 'childNodes' in node ? node.childNodes : [];
+    for (let i = children.length - 1; i >= 0; i -= 1) stack.push({ node: children[i], underNonOpenShadow: childFlag });
+  }
 }
 
 /**
@@ -1646,20 +1679,26 @@ function checkGenericHtmlUrlAttrs(
   node: DefaultTreeAdapterTypes.Element,
   attrs: readonly ArtifactAttribute[],
   skipHrefLike: boolean,
+  allowPageLinks: boolean,
 ): ArtifactRuleFailure | null {
   for (const attr of attrs) {
     if (attr.namespace || attr.prefix) continue;
     if (skipHrefLike && isHrefLikeAttr(attr)) continue; // already judged by the MathML href branch above.
     if (!HTML_URL_ATTRS.has(attr.name)) continue;
     if (node.tagName === 'link' && attr.name === 'href' && isGoogleFontsStylesheetLinkElement(node)) continue; // AI-R12 decides.
-    if (checkHtmlUrlAttr(node.tagName, attr.name, attr.value)) continue;
+    // Under a non-open shadow root only the in-document fragment form of a link survives.
+    const ok =
+      !allowPageLinks && isHtmlLinkHref(node.namespaceURI, node.tagName, attr.name)
+        ? isFragmentOnlyOk(classifyArtifactUrlValue(attr.value))
+        : checkHtmlUrlAttr(node.namespaceURI, node.tagName, attr.name, attr.value);
+    if (ok) continue;
     return { target: elementAttributeTarget(node.tagName, attr.name) };
   }
   return null;
 }
 
 async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<ArtifactRuleFailure | null> {
-  for (const node of walkArtifactTree(context.parsed!.document)) {
+  for (const { node, underNonOpenShadow } of walkWithShadowContext(context.parsed!.document)) {
     if (!isElementLike(node)) continue;
     const attrs = node.attrs as ArtifactAttribute[];
     const namespace = node.namespaceURI;
@@ -1699,13 +1738,13 @@ async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<Artif
       // MathML elements aren't otherwise covered — the HTML name table
       // still applies to any plain attribute name it shares with HTML
       // (href/xlink:href were already judged above, so exclude them here).
-      const genericFailure = checkGenericHtmlUrlAttrs(node, attrs, true);
+      const genericFailure = checkGenericHtmlUrlAttrs(node, attrs, true, true);
       if (genericFailure) return genericFailure;
       continue;
     }
 
     if (namespace !== HTML_NS) continue;
-    const failure = checkGenericHtmlUrlAttrs(node, attrs, false);
+    const failure = checkGenericHtmlUrlAttrs(node, attrs, false, !underNonOpenShadow);
     if (failure) return failure;
   }
   return null;
