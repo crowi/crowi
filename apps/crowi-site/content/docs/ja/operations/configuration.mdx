@@ -28,20 +28,20 @@ compose / オーケストレータから変数を注入します。`.env.example
 cp .env.example .env
 ```
 
-API は、起動時に検証できる値をまとめて起動時に検証します。一方、値によっては起動時ではなく実際に使われる時点で解釈されるものもあります(`LOG_LEVEL` がそれで、不正な値は起動時の一括検証ではなく最初にログを出力しようとした時点で報告されます)。`PORT` / `MONGO_URI`
+API は、起動時に検証できる値を起動時にまとめて検証します。一方、値によっては起動時ではなく実際に使われる時点で解釈されるものもあります(`LOG_LEVEL` がそれで、不正な値は起動時の一括検証ではなく最初にログを出力しようとした時点で報告されます)。`PORT` / `MONGO_URI`
 (またはエイリアス) / `REDIS_URL` (またはエイリアス) / `CROWI_ENCRYPTION_KEY`
 / `CROWI_ARTIFACT_ORIGIN` の形式が不正な場合、検出できた問題をすべて含む
 1 つのエラーメッセージとともに起動が即座に失敗します。`CLIENT_URL` / `CROWI_MULTI_INSTANCE` /
 `NODE_ENV` / `JWT_ACCESS_TOKEN_TTL_SECONDS` / `JWT_REFRESH_TOKEN_TTL_SECONDS`
 / `COLLAB_MAX_EDITORS_PER_PAGE` / `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY`
-などの形式不正は起動を妨げず、起動ログに 1 箇所へまとめて warning として
+などの形式不正は起動を妨げず、起動ログの 1 箇所にまとめて warning として
 出力されます(`CLIENT_URL` が未設定の場合も、送信メール内のリンクが相対
 パスになってしまう旨の warning が同じレポートに含まれます)。
 
 `SECRET_TOKEN` は**必須**です。未設定・空文字・空白のみ・既知の
 placeholder 値のいずれかであれば、`NODE_ENV` や `CROWI_MULTI_INSTANCE` の
 値に関係なく起動が失敗します。加えて、**`NODE_ENV` の値によって重大度が
-変わる例外**でもあります — 32 文字未満の値は `NODE_ENV=production`
+変わる例外**でもあります。32 文字未満の値は `NODE_ENV=production`
 (未設定時も含む) では起動失敗、それ以外の環境では警告に留まります。
 旧 `WS_TOKEN_SECRET` は非推奨の legacy alias として引き続き読みます。
 要件は [環境変数](../reference/env) の該当行を参照してください。
@@ -51,11 +51,11 @@ placeholder 値のいずれかであれば、`NODE_ENV` や `CROWI_MULTI_INSTANC
 どれとも完全一致しない環境変数は、タイポの疑いとして同じ warning
 レポートに含まれます。判定にはレーベンシュタイン距離(編集距離)を使い、
 既知の変数名のうち最も近いものとの距離が 2 以下であれば「もしかして
-`XXX` では?」という形で warning を出します(fail にはなりません — 誤検知
+`XXX` では?」という形で warning を出します(fail にはなりません。誤検知
 を許容するヒューリスティックです)。`PATH` / `CI` / `GITHUB_*` / `npm_*`
 など上記プレフィックスを持たない一般的な OS/CI 環境変数は対象外です。
 
-構造化ログについて: api の構造化ロガーを経由するレコードは、標準出力・標準エラー出力ともに 1 行 1 レコードの NDJSON です。各レコードは、受け取った HTTP リクエストとの相関に使う request id を持ちます。プリティプリント・収集・保管は運用者側の責務です (`LOG_LEVEL` の詳細は [環境変数](../reference/env) を参照)。起動時の進捗表示 (boot reporter)、`@@crowi:fail` マーカー、構造化ロガーを経由しない `console.*` 呼び出しはこの対象外でプレーンテキストのまま出力されるため、api のプロセス全出力をそのまま厳密な NDJSON パーサへ渡せるとは限りません。
+api の構造化ロガーを経由するレコードは、標準出力・標準エラー出力ともに 1 行 1 レコードの NDJSON です。各レコードは、受け取った HTTP リクエストとの相関に使う request id を持ちます。プリティプリント・収集・保管は運用者側の責務です (`LOG_LEVEL` の詳細は [環境変数](../reference/env) を参照)。起動時の進捗表示 (boot reporter)、`@@crowi:fail` マーカー、構造化ロガーを経由しない `console.*` 呼び出しはこの対象外でプレーンテキストのまま出力されるため、api のプロセス全出力をそのまま厳密な NDJSON パーサへ渡せるとは限りません。
 
 ### 変数の一覧
 
@@ -89,8 +89,8 @@ AI クライアント向けの MCP エンドポイント `/api/mcp` は常に有
 > (Vercel・コンテナ・api と同居など)。一方 api は長寿命の Node サーバ
 > (データベースへの持続的な接続・レプリカ間の pub/sub・常駐する WebSocket
 > サーバ・起動時のプラグイン読み込み) であり、**Node ランタイムが必須**
-> です — Node ホストまたは Node コンテナ (ECS / EKS / Fly / Render /
-> Cloud Run / Cloudflare Containers)。Cloudflare Workers のような
+> です。Node ホストまたは Node コンテナ (ECS / EKS / Fly / Render /
+> Cloud Run / Cloudflare Containers) で動作します。Cloudflare Workers のような
 > edge/isolate 系のサーバレス基盤では動作しません。
 
 ### レンダラ plugin アセットと CSP (Content-Security-Policy)
@@ -98,7 +98,7 @@ AI クライアント向けの MCP エンドポイント `/api/mcp` は常に有
 KaTeX のような一部のレンダラ plugin は、CSS / font などの静的アセットを
 自身の public route (`/api/plugins/<plugin-name>/...`) から配信します。
 Web はどのレンダラ plugin が有効かを api に問い合わせ、そのスタイルシートを
-api origin に対する `<link rel="stylesheet">` として読み込みます —
+api origin に対する `<link rel="stylesheet">` として読み込みます。
 plugin 名や CSS の存在を Web 側が事前に知る必要はありません。
 
 Web と api が **同一オリジン** (推奨のリバースプロキシ構成、上記参照) の
@@ -118,7 +118,7 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 
 許可を追加し忘れると、対象の plugin が有効でも CSS / font がブラウザに
 ブロックされ、スタイルが当たらない状態になります (plugin 自体は正常に
-動作しているため、api / Web のログにはエラーが出ません — ブラウザの
+動作しているため、api / Web のログにはエラーが出ません。ブラウザの
 コンソールで CSP violation を確認してください)。
 
 ### HTML artifact の配信 (CROWI_ARTIFACT_ORIGIN)
@@ -127,19 +127,19 @@ HTML artifact ページは、Crowi に到達できる security context では絶
 実行されてはいけません。配信モードは 2 つあり、どちらも既定では無効です。
 
 - **separate-origin (推奨)**: `CROWI_ARTIFACT_ORIGIN` に `CLIENT_URL` と
-  **異なる hostname** を設定します — 同じ hostname の別 port / scheme は
+  **異なる hostname** を設定します。同じ hostname の別 port / scheme は
   boot 時に拒否されます。cookie は origin ではなく host 単位でスコープ
   されるためです。可能であれば別の registrable domain を用意してください
   (例: `wiki.example.com` に対して `artifacts.example.net`)。その origin
   は同じ api process へ到達できる必要があります(reverse proxy の設定、
-  またはその api を指す別の DNS レコード — api 自身はこれを検証できない
+  またはその api を指す別の DNS レコードを使います。api 自身はこれを検証できない
   ため、下記の smoke check で確認します)。
 - **same-origin (明示的な opt-in)**: 環境変数ではなく **Admin > Artifact**
   から有効化します。`CLIENT_URL` の設定が必須で、api がその同一 origin
   配下(推奨のリバースプロキシ構成)で到達できることを前提とします。api を
   別ホストで公開している場合は separate-origin 配信を使ってください。
   複数 api instance 構成では、この設定の他 instance への伝播は
-  best-effort です — 無効化した後は、全 instance に確実に反映させるため
+  best-effort です。無効化した後は、全 instance に確実に反映させるため
   それぞれを再起動してください。
 
 same-origin 配信の `/_artifact-frame` は、request の `Host` header から artifact の期待 host を導出します。手前に reverse proxy を置く場合は、元の `Host` header をそのまま転送するよう設定してください(Caddy は既定でそのまま転送します。nginx では `proxy_set_header Host $host;` が必要です)。転送されないと、正当な same-origin artifact request が `Invalid or missing src.` として拒否されます。
@@ -164,16 +164,16 @@ curl -fsS https://artifacts.example.net/api/app/info
 smoke check です)。到達しない場合、artifact ページの保存自体は通常どおり
 行われますが、routing を直すまで配信できません(データは失われません)。
 
-artifact origin がこの api instance へ到達させる必要がある path prefix は `/api/artifact/`(sandbox 化された文書自体が fetch する、token 認証の配信 route)と `/api/pages/`(署名付き配信 URL を発行する route)の 2 つだけです — 推奨のリバースプロキシ構成では、他の `/api/*` の呼び出しと同様にこの 2 つも既に route されています。配信 response が cookie を発行することはありません — 60 秒だけ有効な署名付き URL が唯一の認証情報で、cookie は一切持ちません。
+artifact origin がこの api instance へ到達させる必要がある path prefix は `/api/artifact/`(sandbox 化された文書自体が fetch する、token 認証の配信 route)と `/api/pages/`(署名付き配信 URL を発行する route)の 2 つだけです。推奨のリバースプロキシ構成では、他の `/api/*` の呼び出しと同様にこの 2 つも既に route されています。配信 response が cookie を発行することはありません。60 秒だけ有効な署名付き URL が唯一の認証情報で、cookie は一切持ちません。
 
-artifact ページの HTML を添付ファイルとしてダウンロードする機能(`GET /pages/{id}/artifact-download`、通常のセッション/PAT 認証配下)は配信モードとは独立していて、上記のどちらのモードも設定していなくても動作します — 設定が必要なのは sandbox 化されたインライン プレビューだけです。
+artifact ページの HTML を添付ファイルとしてダウンロードする機能(`GET /pages/{id}/artifact-download`、通常のセッション/PAT 認証配下)は配信モードとは独立していて、上記のどちらのモードも設定していなくても動作します。設定が必要なのは sandbox 化されたインラインプレビューだけです。
 
 署名付き配信 URL の token は query string(`?t=…`)に載って運ばれます。Crowi 自身の log にはこれを一切記録しませんが、artifact origin の手前に置く reverse proxy や CDN は既定で request URL 全体を access log に記録することがあります。`/api/artifact/` については query string を記録しないよう設定してください。漏れた log の 1 行が(有効期限内は)そのまま有効な配信 URL として再生されてしまいます。
 
 same-origin 配信には知っておくべき残余リスクがあります。artifact への
 request にも Crowi のセッション cookie が送られます(文書自体からは分かり
 ません)。また、reverse proxy や CDN が response header を除去・上書き
-すると、sandbox による保護が黙って失われます。Admin > Artifact の画面にも
+すると、sandbox による保護が警告なく失われます。Admin > Artifact の画面にも
 この 2 点をトグルの直前に表示しています。
 
 ## crowi.config.json
@@ -204,7 +204,7 @@ request にも Crowi のセッション cookie が送られます(文書自体�
 
 ### フィールドとドライバ名
 
-キーの一覧・既定値と、指定できるドライバ名の一覧は [crowi.config.json](../reference/config-file) にあります。ファイルが存在しない場合や項目を省略した場合は既定値が使われ、スキーマに合わない内容は起動時に明示的なエラーで失敗します。
+キーの一覧・既定値と、指定できるドライバ名の一覧は [crowi.config.json](../reference/config-file) にあります。ファイルが存在しない場合や項目を省略した場合は既定値が使われます。スキーマに合わない内容があると、明示的なエラーで起動に失敗します。
 
 ### プラグインの解決方法
 
@@ -216,11 +216,11 @@ request にも Crowi のセッション cookie が送られます(文書自体�
 うえで `crowi.config.json:plugins` に名前を追加します。api パッケージ自体を
 再ビルドする必要はありません。
 
-3 つのプラグインが **暗黙のデフォルトプラグイン** として常に読み込まれ、
-設定不要で動作します: `@crowi/plugin-storage-local`、
-`@crowi/plugin-search-mongo`、`@crowi/plugin-mail-smtp`。そのため、新規
-インストールは **ローカルストレージ + MongoDB 検索 + SMTP メール** が
-そのまま動きます — 必須のインフラは MongoDB だけです。
+`@crowi/plugin-storage-local`、`@crowi/plugin-search-mongo`、
+`@crowi/plugin-mail-smtp` の 3 つは **暗黙のデフォルトプラグイン** として
+常に読み込まれ、設定不要で動作します。そのため、新規
+インストールでは **ローカルストレージ + MongoDB 検索 + SMTP メール** が
+そのまま動きます。必須のインフラは MongoDB だけです。
 
 runner プロジェクトは `package.json` の `"start": "crowi-api"` スクリプト
 (`@crowi/api` が提供する `crowi-api` bin) で起動します。プラグインを
@@ -233,7 +233,7 @@ runner プロジェクトは `package.json` の `"start": "crowi-api"` スクリ
 と `@crowi/plugin-mail-aws-ses` は共通基盤の `@crowi/plugin-aws` を `requires`
 で宣言しているので、`plugins` には **driver プラグインだけ** を列挙すれば
 `@crowi/plugin-aws` は自動でロードされます。umbrella の `@crowi/plugin-aws`
-を明示列挙する必要はありません (重複ロードを避ける)。AWS 一式を使う通し
+を明示列挙する必要はありません (重複ロードを避けるため)。AWS 一式を使う通し
 手順は [AWS Lightsail で動かす](./aws-lightsail) を参照してください。
 
 プラグインの追加・有効化の詳しい手順は [プラグインの導入と設定](./plugins)、

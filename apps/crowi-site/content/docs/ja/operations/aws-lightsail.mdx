@@ -5,15 +5,15 @@ description: Lightsail VPS 1 台 + docker compose 全のせで Crowi 2.0 を立�
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-このページは、**AWS Lightsail の VPS を 1 台** 借り、その上で
-**docker compose に api / web / MongoDB / Redis / Elasticsearch / Caddy を
-全部のせ** にして Crowi 2.0 を立てる、**1 つの具体的な通し手順 (worked
-example)** です。
+このページは、AWS Lightsail の VPS を 1 台借り、その上で
+docker compose に api / web / MongoDB / Redis / Elasticsearch / Caddy を
+全部のせにして Crowi 2.0 を立てる、1 つの具体的な通し手順 (worked
+example) です。
 
 汎用的なステップ ([デプロイ構成](./deployment) / [設定](./configuration) /
 [メール送信の設定](./mail) / [バックアップ](./backup) / [v1 からの移行](./upgrading-from-v1))
-は各ページへリンクし、ここでは **通しの順序** と **Lightsail / AWS 固有の
-勘所** に絞ります。同じ手順を EC2 や他社 VPS でも応用できますが、ここでは
+は各ページへリンクし、ここでは通しの順序と Lightsail / AWS 固有の
+勘所に絞ります。同じ手順を EC2 や他社 VPS でも応用できますが、ここでは
 最小構成例として AWS で完結させます。
 
 <Callout type="info">
@@ -77,8 +77,8 @@ example)** です。
   AWS の公式ページで確認してください。
 </Callout>
 
-ファイアウォール (Lightsail の Networking タブ) では `80` / `443` を全開、
-`22` は自分の IP からのみ、を推奨します。`27017` (MongoDB) や `9200` (ES)
+ファイアウォール (Lightsail の Networking タブ) では `80` / `443` を全開にし、
+`22` は自分の IP からのみ開放することを推奨します。`27017` (MongoDB) や `9200` (ES)
 は **絶対に外部公開しない** でください。compose 内のコンテナは Docker の
 内部ネットワークで名前解決して通信するので、ホストにポートを晒す必要は
 ありません。
@@ -97,7 +97,7 @@ example)** です。
 <Callout type="info">
   **Route53 を使う限り、DNS 用の追加 IAM credential は不要です。**
   Caddy の証明書取得は HTTP-01 / TLS-ALPN-01 (ポート 80 / 443 だけで成立)
-  を使い、Route53 の API を叩きません。A レコードを static IP に向けて
+  を使い、Route53 の API を呼び出しません。A レコードを static IP に向けて
   おけば、Caddy が自動で TLS を張ります。「DNS challenge 用に Route53 の
   IAM キーが要るのでは」と身構える必要はありません。
 </Callout>
@@ -124,7 +124,7 @@ Crowi のデプロイは **api (Hono)** と **web (Next.js)** の 2 サービス
 リポジトリ同梱の `docker-compose.yml` は `--profile app` で api / web / caddy
 を立てられるように作られています。Lightsail 1 台に全のせするなら、infra
 (mongodb / redis / elasticsearch) も同じ compose で起動し、**全サービスを
-1 ファイルで** 管理するのが楽です。最小の動く例:
+1 ファイルで** 管理するのが楽です。次が最小の動く例です。
 
 ```yaml
 # docker-compose.yml (Lightsail 1 台・全のせの最小例)
@@ -241,7 +241,7 @@ S3 ストレージ + SES メール + Elasticsearch 検索を使うなら、`plug
   明示列挙しないでください。** `@crowi/plugin-storage-aws-s3` と
   `@crowi/plugin-mail-aws-ses` はどちらも `requires: ['@crowi/plugin-aws']`
   を宣言しており、共通クレデンシャル基盤の `@crowi/plugin-aws` は
-  **依存として自動 (transitive) ロード** されます。`plugins` に明示で
+  **依存として自動 (transitive) ロード** されます。`plugins` に明示的に
   書き足すと二重ロードになります。`plugins` には **driver
   (`@crowi/plugin-storage-aws-s3` / `@crowi/plugin-mail-aws-ses`) だけ** を
   列挙すれば十分です。プラグイン解決の仕組みは
@@ -257,7 +257,7 @@ api 起動後に管理画面 (`/admin/plugins`、`/admin/mail`) から入力し�
 ## 6. ホスト初期セットアップ
 
 Lightsail インスタンスに SSH で入り、Docker と (任意で) AWS CLI を入れ、
-**Lightsail 固有の 2 つの落とし穴** を先に潰しておきます。
+Lightsail 固有の 2 つの落とし穴に先に対処しておきます。
 
 ```bash
 # Docker / Docker Compose plugin (Ubuntu)
@@ -314,7 +314,7 @@ sudo chown -R 1000:0 data/elasticsearch
 ## 7. v1 からのデータ移行 (任意)
 
 v1 の既存 Wiki から移行する場合は、[v1 からの移行](./upgrading-from-v1) が
-一次情報です。要点だけ:
+一次情報です。要点は次のとおりです。
 
 - v1 の MongoDB を `mongodump` / `mongorestore` でこの Lightsail の MongoDB
   へ移す ([バックアップ](./backup))。
@@ -380,7 +380,7 @@ aws s3 sync "/tmp/crowi-$(date +%F)" "s3://your-backup-bucket/crowi/$(date +%F)/
   したがって S3 backup / SES / KMS を使うには、あなたのアカウントで作った
   **明示的な IAM ユーザーのアクセスキー** を、ホストの `~/.aws/credentials`
   (AWS CLI 用) や管理画面 (SES / S3 ドライバ用) に置く必要があります。
-  この点は backup と SES の両方に波及します。
+  この点は backup と SES の両方に影響します。
 </Callout>
 
 機密 Config を暗号化している場合、ダンプには暗号化された値が含まれます。
