@@ -30,9 +30,7 @@ Trusted Publisher 等はそちら)。この skill はエージェント手順に
 | **team wiki の記録**(詳細ページ + index の 1 行) | **この skill(verify モード)** | CI は書かない — portal `/crowi/release/` の運用契約 |
 | ES image | 別 workflow(`docker-elasticsearch.yml`) | 必要時のみ確認 |
 
-> tag push は GITHUB_TOKEN の anti-recursion で docker.yml を**起動しない**。連鎖は
-> workflow_run。Version-PR-only run は dist-version artifact を上げないため image build
-> は自然に skip される — 「publish したときだけ build」はこの仕組みで担保。
+> tag push は bot App のトークンで行うので `on: push: tags` のワークフローを起動する。docker.yml は tag ではなく workflow_run で連鎖させている (tag トリガーを足すと 1 回のリリースで二重に build される)。Version-PR-only run は dist-version artifact を上げないため image build は自然に skip される — 「publish したときだけ build」はこの仕組みで担保。
 
 ## モード
 

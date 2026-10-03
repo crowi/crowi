@@ -13,10 +13,24 @@ name: Release
 #     and pnpm/action-setup@v6 (>=6.0.6) avoids the pnpm-side OIDC regression.
 #   - One-time external setup (see operations/release-runbook.mdx): each public
 #     @crowi/* package must have a Trusted Publisher configured on npmjs.com
-#     (repo crowi/crowi + workflow file release.yml), and the repo setting
-#     "Allow GitHub Actions to create and approve pull requests" must be ON for
-#     the Version PR.
+#     (repo crowi/crowi + workflow file release.yml).
 #   - NPM_CONFIG_PROVENANCE: 'true' attaches build provenance attestations.
+#
+# Version PR auth: the PR is opened and pushed with an installation token of
+# the org's bot GitHub App (org secrets BOT_CLIENT_ID / BOT_PRIVATE_KEY), not
+# GITHUB_TOKEN. A pull_request run started by a GITHUB_TOKEN push waits for a
+# manual "approve workflow run", so CI on the Version PR never started on its
+# own. The App needs Contents and Pull requests write on crowi/crowi.
+#
+# changesets/action writes the token it is given to ~/.netrc, and git pushes
+# with it — unless checkout left its own token in the git config, which git
+# sends first. So checkout keeps no credentials, and the App token is minted
+# right before changesets/action (installation tokens last one hour; the
+# install and build steps before it would otherwise eat into that). Every
+# later push in this job goes through the same .netrc, so the tags it pushes
+# (changesets' per-package tags and the distribution tag) go out with the App
+# token too and DO start `on: push: tags` workflows (only
+# docker-elasticsearch's `es-v*` exists today, which no release tag matches).
 on:
   workflow_dispatch:
   push:
@@ -28,15 +42,17 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   release:
     runs-on: ubuntu-latest
+    # GITHUB_TOKEN is left with what the aggregate release step needs; the PR
+    # and every push go through the App token.
     permissions:
       contents: write
-      pull-requests: write
       id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -82,6 +98,15 @@ jobs:
       # input below (publish/version/commit/title -> publish-script/
       # version-script/commit-message/pr-title), so moving up means migrating
       # the CLI and the inputs in one change, not bumping this line.
+      - name: Create bot App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
@@ -91,7 +116,7 @@ jobs:
           commit: 'chore: version packages'
           title: 'chore: version packages'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NPM_CONFIG_PROVENANCE: 'true'
 
       # --- Distribution (umbrella) version tag --------------------------------
@@ -109,14 +134,14 @@ jobs:
         id: dist
         run: node scripts/compute-dist-version.mjs --out dist-version.txt
 
-      # Seam to the Docker workflow (docker.yml, phase-3). NOTE: a tag pushed
-      # with the default GITHUB_TOKEN does NOT trigger another workflow's
-      # `on: push: tags` (GitHub anti-recursion). So docker.yml is triggered by
-      # `workflow_run` (this Release workflow completing), NOT by this tag push.
-      # We deliberately do NOT add a PAT — that would reintroduce the long-lived
-      # secret OIDC was adopted to remove. The tag below is the durable release
-      # record; docker.yml picks the version up from the uploaded artifact (and
-      # can fall back to the latest `v*` tag).
+      # Seam to the Docker workflow (docker.yml, phase-3). docker.yml is
+      # triggered by `workflow_run` (this Release workflow completing), NOT by
+      # this tag push: it reads the version from the artifact uploaded below,
+      # and that artifact only exists when a publish happened. This tag is
+      # pushed with the App token (see the header), so a `v*` tag trigger
+      # added to any workflow would fire here too — docker.yml must not grow
+      # one, or every release builds twice. The tag is the durable release
+      # record; docker.yml can fall back to the latest `v*` tag.
       - name: Create and push distribution tag
         if: steps.changesets.outputs.published == 'true'
         env:

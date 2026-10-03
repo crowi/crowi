@@ -77,11 +77,11 @@ done | sort
 
 **新しい公開パッケージを足したときは、そのパッケージだけ初回を手動で publish します。** npm の Trusted Publisher は **既に npm 上に存在するパッケージにしか設定できない** ため、まだ publish されていない名前には登録できません。順序は「ローカルから 1 回 `npm publish` する → npmjs.com でそのパッケージに Trusted Publisher を登録する → 以降は CI の OIDC publish に乗る」。登録前にリリースを回すと、そのパッケージの publish だけが認証できずに失敗します。
 
-### 2. GitHub: Actions に PR 作成を許可
+### 2. GitHub: Version PR を作る bot App
 
-repo Settings → Actions → General → Workflow permissions で
-**「Allow GitHub Actions to create and approve pull requests」を ON** にします。
-これが OFF だと `changesets/action` が Version PR を自動生成できません。
+Version PR の作成と push は、org の bot GitHub App のインストールトークンで行います。`GITHUB_TOKEN` で作った PR では、`pull_request` で起動する CI が毎回「workflow awaiting approval」で止まり、手動の承認が要るためです。
+
+App を crowi/crowi にインストールし、Contents と Pull requests の書き込み権限を与えます。そのうえで org secrets に `BOT_CLIENT_ID` (App の Client ID) と `BOT_PRIVATE_KEY` (App の秘密鍵の PEM) を登録します。リポジトリ設定の「Allow GitHub Actions to create and approve pull requests」は不要です。
 
 ### 3. GitHub secret（Docker Hub）
 
@@ -128,11 +128,7 @@ OIDC publish の前提は次の組合せです（CI 設定済み・参考情報�
    で発火し、full / slim を multi-arch（amd64 + arm64）で build+push します。
 
 <Callout type="warn">
-  `GITHUB_TOKEN` が push したタグは **他の workflow の `on: push: tags` を起動しません**
-  （無限ループ防止のための GitHub の仕様）。このため `docker.yml` は製品版タグ push では
-  なく **`workflow_run`（Release の完了）** で発火し、Release run が upload した
-  `dist-version` artifact の有無で「publish があった run か」を判定します。
-  publish が無かった（Version PR を作っただけの）run では image を build しません。
+  Release はタグを bot App のトークンで push するので、そのタグは**他の workflow の `on: push: tags` を起動します**。それでも `docker.yml` は製品版タグの push ではなく **`workflow_run`（Release の完了）** で発火します。Release run が upload した `dist-version` artifact の有無で「publish があった run か」を判定するためで、タグのトリガーを足すと 1 回のリリースで二重に build されます。publish が無かった（Version PR を作っただけの）run では image を build しません。
 </Callout>
 
 <Callout type="warn">
@@ -282,8 +278,7 @@ pnpm changeset pre exit
   （repo / workflow ファイル名が一致しているか）を確認します。それでも通らない場合の
   フォールバックは、`release.yml` の publish ステップを `pnpm changeset publish` から
   **`npm publish` 経由のスクリプト** に差し替える案です。
-- **Version PR が生成されない**: 「Allow GitHub Actions to create and approve pull
-  requests」が ON か、貯まった changeset が存在するかを確認します。
+- **Version PR が生成されない**: Release の「Create bot App token」ステップが成功しているか (secret の登録、App のインストールと権限) と、貯まった changeset が存在するかを確認します。
 - **Docker image が出ない**: `docker.yml` が `workflow_run` で発火したか、対象 Release run が
   `dist-version` artifact を upload しているか（= 実際に publish があった run か）を確認します。
   publish を伴わない Version PR だけの run では image は build されません。

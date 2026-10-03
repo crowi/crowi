@@ -7,12 +7,11 @@ name: Docker
 #   - crowi/crowi-web  (Next.js renderer): single image, no variant split
 #
 # Trigger (the "umbrella tag" seam, feature-ci-release-automation §4 / D3):
-#   A tag pushed by the Release workflow with the default GITHUB_TOKEN does NOT
-#   start another workflow's `on: push: tags` (GitHub anti-recursion), and we
-#   deliberately did not add a PAT (that would reintroduce the long-lived secret
-#   OIDC was adopted to remove). So this workflow is started by `workflow_run`
-#   when Release COMPLETES, and reads the distribution version from the artifact
-#   Release uploaded.
+#   This workflow is started by `workflow_run` when Release COMPLETES, and reads
+#   the distribution version from the artifact Release uploaded. It does not
+#   listen for the `v*` tag Release pushes: that tag is pushed with the bot
+#   App's token, which does start `on: push: tags` workflows, so a tag trigger
+#   here would build every release a second time.
 #     - workflow_run: only when Release SUCCEEDED. If Release did not publish
 #       (a Version-PR-only run), it uploaded no `dist-version` artifact, so this
 #       workflow downloads nothing and exits cleanly without building — i.e.
