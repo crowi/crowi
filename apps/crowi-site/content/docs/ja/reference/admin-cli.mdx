@@ -71,7 +71,7 @@ description: crowi-admin のサブコマンド・オプション・終了コー�
 | `page-history repair` | `--resume-after <pageId>` | — | ページ単位の再開位置 |
 | `page-history repair` | `--resume-after-operation <operationId>` | — | `--transitions` の操作単位の再開位置 |
 
-グローバルオプションは `--help` と `--version` の 2 つだけです。接続先は環境変数 (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`) から解決されます。すべてのコマンドは内部で api の boot 経路を通るため `SECRET_TOKEN` も必須です — 未設定・空・空白のみ・既知の placeholder のいずれかだと、整形済みの初期化失敗メッセージを出して終了コード `1` で終了します。
+グローバルオプションは `--help` と `--version` の 2 つだけです。接続先は環境変数 (`MONGO_URI` / `CROWI_ENCRYPTION_KEY`) から解決されます。すべてのコマンドは内部で api の boot 経路を通るため、`SECRET_TOKEN` も必須です。未設定・空・空白のみ・既知の placeholder のいずれかだと、整形済みの初期化失敗メッセージを出して終了コード `1` で終了します。
 
 ## 終了コード
 
@@ -79,7 +79,7 @@ description: crowi-admin のサブコマンド・オプション・終了コー�
 | --- | --- | --- |
 | `0` | 成功 (dry-run の完走を含む) | すべて |
 | `1` | 致命的エラー (初期化失敗、オプションの値が不正、処理開始前の例外) | すべて |
-| `2` | 部分的失敗 — 完走したが 1 件以上失敗した (再実行を推奨) | `rebuild storage copy` / `rebuild attachment-display-derivatives` / `replace url` / `page-history repair` |
+| `2` | 部分的失敗。完走したが 1 件以上失敗した (再実行を推奨) | `rebuild storage copy` / `rebuild attachment-display-derivatives` / `replace url` / `page-history repair` |
 | `130` | 中断 (Ctrl-C)。片付けと進捗サマリの出力後に終了する | `rebuild attachment-display-derivatives` |
 
 ## 関連ページ

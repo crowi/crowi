@@ -40,11 +40,11 @@ claude mcp add --transport http crowi https://wiki.example.com/api/mcp \
 
 ### artifact ページを書く
 
-`crowi_create_page` / `crowi_update_page` は省略可能な `content_type` フィールド(`'markdown'` または `'artifact'`)を受け取ります。省略するとサーバの既定に従います — `crowi_create_page` は markdown のページになり、`crowi_update_page` は現在の種別をそのまま保ちます。`content_type` を省略した update が artifact ページを markdown に戻すことはありません。`'artifact'` を指定するときは、`body` が**単一の自己完結 HTML document** である必要があります — 外部の `<script>` / `<link>` / `<img>` / module を参照せず、リソースを指す相対パスも使わず、バイナリは `data:` URI で埋め込みます。他の wiki ページへのリンクだけは例外で、HTML の `a` / `area` の `href` にはページのパスを artifact 自身のページからの相対 (`/team/guide` / `./guide` / `../guide#section` / `guide`) で書けます。ページ名に含まれる `%` は `href` では `%25` と書きます (`100%25done` はページ `100%done` に解決され、`100%done` は拒否されます)。書き方と動作の詳細は [crowi CLI の artifact ガイド](./cli#artifact-から-wiki-ページへリンクする) にあります。種別は本文の中身から推測されないので、artifact のつもりのときは必ず明示してください。
+`crowi_create_page` / `crowi_update_page` は省略可能な `content_type` フィールド(`'markdown'` または `'artifact'`)を受け取ります。省略したときはサーバの既定に従い、`crowi_create_page` は markdown のページになり、`crowi_update_page` は現在の種別をそのまま保ちます。`content_type` を省略した update が artifact ページを markdown に戻すことはありません。`'artifact'` を指定するときは、`body` が**単一の自己完結 HTML document** である必要があります。つまり、外部の `<script>` / `<link>` / `<img>` / module を参照せず、リソースを指す相対パスも使わず、バイナリは `data:` URI で埋め込みます。他の wiki ページへのリンクだけは例外で、HTML の `a` / `area` の `href` にはページのパスを artifact 自身のページからの相対 (`/team/guide` / `./guide` / `../guide#section` / `guide`) で書けます。ページ名に含まれる `%` は `href` では `%25` と書きます (`100%25done` はページ `100%done` に解決され、`100%done` は拒否されます)。書き方と動作の詳細は [crowi CLI の artifact ガイド](./cli#artifact-から-wiki-ページへリンクする) にあります。種別は本文の中身から推測されないので、artifact のつもりのときは必ず明示してください。
 
 ページを読み取るとき (`crowi_get_page` / `crowi_get_revision`) も、結果の `content_type` にその種別が出ます。返ってきた本文が markdown なのか HTML なのかを、AI はそれを見て判断できます。
 
-artifact の書き込みが拒否されたときは、どの規則が発火したか (`ruleId`)・理由・(規則が特定できるときは)該当箇所 (`target`) を含むエラー結果が返るので、AI は「失敗した」以上の、次に直すべき手がかりを得られます。
+artifact の書き込みが拒否されたときは、どの規則が発火したか (`ruleId`)・理由・(規則が特定できるときは)該当箇所 (`target`) を含むエラー結果が返るので、AI は失敗したことだけでなく、次に何を直せばよいかの手がかりも得られます。
 
 ## 覚えておくこと
 
