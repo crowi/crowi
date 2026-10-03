@@ -107,7 +107,7 @@ example) です。
   orange cloud (プロキシ有効) のままだと Let's Encrypt の HTTP-01 challenge
   が Cloudflare 側で止まり、Caddy が証明書を取得できません。orange を使う
   なら Cloudflare Origin Certificate を Caddy 側で読ませる別パターンが必要
-  です。本ページの generic 例では **Route53 + Caddy 自動 TLS** を採ります。
+  です。本ページの例では **Route53 + Caddy 自動 TLS** を採ります。
 </Callout>
 
 Caddy のルーティング (どのパスを api / web へ振るか、WebSocket の透過) は
@@ -340,7 +340,7 @@ AWS で SES を使う場合の固有の勘所は次の通りです。
   (`/admin/mail`) から入力する。送信元アドレス (またはドメイン) は SES 側で
   検証済みである必要がある。このアクセスキーは、あなたの AWS アカウントで
   作った明示的な IAM ユーザーのもの (Lightsail はインスタンスプロファイルが
-  使えないため。**F**。§9 参照)。
+  使えないため。§9 参照)。
 
 <Callout type="info">
   **Crowi の SES ドライバは SESv2 SDK で直接送信** します (SMTP relay

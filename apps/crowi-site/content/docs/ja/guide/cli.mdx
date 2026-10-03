@@ -64,7 +64,7 @@ crowi login --token <pat> https://wiki.example.com
 [crowi CLI](../reference/cli) のコマンド表を参照してください。
 
 `--scope` は **既定を上書き** します。ページ系も使い続けるなら
-`pages:read pages:write` も含めて列挙するか、アンブレラ `read write` を要求
+`pages:read pages:write` も含めて列挙するか、すべての対象をまとめて指定する `read write` を要求
 してください (サーバ側が発行可能な全 `*:read` / `*:write` に展開します)。
 
 ```bash
