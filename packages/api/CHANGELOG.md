@@ -1,5 +1,18 @@
 # @crowi/api
 
+## 2.0.0-alpha.23
+
+### Minor Changes
+
+- af3068c: Artifact pages can now link to other wiki pages with ordinary `a` / `area` links (absolute, relative to the artifact's own page, or with a `#fragment`): a normal click or Enter moves the wiki to the page in the same tab, cmd/ctrl-click and `target="_blank"` open a new tab, and the wiki only follows links to regular wiki pages while the reader is actually interacting with the artifact, asking for confirmation instead when the link was activated right after the page opened or after the reader acted on the page around the artifact.
+
+### Patch Changes
+
+- c9e05ae: Artifacts whose height scales with the viewport, such as a stack of full-screen slides, no longer make the frame grow endlessly up to its cap; the frame stops at the height it first reached and the content scrolls inside it.
+- c494fa1: Update the dependency `nodemailer` to 10.0.13, which fixes a malformed SMTP envelope recipient produced from an address whose local part is quoted. Crowi hands it the recipient addresses of the mail it sends, such as user invitations and notifications.
+- Updated dependencies [af3068c]
+  - @crowi/api-contract@2.0.0-alpha.23
+
 ## 2.0.0-alpha.22
 
 ### Minor Changes
