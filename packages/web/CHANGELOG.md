@@ -1,5 +1,18 @@
 # @crowi/web
 
+## 2.0.0-alpha.23
+
+### Minor Changes
+
+- af3068c: Artifact pages can now link to other wiki pages with ordinary `a` / `area` links (absolute, relative to the artifact's own page, or with a `#fragment`): a normal click or Enter moves the wiki to the page in the same tab, cmd/ctrl-click and `target="_blank"` open a new tab, and the wiki only follows links to regular wiki pages while the reader is actually interacting with the artifact, asking for confirmation instead when the link was activated right after the page opened or after the reader acted on the page around the artifact.
+
+### Patch Changes
+
+- e0add21: In a maximized artifact, the sandboxed-content notice now sits below the artifact and scrolls into view instead of staying pinned to the bottom of the screen, where it took up a large share of a phone's height.
+- 8e804d5: Update the dependency Next.js to 16.3.6, which fixes a remote code execution reported in `next/og`'s `ImageResponse`. Crowi does not use `next/og`, so its pages did not reach that code.
+- Updated dependencies [af3068c]
+  - @crowi/api-contract@2.0.0-alpha.23
+
 ## 2.0.0-alpha.22
 
 ### Minor Changes
