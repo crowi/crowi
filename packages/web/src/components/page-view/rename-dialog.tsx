@@ -63,9 +63,15 @@ export function RenameDialog(props: RenameDialogProps) {
   //   2. The focus TRAP re-selects ALL of the field whenever focus leaves the
   //      dialog and returns. That fires ~150ms after open because the dropdown
   //      menu that launched this dialog hands focus back to its trigger (outside
-  //      the scope), clobbering the leaf selection. We watch for that select-all
-  //      and re-narrow to the leaf, for a short window, then stop so a later user
-  //      Ctrl/Cmd+A still works.
+  //      the scope), clobbering the leaf selection. The trap selects all only
+  //      when it MOVES focus into the field (focus(), then select()), so its
+  //      select-all always arrives with a `focus` event on the field. A
+  //      select-all made on the already-focused field — the user's Ctrl/Cmd+A,
+  //      a test runner's fill — comes with no focus event and must stand:
+  //      narrowing it back makes whatever is typed next land after the parent
+  //      path (`/a/b//a/b-new`), a double slash the server refuses. So only a
+  //      select-all that comes with focus is re-narrowed to the leaf, for a
+  //      short window after open.
   const focusAndSelectLeaf = (event: Event) => {
     event.preventDefault();
     const base = props.page ? props.page.path : props.folderPath;
@@ -77,13 +83,16 @@ export function RenameDialog(props: RenameDialogProps) {
       if (!el) return;
       el.focus();
       el.setSelectionRange(start, end);
-      const reNarrow = () => {
-        if (el.selectionStart === 0 && el.selectionEnd === el.value.length) {
-          el.setSelectionRange(start, end);
-        }
+      const reNarrowAfterFocus = () => {
+        // The trap's select() follows its focus() synchronously; the next frame sees it, before anything is painted.
+        requestAnimationFrame(() => {
+          if (el.selectionStart === 0 && el.selectionEnd === el.value.length) {
+            el.setSelectionRange(start, end);
+          }
+        });
       };
-      el.addEventListener('select', reNarrow);
-      window.setTimeout(() => el.removeEventListener('select', reNarrow), 500);
+      el.addEventListener('focus', reNarrowAfterFocus);
+      window.setTimeout(() => el.removeEventListener('focus', reNarrowAfterFocus), 500);
     });
   };
   return (
