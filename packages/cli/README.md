@@ -107,8 +107,26 @@ profile: <alias>`, see [Errors & exit codes](#errors--exit-codes)).
 ## Commands
 
 Auth / lifecycle: `login`, `logout`, `whoami`, `profiles`. Read: `search`,
-`get` (alias `cat`), `ls`. Write: `create`, `edit`, `update`, `mv`, `rm`.
+`get` (alias `cat`), `ls`, `recent`. Write: `create`, `edit`, `update`, `mv`, `rm`.
 Phase 2 (need extra scopes): `comment`, `attach`, `bookmark`, `watch`, `open`.
+
+### Recently updated pages (`recent`)
+
+`crowi recent [--prefix <path>] [--limit N] [--offset N] [--json]` lists the pages you can read, most recently updated first, as a flat list. It needs no search query and no search plugin, and requires the `pages:read` scope. Each row is a page's current state (a page updated several times is one row), not an update event, and the columns are `path`, `updatedAt` (UTC), `lastUpdateUser` (the last updater, not the creator) and `_id`.
+
+```bash
+crowi recent
+crowi recent --limit 20 --json
+crowi recent --prefix /team/ --limit 20 --offset 20
+crowi recent --prefix /team --format table
+crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{{_id}}'
+```
+
+- `--limit` is 1-100 (default 50) and `--offset` is 0-2147483647 (default 0); both take plain decimal digits only. Invalid values fail with exit `6` before anything is sent.
+- `--prefix` is a literal, case-sensitive prefix of the stored path. `/team` matches `/team`, `/team/` and `/teamwork`; `/team/` matches `/team/` and everything under it but not `/team`. A missing leading `/` is added, and `--prefix /` is the same as no prefix. An empty `--prefix` is rejected.
+- The list is live. Paging with `--offset` can repeat or skip pages that were updated between calls, and pages with the same update time have no defined order. There is no cursor and no automatic walk over all pages.
+- `--json` prints the whole server response unchanged. `--format template` without `--template` renders the same four fields from the raw page, so `lastUpdateUser` is a JSON object there; use `{{lastUpdateUser.username}}` for the name.
+- `--prefix` needs a server that supports `path_prefix`. The CLI checks that the response confirms the prefix and otherwise exits `7` with `server did not confirm literal prefix filtering; upgrade Crowi and retry`, writing nothing to stdout. Without `--prefix` (or with `--prefix /`) the command works against older servers.
 
 ### Artifact pages (RFC-0020)
 
@@ -116,7 +134,7 @@ Phase 2 (need extra scopes): `comment`, `attach`, `bookmark`, `watch`, `open`.
 
 ## Output formats & scripting
 
-`search` and `ls` accept `--format` and `--template` so their output can be
+`search`, `ls` and `recent` accept `--format` and `--template` so their output can be
 shaped for piping:
 
 | Flag | Effect |
@@ -180,6 +198,8 @@ capability mismatch**:
   suppressed, so it keeps working silently.
 
 All of these notes go to stderr, so `--json` stdout stays clean for scripts.
+
+The one exception to "never refuses" is a filter the server cannot be shown to have applied: `crowi recent --prefix` fails with exit `7` rather than print a list that may not be filtered.
 
 ## Errors & exit codes
 
