@@ -7409,7 +7409,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List pages by path or creator (paginated) */
+        /** List pages by path, creator or literal path prefix (paginated) */
         get: {
             parameters: {
                 query?: {
@@ -7421,6 +7421,8 @@ export interface paths {
                     sort?: "updatedAt" | "createdAt" | "path";
                     order?: "asc" | "desc";
                     revision_id?: string;
+                    /** @description Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise). */
+                    path_prefix?: string;
                 };
                 header?: never;
                 path?: never;
@@ -7428,7 +7430,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
+                /** @description Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). A successful `path_prefix` request lists the viewer-visible pages whose path literally starts with the prefix (portalPage/contentPage are null) and echoes it as `appliedPathPrefix`, even for an empty result. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -7771,6 +7773,29 @@ export interface paths {
                                 contentType: "markdown" | "artifact";
                             } | null;
                             total: number;
+                            /** @description Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested. */
+                            appliedPathPrefix?: string;
+                        };
+                    };
+                };
+                /** @description Validation error. With `path_prefix`: combined with `path` / `user` / `revision_id`, `include_deleted=true`, `limit` outside 1-100, or `offset` outside 0-2147483647 (checked in that order, fixed messages). */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
                         };
                     };
                 };
@@ -7787,6 +7812,40 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Authentication is required";
                                 redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Token lacks the `pages:read` scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Internal error while listing with `path_prefix` (never returned for requests without a prefix, which keep the legacy empty-list fallback) */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
                             };
                         };
                     };
@@ -17520,6 +17579,8 @@ export interface components {
              */
             order: "asc" | "desc";
             revision_id?: string;
+            /** @description Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise). */
+            path_prefix?: string;
         };
         ListPagesResponse: {
             pages: {
@@ -17858,6 +17919,8 @@ export interface components {
                 contentType: "markdown" | "artifact";
             } | null;
             total: number;
+            /** @description Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested. */
+            appliedPathPrefix?: string;
         };
         GetPageResponse: {
             page: {

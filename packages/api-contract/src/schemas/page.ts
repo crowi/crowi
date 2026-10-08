@@ -255,6 +255,14 @@ export const ListPagesRequestSchema = z.object({
   // Only the `portalPage` is rewound — the child rows always reflect the
   // latest. Absent for normal listings.
   revision_id: z.string().optional(),
+  path_prefix: z
+    .string()
+    .min(1)
+    .startsWith('/')
+    .optional()
+    .describe(
+      'Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise).',
+    ),
 });
 export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
 export type ListPagesSort = ListPagesRequest['sort'];
@@ -287,6 +295,10 @@ export const ListPagesResponseSchema = z.object({
   // of `PagerSchema` — mirrors `ListUsersResponseSchema.total`, a sibling
   // top-level field alongside `pager`.
   total: z.number(),
+  appliedPathPrefix: z
+    .string()
+    .optional()
+    .describe('Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested.'),
 });
 export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 
