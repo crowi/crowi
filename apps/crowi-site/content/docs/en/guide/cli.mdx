@@ -144,6 +144,17 @@ The subcommands, their own flags and the scope each needs are listed in
 API request schema before anything is sent, so a malformed path fails locally
 with a clear error instead of after a round trip.
 
+### Finding recently updated pages (`recent`)
+
+You can list the pages you can read, newest update first, without a search query. A row is a page's current state, not an update event.
+
+```bash
+crowi recent --limit 20 --json
+crowi recent --prefix /team/ --limit 20 --offset 20
+```
+
+The list is live, so paging with `--offset` can repeat or skip pages that were updated between calls. `--prefix` needs a server that supports `path_prefix`; when the server does not confirm it applied the prefix, the command fails instead of printing a list. See [crowi CLI](../reference/cli) or `crowi recent --help` for the arguments and columns.
+
 ### Writing artifact pages (`--type`)
 
 `create` / `update` accept `--type markdown` or `--type artifact` to declare a page's kind. Omit it and the server keeps its own default: `create` makes a markdown page, `update` keeps the page's current kind — an update that omits `--type` never turns an artifact page back into markdown. The kind is never guessed from `--file`'s extension or from the body's own content either way. An `--type artifact` body must be a single self-contained HTML document: no external script / stylesheet / image / module references, no relative resource paths — embed any binary asset as a `data:` URI. Only relative paths to resources are forbidden; links to other wiki pages are different (next section).
@@ -223,7 +234,7 @@ The policy is cached on the profile for ten minutes, so this is not a round trip
 
 ## Output formats & scripting
 
-`search` and `ls` can shape their output with `--format` / `--template`, which
+`search`, `ls` and `recent` can shape their output with `--format` / `--template`, which
 makes them pipe well. The accepted values and the exit codes are listed in
 [crowi CLI](../reference/cli).
 
@@ -253,7 +264,7 @@ crowi completion fish > ~/.config/fish/completions/crowi.fish
 
 Crowi is self-hosted, so `crowi` and the server it talks to can be on different versions. The CLI never refuses a command over that.
 
-When the server's API differs from what this CLI expects, it prints a one-line note and carries on; a feature the server does not have (`search` with no search backend configured, say) reports "not available on this server".
+When the server's API differs from what this CLI expects, it prints a one-line note and carries on; a feature the server does not have (`search` with no search backend configured, say) reports "not available on this server". A filter whose application cannot be confirmed is the exception: `crowi recent --prefix` exits `7` rather than print a list that may not be filtered.
 
 ## Related pages
 

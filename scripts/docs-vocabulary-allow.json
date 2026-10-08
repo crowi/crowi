@@ -1,3 +1,14 @@
 {
-  "allow": []
+  "allow": [
+    {
+      "path": "apps/crowi-site/content/docs/ja/reference/cli.mdx",
+      "pattern": "internal-symbol",
+      "why": "`updatedAt` and `lastUpdateUser` are the column and template field names of `crowi recent`, which a reader types into `--template`."
+    },
+    {
+      "path": "apps/crowi-site/content/docs/en/reference/cli.mdx",
+      "pattern": "internal-symbol",
+      "why": "`updatedAt` and `lastUpdateUser` are the column and template field names of `crowi recent`, which a reader types into `--template`."
+    }
+  ]
 }
