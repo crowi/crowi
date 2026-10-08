@@ -151,6 +151,33 @@ describe('MCP server (/api/mcp)', () => {
     expect(names).toHaveLength(14);
   });
 
+  it('list tool keeps legacy input and output', async () => {
+    const listRes = await callMcp(fullPatToken, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const tools = (parseRpc(listRes).result?.tools ?? []) as Array<{ name: string; inputSchema: { properties: Record<string, unknown> } }>;
+    const listTool = tools.find((t) => t.name === 'crowi_list_pages');
+    expect(Object.keys(listTool?.inputSchema.properties ?? {}).sort()).toEqual([
+      'include_deleted',
+      'limit',
+      'offset',
+      'order',
+      'path',
+      'revision_id',
+      'sort',
+      'user',
+    ]);
+
+    const res = await callMcp(fullPatToken, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'crowi_list_pages', arguments: { path: PATH_PREFIX, path_prefix: '/' } },
+    });
+    expect(res.status).toBe(200);
+    const result = parseRpc(res).result as { isError?: boolean; structuredContent?: Record<string, unknown> };
+    expect(result.isError).toBeFalsy();
+    expect(Object.keys(result.structuredContent ?? {}).sort()).toEqual(['pager', 'pages']);
+  });
+
   it('advertises Crowi path conventions via the initialize `instructions`', async () => {
     const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',

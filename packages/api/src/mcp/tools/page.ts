@@ -228,7 +228,7 @@ export const pageTools: ToolDescriptor[] = [
     description: 'List wiki pages under a `path` or created by a `user`, paginated. Returns page paths and metadata, not bodies.',
     method: 'GET',
     path: '/pages/list',
-    schema: ListPagesRequestSchema.shape,
+    schema: ListPagesRequestSchema.omit({ path_prefix: true }).shape,
     kind: 'query',
     scope: 'pages:read',
     resultMapper: mapPageListResult,
