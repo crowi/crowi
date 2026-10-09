@@ -58,8 +58,8 @@ Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
 
 **Structured logging**: records that go through the api's
 structured logger — on both stdout and stderr — are one-line-per-record
-NDJSON. Each record carries a request id correlating it to the HTTP request
-it was emitted during. Pretty-printing, collection, and retention are an
+NDJSON. Records emitted while an HTTP request is being handled carry a
+request id correlating them to that request. Pretty-printing, collection, and retention are an
 operator's own responsibility (see [Environment variables](../reference/env)
 for `LOG_LEVEL`). The boot-time progress display (the boot reporter), the
 `@@crowi:fail` marker, and any `console.*` call that does not go through the
@@ -174,7 +174,7 @@ correct — the same boot-readiness check used elsewhere in these docs. If it
 does not resolve, artifact pages save normally but cannot be delivered until
 the routing is fixed; no data is lost.
 
-The artifact origin only needs to reach 2 path prefixes on this api instance: `/api/artifact/` (the token-authenticated delivery route the sandboxed document itself is fetched from) and `/api/pages/` (the route that mints the signed delivery URL, and the recommended reverse-proxy topology already routes both alongside every other `/api/*` call). The delivery response never sets a cookie — the signed URL, valid for 60 seconds, is the only credential it accepts, and it carries none of its own.
+The artifact origin only needs to reach one path prefix on this api instance: `/api/artifact/` (the token-authenticated delivery route the sandboxed document itself is fetched from). The wiki mints the signed delivery URL through its normal `/api/pages/` connection, which does not go through the artifact origin. The delivery response never sets a cookie — the signed URL, valid for 60 seconds, is the only credential it accepts, and it carries none of its own.
 
 Downloading an artifact page's HTML as an attachment (`GET /pages/{id}/artifact-download`, behind the normal session/PAT auth) is independent of delivery mode and works even when neither mode above is configured — only the sandboxed inline preview requires a mode to be active.
 

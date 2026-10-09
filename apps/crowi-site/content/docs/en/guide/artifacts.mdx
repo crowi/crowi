@@ -1,0 +1,53 @@
+---
+title: Artifact pages
+description: Viewing HTML pages, expanding them and following their links
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+An artifact page contains a single HTML document instead of a Markdown body. It gives an AI a way to put tables, charts, slides and other content that is difficult to express in Markdown into the wiki. You can create artifact pages through [Using Crowi from AI tools (MCP)](./mcp) or [CLI (command line)](./cli).
+
+## Viewing an artifact
+
+When you open an artifact page, Crowi shows “Preparing artifact...” and then runs the HTML inside an isolated sandboxed frame. The document in the frame cannot navigate to another site, submit a form, open a popup or access Crowi's data.
+
+- An “Artifact” label appears above the page title. An artifact icon also appears beside the title in page lists, the sidebar tree and search suggestions.
+- The frame grows to fit its content so you can scroll the page as one document. Content that grows with the viewport, such as a series of full-screen slides, stops expanding at its initial height; you can scroll the rest inside the frame.
+- The notice “Running sandboxed, agent-generated content.” always appears below the frame.
+
+<Callout type="warn">
+  Anything you type inside an artifact is not guaranteed to stay private. Although the artifact cannot access Crowi's data, the sandbox cannot guarantee that the artifact will not send text entered into its own fields elsewhere. Do not enter passwords or other secrets.
+</Callout>
+
+If you switch to another revision in the page history, Crowi closes the displayed frame and runs that revision's HTML in a new one.
+
+On a server where an administrator has not configured artifact delivery, the HTML does not run. Crowi shows “This page can't run here”, but you can still download the HTML from the page menu.
+
+## Maximize and full screen
+
+Select “Maximize” above the frame to expand the artifact across the browser window. This is useful when the artifact is wider than the page column.
+
+- While maximized, select “Full screen” to fill the entire screen. This button appears only when the browser supports full-screen display for page elements; it is unavailable on iPhone.
+- Select “Restore” or press Escape to return to the normal view. In full screen, the first Escape leaves full screen and a second one returns to the normal view. Escape also works when focus is inside the artifact, unless the artifact handles Escape itself; in that case, the artifact's action takes priority.
+- Maximizing or entering full screen does not reload the artifact, so its current state stays in place.
+- While maximized, the notice remains below the artifact and comes into view when you scroll down.
+
+## Links inside an artifact
+
+Links inside an artifact can take you to other pages in the same wiki.
+
+- Click a link normally or press Enter on it to open the page in the same tab.
+- Cmd/Ctrl-click and links set to open a new tab open the page in a new tab.
+- Crowi follows links only to ordinary pages in the same wiki. Links to other sites and to screens such as the admin area, invitation acceptance or password reset do not navigate.
+- If a link is activated just after the page loads or just after you interact outside the artifact, Crowi first shows the destination under “This page links to”. Select “Go” or “Open in new tab” to continue, or “Dismiss” to cancel. This prevents an artifact from moving you to another page while pretending the action came from you.
+
+Links inside the artifact do not navigate when you open the artifact's own URL directly in a browser.
+
+## Page menu
+
+Artifact pages still support history, renaming, deletion, likes, watching, sharing and comments as Markdown pages do. The page menu differs in these ways:
+
+- “Download HTML” appears instead of “Download markdown”. The HTML is always downloaded as a file rather than opened in the browser.
+- “Copy markdown” and “Make this a portal” do not appear.
+
+Search indexes an artifact page's path, but not its HTML body. See [Search](./search) for details.

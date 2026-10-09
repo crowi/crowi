@@ -55,7 +55,7 @@ placeholder 値のいずれかであれば、`NODE_ENV` や `CROWI_MULTI_INSTANC
 を許容するヒューリスティックです)。`PATH` / `CI` / `GITHUB_*` / `npm_*`
 など上記プレフィックスを持たない一般的な OS/CI 環境変数は対象外です。
 
-api の構造化ロガーを経由するレコードは、標準出力・標準エラー出力ともに 1 行 1 レコードの NDJSON です。各レコードは、受け取った HTTP リクエストとの相関に使う request id を持ちます。プリティプリント・収集・保管は運用者側の責務です (`LOG_LEVEL` の詳細は [環境変数](../reference/env) を参照)。起動時の進捗表示 (boot reporter)、`@@crowi:fail` マーカー、構造化ロガーを経由しない `console.*` 呼び出しはこの対象外でプレーンテキストのまま出力されるため、api のプロセス全出力をそのまま厳密な NDJSON パーサへ渡せるとは限りません。
+api の構造化ロガーを経由するレコードは、標準出力・標準エラー出力ともに 1 行 1 レコードの NDJSON です。HTTP リクエストの処理中に出力されたレコードは、そのリクエストとの相関に使う request id を持ちます。プリティプリント・収集・保管は運用者側の責務です (`LOG_LEVEL` の詳細は [環境変数](../reference/env) を参照)。起動時の進捗表示 (boot reporter)、`@@crowi:fail` マーカー、構造化ロガーを経由しない `console.*` 呼び出しはこの対象外でプレーンテキストのまま出力されるため、api のプロセス全出力をそのまま厳密な NDJSON パーサへ渡せるとは限りません。
 
 ### 変数の一覧
 
@@ -164,7 +164,7 @@ curl -fsS https://artifacts.example.net/api/app/info
 smoke check です)。到達しない場合、artifact ページの保存自体は通常どおり
 行われますが、routing を直すまで配信できません(データは失われません)。
 
-artifact origin がこの api instance へ到達させる必要がある path prefix は `/api/artifact/`(sandbox 化された文書自体が fetch する、token 認証の配信 route)と `/api/pages/`(署名付き配信 URL を発行する route)の 2 つだけです。推奨のリバースプロキシ構成では、他の `/api/*` の呼び出しと同様にこの 2 つも既に route されています。配信 response が cookie を発行することはありません。60 秒だけ有効な署名付き URL が唯一の認証情報で、cookie は一切持ちません。
+artifact origin からこの api instance へ到達させる必要がある path prefix は `/api/artifact/`(sandbox 化された文書自体が fetch する、token 認証の配信 route)だけです。署名付き配信 URL を発行する `/api/pages/` への呼び出しは、wiki 側の通常の API 接続を通ります。配信 response が cookie を発行することはありません。60 秒だけ有効な署名付き URL が唯一の認証情報で、cookie は一切持ちません。
 
 artifact ページの HTML を添付ファイルとしてダウンロードする機能(`GET /pages/{id}/artifact-download`、通常のセッション/PAT 認証配下)は配信モードとは独立していて、上記のどちらのモードも設定していなくても動作します。設定が必要なのは sandbox 化されたインラインプレビューだけです。
 
