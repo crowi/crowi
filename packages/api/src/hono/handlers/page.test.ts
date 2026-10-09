@@ -5299,6 +5299,205 @@ describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write i
       expect(res.body.error).toMatchObject({ code: 'ARTIFACT_WRITE_REJECTED', reason: 'CONTENT_TYPE_CONFLICT', ruleId: 'AI-D02' });
     });
   });
+
+  describe('feature-artifact-authoring-guidance — diagnostics on create / update / revert', () => {
+    const RESERVED_BODY = validArtifactHtml({ body: '<a href="/admin">go</a>' });
+    const RESERVED_MESSAGE = artifactIngest.ARTIFACT_DIAGNOSTIC_MESSAGES.PAGE_LINK_RESERVED_ROUTE;
+
+    const createArtifact = (path: string, body = VALID_ARTIFACT_HTML) =>
+      request(app).post('/api/pages').set(authHeaders(accessToken)).set('X-Crowi-Page-Content-Type', 'artifact').send({ path, body });
+
+    it('AC-AAG-5/7/8 create: a reserved absolute link is 400 with the diagnostic and fixed message, and nothing is written', async () => {
+      await enableArtifactDelivery();
+      const path = `${PATH_PREFIX}diag-create`;
+      const res = await createArtifact(path, RESERVED_BODY);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toEqual({
+        code: 'ARTIFACT_WRITE_REJECTED',
+        reason: 'EXTERNAL_REFERENCE',
+        ruleId: 'AI-R11',
+        diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE',
+        message: RESERVED_MESSAGE,
+        target: 'a[href]',
+      });
+      expect(await Page.findOne({ path })).toBeNull();
+      expect(await Revision.countDocuments({ path })).toBe(0);
+    });
+
+    it('AC-AAG-8 update: the same rejection leaves the pointer, body and Revision count unchanged, and the corrected body then saves', async () => {
+      await enableArtifactDelivery();
+      const path = `${PATH_PREFIX}diag-update`;
+      const created = await createArtifact(path);
+      const pageId = created.body.page._id;
+      const revisionId = created.body.page.revision._id;
+      const before = await Revision.countDocuments({ path });
+
+      const rejected = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ page_id: pageId, revision_id: revisionId, body: RESERVED_BODY });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.error).toMatchObject({ diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE', message: RESERVED_MESSAGE });
+      expect(await Revision.countDocuments({ path })).toBe(before);
+      expect(String((await Page.findById(pageId)).revision)).toBe(revisionId);
+
+      const fixed = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ page_id: pageId, revision_id: revisionId, body: validArtifactHtml({ body: '<a href="/team/guide">go</a>' }) });
+      expect(fixed.status).toBe(200);
+    });
+
+    it('AC-AAG-8 revert: a stored revision holding a reserved link is 400 before any write, and its stored body stays intact', async () => {
+      await enableArtifactDelivery();
+      const path = `${PATH_PREFIX}diag-revert`;
+      const created = await createArtifact(path);
+      const pageId = created.body.page._id;
+      const revisionId = created.body.page.revision._id;
+      const legacy = await Revision.create({ path, page: new Types.ObjectId(pageId), body: RESERVED_BODY, author: userId, contentType: 'artifact' });
+      const before = await Revision.countDocuments({ path });
+
+      const res = await request(app)
+        .post('/api/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: legacy._id.toString() });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({
+        code: 'ARTIFACT_WRITE_REJECTED',
+        ruleId: 'AI-R11',
+        diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE',
+        message: RESERVED_MESSAGE,
+      });
+      expect(res.body.error.message).not.toMatch(/retry/i);
+      expect(await Revision.countDocuments({ path })).toBe(before);
+      expect(String((await Page.findById(pageId)).revision)).toBe(revisionId);
+      expect((await Revision.findById(legacy._id)).body).toBe(RESERVED_BODY);
+    });
+
+    it('AC-AAG-8 priority: 401, grant 404, stale 409 and a foreign-page revision all come before any body diagnostic', async () => {
+      await enableArtifactDelivery();
+      const created = await createArtifact(`${PATH_PREFIX}diag-priority`);
+      const pageId = created.body.page._id;
+      const staleId = created.body.page.revision._id;
+      const advanced = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ page_id: pageId, revision_id: staleId, body: validArtifactHtml({ body: '<p>v2</p>' }) });
+      expect(advanced.status).toBe(200);
+
+      const unauthenticated = await request(app)
+        .post('/api/pages')
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ path: `${PATH_PREFIX}diag-401`, body: RESERVED_BODY });
+      expect(unauthenticated.status).toBe(401);
+      expect(JSON.stringify(unauthenticated.body)).not.toContain('diagnosticCode');
+
+      const stale = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ page_id: pageId, revision_id: staleId, body: RESERVED_BODY });
+      expect(stale.status).toBe(409);
+      expect(JSON.stringify(stale.body)).not.toContain('diagnosticCode');
+
+      const owned = await createArtifact(`${PATH_PREFIX}diag-owner-only`);
+      const ownerOnly = await request(app)
+        .post('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ path: `${PATH_PREFIX}diag-owner-only-2`, body: VALID_ARTIFACT_HTML, grant: 4 });
+      expect(owned.status).toBe(200);
+      const hidden = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(otherAccessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ page_id: ownerOnly.body.page._id, revision_id: ownerOnly.body.page.revision._id, body: RESERVED_BODY });
+      expect(hidden.status).toBe(404);
+      expect(JSON.stringify(hidden.body)).not.toContain('diagnosticCode');
+
+      const foreign = await Revision.create({
+        path: `${PATH_PREFIX}diag-foreign`,
+        page: new Types.ObjectId(owned.body.page._id),
+        body: RESERVED_BODY,
+        author: userId,
+        contentType: 'artifact',
+      });
+      const foreignRevert = await request(app)
+        .post('/api/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: foreign._id.toString() });
+      expect(foreignRevert.status).toBeGreaterThanOrEqual(400);
+      expect(JSON.stringify(foreignRevert.body)).not.toContain('diagnosticCode');
+    });
+
+    it('AC-AAG-7 an unknown or mismatched diagnostic code from ingest is dropped and the reason message is used', async () => {
+      await enableArtifactDelivery();
+      const base = { ruleId: 'AI-R13', reason: 'SCRIPT_TYPE_FORBIDDEN', httpStatus: 400, target: 'script[type]' } as const;
+      for (const diagnosticCode of ['PAGE_LINK_QUERY', 'NOT_A_REAL_CODE', 42]) {
+        jest.spyOn(artifactIngest, 'ingestHtmlArtifact').mockResolvedValueOnce({ ok: false, rejection: { ...base, diagnosticCode } } as never);
+        const res = await createArtifact(`${PATH_PREFIX}diag-fallback-${String(diagnosticCode)}`);
+        expect(res.status).toBe(400);
+        expect(res.body.error).not.toHaveProperty('diagnosticCode');
+        expect(res.body.error.message).toBe(artifactIngest.ARTIFACT_REJECTION_MESSAGES.SCRIPT_TYPE_FORBIDDEN);
+      }
+    });
+
+    it('AC-AAG-6 an unsafe target from ingest is replaced at the wire boundary and never logged raw', async () => {
+      await enableArtifactDelivery();
+      jest.spyOn(artifactIngest, 'ingestHtmlArtifact').mockResolvedValueOnce({
+        ok: false,
+        rejection: {
+          ruleId: 'AI-R11',
+          reason: 'EXTERNAL_REFERENCE',
+          httpStatus: 400,
+          target: 'a[href=/secret]\r\n\u001b[31mINJECT',
+          diagnosticCode: 'PAGE_LINK_INVALID',
+        },
+      } as never);
+      const { res, logged } = await captureDebugLog(() => createArtifact(`${PATH_PREFIX}diag-target`));
+      expect(res.status).toBe(400);
+      expect(res.body.error.target).toBe('document');
+      expect(JSON.stringify(res.body)).not.toContain('INJECT');
+      expect(logged).not.toContain('INJECT');
+    });
+
+    it('AC-AAG-6 sentinel / ANSI / CRLF / instruction text in an href reaches neither the response nor the debug log, on all three routes', async () => {
+      await enableArtifactDelivery();
+      const sentinel = 'SECRET-SENTINEL-IGNORE-PREVIOUS-INSTRUCTIONS';
+      const body = validArtifactHtml({ body: `<a href="/x?${sentinel}[31m\n${'q'.repeat(3000)}">x</a>` });
+      const base = await createArtifact(`${PATH_PREFIX}diag-sentinel-base`);
+      const legacy = await Revision.create({
+        path: `${PATH_PREFIX}diag-sentinel-base`,
+        page: new Types.ObjectId(base.body.page._id),
+        body,
+        author: userId,
+        contentType: 'artifact',
+      });
+
+      const results = await captureDebugLog(async () => [
+        await createArtifact(`${PATH_PREFIX}diag-sentinel`, body),
+        await request(app)
+          .put('/api/pages')
+          .set(authHeaders(accessToken))
+          .set('X-Crowi-Page-Content-Type', 'artifact')
+          .send({ page_id: base.body.page._id, revision_id: base.body.page.revision._id, body }),
+        await request(app)
+          .post('/api/pages/revert-to-revision')
+          .set(authHeaders(accessToken))
+          .send({ page_id: base.body.page._id, revision_id: legacy._id.toString() }),
+      ]);
+      for (const res of results.res) {
+        expect(res.status).toBe(400);
+        // The embedded newline wins over the query: control characters are the first lexical check.
+        expect(res.body.error.diagnosticCode).toBe('PAGE_LINK_INVALID');
+        expect(JSON.stringify(res.body)).not.toMatch(/SECRET|SENTINEL|IGNORE|qqqq/);
+      }
+      expect(results.logged).not.toMatch(/SECRET|SENTINEL|IGNORE|qqqq/);
+    });
+  });
 });
 
 describe('Routes /api/pages (Hono getPage — past revision / stale detection)', () => {

@@ -16,7 +16,14 @@ import postcss from 'postcss';
 import valueParser from 'postcss-value-parser';
 import { init as esModuleLexerInit, parse as parseEsModules, ImportType } from 'es-module-lexer';
 import type { DefaultTreeAdapterMap, DefaultTreeAdapterTypes, TreeAdapter } from 'parse5';
-import { parseArtifactPageLink, type ArtifactIngestRejectionReason } from '@crowi/api-contract';
+import {
+  ArtifactDiagnosticCodeSchema,
+  classifyArtifactPagePath,
+  parseArtifactPageLinkDetailed,
+  resolveArtifactPagePath,
+  type ArtifactDiagnosticCode,
+  type ArtifactIngestRejectionReason,
+} from '@crowi/api-contract';
 import {
   ARTIFACT_HARD_MAX_BYTES,
   ARTIFACT_MIN_MAX_BYTES,
@@ -95,6 +102,7 @@ export type ArtifactRuleId =
 
 export interface ArtifactRuleFailure {
   readonly target?: string;
+  readonly diagnosticCode?: ArtifactDiagnosticCode;
 }
 
 export interface ArtifactWriteFailure {
@@ -102,6 +110,7 @@ export interface ArtifactWriteFailure {
   readonly reason: ArtifactIngestRejectionReason;
   readonly httpStatus: 400 | 413 | 422;
   readonly target?: string;
+  readonly diagnosticCode?: ArtifactDiagnosticCode;
 }
 
 export interface ArtifactIngestRejection extends ArtifactWriteFailure {
@@ -548,9 +557,37 @@ function stripVendorPrefix(name: string): string {
   return name.replace(/^-(webkit|moz|o|ms)-/, '');
 }
 
-export function truncateArtifactIdentifier(value: string): string {
+const TARGET_MAX_CODE_POINTS = 128;
+const TARGET_PART_MAX_CODE_POINTS = 63;
+const STANDARD_IDENTIFIER = /^[A-Za-z][A-Za-z0-9:_-]*$/;
+const CSS_AT_RULE_IDENTIFIER = /^-{0,2}[A-Za-z][A-Za-z0-9:_-]*$/;
+
+function truncateCodePoints(value: string, limit: number): string {
   const codePoints = Array.from(value);
-  return codePoints.length > 128 ? codePoints.slice(0, 128).join('') : value;
+  return codePoints.length > limit ? codePoints.slice(0, limit).join('') : value;
+}
+
+/**
+ * Author-controlled names (custom elements, attributes, CSS functions) reach
+ * `target`; only a plain identifier is ever echoed. Anything else — escapes
+ * decoded to control characters, ANSI, whitespace, non-ASCII — becomes the
+ * caller's fixed `fallback` literal, so a name can never smuggle content out.
+ */
+function safeArtifactIdentifier(value: string, fallback: string, kind: 'standard' | 'css-at-rule' = 'standard'): string {
+  const pattern = kind === 'css-at-rule' ? CSS_AT_RULE_IDENTIFIER : STANDARD_IDENTIFIER;
+  return pattern.test(value) ? truncateCodePoints(value, TARGET_MAX_CODE_POINTS) : fallback;
+}
+
+const TARGET_ELEMENT_ATTRIBUTE = /^([A-Za-z][A-Za-z0-9:_-]*)\[([A-Za-z][A-Za-z0-9:_-]*)\]$/;
+
+/** Boundary re-check for a `target` crossing into a response / log: identifiers and `tag[attr]` only, else `document`. */
+export function sanitizeArtifactTarget(target: string | undefined): string | undefined {
+  if (target === undefined) return undefined;
+  if (target === 'meta[name=viewport]') return target;
+  if (STANDARD_IDENTIFIER.test(target) || CSS_AT_RULE_IDENTIFIER.test(target)) return truncateCodePoints(target, TARGET_MAX_CODE_POINTS);
+  const match = TARGET_ELEMENT_ATTRIBUTE.exec(target);
+  if (match) return `${truncateCodePoints(match[1], TARGET_PART_MAX_CODE_POINTS)}[${truncateCodePoints(match[2], TARGET_PART_MAX_CODE_POINTS)}]`;
+  return 'document';
 }
 
 // ---------------------------------------------------------------------------
@@ -675,33 +712,67 @@ function valueContainsOnlyFragmentUrls(rawValue: string): boolean {
 // ---------------------------------------------------------------------------
 
 export const ARTIFACT_REJECTION_MESSAGES = {
-  BODY_TOO_LARGE: 'The artifact exceeds the configured size limit.',
-  DOM_LIMIT_EXCEEDED: 'The artifact exceeds the document size or depth limits.',
-  HTML_PARSE_ERROR: 'The artifact is not well-formed HTML.',
-  DOCTYPE_INVALID: 'The artifact must start with exactly one `<!DOCTYPE html>`.',
-  DOCUMENT_STRUCTURE_INVALID: 'The artifact must be a single html document with one head and one body.',
-  ELEMENT_FORBIDDEN: 'The artifact contains an element that is not allowed.',
-  INLINE_CODE_CONTENT_INVALID: 'An inline script or style element contains child nodes other than text.',
-  ATTRIBUTE_FORBIDDEN: 'The artifact contains an attribute that is not allowed.',
-  META_FORBIDDEN: 'The artifact contains a meta element that is not allowed.',
-  EXTERNAL_REFERENCE: 'The artifact references a resource outside itself.',
-  FONT_REFERENCE_FORBIDDEN: 'Web font references are not permitted by the current settings.',
-  SCRIPT_TYPE_FORBIDDEN: 'The artifact contains a script type that is not allowed.',
-  MODULE_SPECIFIER_FORBIDDEN: 'The artifact contains a module import, which is not allowed.',
-  CSS_PARSE_ERROR: 'The artifact contains CSS that could not be parsed.',
-  CSS_AT_RULE_FORBIDDEN: 'The artifact contains a CSS at-rule that is not allowed.',
-  CSS_FUNCTION_FORBIDDEN: 'The artifact contains a CSS function that is not allowed.',
-  CSS_STRING_ARGUMENT_FORBIDDEN: 'The artifact contains a CSS string argument that is not allowed.',
-  URL_FORBIDDEN: 'The artifact contains a URL that is not allowed.',
-  CSS_VALUE_NODE_LIMIT_EXCEEDED: 'The artifact exceeds the CSS complexity limit.',
-  CSS_VALUE_DEPTH_EXCEEDED: 'The artifact exceeds the CSS nesting limit.',
-  CSS_SOURCE_TOO_LARGE: "The artifact's CSS exceeds the size limit.",
-  NORMALIZER_MARKER_INVALID: "The artifact's reserved digest markers are malformed.",
-  NORMALIZATION_NOT_IDEMPOTENT: 'The artifact could not be normalised deterministically.',
-  CONTENT_TYPE_INVALID: 'The page content type header is invalid.',
-  CONTENT_TYPE_CONFLICT: "The requested content type does not match the page's current content type.",
-  ARTIFACT_DELIVERY_NOT_CONFIGURED: 'Artifact delivery is not configured on this server, so artifact pages cannot be written.',
+  BODY_TOO_LARGE: "Reduce the HTML and embedded asset size to fit the server's artifact size limit.",
+  DOM_LIMIT_EXCEEDED: 'Reduce the number of elements and attributes or simplify deeply nested HTML.',
+  HTML_PARSE_ERROR: 'Correct the HTML syntax and submit one complete HTML document.',
+  DOCTYPE_INVALID: 'Use exactly one `<!DOCTYPE html>` with no public or system identifier before the html element.',
+  DOCUMENT_STRUCTURE_INVALID: 'Use one html element containing one head and one body.',
+  ELEMENT_FORBIDDEN: 'Remove the forbidden element and keep the document self-contained.',
+  INLINE_CODE_CONTENT_INVALID: 'Keep only text inside inline script and style elements.',
+  ATTRIBUTE_FORBIDDEN: 'Remove the forbidden attribute; put styles in a style element and event handling in an inline script.',
+  META_FORBIDDEN: 'Remove unsupported or duplicate meta elements and use only the permitted charset and viewport declarations.',
+  EXTERNAL_REFERENCE: 'Remove the forbidden reference or use a permitted HTML wiki page link or supported embedded asset.',
+  FONT_REFERENCE_FORBIDDEN: 'Remove the web font reference or ask an administrator to enable the supported web font option.',
+  SCRIPT_TYPE_FORBIDDEN: 'Omit the script type or use text/javascript, application/javascript, or module.',
+  MODULE_SPECIFIER_FORBIDDEN:
+    'Remove module imports and include the required code inline, or correct JavaScript syntax errors in the script, such as unclosed parentheses or braces.',
+  CSS_PARSE_ERROR: 'Correct the CSS syntax in the style element.',
+  CSS_AT_RULE_FORBIDDEN: 'Remove the unsupported CSS at-rule or replace it with supported local style rules.',
+  CSS_FUNCTION_FORBIDDEN: 'Remove the unsupported CSS function or replace it with supported CSS values.',
+  CSS_STRING_ARGUMENT_FORBIDDEN: "Shorten or remove the CSS function's string argument and use only permitted characters.",
+  URL_FORBIDDEN:
+    'Remove the forbidden CSS URL or use a permitted same-document fragment or embedded data: asset in a supported CSS position. If it is inside @import, remove the @import rule; replacing only its URL still leaves a forbidden import.',
+  CSS_VALUE_NODE_LIMIT_EXCEEDED: 'Simplify CSS values to reduce their total number of tokens and value nodes.',
+  CSS_VALUE_DEPTH_EXCEEDED: 'Reduce nested CSS functions and parentheses.',
+  CSS_SOURCE_TOO_LARGE: 'Reduce the total CSS text size in style elements.',
+  NORMALIZER_MARKER_INVALID:
+    'Remove manually supplied artifact digest meta markers and any occurrences of the reserved marker name shown in target from body text, comments, or scripts, and let the server regenerate the markers.',
+  NORMALIZATION_NOT_IDEMPOTENT: 'Simplify the HTML structure so that parsing and serialization preserve the document.',
+  CONTENT_TYPE_INVALID:
+    "Declare the content type as exactly markdown or artifact. If omitted, creation uses markdown and update retains the page's current content type.",
+  CONTENT_TYPE_CONFLICT: "Keep the page's current content type, or create a separate page for a different type.",
+  ARTIFACT_DELIVERY_NOT_CONFIGURED: 'Ask an administrator to configure and enable artifact delivery before saving artifact pages.',
 } as const satisfies Record<ArtifactIngestRejectionReason, string>;
+
+export const ARTIFACT_DIAGNOSTIC_MESSAGES: Readonly<Record<ArtifactDiagnosticCode, string>> = {
+  PAGE_LINK_QUERY: 'Query strings are not allowed in wiki page links; use a page path such as /guide or /guide#overview.',
+  PAGE_LINK_PERCENT_ENCODING: 'Use valid UTF-8 %HH escapes in page names and write a literal percent sign as %25, for example /discount/100%25off.',
+  PAGE_LINK_RESERVED_ROUTE:
+    'This absolute link resolves to a reserved route, including a root-level page-ID share link; use the wiki page path instead of an admin, authentication, API, delivery, page-ID, or other reserved path.',
+  PAGE_LINK_INVALID:
+    'External URLs such as http(s):, mailto:, tel:, and protocol-relative //host/... cannot be links; remove the href and show the address as body text. Rewrite a full or protocol-relative URL for this wiki as a page path such as /team/guide, and use the ./ prefix for a colon only when it belongs to a real wiki page name, such as ./ADR:0001. For a real wiki page, use its path such as /guide, ./guide, ../guide, or guide. For a same-document link use #id, not # or #a?b. Remove a placeholder or javascript: href from a script-controlled element instead of inventing a page path. Treat an href beginning with // as a protocol-relative URL, not as a page path with repeated slashes. For page paths that do not begin with //, remove repeated slashes, control characters, backslashes, and invalid escapes.',
+  PAGE_LINK_CONTEXT_FORBIDDEN:
+    'Use a same-document #id fragment on an SVG or MathML a link or HTML img[usemap], or place an intended wiki page link on an HTML a or area element outside a closed or invalid declarative shadow root.',
+  RESOURCE_REFERENCE_FORBIDDEN:
+    'Remove the forbidden resource reference or URL-changing attribute. Embed supported assets in permitted data: URI positions; if the URL is inside @import, remove the @import rule instead of replacing its URL with a data: URI or fragment.',
+};
+
+/**
+ * The diagnostic a rejection may carry: the first five codes only describe an
+ * EXTERNAL_REFERENCE, the resource code also fits a CSS URL failure. Anything
+ * else (unknown value, wrong reason) is dropped, never trusted.
+ */
+export function selectArtifactDiagnosticCode(reason: ArtifactIngestRejectionReason, candidate: unknown): ArtifactDiagnosticCode | undefined {
+  const parsed = ArtifactDiagnosticCodeSchema.safeParse(candidate);
+  if (!parsed.success) return undefined;
+  if (parsed.data === 'RESOURCE_REFERENCE_FORBIDDEN') return reason === 'EXTERNAL_REFERENCE' || reason === 'URL_FORBIDDEN' ? parsed.data : undefined;
+  return reason === 'EXTERNAL_REFERENCE' ? parsed.data : undefined;
+}
+
+export function getArtifactRejectionMessage(reason: ArtifactIngestRejectionReason, diagnosticCode?: ArtifactDiagnosticCode): string {
+  const selected = selectArtifactDiagnosticCode(reason, diagnosticCode);
+  return selected === undefined ? ARTIFACT_REJECTION_MESSAGES[reason] : ARTIFACT_DIAGNOSTIC_MESSAGES[selected];
+}
 
 // ---------------------------------------------------------------------------
 // parseArtifactDocument
@@ -1172,11 +1243,11 @@ function checkStringNode(node: CssValueNode, parentFunctionName: string | null):
   if (parentFunctionName === null) return null;
   if (parentFunctionName === 'url') return null; // handled by AI-R19.
   const limit = parentFunctionName ? ARTIFACT_CSS_STRING_LENGTH_LIMITS[parentFunctionName] : undefined;
-  if (limit === undefined) return { ruleId: 'AI-R18', target: parentFunctionName ? truncateArtifactIdentifier(parentFunctionName) : undefined };
+  if (limit === undefined) return { ruleId: 'AI-R18', target: parentFunctionName ? safeArtifactIdentifier(parentFunctionName, 'css-function') : undefined };
   const decoded = parentFunctionName === 'format' ? node.value : decodeCssEscapes(node.value);
   const codePointCount = Array.from(decoded).length;
-  if (codePointCount > limit) return { ruleId: 'AI-R18', target: truncateArtifactIdentifier(parentFunctionName!) };
-  if (hasControlCharacter(node.value)) return { ruleId: 'AI-R18', target: truncateArtifactIdentifier(parentFunctionName!) };
+  if (codePointCount > limit) return { ruleId: 'AI-R18', target: safeArtifactIdentifier(parentFunctionName!, 'css-function') };
+  if (hasControlCharacter(node.value)) return { ruleId: 'AI-R18', target: safeArtifactIdentifier(parentFunctionName!, 'css-function') };
   if (parentFunctionName === 'format' && !/^[A-Za-z0-9-]*$/.test(node.value)) return { ruleId: 'AI-R18', target: 'format' };
   return null;
 }
@@ -1240,7 +1311,7 @@ function analyzeValueNodes(nodes: readonly CssValueNode[], baseCtx: CssWalkConte
         return { failure: { ruleId: 'AI-R19' }, hasExemptFontReference };
       }
       if (!ctx.insideSelectorArg && !ARTIFACT_CSS_FUNCTION_ALLOWLIST.has(normalizedName)) {
-        return { failure: { ruleId: 'AI-R17', target: truncateArtifactIdentifier(normalizedName) }, hasExemptFontReference };
+        return { failure: { ruleId: 'AI-R17', target: safeArtifactIdentifier(normalizedName, 'css-function') }, hasExemptFontReference };
       }
       for (let i = children.length - 1; i >= 0; i -= 1) stack.push({ node: children[i], parentFunctionName: normalizedName, ctx });
       continue;
@@ -1319,7 +1390,7 @@ function walkPostcssTree(root: AtRuleLikeNode, counter: CssValueCounter): CssWal
         if (paramsResult.hasExemptFontReference) hasExemptFontReference = true;
         else return { failure: { ruleId: 'AI-R16', target: 'import' }, hasExemptFontReference };
       } else if (!ARTIFACT_CSS_AT_RULE_ALLOWLIST.has(normalizedName)) {
-        return { failure: { ruleId: 'AI-R16', target: truncateArtifactIdentifier(normalizedName) }, hasExemptFontReference };
+        return { failure: { ruleId: 'AI-R16', target: safeArtifactIdentifier(normalizedName, 'css-at-rule', 'css-at-rule') }, hasExemptFontReference };
       } else {
         const paramsResult = analyzeValueNodes(
           (artifactParserSeam.parseValue(node.params ?? '').nodes as unknown as CssValueNode[]) ?? [],
@@ -1535,7 +1606,7 @@ const FORBIDDEN_ELEMENT_TAGS = new Set(['base', 'iframe', 'frame', 'frameset', '
 async function checkAiR07(context: Readonly<ArtifactRuleContext>): Promise<ArtifactRuleFailure | null> {
   for (const node of walkArtifactTree(context.parsed!.document)) {
     if (!isElementLike(node)) continue;
-    if (FORBIDDEN_ELEMENT_TAGS.has(node.tagName)) return { target: truncateArtifactIdentifier(node.tagName) };
+    if (FORBIDDEN_ELEMENT_TAGS.has(node.tagName)) return { target: safeArtifactIdentifier(node.tagName, 'element') };
   }
   return null;
 }
@@ -1546,7 +1617,7 @@ async function checkAiR07a(context: Readonly<ArtifactRuleContext>): Promise<Arti
     if (node.tagName !== 'script' && node.tagName !== 'style') continue;
     if (!isHtmlOrSvgNamespace(node.namespaceURI)) continue;
     for (const child of node.childNodes) {
-      if (!isTextNodeLike(child)) return { target: truncateArtifactIdentifier(node.tagName) };
+      if (!isTextNodeLike(child)) return { target: safeArtifactIdentifier(node.tagName, 'element') };
     }
   }
   return null;
@@ -1560,7 +1631,7 @@ async function checkAiR08(context: Readonly<ArtifactRuleContext>): Promise<Artif
     for (const attr of node.attrs as ArtifactAttribute[]) {
       const name = attr.name.toLowerCase();
       if (name.startsWith('on') || FORBIDDEN_ATTRIBUTE_NAMES.has(name)) {
-        return { target: truncateArtifactIdentifier(name) };
+        return { target: safeArtifactIdentifier(name, 'attribute') };
       }
     }
   }
@@ -1619,25 +1690,50 @@ const SVG_PRESENTATION_URL_ATTRS = new Set(['fill', 'stroke', 'filter', 'clip-pa
  * form to AC-AI-9's 128-code-point bound before returning it as a `target`.
  */
 function elementAttributeTarget(tagName: string, attrName: string): string {
-  return truncateArtifactIdentifier(`${tagName}[${attrName}]`);
+  const tag = truncateCodePoints(safeArtifactIdentifier(tagName, 'element'), TARGET_PART_MAX_CODE_POINTS);
+  const attribute = truncateCodePoints(safeArtifactIdentifier(attrName, 'attribute'), TARGET_PART_MAX_CODE_POINTS);
+  return `${tag}[${attribute}]`;
 }
 
 function isHtmlLinkHref(namespace: string, tagName: string, attrName: string): boolean {
   return namespace === HTML_NS && (tagName === 'a' || tagName === 'area') && attrName === 'href';
 }
 
-function checkHtmlUrlAttr(namespace: string, tagName: string, attrName: string, value: string, allowPageLinks: boolean): boolean /* true = OK */ {
+const RESOURCE_REFERENCE_FAILURE: ArtifactRuleFailure = { diagnosticCode: 'RESOURCE_REFERENCE_FORBIDDEN' };
+const PAGE_LINK_CONTEXT_FAILURE: ArtifactRuleFailure = { diagnosticCode: 'PAGE_LINK_CONTEXT_FORBIDDEN' };
+
+/**
+ * Judges a page link in an HTML `a` / `area` href. A relative link is only
+ * checked lexically (the parent resolves it against the page's own path); an
+ * absolute one is resolved without a base and refused when it lands on a
+ * reserved route. A link the parent could not follow anyway (unresolvable or
+ * structurally invalid once resolved) is not a new save-time refusal.
+ */
+function checkHtmlPageLink(value: string): ArtifactRuleFailure | null {
+  const parsed = parseArtifactPageLinkDetailed(value);
+  if (!parsed.ok) return { diagnosticCode: parsed.diagnosticCode };
+  if (!parsed.link.absolute) return null;
+  const pagePath = resolveArtifactPagePath(parsed.link);
+  if (pagePath !== null && classifyArtifactPagePath(pagePath) === 'reserved-route') return { diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE' };
+  return null;
+}
+
+function checkHtmlUrlAttr(namespace: string, tagName: string, attrName: string, value: string, allowPageLinks: boolean): ArtifactRuleFailure | null {
   const cls = classifyArtifactUrlValue(value);
-  // Under a non-open shadow root only the in-document fragment form of a link survives.
-  if (isHtmlLinkHref(namespace, tagName, attrName)) return isFragmentOnlyOk(cls) || (allowPageLinks && parseArtifactPageLink(value) !== null);
+  if (isHtmlLinkHref(namespace, tagName, attrName)) {
+    if (isFragmentOnlyOk(cls)) return null;
+    // Under a non-open shadow root only the in-document fragment form of a link survives.
+    if (!allowPageLinks) return PAGE_LINK_CONTEXT_FAILURE;
+    return checkHtmlPageLink(value);
+  }
   // The map is addressed by `#name` in the same document only; a relative or external map would be a resource reference.
-  if (namespace === HTML_NS && tagName === 'img' && attrName === 'usemap') return isFragmentOnlyOk(cls);
-  if ((tagName === 'img' && attrName === 'src') || (tagName === 'video' && attrName === 'poster')) return isDataOnlyOk(cls);
+  if (namespace === HTML_NS && tagName === 'img' && attrName === 'usemap') return isFragmentOnlyOk(cls) ? null : PAGE_LINK_CONTEXT_FAILURE;
+  if ((tagName === 'img' && attrName === 'src') || (tagName === 'video' && attrName === 'poster')) return isDataOnlyOk(cls) ? null : RESOURCE_REFERENCE_FAILURE;
   // Every other HTML URL-bearing (tag, attr) combination is rejected
   // outright: scheme-agnostic for the explicitly-listed dangerous
   // attributes, and "no allowance exists" by default for everything else
   // (allow is enumerate, deny is default).
-  return false;
+  return RESOURCE_REFERENCE_FAILURE;
 }
 
 /**
@@ -1687,8 +1783,9 @@ function checkGenericHtmlUrlAttrs(
     if (skipHrefLike && isHrefLikeAttr(attr)) continue; // already judged by the MathML href branch above.
     if (!HTML_URL_ATTRS.has(attr.name)) continue;
     if (node.tagName === 'link' && attr.name === 'href' && isGoogleFontsStylesheetLinkElement(node)) continue; // AI-R12 decides.
-    if (checkHtmlUrlAttr(node.namespaceURI, node.tagName, attr.name, attr.value, allowPageLinks)) continue;
-    return { target: elementAttributeTarget(node.tagName, attr.name) };
+    const failure = checkHtmlUrlAttr(node.namespaceURI, node.tagName, attr.name, attr.value, allowPageLinks);
+    if (failure === null) continue;
+    return { ...failure, target: elementAttributeTarget(node.tagName, attr.name) };
   }
   return null;
 }
@@ -1705,16 +1802,17 @@ async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<Artif
           const cls = classifyArtifactUrlValue(attr.value);
           const target = elementAttributeTarget(node.tagName, `${attr.prefix ? `${attr.prefix}:` : ''}${attr.name}`);
           if (node.tagName === 'image') {
-            if (!isDataOnlyOk(cls)) return { target };
+            if (!isDataOnlyOk(cls)) return { ...RESOURCE_REFERENCE_FAILURE, target };
           } else if (node.tagName === 'script') {
-            return { target };
+            return { ...RESOURCE_REFERENCE_FAILURE, target };
           } else if (!isFragmentOnlyOk(cls)) {
-            return { target };
+            // An SVG `a` is navigation (a page link would be an HTML one); every other href-like SVG attribute is a resource reference.
+            return { ...(node.tagName === 'a' ? PAGE_LINK_CONTEXT_FAILURE : RESOURCE_REFERENCE_FAILURE), target };
           }
           continue;
         }
         if (SVG_PRESENTATION_URL_ATTRS.has(attr.name) && !valueContainsOnlyFragmentUrls(attr.value)) {
-          return { target: elementAttributeTarget(node.tagName, attr.name) };
+          return { ...RESOURCE_REFERENCE_FAILURE, target: elementAttributeTarget(node.tagName, attr.name) };
         }
       }
       continue;
@@ -1724,11 +1822,11 @@ async function checkAiR11(context: Readonly<ArtifactRuleContext>): Promise<Artif
       for (const attr of attrs) {
         if (isHrefLikeAttr(attr)) {
           const cls = classifyArtifactUrlValue(attr.value);
-          if (!isFragmentOnlyOk(cls)) return { target: elementAttributeTarget(node.tagName, attr.name) };
+          if (!isFragmentOnlyOk(cls)) return { ...PAGE_LINK_CONTEXT_FAILURE, target: elementAttributeTarget(node.tagName, attr.name) };
           continue;
         }
         if (!attr.prefix && attr.name === 'definitionURL') {
-          return { target: elementAttributeTarget(node.tagName, 'definitionURL') };
+          return { ...RESOURCE_REFERENCE_FAILURE, target: elementAttributeTarget(node.tagName, 'definitionURL') };
         }
       }
       // MathML elements aren't otherwise covered — the HTML name table
@@ -1750,7 +1848,7 @@ async function checkAiR11a(context: Readonly<ArtifactRuleContext>): Promise<Arti
   for (const node of walkArtifactTree(context.parsed!.document)) {
     if (!isElementLike(node)) continue;
     for (const attr of node.attrs as ArtifactAttribute[]) {
-      if (!attr.namespace && attr.name.toLowerCase() === 'xml:base') return { target: 'xml:base' };
+      if (!attr.namespace && attr.name.toLowerCase() === 'xml:base') return { ...RESOURCE_REFERENCE_FAILURE, target: 'xml:base' };
     }
   }
   return null;
@@ -1780,9 +1878,10 @@ async function checkAiR11b(context: Readonly<ArtifactRuleContext>): Promise<Arti
 
     for (const value of valuesToCheck) {
       if (isHrefTarget) {
-        if (!isFragmentOnlyOk(classifyArtifactUrlValue(value))) return { target: targetAttrName };
+        if (!isFragmentOnlyOk(classifyArtifactUrlValue(value)))
+          return { ...RESOURCE_REFERENCE_FAILURE, target: safeArtifactIdentifier(targetAttrName, 'attribute') };
       } else if (!valueContainsOnlyFragmentUrls(value)) {
-        return { target: targetAttrName };
+        return { ...RESOURCE_REFERENCE_FAILURE, target: safeArtifactIdentifier(targetAttrName, 'attribute') };
       }
     }
   }
@@ -1830,7 +1929,9 @@ async function checkAiR14(context: Readonly<ArtifactRuleContext>): Promise<Artif
 
 async function checkCssRuleStage(context: Readonly<ArtifactRuleContext>, ruleId: ArtifactRuleId): Promise<ArtifactRuleFailure | null> {
   const analysis = analyzeArtifactCss(context);
-  if (analysis.failure && analysis.failure.ruleId === ruleId) return { target: analysis.failure.target };
+  if (analysis.failure && analysis.failure.ruleId === ruleId) {
+    return ruleId === 'AI-R19' ? { ...RESOURCE_REFERENCE_FAILURE, target: analysis.failure.target } : { target: analysis.failure.target };
+  }
   return null;
 }
 
@@ -1839,10 +1940,10 @@ function checkAiR21Source(context: Readonly<ArtifactRuleContext>): ArtifactRuleF
   for (const marker of context.parsed!.removedReservedMarkers) {
     countByName.set(marker.name, (countByName.get(marker.name) ?? 0) + 1);
     const validAttrs = marker.attributeNames.every((name) => name === 'name' || name === 'content');
-    if (!validAttrs) return { target: truncateArtifactIdentifier(marker.name) };
+    if (!validAttrs) return { target: safeArtifactIdentifier(marker.name, 'document') };
   }
   for (const [name, count] of countByName) {
-    if (count > 1) return { target: truncateArtifactIdentifier(name) };
+    if (count > 1) return { target: safeArtifactIdentifier(name, 'document') };
   }
   return null;
 }
@@ -1864,11 +1965,11 @@ function checkAiR21Normalized(context: Readonly<ArtifactRuleContext>): ArtifactR
   }
   for (const reservedName of RESERVED_MARKER_NAMES) {
     const bucket = byName.get(reservedName) ?? [];
-    if (bucket.length !== 1) return { target: truncateArtifactIdentifier(reservedName) };
+    if (bucket.length !== 1) return { target: safeArtifactIdentifier(reservedName, 'document') };
     const [meta] = bucket;
     const attrs = meta.attrs as ArtifactAttribute[];
     if (attrs.length !== 2 || !attrs.every((a) => a.name === 'name' || a.name === 'content')) {
-      return { target: truncateArtifactIdentifier(reservedName) };
+      return { target: safeArtifactIdentifier(reservedName, 'document') };
     }
   }
   const { scriptDigests, styleDigests } = computeArtifactDigests(document);
@@ -1876,12 +1977,12 @@ function checkAiR21Normalized(context: Readonly<ArtifactRuleContext>): ArtifactR
   const styleMeta = byName.get(ARTIFACT_STYLE_DIGEST_META_NAME)![0];
   const scriptContent = findAttr(scriptMeta.attrs as ArtifactAttribute[], (a) => a.name === 'content')?.value ?? '';
   const styleContent = findAttr(styleMeta.attrs as ArtifactAttribute[], (a) => a.name === 'content')?.value ?? '';
-  if (scriptContent !== scriptDigests.join(' ')) return { target: truncateArtifactIdentifier(ARTIFACT_SCRIPT_DIGEST_META_NAME) };
-  if (styleContent !== styleDigests.join(' ')) return { target: truncateArtifactIdentifier(ARTIFACT_STYLE_DIGEST_META_NAME) };
+  if (scriptContent !== scriptDigests.join(' ')) return { target: safeArtifactIdentifier(ARTIFACT_SCRIPT_DIGEST_META_NAME, 'document') };
+  if (styleContent !== styleDigests.join(' ')) return { target: safeArtifactIdentifier(ARTIFACT_STYLE_DIGEST_META_NAME, 'document') };
 
   const reserialized = serializeArtifactTree(document);
   for (const reservedName of RESERVED_MARKER_NAMES) {
-    if (countOccurrences(reserialized, reservedName) !== 1) return { target: truncateArtifactIdentifier(reservedName) };
+    if (countOccurrences(reserialized, reservedName) !== 1) return { target: safeArtifactIdentifier(reservedName, 'document') };
   }
   return null;
 }
@@ -2153,7 +2254,13 @@ export async function runArtifactRules(context: Readonly<ArtifactRuleContext>): 
   for (const rule of applicable) {
     const failure = await rule.check(context, rule);
     if (failure) {
-      return { ruleId: rule.id, reason: rule.result.reason, httpStatus: rule.result.httpStatus, target: failure.target };
+      return {
+        ruleId: rule.id,
+        reason: rule.result.reason,
+        httpStatus: rule.result.httpStatus,
+        target: failure.target,
+        ...(failure.diagnosticCode === undefined ? {} : { diagnosticCode: failure.diagnosticCode }),
+      };
     }
   }
   return null;
