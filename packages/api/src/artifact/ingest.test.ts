@@ -8,6 +8,12 @@ import {
   serializeArtifactTree,
   scanCssText,
   ARTIFACT_INGEST_RULES,
+  ARTIFACT_DIAGNOSTIC_MESSAGES,
+  ARTIFACT_REJECTION_MESSAGES,
+  getArtifactRejectionMessage,
+  sanitizeArtifactTarget,
+  selectArtifactDiagnosticCode,
+  runArtifactRules,
   ARTIFACT_NODE_BUDGET,
   ARTIFACT_MAX_TREE_DEPTH,
   ARTIFACT_MAX_ATTRIBUTES_PER_ELEMENT,
@@ -21,6 +27,13 @@ import {
   type ArtifactRuleContext,
 } from './ingest';
 import { ARTIFACT_HARD_MAX_BYTES, ARTIFACT_MIN_MAX_BYTES, ARTIFACT_SCRIPT_DIGEST_META_NAME, ARTIFACT_STYLE_DIGEST_META_NAME } from './constants';
+import {
+  ARTIFACT_DIAGNOSTIC_CODES,
+  ARTIFACT_INGEST_REJECTION_REASONS,
+  parseArtifactPageLink,
+  resolveArtifactPagePath,
+  classifyArtifactPagePath,
+} from '@crowi/api-contract';
 import { validArtifactHtml, VALID_ARTIFACT_HTML } from '../test/artifact-fixtures';
 
 const SCRIPT_MARKER_NAME = ARTIFACT_SCRIPT_DIGEST_META_NAME;
@@ -1427,5 +1440,313 @@ describe('ingestHtmlArtifact', () => {
       const guardedDoc = Parser.parse(ordinary, {}) as never;
       expect(countTreeBudget(guardedDoc).nodes).toBe(countTreeBudget(plainDoc).nodes);
     }, 30_000);
+  });
+});
+
+describe('artifact authoring guidance: diagnostics (feature-artifact-authoring-guidance)', () => {
+  const ID = '507f1f77bcf86cd799439011';
+
+  async function rejectionOf(body: string, options: ArtifactIngestOptions = authorOptions()) {
+    const result = await ingestHtmlArtifact(validArtifactHtml({ body }), options);
+    if (result.ok) throw new Error(`expected rejection for ${body}`);
+    return result.rejection;
+  }
+
+  /** Runs every rule against an already-normalized document, so the normalized pass is exercised directly. */
+  async function normalizedPassRejection(href: string) {
+    const accepted = await ingestValid({ body: '<a href="/team/guide">x</a>' });
+    expectAccepted(accepted);
+    const text = Buffer.from(accepted.bytes).toString('utf8').replace('href="/team/guide"', `href="${href}"`);
+    const parsed = parseArtifactDocument(text, 'normalized');
+    if (!('document' in parsed)) throw new Error('expected a parsed document');
+    return runArtifactRules({
+      pass: 'normalized',
+      source: 'stored-revision',
+      input: text,
+      options: storedOptions(),
+      parsed,
+      ownership: { exemptReservedMarker: true },
+    });
+  }
+
+  describe('AC-AAG-4 I: absolute reserved routes are refused on save', () => {
+    const RESERVED = [
+      '/admin',
+      '/ADMIN',
+      '/%61dmin',
+      '/x/%2e%2e/admin',
+      '/-',
+      '/-/foo',
+      '/a/edit/',
+      '/a/EDIT/',
+      '/notes.md/',
+      '/api/pages',
+      '/files/x',
+      '/logout',
+      '/login',
+      '/user',
+      '/user/alice/bookmarks',
+      '/notifications',
+      '/_next/static/x',
+      '/favicon.ico',
+      `/${ID}`,
+      '/a^b',
+    ];
+    const ALLOWED = [
+      '/apiary',
+      '/meeting',
+      '/team/admin',
+      '/-foo',
+      '/team/-/foo',
+      '/user/alice',
+      '/user/alice/notes',
+      `/docs/${ID}`,
+      '/',
+      '/../guide',
+      '/a/%2e%2e/%2e%2e/b',
+    ];
+
+    it.each(RESERVED)('rejects a[href] = %s as PAGE_LINK_RESERVED_ROUTE (AI-R11 / EXTERNAL_REFERENCE / 400)', async (href) => {
+      for (const body of [`<a href="${href}">x</a>`, `<map name="m"><area href="${href}"></map>`]) {
+        const rejection = await rejectionOf(body);
+        expect(rejection).toMatchObject({ ruleId: 'AI-R11', reason: 'EXTERNAL_REFERENCE', httpStatus: 400, diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE' });
+        expect(rejection.target).toMatch(/^(a|area)\[href\]$/);
+      }
+    });
+
+    it.each(RESERVED)('rejects %s for author and stored-revision sources, and in the normalized pass directly', async (href) => {
+      const stored = await rejectionOf(`<a href="${href}">x</a>`, storedOptions());
+      expect(stored.diagnosticCode).toBe('PAGE_LINK_RESERVED_ROUTE');
+      const normalized = await normalizedPassRejection(href);
+      expect(normalized).toMatchObject({ ruleId: 'AI-R11', diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE' });
+    });
+
+    it.each(ALLOWED)('still saves a[href] = %s (I-3: only a resolved reserved route is newly refused)', async (href) => {
+      expectAccepted(await ingestValid({ body: `<a href="${href}">x</a>` }));
+    });
+
+    it('I-3/I-4: a relative link is checked lexically only; ../admin and ./admin save, a relative query does not', async () => {
+      expectAccepted(await ingestValid({ body: '<a href="../admin">x</a><a href="./admin">y</a><a href="admin">z</a>' }));
+      expect((await rejectionOf('<a href="../guide?x=1">x</a>')).diagnosticCode).toBe('PAGE_LINK_QUERY');
+      expectAccepted(await ingestValid({ body: '<a href="/guide#what?next">x</a>' }));
+    });
+
+    it('shares the api-contract classifier: ingest and the parent agree on what is reserved', () => {
+      for (const href of ['/admin', '/ADMIN', `/${ID}`, '/team/guide']) {
+        const link = parseArtifactPageLink(href)!;
+        const path = resolveArtifactPagePath(link)!;
+        expect(classifyArtifactPagePath(path) === 'reserved-route').toBe(href !== '/team/guide');
+      }
+    });
+  });
+
+  describe('AC-AAG-4/5 D: the diagnostic for each refusal', () => {
+    const CASES: Array<[string, string, string]> = [
+      ['/guide?edit=1', 'PAGE_LINK_QUERY', 'query'],
+      ['/100%off', 'PAGE_LINK_PERCENT_ENCODING', 'percent'],
+      ['/%2G', 'PAGE_LINK_PERCENT_ENCODING', 'percent'],
+      ['100%', 'PAGE_LINK_PERCENT_ENCODING', 'percent'],
+      ['https://example.com', 'PAGE_LINK_INVALID', 'https'],
+      ['//example.com/guide', 'PAGE_LINK_INVALID', 'protocol-relative'],
+      ['mailto:a@b.com', 'PAGE_LINK_INVALID', 'mailto'],
+      ['tel:+1234567890', 'PAGE_LINK_INVALID', 'tel'],
+      ['https://wiki.example/team/guide', 'PAGE_LINK_INVALID', 'same-wiki'],
+      ['//wiki.example/team/guide', 'PAGE_LINK_INVALID', 'same-wiki protocol-relative'],
+      ['javascript:void(0)', 'PAGE_LINK_INVALID', 'javascript'],
+      ['ADR:0001', 'PAGE_LINK_INVALID', 'colon'],
+      ['#', 'PAGE_LINK_INVALID', 'hash'],
+      ['#a?b', 'PAGE_LINK_INVALID', 'fragment query'],
+      ['/a//b', 'PAGE_LINK_INVALID', 'double slash'],
+    ];
+
+    it.each(CASES)('a[href] = %s -> %s (%s)', async (href, code) => {
+      const rejection = await rejectionOf(`<a href="${href}">x</a>`);
+      expect(rejection).toMatchObject({ ruleId: 'AI-R11', reason: 'EXTERNAL_REFERENCE', httpStatus: 400, diagnosticCode: code, target: 'a[href]' });
+      expect(JSON.stringify(rejection)).not.toContain('example');
+    });
+
+    it('the corrected forms save: external URLs become text, same-wiki URLs page paths, colon names get ./', async () => {
+      expectAccepted(await ingestValid({ body: '<p>https://example.com //example.com/guide mailto:a@b.com tel:+1234567890</p>' }));
+      expectAccepted(
+        await ingestValid({
+          body: '<a href="/team/guide">x</a><a href="./ADR:0001">y</a><a href="#top">z</a><a href="/100%25off">w</a><a href="/guide">v</a>',
+        }),
+      );
+      expectAccepted(await ingestValid({ body: '<a>no href</a><a href="#a">fragment</a>' }));
+    });
+
+    it('a fragment-only link keeps its existing rules, including an allowed literal %', async () => {
+      expectAccepted(await ingestValid({ body: '<a href="#section%">x</a>' }));
+    });
+
+    it('I-6: the first failing attribute follows source order', async () => {
+      const ab = await rejectionOf('<img src="https://example.com/a.png" onclick="x" alt="y">');
+      const ba = await rejectionOf('<img onclick="x" src="https://example.com/a.png" alt="y">');
+      // ATTRIBUTE_FORBIDDEN (AI-R08) outranks AI-R11, so use two attributes of the same rule instead.
+      expect(ab.ruleId).toBe(ba.ruleId);
+      const first = await rejectionOf('<img src="https://e.example/a.png" usemap="/x" alt="y">');
+      const second = await rejectionOf('<img usemap="/x" src="https://e.example/a.png" alt="y">');
+      expect(first.target).toBe('img[src]');
+      expect(second.target).toBe('img[usemap]');
+    });
+  });
+
+  describe('AC-AAG-4 I-1/I-5: context and resource classification', () => {
+    it('img[usemap], SVG a and MathML a use the context code', async () => {
+      expect((await rejectionOf('<img src="data:image/png;base64,AAAA" usemap="/guide" alt="x">')).diagnosticCode).toBe('PAGE_LINK_CONTEXT_FORBIDDEN');
+      expect((await rejectionOf('<svg><a href="/guide"><text>x</text></a></svg>')).diagnosticCode).toBe('PAGE_LINK_CONTEXT_FORBIDDEN');
+      expect((await rejectionOf('<math><mrow href="/guide"><mi>x</mi></mrow></math>')).diagnosticCode).toBe('PAGE_LINK_CONTEXT_FORBIDDEN');
+    });
+
+    it('SVG use / feImage, images, definitionURL, xml:base and SVG animation use the resource code', async () => {
+      for (const body of [
+        '<svg><use href="https://e.example/a.svg#x"/></svg>',
+        '<svg><filter id="f"><feImage href="https://e.example/a.png"/></filter></svg>',
+        '<svg><image href="https://e.example/a.png"/></svg>',
+        '<img src="https://e.example/a.png" alt="x">',
+        '<video poster="https://e.example/a.png"></video>',
+        '<math><mi definitionURL="https://e.example/d">x</mi></math>',
+        '<svg xml:base="https://e.example/"></svg>',
+        '<svg><a><animate attributeName="href" to="https://e.example/x"/></a></svg>',
+      ]) {
+        const rejection = await rejectionOf(body);
+        expect(rejection.diagnosticCode).toBe('RESOURCE_REFERENCE_FORBIDDEN');
+      }
+    });
+
+    it('a closed declarative shadow root cannot hold a page link; an open one can', async () => {
+      const closed = await rejectionOf('<div><template shadowrootmode="closed"><a href="/guide">x</a></template></div>');
+      expect(closed).toMatchObject({ ruleId: 'AI-R11', diagnosticCode: 'PAGE_LINK_CONTEXT_FORBIDDEN', target: 'a[href]' });
+      expectAccepted(await ingestValid({ body: '<div><template shadowrootmode="open"><a href="/guide">x</a></template></div>' }));
+    });
+
+    it('an @import keeps AI-R19 / URL_FORBIDDEN with the resource code, and a URL replaced by a fragment is still AI-R16', async () => {
+      const external = await ingestHtmlArtifact(validArtifactHtml({ style: '@import url("https://e.example/a.css");' }), authorOptions());
+      if (external.ok) throw new Error('expected rejection');
+      expect(external.rejection).toMatchObject({ ruleId: 'AI-R19', reason: 'URL_FORBIDDEN', diagnosticCode: 'RESOURCE_REFERENCE_FORBIDDEN' });
+      const fragment = await ingestHtmlArtifact(validArtifactHtml({ style: '@import url("#x");' }), authorOptions());
+      if (fragment.ok) throw new Error('expected rejection');
+      expect(fragment.rejection).toMatchObject({ ruleId: 'AI-R16', reason: 'CSS_AT_RULE_FORBIDDEN' });
+      expect(fragment.rejection.diagnosticCode).toBeUndefined();
+      expectAccepted(await ingestValid({ style: 'body { color: red; }' }));
+    });
+
+    it('Google Fonts keeps its existing AI-R12 handling', async () => {
+      const html = validArtifactHtml({ style: '@import url("https://fonts.googleapis.com/css2?family=Roboto");' });
+      expectAccepted(await ingestHtmlArtifact(html, authorOptions({ allowWebFonts: true })));
+      const denied = await ingestHtmlArtifact(html, authorOptions({ allowWebFonts: false }));
+      if (denied.ok) throw new Error('expected rejection');
+      expect(denied.rejection).toMatchObject({ ruleId: 'AI-R12', reason: 'FONT_REFERENCE_FORBIDDEN' });
+      expect(denied.rejection.diagnosticCode).toBeUndefined();
+    });
+  });
+
+  describe('AC-AAG-5 D: fixed messages', () => {
+    it('has the exact fixed text for every reason (D-2) and every diagnostic code (D-1)', () => {
+      expect(Object.keys(ARTIFACT_REJECTION_MESSAGES).sort()).toEqual([...ARTIFACT_INGEST_REJECTION_REASONS].sort());
+      expect(ARTIFACT_INGEST_REJECTION_REASONS).toHaveLength(26);
+      expect(ARTIFACT_REJECTION_MESSAGES.EXTERNAL_REFERENCE).toBe(
+        'Remove the forbidden reference or use a permitted HTML wiki page link or supported embedded asset.',
+      );
+      expect(ARTIFACT_REJECTION_MESSAGES.MODULE_SPECIFIER_FORBIDDEN).toBe(
+        'Remove module imports and include the required code inline, or correct JavaScript syntax errors in the script, such as unclosed parentheses or braces.',
+      );
+      expect(ARTIFACT_REJECTION_MESSAGES.DOCTYPE_INVALID).toBe(
+        'Use exactly one `<!DOCTYPE html>` with no public or system identifier before the html element.',
+      );
+      expect(ARTIFACT_REJECTION_MESSAGES.ARTIFACT_DELIVERY_NOT_CONFIGURED).toBe(
+        'Ask an administrator to configure and enable artifact delivery before saving artifact pages.',
+      );
+      expect(ARTIFACT_REJECTION_MESSAGES.CONTENT_TYPE_INVALID).toBe(
+        "Declare the content type as exactly markdown or artifact. If omitted, creation uses markdown and update retains the page's current content type.",
+      );
+      for (const message of Object.values(ARTIFACT_REJECTION_MESSAGES)) expect(message).not.toMatch(/retry|try again|re-?submit the (same )?revert/i);
+      expect(Object.keys(ARTIFACT_DIAGNOSTIC_MESSAGES).sort()).toEqual([...ARTIFACT_DIAGNOSTIC_CODES].sort());
+      expect(ARTIFACT_DIAGNOSTIC_MESSAGES.PAGE_LINK_QUERY).toBe(
+        'Query strings are not allowed in wiki page links; use a page path such as /guide or /guide#overview.',
+      );
+      expect(ARTIFACT_DIAGNOSTIC_MESSAGES.PAGE_LINK_PERCENT_ENCODING).toBe(
+        'Use valid UTF-8 %HH escapes in page names and write a literal percent sign as %25, for example /discount/100%25off.',
+      );
+      expect(ARTIFACT_DIAGNOSTIC_MESSAGES.PAGE_LINK_INVALID).not.toContain('/example.com/guide');
+      expect(ARTIFACT_DIAGNOSTIC_MESSAGES.PAGE_LINK_INVALID).toContain('Treat an href beginning with // as a protocol-relative URL');
+    });
+
+    it('selectArtifactDiagnosticCode / getArtifactRejectionMessage only honour a code valid for the reason', () => {
+      expect(selectArtifactDiagnosticCode('EXTERNAL_REFERENCE', 'PAGE_LINK_QUERY')).toBe('PAGE_LINK_QUERY');
+      expect(selectArtifactDiagnosticCode('EXTERNAL_REFERENCE', 'RESOURCE_REFERENCE_FORBIDDEN')).toBe('RESOURCE_REFERENCE_FORBIDDEN');
+      expect(selectArtifactDiagnosticCode('URL_FORBIDDEN', 'RESOURCE_REFERENCE_FORBIDDEN')).toBe('RESOURCE_REFERENCE_FORBIDDEN');
+      expect(selectArtifactDiagnosticCode('URL_FORBIDDEN', 'PAGE_LINK_QUERY')).toBeUndefined();
+      expect(selectArtifactDiagnosticCode('SCRIPT_TYPE_FORBIDDEN', 'RESOURCE_REFERENCE_FORBIDDEN')).toBeUndefined();
+      expect(selectArtifactDiagnosticCode('EXTERNAL_REFERENCE', 'NOT_A_CODE')).toBeUndefined();
+      expect(selectArtifactDiagnosticCode('EXTERNAL_REFERENCE', undefined)).toBeUndefined();
+      expect(getArtifactRejectionMessage('EXTERNAL_REFERENCE', 'PAGE_LINK_QUERY')).toBe(ARTIFACT_DIAGNOSTIC_MESSAGES.PAGE_LINK_QUERY);
+      expect(getArtifactRejectionMessage('SCRIPT_TYPE_FORBIDDEN', 'PAGE_LINK_QUERY')).toBe(ARTIFACT_REJECTION_MESSAGES.SCRIPT_TYPE_FORBIDDEN);
+      expect(getArtifactRejectionMessage('EXTERNAL_REFERENCE')).toBe(ARTIFACT_REJECTION_MESSAGES.EXTERNAL_REFERENCE);
+    });
+
+    it('a script with a JavaScript syntax error and no import is MODULE_SPECIFIER_FORBIDDEN / AI-R14 / 400 with no diagnostic code, and the bracket fix saves', async () => {
+      const rejected = await ingestValid({ script: 'function f() {' });
+      if (rejected.ok) throw new Error('expected rejection');
+      expect(rejected.rejection).toMatchObject({ ruleId: 'AI-R14', reason: 'MODULE_SPECIFIER_FORBIDDEN', httpStatus: 400, target: 'script' });
+      expect(rejected.rejection.diagnosticCode).toBeUndefined();
+      expectAccepted(await ingestValid({ script: 'function f() {}' }));
+    });
+
+    it('the reserved marker name inside a script is NORMALIZER_MARKER_INVALID / AI-R21 / 400 targeting the marker name, and removing it saves', async () => {
+      const rejected = await ingestValid({ script: `const m = '${SCRIPT_MARKER_NAME}';` });
+      if (rejected.ok) throw new Error('expected rejection');
+      expect(rejected.rejection).toMatchObject({ ruleId: 'AI-R21', reason: 'NORMALIZER_MARKER_INVALID', httpStatus: 400, target: SCRIPT_MARKER_NAME });
+      expect(rejected.rejection.diagnosticCode).toBeUndefined();
+      expectAccepted(await ingestValid({ script: "const m = '';" }));
+    });
+  });
+
+  describe('AC-AAG-6 T: target producers', () => {
+    it('keeps ordinary identifiers and falls back for unsafe ones', async () => {
+      expect((await rejectionOf('<my-widget><iframe></iframe></my-widget>')).target).toBe('iframe');
+      expect((await rejectionOf('<p onclick="x">y</p>')).target).toBe('onclick');
+      expect((await rejectionOf('<p on-click="x">y</p>')).target).toBe('on-click');
+      expect((await rejectionOf('<x-evil onclick="1">y</x-evil>')).target).toBe('onclick');
+    });
+
+    it('sanitizeArtifactTarget allows only identifiers, tag[attr] and a few fixed forms', () => {
+      expect(sanitizeArtifactTarget(undefined)).toBeUndefined();
+      for (const ok of ['a[href]', 'script[type]', 'meta[charset]', 'meta[name=viewport]', 'document', 'xml:base', 'import', '-webkit-keyframes', '--x']) {
+        expect(sanitizeArtifactTarget(ok)).toBe(ok);
+      }
+      for (const bad of ['a[href=/admin]', 'x\r\ny', '\u001b[31mred', 'ignore previous instructions', 'a[href]\nsecret', '/admin', '']) {
+        expect(sanitizeArtifactTarget(bad)).toBe('document');
+      }
+      expect(Array.from(sanitizeArtifactTarget('a'.repeat(500))!)).toHaveLength(128);
+      const long = sanitizeArtifactTarget(`${'t'.repeat(100)}[${'u'.repeat(100)}]`)!;
+      expect(long).toBe(`${'t'.repeat(63)}[${'u'.repeat(63)}]`);
+      expect(Array.from(long).length).toBeLessThanOrEqual(128);
+    });
+
+    it('a CSS function or at-rule name that decodes to control characters never reaches target', async () => {
+      const fn = await ingestHtmlArtifact(validArtifactHtml({ style: 'body { color: \\1b\\a evil(1); }' }), authorOptions());
+      if (!fn.ok) expect(JSON.stringify(fn.rejection.target ?? '')).not.toMatch(/\\u001b|\\n/);
+      const longAtRule = `@${'x'.repeat(300)} { a { color: red; } }`;
+      const at = await ingestHtmlArtifact(validArtifactHtml({ style: longAtRule }), authorOptions());
+      if (at.ok) throw new Error('expected rejection');
+      expect(at.rejection.ruleId).toBe('AI-R16');
+      expect(Array.from(at.rejection.target ?? '').length).toBeLessThanOrEqual(128);
+    });
+
+    it('a long custom element and attribute name keep the combined target within 128 code points', async () => {
+      const rejection = await rejectionOf(
+        `<${'z'.repeat(200)}-el><a href="https://e.example">x</a></${'z'.repeat(200)}-el><img src="https://e.example/x.png" alt="y">`,
+      );
+      expect(Array.from(rejection.target ?? '').length).toBeLessThanOrEqual(128);
+      const pLong = await rejectionOf(`<img ${'q'.repeat(200)}="v" src="https://e.example/x.png" alt="y">`);
+      expect(Array.from(pLong.target ?? '').length).toBeLessThanOrEqual(128);
+    });
+
+    it('never echoes an href, attribute value or control sequence from the document', async () => {
+      const rejection = await rejectionOf('<a href="/x?SECRET-SENTINEL-CRLF">x</a>');
+      expect(rejection.diagnosticCode).toBe('PAGE_LINK_QUERY');
+      expect(JSON.stringify(rejection)).not.toContain('SECRET-SENTINEL');
+    });
   });
 });

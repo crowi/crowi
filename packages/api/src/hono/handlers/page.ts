@@ -56,14 +56,15 @@ import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import {
-  ARTIFACT_REJECTION_MESSAGES,
   type ArtifactIngestOptions,
   type ArtifactIngestRejection,
   type ArtifactInputSource,
   ArtifactInternalError,
   type ArtifactWriteFailure,
+  getArtifactRejectionMessage,
   ingestHtmlArtifact,
-  truncateArtifactIdentifier,
+  sanitizeArtifactTarget,
+  selectArtifactDiagnosticCode,
 } from 'src/artifact/ingest';
 import { type ArtifactPolicySnapshot, isArtifactWriteEnabled, resolveArtifactPolicySnapshot } from 'src/artifact/policy';
 import type Crowi from 'src/crowi';
@@ -285,26 +286,29 @@ async function ingestArtifactBodyForWrite(
 /**
  * `ingestHtmlArtifact`'s `target` is already generated as a bounded, fixed
  * identifier (never an attribute value/URL) — this is a redundant guard at
- * the wire/log boundary this handler owns per the ingest-core spec's
- * allowlist assignment, so a future ingest rule that forgets the bound
- * still can't push more than 128 code points out through this handler.
+ * the wire/log boundary this handler owns, so a future ingest rule that
+ * forgets the bound or shape still can't push anything but an identifier
+ * out through this handler.
  */
 function boundedArtifactTarget(target: string | undefined): string | undefined {
-  return target === undefined ? undefined : truncateArtifactIdentifier(target);
+  return sanitizeArtifactTarget(target);
 }
 
 /**
  * `ArtifactWriteFailure` -> the wire `ArtifactWriteRejectionSchema`
- * envelope. `message` comes ONLY from the fixed per-reason table — never a
- * parser/library message or author content.
+ * envelope. `message` comes ONLY from the fixed tables — never a
+ * parser/library message or author content — and `diagnosticCode` is kept
+ * only when it is valid for the failure's reason.
  */
 function artifactWriteRejectionBody(failure: ArtifactWriteFailure): ArtifactWriteRejection {
+  const diagnosticCode = selectArtifactDiagnosticCode(failure.reason, failure.diagnosticCode);
   return {
     error: {
       code: 'ARTIFACT_WRITE_REJECTED',
       reason: failure.reason,
       ruleId: failure.ruleId,
-      message: ARTIFACT_REJECTION_MESSAGES[failure.reason],
+      ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
+      message: getArtifactRejectionMessage(failure.reason, diagnosticCode),
       target: boundedArtifactTarget(failure.target),
     },
   };

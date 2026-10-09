@@ -7,7 +7,8 @@
  * `trust: 'untrusted'` `structuredContent`, per-response nonce freshness,
  * breakout resistance, and the search-snippet fencing (§2).
  */
-import { okResultWithBody, wrapUntrusted } from './result';
+import { ApiToolError } from './dispatch';
+import { errorResult, okResultWithBody, wrapUntrusted } from './result';
 import { mapSearchResult } from './tools/search';
 
 const NONCE_RE = /<untrusted-data id="([0-9a-f]+)">/;
@@ -93,5 +94,46 @@ describe('mapSearchResult (§2 — snippet fencing)', () => {
   it('renders the empty case without a fence', () => {
     const r = mapSearchResult({ data: [], meta: { total: 0 } });
     expect(r.content[0].text).toBe('No matching pages.');
+  });
+});
+
+describe('errorResult — artifact rejection diagnostics (AC-AAG-6/7)', () => {
+  const envelope = (extra: Record<string, unknown> = {}) => ({
+    error: { code: 'ARTIFACT_WRITE_REJECTED', reason: 'EXTERNAL_REFERENCE', ruleId: 'AI-R11', message: 'fixed guidance', ...extra },
+  });
+
+  it('adds [diagnostic: CODE] before [target: ...] and carries the code in structuredContent', () => {
+    const r = errorResult(new ApiToolError(400, envelope({ diagnosticCode: 'PAGE_LINK_QUERY', target: 'a[href]' })));
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toBe(
+      'Error (ARTIFACT_WRITE_REJECTED): fixed guidance (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: PAGE_LINK_QUERY] [target: a[href]]',
+    );
+    expect(r.structuredContent).toEqual({
+      status: 400,
+      error: {
+        code: 'ARTIFACT_WRITE_REJECTED',
+        reason: 'EXTERNAL_REFERENCE',
+        ruleId: 'AI-R11',
+        diagnosticCode: 'PAGE_LINK_QUERY',
+        message: 'fixed guidance',
+        target: 'a[href]',
+      },
+    });
+  });
+
+  it('keeps the old text for an envelope without a code', () => {
+    const r = errorResult(new ApiToolError(400, envelope()));
+    expect(r.content[0].text).toBe('Error (ARTIFACT_WRITE_REJECTED): fixed guidance (AI-R11 / EXTERNAL_REFERENCE)');
+    expect(r.structuredContent?.error).not.toHaveProperty('diagnosticCode');
+  });
+
+  it('drops extra body fields from both text and structuredContent', () => {
+    const r = errorResult(new ApiToolError(400, envelope({ diagnosticCode: 'PAGE_LINK_INVALID', href: '/secret-href', token: 'secret-token' })));
+    expect(JSON.stringify(r)).not.toContain('secret');
+  });
+
+  it('treats an unknown diagnostic code as a non-artifact envelope, never as a trusted code', () => {
+    const r = errorResult(new ApiToolError(400, envelope({ diagnosticCode: 'SOMETHING_NEW' })));
+    expect(r.structuredContent?.error).not.toHaveProperty('diagnosticCode');
   });
 });

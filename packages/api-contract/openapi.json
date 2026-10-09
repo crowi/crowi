@@ -24493,29 +24493,6 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
                               "type": "string",
                               "enum": [
                                 "ARTIFACT_WRITE_REJECTED"
@@ -24556,6 +24533,17 @@
                               "type": "string",
                               "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                             },
+                            "diagnosticCode": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_LINK_QUERY",
+                                "PAGE_LINK_PERCENT_ENCODING",
+                                "PAGE_LINK_RESERVED_ROUTE",
+                                "PAGE_LINK_INVALID",
+                                "PAGE_LINK_CONTEXT_FORBIDDEN",
+                                "RESOURCE_REFERENCE_FORBIDDEN"
+                              ]
+                            },
                             "message": {
                               "type": "string"
                             },
@@ -24567,6 +24555,29 @@
                             "code",
                             "reason",
                             "ruleId",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
                             "message"
                           ]
                         }
@@ -24670,6 +24681,17 @@
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                         },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
+                        },
                         "message": {
                           "type": "string"
                         },
@@ -24742,6 +24764,17 @@
                         "ruleId": {
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
+                        },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
                         },
                         "message": {
                           "type": "string"
@@ -25362,29 +25395,6 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
                               "type": "string",
                               "enum": [
                                 "ARTIFACT_WRITE_REJECTED"
@@ -25425,6 +25435,17 @@
                               "type": "string",
                               "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                             },
+                            "diagnosticCode": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_LINK_QUERY",
+                                "PAGE_LINK_PERCENT_ENCODING",
+                                "PAGE_LINK_RESERVED_ROUTE",
+                                "PAGE_LINK_INVALID",
+                                "PAGE_LINK_CONTEXT_FORBIDDEN",
+                                "RESOURCE_REFERENCE_FORBIDDEN"
+                              ]
+                            },
                             "message": {
                               "type": "string"
                             },
@@ -25436,6 +25457,29 @@
                             "code",
                             "reason",
                             "ruleId",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
                             "message"
                           ]
                         }
@@ -25608,6 +25652,17 @@
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                         },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
+                        },
                         "message": {
                           "type": "string"
                         },
@@ -25680,6 +25735,17 @@
                         "ruleId": {
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
+                        },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
                         },
                         "message": {
                           "type": "string"
@@ -33200,29 +33266,6 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
                               "type": "string",
                               "enum": [
                                 "ARTIFACT_WRITE_REJECTED"
@@ -33263,6 +33306,17 @@
                               "type": "string",
                               "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                             },
+                            "diagnosticCode": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_LINK_QUERY",
+                                "PAGE_LINK_PERCENT_ENCODING",
+                                "PAGE_LINK_RESERVED_ROUTE",
+                                "PAGE_LINK_INVALID",
+                                "PAGE_LINK_CONTEXT_FORBIDDEN",
+                                "RESOURCE_REFERENCE_FORBIDDEN"
+                              ]
+                            },
                             "message": {
                               "type": "string"
                             },
@@ -33274,6 +33328,29 @@
                             "code",
                             "reason",
                             "ruleId",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
                             "message"
                           ]
                         }
@@ -33413,6 +33490,17 @@
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                         },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
+                        },
                         "message": {
                           "type": "string"
                         },
@@ -33485,6 +33573,17 @@
                         "ruleId": {
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
+                        },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
                         },
                         "message": {
                           "type": "string"

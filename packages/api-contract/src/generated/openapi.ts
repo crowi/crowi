@@ -6812,18 +6812,20 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
-                                message: string;
-                            };
-                        } | {
-                            error: {
                                 /** @enum {string} */
                                 code: "ARTIFACT_WRITE_REJECTED";
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
+                            };
+                        } | {
+                            error: {
+                                code: string;
+                                message: string;
                             };
                         };
                     };
@@ -6889,6 +6891,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -6908,6 +6912,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -7080,18 +7086,20 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
-                                message: string;
-                            };
-                        } | {
-                            error: {
                                 /** @enum {string} */
                                 code: "ARTIFACT_WRITE_REJECTED";
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
+                            };
+                        } | {
+                            error: {
+                                code: string;
+                                message: string;
                             };
                         };
                     };
@@ -7126,6 +7134,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -7145,6 +7155,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -9544,18 +9556,20 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
-                                message: string;
-                            };
-                        } | {
-                            error: {
                                 /** @enum {string} */
                                 code: "ARTIFACT_WRITE_REJECTED";
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
+                            };
+                        } | {
+                            error: {
+                                code: string;
+                                message: string;
                             };
                         };
                     };
@@ -9606,6 +9620,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -9625,6 +9641,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };

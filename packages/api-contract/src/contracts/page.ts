@@ -224,7 +224,7 @@ export const createPageRoute = createRoute({
     400: {
       description:
         'Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01)',
-      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
+      content: { 'application/json': { schema: z.union([ArtifactWriteRejectionSchema, PageBadRequestErrorSchema]) } },
     },
     401: {
       description: 'Authentication required',
@@ -267,7 +267,7 @@ export const updatePageRoute = createRoute({
     },
     400: {
       description: 'Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01/AI-D02)',
-      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
+      content: { 'application/json': { schema: z.union([ArtifactWriteRejectionSchema, PageBadRequestErrorSchema]) } },
     },
     401: {
       description: 'Authentication required',
@@ -681,7 +681,7 @@ export const revertToRevisionRoute = createRoute({
     },
     400: {
       description: 'PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page) / ARTIFACT_WRITE_REJECTED (RFC-0020 AI-D02)',
-      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
+      content: { 'application/json': { schema: z.union([ArtifactWriteRejectionSchema, PageBadRequestErrorSchema]) } },
     },
     401: {
       description: 'Authentication required',

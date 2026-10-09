@@ -1,9 +1,18 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import * as shared from '@crowi/api-contract';
 import { describe, expect, it } from 'vitest';
 
 import { decodePagePathFromUrl } from './page-path';
 import { isSafeArtifactPagePath, resolveArtifactNavigation } from './artifact-navigation';
+
+describe('web re-exports (AC-AAG-3)', () => {
+  it('shares the api-contract implementation by reference', () => {
+    expect(resolveArtifactNavigation).toBe(shared.resolveArtifactNavigation);
+    expect(isSafeArtifactPagePath).toBe(shared.isSafeArtifactPagePath);
+    expect(decodePagePathFromUrl).toBe(shared.decodePagePathFromUrl);
+  });
+});
 
 const resolve = (source: string, href: string) => resolveArtifactNavigation(source, href);
 

@@ -168,6 +168,24 @@ describe('authedFetch error mapping â€” artifact rejection envelopes (RFC-0020 Â
     expect(err.message).not.toContain('target:');
   });
 
+  it.each([400, 413, 422])('AC-AAG-7 appends the diagnostic code on a %i response and keeps the body in rawBody', async (status) => {
+    const body = {
+      error: {
+        ...artifactBody('a[href]').error,
+        reason: 'EXTERNAL_REFERENCE',
+        ruleId: 'AI-R11',
+        diagnosticCode: 'PAGE_LINK_QUERY',
+        message: 'fixed query guidance',
+      },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(status, body));
+    const err = (await authedFetch(PROFILE, 'POST', '/pages').catch((e: unknown) => e)) as CliError;
+    expect(err.exitCode).toBe(EXIT.INVALID);
+    expect(err.apiCode).toBe('ARTIFACT_WRITE_REJECTED');
+    expect(err.message).toBe('fixed query guidance (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: PAGE_LINK_QUERY]\ntarget: a[href]');
+    expect(err.rawBody).toEqual(body);
+  });
+
   it("leaves an ordinary (non-artifact) error body's message untouched", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(400, { error: { code: 'VALIDATION_ERROR', message: 'path is required' } }));
     const err = (await authedFetch(PROFILE, 'POST', '/pages').catch((e: unknown) => e)) as CliError;

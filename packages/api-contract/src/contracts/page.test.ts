@@ -47,6 +47,35 @@ describe('page write contracts (RFC-0020)', () => {
     });
   }
 
+  for (const [name, route] of [
+    ['createPageRoute', createPageRoute],
+    ['updatePageRoute', updatePageRoute],
+    ['revertToRevisionRoute', revertToRevisionRoute],
+  ] as const) {
+    it(`AC-AAG-5 ${name} 400 client schema keeps diagnosticCode / reason / ruleId / target`, () => {
+      const response = route.responses['400'];
+      const schema = response.content['application/json'].schema;
+      const body = {
+        error: {
+          code: 'ARTIFACT_WRITE_REJECTED',
+          reason: 'EXTERNAL_REFERENCE',
+          ruleId: 'AI-R11',
+          diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE',
+          message: 'fixed',
+          target: 'a[href]',
+          extra: 'dropped',
+        },
+      };
+      const parsed = schema.safeParse(body);
+      assert.equal(parsed.success, true);
+      const { extra: _extra, ...kept } = body.error;
+      assert.deepEqual(parsed.data, { error: kept });
+
+      const generic = schema.safeParse({ error: { code: 'VALIDATION_ERROR', message: 'bad' } });
+      assert.equal(generic.success, true);
+    });
+  }
+
   it('409 is registered only on updatePageRoute (stale revision_id), not create/revert', () => {
     assert.ok('409' in updatePageRoute.responses, 'updatePageRoute is missing its existing 409 (stale revision_id)');
     assert.ok(!('409' in createPageRoute.responses), 'createPageRoute must not declare a 409 — 422 covers delivery-not-configured');

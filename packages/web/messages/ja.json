@@ -601,7 +601,7 @@
   "errors.application_not_installed": "アプリケーションがまだインストールされていません。",
   "errors.artifact_settings_rejected": "same-origin での artifact 配信には api 側で CLIENT_URL の設定が必要です。",
   "errors.artifact_url_unavailable": "この artifact は現在表示できません。",
-  "errors.artifact_write_rejected": "この HTML artifact は検証で拒否されました。",
+  "errors.artifact_write_rejected": "この HTML artifact は検証で拒否されました。MCP または CLI でその版の本文を取得し、報告された HTML の問題を直したうえで、現在版の revision ID を取得して、その現在版の ID を付けて修正後の本文を保存してください。",
   "errors.auth_required": "認証が必要です",
   "errors.comment_not_found": "コメントが見つかりませんでした。",
   "errors.conflict_generic": "既存のデータと競合しています。",

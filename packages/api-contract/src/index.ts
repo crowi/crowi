@@ -48,5 +48,8 @@ export * from './schemas/user';
 export * from './schemas/user-public';
 export * from './schemas/username';
 export * from './util/artifact-link';
+export * from './util/artifact-navigation';
 export * from './util/html-elements';
+export * from './util/object-id';
+export * from './util/page-path';
 export * from './util/ws-close-codes';

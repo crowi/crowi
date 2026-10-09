@@ -104,7 +104,7 @@ export const okResultWithBody = (body: string, meta: Structured): McpToolResult 
  * `structuredContent` for clients that introspect it.
  *
  * RFC-0020 §J-2 — a rejection carries
- * `reason` / `ruleId` / `target?` alongside `code` / `message`; when `err.body`
+ * `reason` / `ruleId` / `diagnosticCode?` / `target?` alongside `code` / `message`; when `err.body`
  * validates against the contract's `ArtifactWriteRejectionSchema` (the same
  * in-process response `ingestHtmlArtifact` / the write-path leaf produce —
  * see `dispatch.ts`) those are folded into both the text and
@@ -115,9 +115,12 @@ export const errorResult = (err: ApiToolError): McpToolResult => {
   const artifactParse = ArtifactWriteRejectionSchema.safeParse(err.body);
   if (artifactParse.success) {
     const artifact = artifactParse.data.error;
+    const diagnosticSuffix = artifact.diagnosticCode !== undefined ? ` [diagnostic: ${artifact.diagnosticCode}]` : '';
     const targetSuffix = artifact.target !== undefined ? ` [target: ${artifact.target}]` : '';
     return {
-      content: [{ type: 'text', text: `Error (${artifact.code}): ${artifact.message} (${artifact.ruleId} / ${artifact.reason})${targetSuffix}` }],
+      content: [
+        { type: 'text', text: `Error (${artifact.code}): ${artifact.message} (${artifact.ruleId} / ${artifact.reason})${diagnosticSuffix}${targetSuffix}` },
+      ],
       structuredContent: { status: err.status, error: artifact },
       isError: true,
     };

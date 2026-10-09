@@ -548,6 +548,21 @@ export const ArtifactIngestRejectionReasonSchema = z.enum(ARTIFACT_INGEST_REJECT
 export type ArtifactIngestRejectionReason = z.infer<typeof ArtifactIngestRejectionReasonSchema>;
 
 /**
+ * Closed set of fixed diagnostics an artifact author can act on without the
+ * rejected value being echoed back. Each maps to a fixed correction message.
+ */
+export const ARTIFACT_DIAGNOSTIC_CODES = [
+  'PAGE_LINK_QUERY',
+  'PAGE_LINK_PERCENT_ENCODING',
+  'PAGE_LINK_RESERVED_ROUTE',
+  'PAGE_LINK_INVALID',
+  'PAGE_LINK_CONTEXT_FORBIDDEN',
+  'RESOURCE_REFERENCE_FORBIDDEN',
+] as const;
+export const ArtifactDiagnosticCodeSchema = z.enum(ARTIFACT_DIAGNOSTIC_CODES);
+export type ArtifactDiagnosticCode = z.infer<typeof ArtifactDiagnosticCodeSchema>;
+
+/**
  * RFC-0020 — the write-only content-type declaration for POST/PUT `/pages`.
  * Deliberately `z.string().optional()` rather than an enum: OpenAPIHono's
  * shared `defaultHook` (`packages/api/src/hono/middleware/default-hook.ts`)
@@ -571,13 +586,15 @@ export const ArtifactContentTypeHeaderSchema = z.object({
  * union above; `message` is a fixed per-reason string (never a parser/
  * library message or author content); `target` is an optional bounded
  * identifier (offending tag/attribute/rule name), never a value/URL/source
- * excerpt.
+ * excerpt; `diagnosticCode` is an optional fixed classification of the
+ * rejection (see `ARTIFACT_DIAGNOSTIC_CODES`).
  */
 export const ArtifactWriteRejectionSchema = ApiErrorSchema.extend({
   error: z.object({
     code: z.literal('ARTIFACT_WRITE_REJECTED'),
     reason: ArtifactIngestRejectionReasonSchema,
     ruleId: z.string().regex(/^AI-(R\d{2}[a-c]?|D0[1-3])$/),
+    diagnosticCode: ArtifactDiagnosticCodeSchema.optional(),
     message: z.string(),
     target: z.string().optional(),
   }),

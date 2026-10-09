@@ -341,6 +341,44 @@ describe('RFC-0020 §7 — content_type / --type (create, update, edit, get)', (
     });
   });
 
+  describe('AC-AAG-7 artifact rejection with a diagnostic is a CliError, never stdout', () => {
+    const rejection = {
+      error: {
+        code: 'ARTIFACT_WRITE_REJECTED',
+        reason: 'EXTERNAL_REFERENCE',
+        ruleId: 'AI-R11',
+        diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE',
+        message: 'fixed reserved-route guidance',
+        target: 'a[href]',
+      },
+    };
+    const expectedMessage = 'fixed reserved-route guidance (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: PAGE_LINK_RESERVED_ROUTE]\ntarget: a[href]';
+
+    const cases: [string, string[], Response[]][] = [];
+    for (const flags of [[], ['--json'], ['--quiet']]) {
+      cases.push([`create ${flags.join(' ')}`, [...flags, 'create', '/a', '--type', 'artifact', '-m', '<html></html>'], [jsonResponse(400, rejection)]]);
+      cases.push([
+        `update ${flags.join(' ')}`,
+        [...flags, 'update', '/a', '--type', 'artifact', '-m', '<html></html>'],
+        [jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'rev1', body: 'old' } } }), jsonResponse(400, rejection)],
+      ]);
+    }
+
+    it.each(cases)('%s: rejects with the diagnostic message and writes nothing to stdout', async (_label, args, responses) => {
+      for (const response of responses) fetchMock.mockResolvedValueOnce(response);
+      let caught: unknown;
+      try {
+        await build().parseAsync(args, { from: 'user' });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(CliError);
+      expect((caught as CliError).exitCode).toBe(EXIT.INVALID);
+      expect((caught as CliError).message).toBe(expectedMessage);
+      expect(stdout).not.toHaveBeenCalled();
+    });
+  });
+
   describe('edit — temp file extension follows the CURRENT kind, and update omits --type (AC-CL-7)', () => {
     it('opens a .html temp file for an artifact page, and the save carries no content-type header (kind preserved)', async () => {
       fetchMock

@@ -76,4 +76,30 @@ describe('formatArtifactRejection', () => {
     expect(formatted).not.toContain('top-secret-app-secret-value');
     expect(formatted).not.toContain('<script>');
   });
+  describe('AC-AAG-7 optional diagnosticCode', () => {
+    const envelope = (extra: Record<string, unknown> = {}) => ({
+      error: { code: 'ARTIFACT_WRITE_REJECTED', reason: 'EXTERNAL_REFERENCE', ruleId: 'AI-R11', message: 'm', ...extra },
+    });
+
+    it('shows a known or future code between the message and the target', () => {
+      expect(formatArtifactRejection(envelope({ diagnosticCode: 'PAGE_LINK_QUERY', target: 'a[href]' }))).toBe(
+        'm (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: PAGE_LINK_QUERY]\ntarget: a[href]',
+      );
+      expect(formatArtifactRejection(envelope({ diagnosticCode: 'SOME_FUTURE_CODE' }))).toBe('m (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: SOME_FUTURE_CODE]');
+    });
+
+    it('prints an old-server envelope without a code exactly as before', () => {
+      expect(formatArtifactRejection(envelope())).toBe('m (AI-R11 / EXTERNAL_REFERENCE)');
+    });
+
+    it.each([42, 'lower_case', 'HAS SPACE', `A${'B'.repeat(64)}`, null, ''])('ignores only a malformed code (%p)', (bad) => {
+      expect(formatArtifactRejection(envelope({ diagnosticCode: bad }))).toBe('m (AI-R11 / EXTERNAL_REFERENCE)');
+    });
+
+    it('never prints extra fields next to a code', () => {
+      const out = formatArtifactRejection(envelope({ diagnosticCode: 'PAGE_LINK_INVALID', href: '/secret', details: 'token' }));
+      expect(out).not.toContain('secret');
+      expect(out).not.toContain('token');
+    });
+  });
 });
