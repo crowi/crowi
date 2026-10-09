@@ -44,7 +44,33 @@ claude mcp add --transport http crowi https://wiki.example.com/api/mcp \
 
 ページを読み取るとき (`crowi_get_page` / `crowi_get_revision`) も、結果の `content_type` にその種別が出ます。返ってきた本文が markdown なのか HTML なのかを、AI はそれを見て判断できます。
 
-artifact の書き込みが拒否されたときは、どの規則が発火したか (`ruleId`)・理由・(規則が特定できるときは)該当箇所 (`target`) を含むエラー結果が返るので、AI は失敗したことだけでなく、次に何を直せばよいかの手がかりも得られます。
+外部の stylesheet は使えませんが、管理者が Web フォントを許可している wiki では Google Fonts の stylesheet だけは使え、許可されていなければ FONT_REFERENCE_FORBIDDEN で拒否されます。
+
+`href` に書けるのは、同じ文書内の `#id` と wiki ページのパス (`/guide#overview` のようにページの fragment も付けられます) です。ページのパスに `?` (query) は付けられず、`/admin` や `/logout`、API、配信の経路といった予約された経路への絶対リンクは保存時に拒否されます。相対リンクの経路は、リンクが押されたときに親がページの位置から解決したうえで判定します。ページ ID の形 (`<wiki origin>/<page id>` や `/<page id>`) も artifact の中では使えません。`#` だけ・`#a?b` のような壊れた同一文書リンクは `#id` に直します。
+
+外部 URL (`https:` / `mailto:` / `tel:` / `//host/...` のような protocol-relative URL) はリンクにできないので、`href` を外してアドレスを本文のテキストとして残します。同じ wiki の完全 URL や protocol-relative URL は `/team/guide` のようなページのパスに直します。`//` で始まる値は protocol-relative URL として扱うので、`//example.com/guide` を `/example.com/guide` に直してはいけません。ページ名に `:` が含まれる実在のページだけは `./ADR:0001` のように `./` を付けて書きます。`javascript:` やプレースホルダーの `#` は、スクリプトで動かす要素から `href` を外します。`javascript:` の scheme だけを削ったり、`ADR:0001` を `0001` にしたり、`mailto:a@b.com` を `./mailto:a@b.com` にしたり、`#` を架空のページのパスにしたりすると別のページへ移動するので、してはいけません。
+
+artifact の書き込みが拒否されたときは、どの規則が発火したか (`ruleId`)・理由・(規則が特定できるときは)該当箇所 (`target`)・(リンクやリソースの問題のときは)診断 (`diagnosticCode`) と、固定の修正案内 (`message`) を含むエラー結果が返ります。AI は失敗したことだけでなく、次に何を直せばよいかの手がかりも得られます。`target` は要素や属性の名前で、本文中の一意な位置を指すものではありません。同じ `a[href]` が複数あるときは、AI が自分の本文と規則を照らし合わせます。エラーに拒否された値や HTML の断片は含まれません。
+
+| `diagnosticCode` | 直し方 |
+| --- | --- |
+| `PAGE_LINK_QUERY` | ページのパスから `?...` を除く |
+| `PAGE_LINK_PERCENT_ENCODING` | `%` の後に正しい `%HH` を書くか、文字としての `%` は `%25` と書く |
+| `PAGE_LINK_RESERVED_ROUTE` | 管理画面・認証・API・配信・ページ ID などの経路ではなく、通常のページのパスにする |
+| `PAGE_LINK_INVALID` | 外部 URL は `href` を外す。wiki のページは `/guide` / `./guide` / `../guide` / `guide` の形にする。連続する `/`・制御文字・`\`・不正な escape を除く |
+| `PAGE_LINK_CONTEXT_FORBIDDEN` | SVG・MathML の `a` と `img[usemap]` には同じ文書内の `#id` だけを書く。ページへのリンクは HTML の `a` / `area` に書く |
+| `RESOURCE_REFERENCE_FORBIDDEN` | 許可された位置の `data:` URI に埋め込む。`@import` は URL ではなく規則ごと除く |
+
+JavaScript の構文エラー (`MODULE_SPECIFIER_FORBIDDEN`) は括弧の閉じ忘れなどを直し、予約された digest の meta や `target` に出た予約 marker の名前が本文・コメント・スクリプトにある場合 (`NORMALIZER_MARKER_INVALID`) はそれを除きます。
+
+#### 版の復元が拒否されたとき
+
+`crowi_revert_to_revision` も保存と同じ検査を通すので、過去に保存できた予約された経路へのリンクを含む版の復元は 400 になることがあります。保存済みの本文や表示は書き換えません。次の手順で直して保存します。
+
+1. `crowi_get_revision` でその過去版の本文を取得する
+2. 報告された HTML の問題を本文で直す
+3. `crowi_get_page` を `revision_id` なしで呼び、現在版の `revision_id` を取得する (手順 1 で返る `revision_id` は過去版のもので、そのまま渡すと 409 になります)
+4. 現在版の `revision_id` を付けて `crowi_update_page` で保存する
 
 ## 覚えておくこと
 

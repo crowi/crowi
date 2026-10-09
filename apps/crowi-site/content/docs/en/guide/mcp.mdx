@@ -44,7 +44,33 @@ The tools, and the scope each one needs, are listed on [HTTP API](../reference/a
 
 Reading a page back (`crowi_get_page` / `crowi_get_revision`) reports its kind as `content_type` in the result, so the AI can tell whether the returned body is markdown or HTML before it treats it as either.
 
-A rejected artifact write comes back as an error result naming the rule that fired (`ruleId`), the reason, and — when the rule names one — the offending element/attribute (`target`), so the AI knows what to fix rather than just that the write failed.
+External stylesheets are not allowed except Google Fonts stylesheets when the wiki administrator has enabled web fonts; otherwise, Google Fonts references are rejected with FONT_REFERENCE_FORBIDDEN.
+
+An `href` may hold a same-document `#id` or a wiki page path, optionally with a page fragment (`/guide#overview`). A page path cannot carry a query (`?`), and an absolute link to a reserved route such as `/admin`, `/logout`, the API or delivery paths is rejected when the page is saved. A relative link is judged by the parent after it resolves it from the page's own position, when the link is clicked. The page-ID forms (`<wiki origin>/<page id>` and `/<page id>`) cannot be used inside an artifact either. Fix a broken same-document link such as `#` or `#a?b` to a `#id`.
+
+External URLs (`https:`, `mailto:`, `tel:`, and protocol-relative `//host/...`) cannot be links: remove the `href` and keep the address as body text. Rewrite a full or protocol-relative URL for this wiki as a page path such as `/team/guide`. An `href` that begins with `//` is a protocol-relative URL, so never "fix" `//example.com/guide` into `/example.com/guide`. Use the `./` prefix for a colon only when it belongs to a real wiki page name, such as `./ADR:0001`. Remove a `javascript:` or placeholder `#` href from a script-controlled element. Do not just strip the scheme off a `javascript:` href, turn `ADR:0001` into `0001`, `mailto:a@b.com` into `./mailto:a@b.com`, or `#` into an invented page path — each one sends readers to the wrong page.
+
+A rejected artifact write comes back as an error result naming the rule that fired (`ruleId`), the reason, the offending element/attribute (`target`) when the rule names one, a `diagnosticCode` for link and resource problems, and a fixed correction message (`message`), so the AI knows what to fix rather than just that the write failed. `target` is an element or attribute name, not a unique position in the body; when the same `a[href]` appears more than once, the AI matches the rule against its own body. The error never contains the rejected value or an HTML fragment.
+
+| `diagnosticCode` | How to fix it |
+| --- | --- |
+| `PAGE_LINK_QUERY` | Remove the `?...` from the page path |
+| `PAGE_LINK_PERCENT_ENCODING` | Use a valid `%HH` after every `%`, or write a literal percent sign as `%25` |
+| `PAGE_LINK_RESERVED_ROUTE` | Use an ordinary wiki page path instead of an admin, authentication, API, delivery, page-ID or other reserved route |
+| `PAGE_LINK_INVALID` | Remove the `href` of an external URL; write a wiki page as `/guide`, `./guide`, `../guide` or `guide`; remove repeated slashes, control characters, backslashes and invalid escapes |
+| `PAGE_LINK_CONTEXT_FORBIDDEN` | On an SVG or MathML `a` and on `img[usemap]` use only a same-document `#id`; put wiki page links on an HTML `a` / `area` |
+| `RESOURCE_REFERENCE_FORBIDDEN` | Embed the asset as a `data:` URI in a permitted position; remove an `@import` rule itself, not just its URL |
+
+For a JavaScript syntax error (`MODULE_SPECIFIER_FORBIDDEN`) fix the unclosed parenthesis or brace; for `NORMALIZER_MARKER_INVALID` remove hand-written digest meta markers and any occurrence of the reserved marker name shown in `target` from body text, comments and scripts.
+
+#### When restoring a revision is rejected
+
+`crowi_revert_to_revision` runs the same checks as a save, so restoring a revision that holds a link to a reserved route, which could be saved in the past, can return 400. Stored bodies and rendering are not rewritten. Fix and save it like this:
+
+1. Retrieve that past revision's body with `crowi_get_revision`.
+2. Fix the reported HTML issues in the body.
+3. Call `crowi_get_page` without `revision_id` to get the current `revision_id` (the `revision_id` returned in step 1 belongs to the past revision and would return 409).
+4. Save the corrected body with `crowi_update_page`, passing that current `revision_id`.
 
 ## Things to keep in mind
 

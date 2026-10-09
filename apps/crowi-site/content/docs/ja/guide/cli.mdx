@@ -172,8 +172,9 @@ HTML の `a[href]` / `area[href]` に wiki ページのパスを書けます。�
 - `area` は対応する画像地図として書きます。`img[usemap]` には同一文書の `#名前` だけを書けます。
 - ページ名の空白は、そのまま・`+`・`%20` のどれでも書けます。ページ名に含まれる `%` は `%25` と書きます (`100%25done` はページ `100%done` に解決されます)。`%` に続く 2 桁の 16 進数が作れない `100%done` / `100%off` / `%ZZ` / `%2G` / 末尾の `%` は保存時に拒否されます。
 - `:` を含むページ名は、`/team/section:1` か `./section:1` と書きます。`section:1` のように先頭が `scheme:` に見える相対表記は URL と区別できないため拒否されます。
-- 外部 URL、同一 origin の絶対 URL、`?` を含む URL は書けません。`#section` は artifact 内の移動のままで、`/page#section` は移動先ページの fragment を指します。
-- システム用の経路 (`/admin` / `/api` / `/login` など)、`/_` で始まる経路、`/user` (一覧)、ページ ID だけの経路へのリンクは、保存はできても閲覧者が開いたときに移動しません。
+- ページのパスには `?` (query) を付けられません。`/guide?edit=1` は保存時に拒否されます。`?` を禁じるのはページのパス部分だけで、`/guide#what?next` のように fragment の中の `?` は fragment の一部です。`#section` は artifact 内の移動のままで、`/page#section` は移動先ページの fragment を指します。同じ文書内のリンクは `#id` と書き、`#` だけや `#a?b` は拒否されます。`#section%` のような fragment だけのリンクは従来どおり保存でき、fragment にページ名の `%25` の規則は流用されません。
+- 外部 URL (`https:` / `mailto:` / `tel:` / `//host/...` のような protocol-relative URL) はリンクにできません。`href` を外してアドレスを本文のテキストとして残します。同じ wiki の完全 URL や protocol-relative URL は `/team/guide` のようなページのパスに直します。`//` で始まる値は protocol-relative URL として扱うので、`//example.com/guide` を `/example.com/guide` に直してはいけません。`:` を含むページ名に `./` を付けるのは、そのページが実在するときだけです。
+- システム用の経路 (`/admin` / `/api` / `/login` など)、`/_` で始まる経路、`/user` (一覧)、ページ ID だけの経路への**絶対**リンクは、保存時に拒否されます。`<wiki origin>/<page id>` の完全 URL も、`/<page id>` の形も使えません。相対リンクは保存時には字句だけを検査し、リンクが押されたときに親がページの位置から解決します。たとえば `../admin` は `/team/artifact` からは `/admin` になって移動せず、`/team/sub/artifact` からは `/team/admin` になって移動します。
 
 ```html
 <map name="m"><area href="guide" shape="rect" coords="0,0,80,80"></map>
@@ -188,13 +189,19 @@ HTML の `a[href]` / `area[href]` に wiki ページのパスを書けます。�
 
 `edit` は artifact ページでも markdown ページと同じように使えます。`.md` ではなく `.html` の一時ファイルを開く (エディタのシンタックスハイライトが本文に合う) だけで、保存時にページの種別が変わることはありません。
 
-artifact の書き込みが拒否されると終了コード `6` (invalid) になり、サーバの固定メッセージに規則の識別子と理由が付いて表示されます。
+外部の stylesheet は使えませんが、管理者が Web フォントを許可している wiki では Google Fonts の stylesheet だけは使え、許可されていなければ FONT_REFERENCE_FORBIDDEN で拒否されます。
+
+artifact の書き込みが拒否されると終了コード `6` (invalid) になり、サーバの固定メッセージに規則の識別子と理由が付いて表示されます。リンクやリソースの問題には診断コードも付きます。`--json` や `--quiet` を付けても拒否の表示は同じ stderr に出て、stdout には何も出力されません。
 
 ```console
 $ crowi create /demo --type artifact --file page.html
-crowi: This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)
-target: script[type]
+crowi: Query strings are not allowed in wiki page links; use a page path such as /guide or /guide#overview. (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: PAGE_LINK_QUERY]
+target: a[href]
 ```
+
+`target` は要素や属性の名前で、本文中の一意な位置ではありません。同じ `a[href]` が複数あるときは自分の本文と規則を照らし合わせてください。表示には拒否された値や HTML の断片は含まれません。直し方は [MCP ガイド](./mcp#artifact-ページを書く) の診断コードの表にまとめてあります。外部 URL は `href` を外して本文のテキストにし、同じ wiki の URL はページのパスに直し、`?` は取り除き、ページ名の `%` は `%25` と書き、リソースは許可された位置の `data:` URI に埋め込み、`@import` は URL ではなく規則ごと除きます。
+
+過去に保存できた予約された経路へのリンクを含む版を、web の「この版に戻す」や `crowi_revert_to_revision` で復元しようとすると、同じ検査で 400 になることがあります。保存済みの本文や表示は書き換えません。MCP または CLI でその版の本文を取得して HTML の問題を直し、現在版の `revision_id` を取得して、その ID を付けて `update` で保存します。CLI の場合は `crowi get <path> --revision <id>` で過去版の本文を、`crowi get <path> --json` で現在版の `revisionId` を取得できます。MCP では `crowi_get_revision` で過去版の本文を取得し、`crowi_get_page` で現在版の `revision_id` を取得してから、その ID を付けて `crowi_update_page` を呼びます。過去版の `revision_id` をそのまま渡すと 409 になります。
 
 ### `edit` の競合 (409)
 
