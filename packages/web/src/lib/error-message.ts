@@ -121,8 +121,6 @@ export const ERROR_MESSAGE_KEYS = {
   // `mapValidationError`) already localizes the single known `reason` via
   // its own message key; this is the fallback for any other caller.
   ARTIFACT_SETTINGS_REJECTED: m['errors.artifact_settings_rejected'],
-  // web never triggers this (it never sends the artifact write header), but
-  // the code is a valid server response so the exhaustive map must cover it.
   ARTIFACT_WRITE_REJECTED: m['errors.artifact_write_rejected'],
   // web doesn't call this route yet, but the code is a valid server
   // response so the exhaustive map must cover it.

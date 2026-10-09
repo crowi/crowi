@@ -1,6 +1,13 @@
 'use client';
 
-import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
+import {
+  ArtifactWriteRejectionSchema,
+  type PageWithRevision,
+  type RenamePageRequest,
+  type RenameSubtreeRequest,
+  type SetPageGrantRequest,
+  type UpdatePageRequest,
+} from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
@@ -328,6 +335,14 @@ export function useRevertToRevision() {
       if (response.status === 404) {
         // 404 covers grant-denied as well (existence-leak guard).
         throw new Error(m['errors.page_not_found']());
+      }
+      if (response.status === 400) {
+        // A stored artifact revision can carry a link the save-time check now refuses. Show the fixed reason together
+        // with the recovery path (fix the body through MCP / CLI), not the generic failure.
+        const rejection = ArtifactWriteRejectionSchema.safeParse(await response.json().catch(() => undefined));
+        if (rejection.success) {
+          throw new Error(`${errorMessage('ARTIFACT_WRITE_REJECTED')}\n${rejection.data.error.message}`);
+        }
       }
       throw new Error(m['errors.revert_failed']());
     },
