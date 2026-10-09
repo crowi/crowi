@@ -1,10 +1,11 @@
-import { type ListPagesResponse, ListPagesRequestSchema, type Page } from '@crowi/api-contract';
+import { LIST_PAGES_PREFIX_LIMIT, LIST_PAGES_PREFIX_OFFSET, type ListPagesResponse, type Page } from '@crowi/api-contract';
 import type { Command } from 'commander';
 
 import { getGlobalOptions } from '../cli';
 import { maybeWarnVersionSkew } from '../lib/capability';
 import { applyTemplate, renderRecords, resolveFormat } from '../lib/format';
 import { authedFetch, CliError, EXIT } from '../lib/http';
+import { normalisePath } from '../lib/page-ref';
 import { markNoSkewProbe } from '../lib/skew';
 import { requireProfile } from './_shared';
 
@@ -28,15 +29,14 @@ interface RecentDisplayRow {
   _id: string;
 }
 
-const LIMIT_RANGE = { min: 1, max: 100 } as const;
-const OFFSET_RANGE = { min: 0, max: 2147483647 } as const;
+const LIMIT_RANGE = { ...LIST_PAGES_PREFIX_LIMIT, default: 50 } as const;
+const OFFSET_RANGE = { ...LIST_PAGES_PREFIX_OFFSET, default: 0 } as const;
 const HUMAN_TEMPLATE = '{{path}}\t{{updatedAt}}\t{{lastUpdateUser}}\t{{_id}}';
 
 function parseRecentInteger(value: string | undefined, flag: 'limit' | 'offset'): number {
   const range = flag === 'limit' ? LIMIT_RANGE : OFFSET_RANGE;
-  const fallback = flag === 'limit' ? 50 : 0;
   if (value === undefined) {
-    return fallback;
+    return range.default;
   }
   const parsed = /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed < range.min || parsed > range.max) {
@@ -53,7 +53,7 @@ function normalizeRecentPrefix(value: string | undefined): string | undefined {
   if (value === '') {
     throw new CliError('--prefix must not be empty', { exitCode: EXIT.INVALID });
   }
-  const withSlash = value.startsWith('/') ? value : `/${value}`;
+  const withSlash = normalisePath(value);
   return withSlash === '/' ? undefined : withSlash;
 }
 
@@ -123,25 +123,14 @@ Examples:
       const prefix = normalizeRecentPrefix(options.prefix);
       const mode = resolveFormat({ format: options.format, template: options.template, json: getGlobalOptions(cmd).json });
 
-      const parsed = ListPagesRequestSchema.safeParse({ limit, offset, sort: 'updatedAt', order: 'desc', path_prefix: prefix });
-      if (!parsed.success) {
-        throw new CliError(`invalid recent arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`, { exitCode: EXIT.INVALID });
-      }
-
       const { profile, globals } = requireProfile(cmd);
       await maybeWarnVersionSkew({ profile: globals.profile, url: globals.url, token: globals.token });
 
       const body = await authedFetch<RecentResponse>(profile, 'GET', '/pages/list', {
-        query: {
-          limit: parsed.data.limit,
-          offset: parsed.data.offset,
-          sort: parsed.data.sort,
-          order: parsed.data.order,
-          path_prefix: parsed.data.path_prefix,
-        },
+        query: { limit, offset, sort: 'updatedAt', order: 'desc', path_prefix: prefix },
       });
 
-      if (parsed.data.path_prefix !== undefined && body?.appliedPathPrefix !== parsed.data.path_prefix) {
+      if (prefix !== undefined && body?.appliedPathPrefix !== prefix) {
         throw new CliError('server did not confirm literal prefix filtering; upgrade Crowi and retry', { exitCode: EXIT.UNAVAILABLE });
       }
 

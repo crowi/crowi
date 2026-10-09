@@ -31,6 +31,8 @@ import {
   getSeenUsersRoute,
   getWatchStatusRoute,
   IDEMPOTENCY_KEY_PATTERN,
+  LIST_PAGES_PREFIX_LIMIT,
+  LIST_PAGES_PREFIX_OFFSET,
   likePageRoute,
   listPageChildrenRoute,
   listPagesRoute,
@@ -90,8 +92,8 @@ import { toPageHistoryEventSource } from 'src/service/page-history/page-event-co
 import { computeRevisionRenderArtifactsAsync, type EnrichedPage, isPopulatedRevision, pageToResponse, populatePageRelationData } from 'src/util/page-response';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
-import { escapeRegExp } from 'src/util/regex';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
+import { escapeRegExp } from 'src/util/regex';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { actorFromUser, isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
@@ -604,11 +606,13 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           if (include_deleted) {
             return reject('path_prefix does not support include_deleted=true');
           }
-          if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
-            return reject('limit must be an integer between 1 and 100');
+          const L = LIST_PAGES_PREFIX_LIMIT;
+          const O = LIST_PAGES_PREFIX_OFFSET;
+          if (!Number.isSafeInteger(limit) || limit < L.min || limit > L.max) {
+            return reject(`limit must be an integer between ${L.min} and ${L.max}`);
           }
-          if (!Number.isSafeInteger(offset) || offset < 0 || offset > 2147483647) {
-            return reject('offset must be an integer between 0 and 2147483647');
+          if (!Number.isSafeInteger(offset) || offset < O.min || offset > O.max) {
+            return reject(`offset must be an integer between ${O.min} and ${O.max}`);
           }
         }
 
@@ -736,8 +740,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (!includeDeletedPage) {
               andClauses.push({ $or: visiblePageStatusOr(user._id) });
             }
-            // Literal prefix (escaped, start-anchored, case-sensitive). The
-            // same `conditions` feed find and count so `total` matches rows.
+            // Literal prefix (escaped, start-anchored, case-sensitive).
             if (path_prefix !== undefined) {
               andClauses.push({ path: new RegExp(`^${escapeRegExp(path_prefix)}`) });
             }

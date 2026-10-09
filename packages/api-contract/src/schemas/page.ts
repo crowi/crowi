@@ -228,6 +228,12 @@ export type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
 export const ClaimPageLinkAccessResponseSchema = GetPageResponseSchema.extend({ granted: z.boolean() });
 export type ClaimPageLinkAccessResponse = z.infer<typeof ClaimPageLinkAccessResponseSchema>;
 
+// The page list enforces these on `limit` / `offset` only when `path_prefix`
+// is set; the schema itself stays unbounded because callers without a prefix
+// probe with `limit: 0`.
+export const LIST_PAGES_PREFIX_LIMIT = { min: 1, max: 100 } as const;
+export const LIST_PAGES_PREFIX_OFFSET = { min: 0, max: 2147483647 } as const;
+
 // List pages request schema
 export const ListPagesRequestSchema = z.object({
   path: z.string().optional(),
