@@ -1,1 +1,1 @@
-export { OBJECT_ID_PATTERN, isObjectId } from '@crowi/api-contract';
+export { isObjectId } from '@crowi/api-contract';

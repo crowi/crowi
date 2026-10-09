@@ -11,19 +11,19 @@
  * here explain *why* a given line exists, not what the table already says.
  */
 
-import { createJiti } from 'jiti';
-import postcss from 'postcss';
-import valueParser from 'postcss-value-parser';
-import { init as esModuleLexerInit, parse as parseEsModules, ImportType } from 'es-module-lexer';
-import type { DefaultTreeAdapterMap, DefaultTreeAdapterTypes, TreeAdapter } from 'parse5';
 import {
+  type ArtifactDiagnosticCode,
   ArtifactDiagnosticCodeSchema,
+  type ArtifactIngestRejectionReason,
   classifyArtifactPagePath,
   parseArtifactPageLinkDetailed,
   resolveArtifactPagePath,
-  type ArtifactDiagnosticCode,
-  type ArtifactIngestRejectionReason,
 } from '@crowi/api-contract';
+import { init as esModuleLexerInit, ImportType, parse as parseEsModules } from 'es-module-lexer';
+import { createJiti } from 'jiti';
+import type { DefaultTreeAdapterMap, DefaultTreeAdapterTypes, TreeAdapter } from 'parse5';
+import postcss from 'postcss';
+import valueParser from 'postcss-value-parser';
 import {
   ARTIFACT_HARD_MAX_BYTES,
   ARTIFACT_MIN_MAX_BYTES,
@@ -584,7 +584,7 @@ const TARGET_ELEMENT_ATTRIBUTE = /^([A-Za-z][A-Za-z0-9:_-]*)\[([A-Za-z][A-Za-z0-
 export function sanitizeArtifactTarget(target: string | undefined): string | undefined {
   if (target === undefined) return undefined;
   if (target === 'meta[name=viewport]') return target;
-  if (STANDARD_IDENTIFIER.test(target) || CSS_AT_RULE_IDENTIFIER.test(target)) return truncateCodePoints(target, TARGET_MAX_CODE_POINTS);
+  if (CSS_AT_RULE_IDENTIFIER.test(target)) return truncateCodePoints(target, TARGET_MAX_CODE_POINTS);
   const match = TARGET_ELEMENT_ATTRIBUTE.exec(target);
   if (match) return `${truncateCodePoints(match[1], TARGET_PART_MAX_CODE_POINTS)}[${truncateCodePoints(match[2], TARGET_PART_MAX_CODE_POINTS)}]`;
   return 'document';
@@ -1686,8 +1686,9 @@ const HTML_URL_ATTRS = new Set([
 const SVG_PRESENTATION_URL_ATTRS = new Set(['fill', 'stroke', 'filter', 'clip-path', 'mask', 'cursor', 'marker-start', 'marker-mid', 'marker-end']);
 /**
  * `tagName` is an author-controlled identifier with no length limit (custom
- * element names in particular) — always truncate the combined `tag[attr]`
- * form to AC-AI-9's 128-code-point bound before returning it as a `target`.
+ * element names in particular) — each part is validated as an identifier and
+ * cut to 63 code points, so the combined `tag[attr]` stays within AC-AI-9's
+ * 128-code-point bound.
  */
 function elementAttributeTarget(tagName: string, attrName: string): string {
   const tag = truncateCodePoints(safeArtifactIdentifier(tagName, 'element'), TARGET_PART_MAX_CODE_POINTS);
@@ -1965,11 +1966,11 @@ function checkAiR21Normalized(context: Readonly<ArtifactRuleContext>): ArtifactR
   }
   for (const reservedName of RESERVED_MARKER_NAMES) {
     const bucket = byName.get(reservedName) ?? [];
-    if (bucket.length !== 1) return { target: safeArtifactIdentifier(reservedName, 'document') };
+    if (bucket.length !== 1) return { target: reservedName };
     const [meta] = bucket;
     const attrs = meta.attrs as ArtifactAttribute[];
     if (attrs.length !== 2 || !attrs.every((a) => a.name === 'name' || a.name === 'content')) {
-      return { target: safeArtifactIdentifier(reservedName, 'document') };
+      return { target: reservedName };
     }
   }
   const { scriptDigests, styleDigests } = computeArtifactDigests(document);
@@ -1977,12 +1978,12 @@ function checkAiR21Normalized(context: Readonly<ArtifactRuleContext>): ArtifactR
   const styleMeta = byName.get(ARTIFACT_STYLE_DIGEST_META_NAME)![0];
   const scriptContent = findAttr(scriptMeta.attrs as ArtifactAttribute[], (a) => a.name === 'content')?.value ?? '';
   const styleContent = findAttr(styleMeta.attrs as ArtifactAttribute[], (a) => a.name === 'content')?.value ?? '';
-  if (scriptContent !== scriptDigests.join(' ')) return { target: safeArtifactIdentifier(ARTIFACT_SCRIPT_DIGEST_META_NAME, 'document') };
-  if (styleContent !== styleDigests.join(' ')) return { target: safeArtifactIdentifier(ARTIFACT_STYLE_DIGEST_META_NAME, 'document') };
+  if (scriptContent !== scriptDigests.join(' ')) return { target: ARTIFACT_SCRIPT_DIGEST_META_NAME };
+  if (styleContent !== styleDigests.join(' ')) return { target: ARTIFACT_STYLE_DIGEST_META_NAME };
 
   const reserialized = serializeArtifactTree(document);
   for (const reservedName of RESERVED_MARKER_NAMES) {
-    if (countOccurrences(reserialized, reservedName) !== 1) return { target: safeArtifactIdentifier(reservedName, 'document') };
+    if (countOccurrences(reserialized, reservedName) !== 1) return { target: reservedName };
   }
   return null;
 }
@@ -2259,7 +2260,7 @@ export async function runArtifactRules(context: Readonly<ArtifactRuleContext>): 
         reason: rule.result.reason,
         httpStatus: rule.result.httpStatus,
         target: failure.target,
-        ...(failure.diagnosticCode === undefined ? {} : { diagnosticCode: failure.diagnosticCode }),
+        diagnosticCode: failure.diagnosticCode,
       };
     }
   }

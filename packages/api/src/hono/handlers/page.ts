@@ -284,17 +284,6 @@ async function ingestArtifactBodyForWrite(
 }
 
 /**
- * `ingestHtmlArtifact`'s `target` is already generated as a bounded, fixed
- * identifier (never an attribute value/URL) — this is a redundant guard at
- * the wire/log boundary this handler owns, so a future ingest rule that
- * forgets the bound or shape still can't push anything but an identifier
- * out through this handler.
- */
-function boundedArtifactTarget(target: string | undefined): string | undefined {
-  return sanitizeArtifactTarget(target);
-}
-
-/**
  * `ArtifactWriteFailure` -> the wire `ArtifactWriteRejectionSchema`
  * envelope. `message` comes ONLY from the fixed tables — never a
  * parser/library message or author content — and `diagnosticCode` is kept
@@ -309,7 +298,10 @@ function artifactWriteRejectionBody(failure: ArtifactWriteFailure): ArtifactWrit
       ruleId: failure.ruleId,
       ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
       message: getArtifactRejectionMessage(failure.reason, diagnosticCode),
-      target: boundedArtifactTarget(failure.target),
+      // Ingest already emits a bounded identifier; re-checking at this
+      // boundary keeps a future rule that forgets the bound from leaking
+      // author content into the response or the log.
+      target: sanitizeArtifactTarget(failure.target),
     },
   };
 }
@@ -320,7 +312,7 @@ function artifactWriteRejectionBody(failure: ArtifactWriteFailure): ArtifactWrit
  * raw header value, or a parser/library message.
  */
 function logArtifactWriteRejection(failure: ArtifactWriteFailure, ids: Readonly<{ pageId?: string; revisionId?: string }>): void {
-  debug('Artifact write rejected:', { reason: failure.reason, ruleId: failure.ruleId, target: boundedArtifactTarget(failure.target), ...ids });
+  debug('Artifact write rejected:', { reason: failure.reason, ruleId: failure.ruleId, target: sanitizeArtifactTarget(failure.target), ...ids });
 }
 
 type ArtifactPreWriteResult =
