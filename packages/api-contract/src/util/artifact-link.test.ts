@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { ARTIFACT_LINK_MAX_LENGTH, parseArtifactPageLink } from './artifact-link';
+import { ARTIFACT_LINK_MAX_LENGTH, parseArtifactPageLink, parseArtifactPageLinkDetailed } from './artifact-link';
 
 const ok = (href: string) => {
   const parsed = parseArtifactPageLink(href);
@@ -80,6 +80,93 @@ describe('util/artifact-link', () => {
       const prefix = '/';
       assert.notEqual(parseArtifactPageLink(prefix + 'a'.repeat(ARTIFACT_LINK_MAX_LENGTH - 1)), null);
       assert.equal(parseArtifactPageLink(prefix + 'a'.repeat(ARTIFACT_LINK_MAX_LENGTH)), null);
+    });
+  });
+  describe('parseArtifactPageLinkDetailed (AC-AAG-2)', () => {
+    const code = (href: string) => {
+      const result = parseArtifactPageLinkDetailed(href);
+      assert.equal(result.ok, false, `expected ${JSON.stringify(href)} rejected`);
+      return result.ok ? null : result.diagnosticCode;
+    };
+
+    it('classifies a refusal in the fixed priority order', () => {
+      assert.equal(code('/guide?edit=1'), 'PAGE_LINK_QUERY');
+      assert.equal(code('guide?x'), 'PAGE_LINK_QUERY');
+      assert.equal(code('/100%off'), 'PAGE_LINK_PERCENT_ENCODING');
+      assert.equal(code('/100%done'), 'PAGE_LINK_PERCENT_ENCODING');
+      assert.equal(code('/%2G'), 'PAGE_LINK_PERCENT_ENCODING');
+      assert.equal(code('/100%'), 'PAGE_LINK_PERCENT_ENCODING');
+      assert.equal(code('/%C0%AF'), 'PAGE_LINK_PERCENT_ENCODING');
+      assert.equal(code('/%2fadmin'), 'PAGE_LINK_INVALID');
+      assert.equal(code('https://example.com'), 'PAGE_LINK_INVALID');
+      assert.equal(code('mailto:a@b.com'), 'PAGE_LINK_INVALID');
+      assert.equal(code('//example.com/guide'), 'PAGE_LINK_INVALID');
+      assert.equal(code('#'), 'PAGE_LINK_INVALID');
+      assert.equal(code('#a?b'), 'PAGE_LINK_INVALID');
+      assert.equal(code(''), 'PAGE_LINK_INVALID');
+      assert.equal(code('/a\\b'), 'PAGE_LINK_INVALID');
+      assert.equal(code('/a#'), 'PAGE_LINK_INVALID');
+      assert.equal(code('/a#b#c'), 'PAGE_LINK_INVALID');
+      assert.equal(code('/a#%'), 'PAGE_LINK_INVALID');
+    });
+
+    it('lets structure win over query, and query over escapes', () => {
+      assert.equal(code('https://x/y?z=%'), 'PAGE_LINK_INVALID');
+      assert.equal(code('//x/y?z'), 'PAGE_LINK_INVALID');
+      assert.equal(code('/a?b=%'), 'PAGE_LINK_QUERY');
+      assert.equal(code('/%ZZ#a%'), 'PAGE_LINK_PERCENT_ENCODING');
+    });
+
+    it('does not read a ? inside a fragment as a query', () => {
+      const result = parseArtifactPageLinkDetailed('/guide#what?next');
+      assert.equal(result.ok, true);
+    });
+
+    it('accepts the documented literal-percent spelling and never re-decodes', () => {
+      const ok25 = parseArtifactPageLinkDetailed('/100%25off');
+      assert.equal(ok25.ok && ok25.link.segments[0], '100%off');
+      const nested = parseArtifactPageLinkDetailed('/%252e%252e/admin');
+      assert.equal(nested.ok && nested.link.segments[0], '%2e%2e');
+    });
+
+    it('rejects over-long input before any other work', () => {
+      assert.equal(code('/' + 'a'.repeat(ARTIFACT_LINK_MAX_LENGTH)), 'PAGE_LINK_INVALID');
+    });
+
+    it('agrees with the null-returning wrapper on every input', () => {
+      const inputs = [
+        '/',
+        '/team/guide',
+        './guide',
+        '../guide#overview',
+        'guide',
+        '',
+        '#',
+        '#top',
+        '/a#',
+        '/a?b',
+        '/a//b',
+        '/100%off',
+        '/100%25off',
+        '/%2G',
+        'https://x',
+        'mailto:a@b',
+        'my page/資料',
+        '資料#章+1',
+        '/a\\b',
+        ' /a',
+        '/a#%25',
+        '/a#x?y/z',
+        '/%252e%252e/x',
+        './section:1',
+        'section:1',
+        '/' + 'a'.repeat(ARTIFACT_LINK_MAX_LENGTH),
+        '/' + 'a'.repeat(ARTIFACT_LINK_MAX_LENGTH - 1),
+      ];
+      for (const href of inputs) {
+        const detailed = parseArtifactPageLinkDetailed(href);
+        assert.deepEqual(parseArtifactPageLink(href), detailed.ok ? detailed.link : null, JSON.stringify(href));
+      }
     });
   });
 });

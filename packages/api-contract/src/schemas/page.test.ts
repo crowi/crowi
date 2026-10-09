@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { ListPagesRequestSchema, ListPagesResponseSchema, PageSchema } from './page';
+import { ARTIFACT_DIAGNOSTIC_CODES, ArtifactWriteRejectionSchema, ListPagesRequestSchema, ListPagesResponseSchema, PageSchema } from './page';
 
 const basePage = {
   _id: '000000000000000000000001',
@@ -94,6 +94,30 @@ describe('schemas/page', () => {
       assert.equal(ListPagesResponseSchema.safeParse(base).success, true);
       assert.equal(ListPagesResponseSchema.safeParse({ ...base, appliedPathPrefix: '/team' }).success, true);
       assert.equal(ListPagesResponseSchema.safeParse({ ...base, appliedPathPrefix: 1 }).success, false);
+    });
+  });
+  describe('ArtifactWriteRejectionSchema diagnosticCode (AC-AAG-5)', () => {
+    const envelope = (extra: Record<string, unknown> = {}) => ({
+      error: { code: 'ARTIFACT_WRITE_REJECTED', reason: 'EXTERNAL_REFERENCE', ruleId: 'AI-R11', message: 'm', ...extra },
+    });
+
+    it('accepts an envelope with and without a code', () => {
+      assert.equal(ArtifactWriteRejectionSchema.safeParse(envelope()).success, true);
+      for (const code of ARTIFACT_DIAGNOSTIC_CODES) {
+        const parsed = ArtifactWriteRejectionSchema.safeParse(envelope({ diagnosticCode: code }));
+        assert.equal(parsed.success && parsed.data.error.diagnosticCode, code);
+      }
+    });
+
+    it('rejects an unknown code and keeps required fields required', () => {
+      assert.equal(ArtifactWriteRejectionSchema.safeParse(envelope({ diagnosticCode: 'NOPE' })).success, false);
+      assert.equal(ArtifactWriteRejectionSchema.safeParse(envelope({ ruleId: undefined })).success, false);
+    });
+
+    it('strips extra fields', () => {
+      const parsed = ArtifactWriteRejectionSchema.safeParse(envelope({ href: '/admin', detail: 'x' }));
+      assert.equal(parsed.success, true);
+      assert.deepEqual(Object.keys(parsed.success ? parsed.data.error : {}).sort(), ['code', 'message', 'reason', 'ruleId']);
     });
   });
 });
