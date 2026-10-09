@@ -141,7 +141,7 @@ prints a hint on stderr showing how to switch (suppressed by `--quiet`; the
 
 The subcommands, their own flags and the scope each needs are listed in
 [crowi CLI](../reference/cli). Arguments are validated against the matching
-API request schema before anything is sent, so a malformed path fails locally
+API request schema before the request is sent, so a malformed path fails locally
 with a clear error instead of after a round trip.
 
 ### Finding recently updated pages (`recent`)

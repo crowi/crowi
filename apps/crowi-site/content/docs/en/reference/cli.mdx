@@ -14,13 +14,13 @@ Accepted by every command, before or after the command name.
 | `-p, --profile <alias>` | Select a stored profile by alias |
 | `--url <baseUrl>` | Target a server directly, with no stored profile |
 | `--token <accessToken>` | Pass a token directly (a personal access token, for instance) |
-| `--json` | Emit the raw response as JSON instead of human output |
+| `--json` | Emit structured JSON instead of human output (each command chooses the fields) |
 | `-q, --quiet` | Suppress progress output on stderr |
 | `--help` / `--version` | Print the help and the version |
 
 ## Commands
 
-The scope names are the ones in the catalog on [HTTP API](./api). The default login scope is `pages:read pages:write`; anything else is added with `crowi login --scope`.
+The scope names are the ones in the catalog on [HTTP API](./api). The default login scope is `pages:read pages:write`; `crowi login --scope` replaces it, so list `pages:read pages:write` as well when you still need the page commands.
 
 | Command | What it does | Own flags | Scope needed |
 | --- | --- | --- | --- |

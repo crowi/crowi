@@ -14,13 +14,13 @@ description: crowi コマンドのサブコマンド・フラグ・終了コー�
 | `-p, --profile <alias>` | 保存済みのプロファイルを名前で選ぶ |
 | `--url <baseUrl>` | プロファイルを使わずサーバを直接指定する |
 | `--token <accessToken>` | トークンを直接渡す (個人アクセストークンなど) |
-| `--json` | 人間向け表示のかわりに生のレスポンスを JSON で出力する |
+| `--json` | 人間向け表示のかわりに構造化した JSON を出力する (出力する項目はコマンドごとに異なる) |
 | `-q, --quiet` | 進捗表示 (stderr) を抑止する |
 | `--help` / `--version` | ヘルプとバージョンを表示する |
 
 ## コマンド
 
-必要なスコープは [HTTP API](./api) のスコープカタログの語です。既定のログインスコープは `pages:read pages:write` で、それ以外は `crowi login --scope` で追加します。
+必要なスコープは [HTTP API](./api) のスコープカタログの語です。既定のログインスコープは `pages:read pages:write` で、`crowi login --scope` を指定するとこの既定値は置き換わるので、ページ操作も使う場合は `pages:read pages:write` も並べて指定します。
 
 | コマンド | 用途 | 固有のフラグ | 必要なスコープ |
 | --- | --- | --- | --- |
