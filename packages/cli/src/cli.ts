@@ -19,6 +19,7 @@ import { registerLs } from './commands/ls';
 import { registerMv } from './commands/mv';
 import { registerOpen } from './commands/open';
 import { registerProfiles } from './commands/profiles';
+import { registerRecent } from './commands/recent';
 import { registerRm } from './commands/rm';
 import { registerSearch } from './commands/search';
 import { registerUpdate } from './commands/update';
@@ -156,11 +157,12 @@ export function createProgram(): Command {
   registerWhoami(program);
   registerProfiles(program);
 
-  // Read commands (Stage 4): search / get / cat / ls.
+  // Read commands (Stage 4): search / get / cat / ls / recent.
   registerSearch(program);
   registerGet(program);
   registerCat(program);
   registerLs(program);
+  registerRecent(program);
 
   // Write commands (Stage 5): create / edit / update / mv / rm.
   registerCreate(program);

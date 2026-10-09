@@ -405,3 +405,43 @@ describe('RFC-0020 §7 — content_type / --type (create, update, edit, get)', (
     });
   });
 });
+
+describe('recent is discoverable from root and sibling help', () => {
+  const helpOf = (name: string): string => {
+    const command = findCommand(createProgram(), name);
+    let text = '';
+    command.configureOutput({ writeOut: (str) => (text += str), writeErr: (str) => (text += str) });
+    command.outputHelp();
+    return text;
+  };
+
+  it('lists recent with its description at the root', () => {
+    const root = createProgram();
+    expect(root.helpInformation()).toContain('recent');
+    expect(findCommand(root, 'recent').description()).toBe('List recently updated pages, newest first (all readable pages)');
+  });
+
+  it('documents options, examples, live-list caveat and global flags on recent --help', () => {
+    const fetchSpy = jest.fn();
+    const originalFetch = global.fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    try {
+      const help = helpOf('recent');
+      for (const text of ['--prefix <path>', '--limit <n>', '--offset <n>', '--format <mode>', '--template <tpl>', '-p, --profile <alias>', '--json']) {
+        expect(help).toContain(text);
+      }
+      expect(help).toContain('crowi recent --limit 20 --json');
+      expect(help).toContain('crowi recent --prefix /team/ --limit 20 --offset 20');
+      expect(help).toContain('crowi recent --prefix /team --format table');
+      expect(help).toContain('updated between calls');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('points ls and search help at recent', () => {
+    expect(helpOf('ls')).toContain('For recently updated pages, use crowi recent.');
+    expect(helpOf('search')).toContain('For recently updated pages without a search query, use crowi recent.');
+  });
+});

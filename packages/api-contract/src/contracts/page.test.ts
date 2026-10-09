@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createPageRoute, revertToRevisionRoute, updatePageRoute } from './page';
+import { createPageRoute, listPagesRoute, revertToRevisionRoute, updatePageRoute } from './page';
 
 describe('page write contracts (RFC-0020)', () => {
   it('createPageRoute declares the x-crowi-page-content-type header', () => {
@@ -51,5 +51,21 @@ describe('page write contracts (RFC-0020)', () => {
     assert.ok('409' in updatePageRoute.responses, 'updatePageRoute is missing its existing 409 (stale revision_id)');
     assert.ok(!('409' in createPageRoute.responses), 'createPageRoute must not declare a 409 — 422 covers delivery-not-configured');
     assert.ok(!('409' in revertToRevisionRoute.responses), 'revertToRevisionRoute must not declare a 409 — 422 covers delivery-not-configured');
+  });
+});
+
+describe('listPagesRoute contract', () => {
+  it('declares the path_prefix query and appliedPathPrefix response fields', () => {
+    const query = listPagesRoute.request.query;
+    assert.ok(query && 'shape' in query && 'path_prefix' in (query as { shape: object }).shape, 'path_prefix query missing');
+    const ok = listPagesRoute.responses[200];
+    const schema = 'content' in ok ? ok.content?.['application/json']?.schema : undefined;
+    assert.ok(schema && 'shape' in schema && 'appliedPathPrefix' in (schema as { shape: object }).shape, 'appliedPathPrefix missing');
+  });
+
+  it('declares 400/401/403/500', () => {
+    for (const status of ['400', '401', '403', '500']) {
+      assert.ok(status in listPagesRoute.responses, `listPagesRoute is missing ${status}`);
+    }
   });
 });

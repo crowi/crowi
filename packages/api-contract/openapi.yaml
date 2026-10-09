@@ -1712,6 +1712,17 @@ components:
           default: desc
         revision_id:
           type: string
+        path_prefix:
+          type: string
+          minLength: 1
+          description: >-
+            Literal, case-sensitive prefix match on the stored page path (no
+            regex, no trailing-slash or portal handling): `/team` matches
+            `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and
+            its descendants only. Lists the viewer-visible set across the whole
+            wiki, so it cannot be combined with `path`, `user` or `revision_id`,
+            and `include_deleted=true` is rejected. With a prefix, `limit` must
+            be 1-100 and `offset` 0-2147483647 (400 otherwise).
     ListPagesResponse:
       type: object
       properties:
@@ -2694,6 +2705,11 @@ components:
             - contentType
         total:
           type: number
+        appliedPathPrefix:
+          type: string
+          description: >-
+            Present only on a successful `path_prefix` request: the exact prefix
+            the server filtered with. Absent when no prefix was requested.
       required:
         - pages
         - pager
@@ -17678,7 +17694,7 @@ paths:
         - page
       security:
         - bearerAuth: []
-      summary: List pages by path or creator (paginated)
+      summary: List pages by path, creator or literal path prefix (paginated)
       parameters:
         - schema:
             type: string
@@ -17738,6 +17754,29 @@ paths:
           required: false
           name: revision_id
           in: query
+        - schema:
+            type: string
+            minLength: 1
+            description: >-
+              Literal, case-sensitive prefix match on the stored page path (no
+              regex, no trailing-slash or portal handling): `/team` matches
+              `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and
+              its descendants only. Lists the viewer-visible set across the
+              whole wiki, so it cannot be combined with `path`, `user` or
+              `revision_id`, and `include_deleted=true` is rejected. With a
+              prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400
+              otherwise).
+          required: false
+          description: >-
+            Literal, case-sensitive prefix match on the stored page path (no
+            regex, no trailing-slash or portal handling): `/team` matches
+            `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and
+            its descendants only. Lists the viewer-visible set across the whole
+            wiki, so it cannot be combined with `path`, `user` or `revision_id`,
+            and `include_deleted=true` is rejected. With a prefix, `limit` must
+            be 1-100 and `offset` 0-2147483647 (400 otherwise).
+          name: path_prefix
+          in: query
       responses:
         '200':
           description: >-
@@ -17747,7 +17786,10 @@ paths:
             `revision.renderedAst`; its shape is content-negotiated via the
             `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as
             GET /pages). The response varies on this header (`Vary:
-            X-Crowi-Ast-Version`).
+            X-Crowi-Ast-Version`). A successful `path_prefix` request lists the
+            viewer-visible pages whose path literally starts with the prefix
+            (portalPage/contentPage are null) and echoes it as
+            `appliedPathPrefix`, even for an empty result.
           content:
             application/json:
               schema:
@@ -18733,10 +18775,57 @@ paths:
                       - contentType
                   total:
                     type: number
+                  appliedPathPrefix:
+                    type: string
+                    description: >-
+                      Present only on a successful `path_prefix` request: the
+                      exact prefix the server filtered with. Absent when no
+                      prefix was requested.
                 required:
                   - pages
                   - pager
                   - total
+        '400':
+          description: >-
+            Validation error. With `path_prefix`: combined with `path` / `user`
+            / `revision_id`, `include_deleted=true`, `limit` outside 1-100, or
+            `offset` outside 0-2147483647 (checked in that order, fixed
+            messages).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - VALIDATION_ERROR
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          fieldErrors:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: string
+                          formErrors:
+                            type: array
+                            items:
+                              type: string
+                        required:
+                          - fieldErrors
+                          - formErrors
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
         '401':
           description: Authentication required
           content:
@@ -18757,6 +18846,60 @@ paths:
                           - Authentication is required
                       redirectTo:
                         type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Token lacks the `pages:read` scope
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INSUFFICIENT_SCOPE
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          requiredScope:
+                            type: string
+                        required:
+                          - requiredScope
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: >-
+            Internal error while listing with `path_prefix` (never returned for
+            requests without a prefix, which keep the legacy empty-list
+            fallback)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
                     required:
                       - code
                       - message

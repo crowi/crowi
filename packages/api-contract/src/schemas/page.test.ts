@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PageSchema } from './page';
+import { ListPagesRequestSchema, ListPagesResponseSchema, PageSchema } from './page';
 
 const basePage = {
   _id: '000000000000000000000001',
@@ -60,6 +60,40 @@ describe('schemas/page', () => {
       if (result.success) {
         assert.equal('liker' in result.data, false);
       }
+    });
+  });
+
+  describe('list prefix field and applied metadata schema', () => {
+    it('keeps the legacy defaults when path_prefix is absent', () => {
+      const parsed = ListPagesRequestSchema.parse({});
+      assert.equal(parsed.limit, 50);
+      assert.equal(parsed.offset, 0);
+      assert.equal(parsed.include_deleted, false);
+      assert.equal(parsed.sort, 'updatedAt');
+      assert.equal(parsed.order, 'desc');
+      assert.equal(parsed.path_prefix, undefined);
+    });
+
+    it('rejects an empty or slash-less path_prefix', () => {
+      assert.equal(ListPagesRequestSchema.safeParse({ path_prefix: '' }).success, false);
+      assert.equal(ListPagesRequestSchema.safeParse({ path_prefix: 'team' }).success, false);
+    });
+
+    it('accepts root and prefixes carrying regex symbols literally', () => {
+      for (const value of ['/', '/team', '/team/', '/a.b[c]+*?\\$', '/日本語']) {
+        const result = ListPagesRequestSchema.safeParse({ path_prefix: value });
+        assert.equal(result.success, true, value);
+        if (result.success) {
+          assert.equal(result.data.path_prefix, value);
+        }
+      }
+    });
+
+    it('keeps appliedPathPrefix optional on the response', () => {
+      const base = { pages: [], pager: { prev: null, next: null, offset: 0 }, total: 0 };
+      assert.equal(ListPagesResponseSchema.safeParse(base).success, true);
+      assert.equal(ListPagesResponseSchema.safeParse({ ...base, appliedPathPrefix: '/team' }).success, true);
+      assert.equal(ListPagesResponseSchema.safeParse({ ...base, appliedPathPrefix: 1 }).success, false);
     });
   });
 });

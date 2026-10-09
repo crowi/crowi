@@ -34,6 +34,7 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 | `search <query>` | Run a full-text search | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
 | `get <path-or-id>` (alias `cat`) | Write a page body to stdout | `--revision <id>` | `pages:read` |
 | `ls [path]` | List the child pages under a path | `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `recent` | List recently updated pages, newest first | `--prefix <path>` / `--limit <n>` / `--offset <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
 | `create <path>` | Create a page | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` / `--type <kind>` | `pages:write` |
 | `edit <path>` | Edit interactively in your editor (works on artifact pages too — opens an `.html` temp file) | `--editor <bin>` / `--force` | `pages:write` |
 | `update <path>` | Replace the body non-interactively | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--force` / `--type <kind>` | `pages:write` |
@@ -53,9 +54,27 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 
 `mv` and `rm` (other than with `--completely`) each generate a key automatically and attach it to the request, so that if the same request reaches the server twice over an unreliable connection it is only applied once — you never see or supply the key yourself. Running the command again yourself, however, is a separate operation and is not deduplicated: running `rm /some/page` twice attempts two deletes. `rm --completely` also sends a key, but the hard-delete path does not read it, so it is outside this protection.
 
+## recent
+
+`crowi recent [--prefix <path>] [--limit N] [--offset N]` lists the pages you can read as a flat list, most recently updated first. It needs no search query and no search plugin. A row is a page's current state, not an update event, so a page updated many times is still one row. The columns are `path`, `updatedAt` (UTC), `lastUpdateUser` (the last updater, not the creator) and `_id`.
+
+```bash
+crowi recent
+crowi recent --limit 20 --json
+crowi recent --prefix /team/ --limit 20 --offset 20
+crowi recent --prefix /team --format table
+crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{{_id}}'
+```
+
+- `--limit` is 1-100 (default 50) and `--offset` is 0-2147483647 (default 0); both accept plain decimal digits only. An invalid value is rejected with exit code `6` before anything is sent.
+- `--prefix` is a literal, case-sensitive prefix match on the stored path. `/team` matches `/team`, `/team/` and `/teamwork`; `/team/` matches `/team/` and everything under it, but not `/team`. A missing leading `/` is added, and `--prefix /` is the same as no prefix. An empty value is rejected.
+- The list is live. Paging with `--offset` can repeat or skip pages that were updated between calls, and pages with the same update time have no defined order. There is no cursor and no automatic walk over every page.
+- `--json` prints the server response unchanged. `--format template` without `--template` reads the same four fields from the raw page, so `lastUpdateUser` is a JSON object there; take the name with `{{lastUpdateUser.username}}`.
+- `--prefix` needs a server that supports `path_prefix`. If the response does not confirm the prefix, nothing is written to stdout and the command exits `7` with `server did not confirm literal prefix filtering; upgrade Crowi and retry`. Without `--prefix` (or with `--prefix /`) it works against older servers too.
+
 ## Output formats
 
-`search` and `ls` shape their output with `--format` / `--template`.
+`search`, `ls` and `recent` shape their output with `--format` / `--template`.
 
 | Value | Output |
 | --- | --- |
@@ -78,7 +97,7 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 | `4` | Target does not exist |
 | `5` | Edit conflict (`--force` overwrites) |
 | `6` | Invalid argument (also a rejected artifact write — `400` / `413` / `422` all map here) |
-| `7` | Server unavailable / feature disabled |
+| `7` | Server unavailable / feature disabled (also `recent --prefix` when the server could not confirm it applied the prefix) |
 
 ## Artifact pages
 

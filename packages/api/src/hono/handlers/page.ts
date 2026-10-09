@@ -90,6 +90,7 @@ import { toPageHistoryEventSource } from 'src/service/page-history/page-event-co
 import { computeRevisionRenderArtifactsAsync, type EnrichedPage, isPopulatedRevision, pageToResponse, populatePageRelationData } from 'src/util/page-response';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { escapeRegExp } from 'src/util/regex';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { actorFromUser, isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
@@ -588,9 +589,28 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       // --------------------------------------------------------------
       .openapi(listPagesRoute, async (c) => {
         const user = c.get('user');
-        const { path, user: userParam, limit, offset, include_deleted, sort, order, revision_id } = c.req.valid('query');
+        const { path, user: userParam, limit, offset, include_deleted, sort, order, revision_id, path_prefix } = c.req.valid('query');
         // Mongoose sort direction: 1 ascending, -1 descending.
         const sortDir = order === 'asc' ? 1 : -1;
+
+        // Combination / range checks that a single-field schema cannot
+        // express. They run before any DB read, in a fixed order with fixed
+        // messages (the input is never echoed back).
+        if (path_prefix !== undefined) {
+          const reject = (message: string) => c.json({ error: { code: 'VALIDATION_ERROR' as const, message } }, 400);
+          if (path !== undefined || userParam !== undefined || revision_id !== undefined) {
+            return reject('path_prefix cannot be combined with path, user, or revision_id');
+          }
+          if (include_deleted) {
+            return reject('path_prefix does not support include_deleted=true');
+          }
+          if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+            return reject('limit must be an integer between 1 and 100');
+          }
+          if (!Number.isSafeInteger(offset) || offset < 0 || offset > 2147483647) {
+            return reject('offset must be an integer between 0 and 2147483647');
+          }
+        }
 
         // Force-enable include_deleted for /trash and /trash/<sub> requests so
         // the legacy deletedPageListShow semantics are preserved even when
@@ -716,6 +736,11 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (!includeDeletedPage) {
               andClauses.push({ $or: visiblePageStatusOr(user._id) });
             }
+            // Literal prefix (escaped, start-anchored, case-sensitive). The
+            // same `conditions` feed find and count so `total` matches rows.
+            if (path_prefix !== undefined) {
+              andClauses.push({ path: new RegExp(`^${escapeRegExp(path_prefix)}`) });
+            }
             const baseConditions = {
               redirectTo: null,
               $and: andClauses,
@@ -830,10 +855,16 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               portalPage: portalPageResponse,
               contentPage: contentPageResponse,
               total,
+              ...(path_prefix !== undefined ? { appliedPathPrefix: path_prefix } : {}),
             },
             200,
           );
         } catch (err) {
+          if (path_prefix !== undefined) {
+            // Fixed text only: the exception may carry query or page data.
+            debug('Error listing pages with literal prefix');
+            return c.json(INTERNAL_ERROR_BODY, 500);
+          }
           debug('Error listing pages:', (err as Error).message);
           // Legacy behaviour: an unexpected error collapses to an empty
           // list rather than 500. Preserved for wire compatibility.

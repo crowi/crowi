@@ -143,6 +143,17 @@ crowi search "release notes"   # --profile なしで almoha に対して実行�
 リクエストスキーマで検証されるため、不正な path などは往復せずローカルで
 明確なエラーになります。
 
+### 最近更新されたページを探す (`recent`)
+
+検索語がなくても、閲覧できるページを最終更新の新しい順に一覧できます。1 行は更新イベントではなくページの現在の状態です。
+
+```bash
+crowi recent --limit 20 --json
+crowi recent --prefix /team/ --limit 20 --offset 20
+```
+
+一覧はライブなので、`--offset` で順に取得する間にページが更新されると重複や取りこぼしが起こり得ます。`--prefix` は `path_prefix` に対応したサーバが必要で、適用を確認できない場合は一覧を出さずに失敗します。引数と列の詳細は [crowi CLI](../reference/cli) か `crowi recent --help` を見てください。
+
 ### artifact ページを書く (`--type`)
 
 `create` / `update` は `--type markdown` または `--type artifact` でページの種別を宣言できます。省略するとサーバの既定に従い、`create` は markdown のページになり、`update` は現在の種別をそのまま保ちます。`--type` を省略した update が artifact ページを markdown に戻すことはありません。いずれの場合も種別は `--file` の拡張子や本文の中身から推測されません。`--type artifact` を指定するときの本文は、単一の自己完結した HTML 文書である必要があります。具体的には、外部の script / stylesheet / image / module を参照せず、リソースを指す相対パスも使わず、バイナリは `data:` URI で埋め込みます。禁止されるのはリソース参照の相対パスだけで、他の wiki ページへのリンクは別です (次節)。
@@ -222,7 +233,7 @@ upload rejected: video.mkv has type application/octet-stream, which this server 
 
 ## 出力フォーマットとスクリプティング
 
-`search` と `ls` は `--format` / `--template` で出力を整形でき、パイプ処理に
+`search` / `ls` / `recent` は `--format` / `--template` で出力を整形でき、パイプ処理に
 向きます。指定できる値と終了コードの一覧は
 [crowi CLI](../reference/cli) にあります。
 
@@ -252,7 +263,7 @@ crowi completion fish > ~/.config/fish/completions/crowi.fish
 
 Crowi は self-hosted なので、`crowi` と接続先サーバのバージョンがずれることがあります。CLI がそれを理由にコマンドを拒否することはありません。
 
-サーバの API が CLI の想定と違う場合は 1 行の注意を出したうえで実行を続け、そのサーバが持たない機能 (検索バックエンド未設定時の `search` など) は「このサーバでは利用できません」と表示します。
+サーバの API が CLI の想定と違う場合は 1 行の注意を出したうえで実行を続け、そのサーバが持たない機能 (検索バックエンド未設定時の `search` など) は「このサーバでは利用できません」と表示します。ただし、適用を確認できない絞り込みは例外で、`crowi recent --prefix` は絞り込まれていないかもしれない一覧を出す代わりに終了コード `7` で失敗します。
 
 ## 関連ページ
 
