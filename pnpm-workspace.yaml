@@ -21,7 +21,7 @@ catalog:
   "@typescript-eslint/parser": ^8.68.0
   eslint: ^9.39.5
   "@eslint/js": ^9.39.5
-  "@modelcontextprotocol/sdk": ^1.29.0
+  "@modelcontextprotocol/sdk": ^1.32.1
   "@hono/mcp": ^0.3.0
   hono-rate-limiter: ^0.5.3
   lucide-react: ^1.35.0
