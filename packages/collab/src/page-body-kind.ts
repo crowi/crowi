@@ -1,4 +1,3 @@
-import { resolvePageEpoch } from './doc-epoch';
 import type { CollabModels } from './models';
 
 /**
@@ -23,8 +22,6 @@ export type CollabBodyEligibility =
       revisionId: string | null;
       /** `Page.currentRevision` as read, `null` when unset. */
       currentRevisionId: string | null;
-      /** `Page.collabLifecycleVersion`, `0` when the field is missing. */
-      epoch: number;
     }
   | { ok: false; reason: 'missing' | 'content-type' | 'invalid-state' };
 
@@ -32,7 +29,6 @@ interface PageEligibilityRow {
   revision?: { toString(): string } | null;
   currentRevision?: { toString(): string } | null;
   contentType?: unknown;
-  collabLifecycleVersion?: number;
 }
 
 interface RevisionEligibilityRow {
@@ -45,10 +41,7 @@ interface RevisionEligibilityRow {
  * pointers), both metadata-only: no body or Yjs bytes are read.
  */
 export async function readCollabBodyEligibility(models: Pick<CollabModels, 'Page' | 'Revision'>, pageId: string): Promise<CollabBodyEligibility> {
-  const page = (await models.Page.findById(pageId)
-    .select('_id revision currentRevision contentType status collabLifecycleVersion')
-    .lean()
-    .exec()) as PageEligibilityRow | null;
+  const page = (await models.Page.findById(pageId).select('_id revision currentRevision contentType').lean().exec()) as PageEligibilityRow | null;
   if (!page) return { ok: false, reason: 'missing' };
 
   const revisionId = page.revision != null ? page.revision.toString() : null;
@@ -77,5 +70,5 @@ export async function readCollabBodyEligibility(models: Pick<CollabModels, 'Page
     if (invalid) return { ok: false, reason: 'invalid-state' };
   }
 
-  return { ok: true, revisionId, currentRevisionId, epoch: resolvePageEpoch(page.collabLifecycleVersion) };
+  return { ok: true, revisionId, currentRevisionId };
 }

@@ -37,7 +37,6 @@ import {
   listPageChildrenRoute,
   listPagesRoute,
   type PageContentType,
-  PageContentTypeSchema,
   PageGrantEnum,
   renamePageRoute,
   renameSubtreeRoute,
@@ -85,7 +84,7 @@ import {
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 import type { SeenDocument } from 'src/models/seen';
 import type { UserDocument } from 'src/models/user';
-import { type ArtifactPreWriteAccepted, getRawRevisionPointer, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
+import { type ArtifactPreWriteAccepted, getRawRevisionPointer, resolveCurrentPageBodyKind, validatedStoredContentType } from 'src/service/page-body-write';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
 import { restorePageCommand } from 'src/service/page-history/commands/restore';
 import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-history/commands/subtree-rename';
@@ -230,26 +229,6 @@ function readArtifactContentTypeDeclaration(value: string | undefined): PageCont
   if (value === undefined) return 'markdown';
   if (value === 'markdown' || value === 'artifact') return value;
   return AI_D01_CONTENT_TYPE_INVALID;
-}
-
-/**
- * Narrows a Revision's stored `contentType` (typed as `PageContentType` at
- * compile time, but never re-validated by Mongoose on read/populate — only
- * on `save()`) to the actual `markdown | artifact` union. An unrecognized
- * runtime value is treated as internal-state corruption (fixed 500), never
- * silently coerced to either kind: falling back to `'markdown'` would let a
- * corrupt row bypass artifact ingest entirely on a header-omitted PUT/revert
- * (the stray value would never `=== 'artifact'`), and comparing it as-is
- * against an explicit header would surface a normal author-facing AI-D02
- * conflict for what is actually a broken invariant.
- */
-function validatedStoredContentType(value: string | undefined, context: string): PageContentType {
-  if (value === undefined) return 'markdown';
-  const parsed = PageContentTypeSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new ArtifactInternalError(`${context}: unrecognized stored contentType`);
-  }
-  return parsed.data;
 }
 
 /**

@@ -37,7 +37,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import { GRANT_PUBLIC, type PageDocument, STATUS_DRAFT } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
-import { getRawRevisionPointer, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
+import { isArtifactBody } from 'src/service/page-body-write';
 import { isValidObjectId, toISOStringOrNull } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -123,8 +123,7 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             // An own draft that already holds an artifact body is never
             // reused as a Markdown draft: the caller (the Markdown editor)
             // would otherwise be handed an artifact page to edit.
-            const current = await resolveCurrentPageBodyKind(crowi, existing, getRawRevisionPointer(existing));
-            if (current.contentType === 'artifact' || existing.contentType === 'artifact') {
+            if (await isArtifactBody(crowi, existing)) {
               return c.json({ error: 'invalid_path' as const, message: ARTIFACT_DRAFT_REJECTED_MESSAGE }, 400);
             }
             return c.json({ pageId: existing._id.toString() }, 201);

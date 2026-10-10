@@ -3,7 +3,7 @@ import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import type { MigrationApplicationModel, MigrationResult } from 'src/models/migration-application';
-import { getRawRevisionPointer, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
+import { isArtifactBody } from 'src/service/page-body-write';
 
 import type {
   DetectReport,
@@ -99,8 +99,7 @@ function buildContext(
     // RFC-0020 §1 — a body-rewrite migration only ever produces Markdown, so an
     // artifact Page (by its current Revision, or by an inconsistent hint) is a
     // no-op rather than a rewrite that would be rejected mid-run.
-    const current = await resolveCurrentPageBodyKind(crowi, page, getRawRevisionPointer(page));
-    if (current.contentType === 'artifact' || page.contentType === 'artifact') {
+    if (await isArtifactBody(crowi, page)) {
       opts.logger.warn(`rewritePageBody: page ${pageId} is an artifact page, skipping`);
       return;
     }

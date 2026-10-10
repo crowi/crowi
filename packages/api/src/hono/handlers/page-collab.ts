@@ -39,7 +39,7 @@ import Debug from 'debug';
 import { ArtifactInternalError } from 'src/artifact/ingest';
 import type Crowi from 'src/crowi';
 import { STATUS_DELETED, STATUS_DRAFT } from 'src/models/page';
-import { getRawRevisionPointer, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
+import { isArtifactBody } from 'src/service/page-body-write';
 import { checkEditorCap } from 'src/util/collab-cap';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 import { createWsTokenUtil } from 'src/util/ws-token';
@@ -105,9 +105,9 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
     // The kind is the CURRENT Revision's, not the Page hint alone: a wrong or
     // missing hint must not let an artifact body reach the Yjs editor. An
     // unresolvable pointer is internal-state corruption, never "Markdown".
-    let currentKind: Awaited<ReturnType<typeof resolveCurrentPageBodyKind>>;
+    let isArtifact: boolean;
     try {
-      currentKind = await resolveCurrentPageBodyKind(crowi, loaded.page, getRawRevisionPointer(loaded.page));
+      isArtifact = await isArtifactBody(crowi, loaded.page);
     } catch (err) {
       if (err instanceof ArtifactInternalError) {
         debug('getYjsToken rejected: page %s has an unresolvable revision pointer', pageId);
@@ -115,7 +115,7 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
       }
       throw err;
     }
-    if (currentKind.contentType === 'artifact' || loaded.page.contentType === 'artifact') {
+    if (isArtifact) {
       debug('getYjsToken rejected: page %s is an artifact page', pageId);
       return c.json(PAGE_NOT_FOUND_BODY, 404);
     }

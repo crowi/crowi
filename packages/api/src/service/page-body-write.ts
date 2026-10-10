@@ -61,11 +61,18 @@ interface RevisionKindRow {
   isSelected?: (path: string) => boolean;
 }
 
-function normalizeStoredKind(value: unknown): PageContentType {
+/**
+ * Narrows a stored `contentType` to the `markdown | artifact` union. Mongoose
+ * re-validates the enum only on `save()`, never on read/populate, so an
+ * unrecognized runtime value is internal-state corruption (fixed 500), never
+ * coerced to either kind: falling back to Markdown would let a corrupt row
+ * bypass artifact ingest. A missing value is legacy Markdown.
+ */
+export function validatedStoredContentType(value: unknown, context: string): PageContentType {
   if (value === undefined) return 'markdown';
   const parsed = PageContentTypeSchema.safeParse(value);
   if (!parsed.success) {
-    throw new ArtifactInternalError('resolveCurrentPageBodyKind: unrecognized stored contentType');
+    throw new ArtifactInternalError(`${context}: unrecognized stored contentType`);
   }
   return parsed.data;
 }
@@ -96,5 +103,15 @@ export async function resolveCurrentPageBodyKind(crowi: Crowi, page: PageWithPoi
   if (row === null || String(row._id) !== pointerId) {
     throw new ArtifactInternalError('resolveCurrentPageBodyKind: the revision pointer does not resolve to its Revision');
   }
-  return { revisionId: pointerId, contentType: normalizeStoredKind(row.contentType) };
+  return { revisionId: pointerId, contentType: validatedStoredContentType(row.contentType, 'resolveCurrentPageBodyKind') };
+}
+
+/**
+ * Whether the Page holds an artifact body, judged by its current Revision OR
+ * the Page hint: either signal is enough to refuse a Markdown-only path, so a
+ * wrong or missing hint cannot let an artifact body through.
+ */
+export async function isArtifactBody(crowi: Crowi, page: PageWithPointer & Pick<PageDocument, 'contentType'>): Promise<boolean> {
+  const current = await resolveCurrentPageBodyKind(crowi, page, getRawRevisionPointer(page));
+  return current.contentType === 'artifact' || page.contentType === 'artifact';
 }
