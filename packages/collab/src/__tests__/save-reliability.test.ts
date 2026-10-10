@@ -1,14 +1,14 @@
-import * as Y from 'yjs';
 import { Types } from 'mongoose';
-import type { CollabModels } from '../models';
+import * as Y from 'yjs';
 import { createContributorsTracker } from '../contributors';
-import { createSaveFlow } from '../save-flow';
 import { createDocBaseRevisionStore, type DocBaseRevisionStore } from '../doc-base-revision';
 import { createOnLoadDocument } from '../hooks/on-load-document';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import { makeFixtures, type CollabFixtures } from './fixtures';
-import { CONTENT_FIELD } from '../yjs-doc';
+import type { CollabModels } from '../models';
+import { createSaveFlow } from '../save-flow';
 import type { CollabPageEventPublisher } from '../types';
+import { CONTENT_FIELD } from '../yjs-doc';
+import { type CollabFixtures, makeFixtures } from './fixtures';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * editor-preview-reliability (round 2) save-flow tests:
@@ -313,10 +313,15 @@ describe('save-flow reliability (editor-preview-reliability round 2)', () => {
     const Revision = models.Revision as any;
     const originalFindById = Revision.findById.bind(Revision);
     const spy = jest.spyOn(Revision, 'findById').mockImplementation((id: unknown) => {
+      const query = originalFindById(id);
       if (String(id) === r1.revisionId) {
-        return { select: () => ({ lean: () => ({ exec: () => Promise.reject(new Error('simulated DB outage')) }) }) };
+        // Only the body-baseline style read fails; the kind-metadata read
+        // (`_id contentType`) every save now performs passes through.
+        const originalSelect = query.select.bind(query);
+        query.select = (fields: string) =>
+          fields === 'body' ? { lean: () => ({ exec: () => Promise.reject(new Error('simulated DB outage')) }) } : originalSelect(fields);
       }
-      return originalFindById(id);
+      return query;
     });
 
     let r2: { revisionId: string };
@@ -399,6 +404,45 @@ describe('save-flow reliability (editor-preview-reliability round 2)', () => {
     const Revision = models.Revision as any;
     const winnerRev = await Revision.findById(winner.revisionId).lean().exec();
     expect((winnerRev.contributors ?? []).map((id: Types.ObjectId) => id.toString())).toContain(loserUser._id.toString());
+  });
+
+  test('AC-06 (RFC-0020 §1): a same-body CAS-loser re-reads the kind before folding itself into the winner, and an artifact winner never gets its contributors updated', async () => {
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const winnerUser = await seedUser(models);
+    const loserUser = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'identical co-edited content');
+    const winner = await flow.executeSave({ pageId, userId: winnerUser._id.toString(), document: doc });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page2 = models.Page as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const RevisionModel = models.Revision as any;
+    const realUpdateOne = Page2.updateOne.bind(Page2);
+    const spy = jest.spyOn(Page2, 'updateOne').mockImplementation((...args: unknown[]) => {
+      const filter = args[0] as Record<string, unknown>;
+      if (filter && Object.prototype.hasOwnProperty.call(filter, 'currentRevision')) {
+        // The CAS is lost AND the winner turns out to be an artifact Revision by the time the loser looks.
+        return {
+          exec: async () => {
+            await RevisionModel.collection.updateOne({ _id: new Types.ObjectId(winner.revisionId) }, { $set: { contentType: 'artifact' } });
+            return { matchedCount: 0 };
+          },
+        };
+      }
+      return realUpdateOne(...args);
+    });
+
+    try {
+      await expect(flow.executeSave({ pageId, userId: loserUser._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    } finally {
+      spy.mockRestore();
+    }
+    const winnerRev = await RevisionModel.findById(winner.revisionId).lean().exec();
+    expect((winnerRev.contributors ?? []).map((id: Types.ObjectId) => id.toString())).not.toContain(loserUser._id.toString());
   });
 
   test('G2: a CAS-loser whose body DIFFERS from the winner keeps CONFLICT (no coalesce)', async () => {

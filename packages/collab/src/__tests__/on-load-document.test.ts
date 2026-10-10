@@ -437,6 +437,70 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
       expect(docEpochRevisions.get(pageId)).toBeUndefined();
     });
 
+    test('AC-05: an artifact Revision with existing Yjs bytes and deltas is never restored, replayed or epoch-registered, even when the Page hint is markdown or missing', async () => {
+      for (const hint of ['markdown', undefined]) {
+        const { pageId } = await seedPageWithBody('artifact body should never be read');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const Page = models.Page as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const Revision = models.Revision as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const PageYjsUpdate = models.PageYjsUpdate as any;
+        const page = await Page.findById(pageId).lean();
+        await Revision.collection.updateOne({ _id: page.revision }, { $set: { contentType: 'artifact' } });
+        const seeded = new Y.Doc();
+        seeded.getText(CONTENT_FIELD).insert(0, 'stale markdown that must not be materialised');
+        await Page.collection.updateOne(
+          { _id: page._id },
+          { $set: { yjsState: Buffer.from(Y.encodeStateAsUpdate(seeded)), ...(hint ? { contentType: hint } : {}) } },
+        );
+        await PageYjsUpdate.create({ pageId, payload: Buffer.from(Y.encodeStateAsUpdate(seeded)), createdAt: new Date() });
+
+        const docEpochRevisions = createDocEpochStore();
+        const docBaseRevisions = createDocBaseRevisionStore();
+        const onLoadDocument = createOnLoadDocument({
+          models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+          docEpochRevisions,
+          docBaseRevisions,
+        });
+        const newDoc = new Y.Doc();
+        await expect(
+          onLoadDocument({
+            documentName: pageId,
+            document: newDoc,
+            instance: { documents: new Map() },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any),
+        ).rejects.toThrow('page not found');
+        expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('');
+        expect(docEpochRevisions.get(pageId)).toBeUndefined();
+        expect(docBaseRevisions.get(pageId)).toBeUndefined();
+        expect(await PageYjsUpdate.countDocuments({ pageId }).exec()).toBe(1);
+      }
+    });
+
+    test('AC-05: a soft-deleted Markdown Page still records its epoch unconditionally and is then refused before materialising', async () => {
+      const { pageId } = await seedPageWithBody('deleted markdown body');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (models.Page as any).updateOne({ _id: pageId }, { $set: { status: 'deleted', collabLifecycleVersion: 7 } }).exec();
+      const docEpochRevisions = createDocEpochStore();
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+        docEpochRevisions,
+      });
+      const newDoc = new Y.Doc();
+      await expect(
+        onLoadDocument({
+          documentName: pageId,
+          document: newDoc,
+          instance: { documents: new Map() },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any),
+      ).rejects.toThrow('page not found');
+      expect(docEpochRevisions.get(pageId)).toBe(7);
+      expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('');
+    });
+
     test('a missing contentType hint (legacy Markdown) still materializes normally', async () => {
       const { pageId } = await seedPageWithBody('legacy markdown body');
       const onLoadDocument = createOnLoadDocument({

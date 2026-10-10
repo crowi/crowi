@@ -5,16 +5,17 @@
 // future phases.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
+import mongoose from 'mongoose';
 import * as Y from 'yjs';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import { encodeYjsDelta, makeFixtures, type CollabFixtures } from './fixtures';
-import type { CollabModels } from '../models';
 import { createCompactor } from '../compaction';
 import { createOnChange } from '../hooks/on-change';
-import { createOnStoreDocument } from '../hooks/on-store-document';
 import { createOnLoadDocument } from '../hooks/on-load-document';
+import { createOnStoreDocument } from '../hooks/on-store-document';
+import type { CollabModels } from '../models';
 import { CONTENT_FIELD } from '../yjs-doc';
 import { payloadToUint8Array } from '../yjs-payload';
+import { type CollabFixtures, encodeYjsDelta, makeFixtures } from './fixtures';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * Phase 4 tests for the PageYjsUpdate append + compaction loop.
@@ -496,5 +497,59 @@ describe('@crowi/collab Phase 4 compaction', () => {
     expect(ttl).toBeDefined();
     expect(ttl?.key).toEqual({ createdAt: 1 });
     expect(ttl?.expireAfterSeconds).toBe(3600);
+  });
+
+  describe('RFC-0020 §1 — artifact pages are never hydrated, merged or pruned', () => {
+    const makeArtifact = async (hint: 'artifact' | 'markdown') => {
+      const { pageId } = await seedPage();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Revision = models.Revision as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const PageYjsUpdate = models.PageYjsUpdate as any;
+      const revision = await Revision.collection.insertOne({
+        path: '/artifact-compaction',
+        body: '<html></html>',
+        format: 'markdown',
+        contentType: 'artifact',
+        author: new mongoose.Types.ObjectId(),
+        createdAt: new Date(),
+      });
+      const live = new Y.Doc();
+      live.getText(CONTENT_FIELD).insert(0, 'stale markdown lineage');
+      const state = Buffer.from(Y.encodeStateAsUpdate(live));
+      await Page.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(pageId) },
+        { $set: { revision: revision.insertedId, currentRevision: revision.insertedId, contentType: hint, yjsState: state } },
+      );
+      await PageYjsUpdate.create({ pageId, payload: state, createdAt: new Date() });
+      return { pageId, state, live };
+    };
+
+    it.each(['artifact', 'markdown'] as const)('full-merge: refuses (hint=%s), builds no Y.Doc and prunes no delta', async (hint) => {
+      const { pageId, state } = await makeArtifact(hint);
+      const compactor = createCompactor({ models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision } });
+      const find = jest.spyOn(models.PageYjsUpdate, 'find');
+      try {
+        expect(await compactor.compactPage(pageId)).toBeNull();
+        // Pending rows are not even read.
+        expect(find).not.toHaveBeenCalled();
+      } finally {
+        find.mockRestore();
+      }
+      expect(await countPending(pageId)).toBe(1);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const after = await (models.Page as any).findById(pageId).select('yjsState').lean().exec();
+      expect(Buffer.compare(Buffer.from(after.yjsState.buffer ?? after.yjsState), state)).toBe(0);
+    });
+
+    it('store-only: a live Y.Doc for an artifact Page is not checkpointed', async () => {
+      const { pageId, live } = await makeArtifact('artifact');
+      const compactor = createCompactor({ models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision } });
+      live.getText(CONTENT_FIELD).insert(0, 'new edit');
+      expect(await compactor.storeCheckpoint(pageId, live)).toBeNull();
+      expect(await countPending(pageId)).toBe(1);
+    });
   });
 });

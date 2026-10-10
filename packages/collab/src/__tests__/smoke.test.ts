@@ -126,7 +126,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
 
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page: models.Page },
+      models: { Page: models.Page, Revision: models.Revision },
     });
     const authPayload = makeAuthPayload(token, pageId);
     const ctx = await onAuthenticate(authPayload);
@@ -219,7 +219,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
 
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page },
+      models: { Page, Revision: models.Revision },
     });
     await expect(onAuthenticate(makeAuthPayload(token, seededPage._id.toString()))).rejects.toThrow();
   });
@@ -227,7 +227,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
   it('onAuthenticate rejects when no token is presented', async () => {
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page: models.Page },
+      models: { Page: models.Page, Revision: models.Revision },
     });
     await expect(onAuthenticate(makeAuthPayload('', new mongoose.Types.ObjectId().toString()))).rejects.toThrow(/authentication required/);
   });
@@ -254,7 +254,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       const pageId = await seedPage('draft', authorId);
       const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: authorId.toString(), pageId, readonly: false, epoch: 0 });
 
-      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
       const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
       expect(ctx.userId).toBe(authorId.toString());
       expect(ctx.pageId).toBe(pageId);
@@ -268,7 +268,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       // different user — the draft author gate must still reject it.
       const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: intruderId.toString(), pageId, readonly: false, epoch: 0 });
 
-      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
       await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow(/permission denied/);
     });
 
@@ -278,7 +278,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       const pageId = await seedPage('published', authorId);
       const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: otherId.toString(), pageId, readonly: false, epoch: 0 });
 
-      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
       const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
       expect(ctx.userId).toBe(otherId.toString());
     });
