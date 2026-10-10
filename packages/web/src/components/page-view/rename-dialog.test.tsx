@@ -57,4 +57,13 @@ describe('RenameDialog', () => {
     const secondKey = mutateAsync.mock.calls[1][0].idempotencyKey;
     expect(firstKey).not.toBe(secondKey);
   });
+
+  it('shows an error state and blocks submit when the descendant list fails to load', () => {
+    usePageList.mockReturnValue({ data: undefined, error: new Error('Failed to fetch page list'), refetch: vi.fn() });
+    render(<RenameDialog page={page} open onOpenChange={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(m['page.rename.new_path']()), { target: { value: '/docs/renamed' } });
+
+    expect(screen.getByText(m['page_list.failed_to_load']())).toBeTruthy();
+    expect((screen.getByRole('button', { name: m['page.rename.submit']() }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });

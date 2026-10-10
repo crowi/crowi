@@ -1,4 +1,5 @@
 import type { ListPagesResponse } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makePage } from '@/lib/test-utils/factories';
@@ -80,5 +81,14 @@ describe('PageList — portalize banner at the content-page fallback (RFC-0020, 
     expect(screen.queryByTestId('portalize-banner-stub')).toBeNull();
     // The page itself is still listed — only the banner is withheld.
     expect(row('/foo')).not.toBeNull();
+  });
+});
+
+describe('PageList — fetch failure', () => {
+  it('shows the error state instead of an empty list', () => {
+    usePageList.mockReturnValue({ data: undefined, isLoading: false, error: new Error('Failed to fetch page list') });
+    render(<PageList initialParams={{ path: '/foo/' }} />);
+
+    expect(screen.getByText(m['page_list.failed_to_load']())).toBeTruthy();
   });
 });

@@ -198,15 +198,17 @@ describe('Routes /api/pages/list path_prefix (literal prefix recent listing)', (
     expect(failedEnrich.status).toBe(500);
     expect(JSON.stringify(failedEnrich.body)).not.toContain(secret);
 
-    // Without a prefix the legacy empty-list fallback stays.
-    const legacySpy = jest.spyOn(Page, 'countDocuments').mockImplementationOnce(() => {
-      throw new Error(secret);
-    });
-    const legacy = await list(viewerToken, {});
-    legacySpy.mockRestore();
-    expect(legacy.status).toBe(200);
-    expect(legacy.body.pages).toEqual([]);
-    expect(legacy.body.appliedPathPrefix).toBeUndefined();
+    // Without a prefix the failure is the same 500, never an empty list.
+    for (const query of [{}, { path: `${BASE}/f/` }, { path: '/' }]) {
+      const spy = jest.spyOn(Page, 'countDocuments').mockImplementationOnce(() => {
+        throw new Error(secret);
+      });
+      const res = await list(viewerToken, query);
+      spy.mockRestore();
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
+      expect(JSON.stringify(res.body)).not.toContain(secret);
+    }
   });
 
   it('prefix rows and total share the viewer predicate', async () => {

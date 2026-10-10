@@ -7846,7 +7846,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Internal error while listing with `path_prefix` (never returned for requests without a prefix, which keep the legacy empty-list fallback) */
+                /** @description Internal error while listing, for any request shape (never an empty list) */
                 500: {
                     headers: {
                         [name: string]: unknown;

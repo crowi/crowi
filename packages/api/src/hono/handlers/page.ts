@@ -858,25 +858,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             },
             200,
           );
-        } catch (err) {
-          if (path_prefix !== undefined) {
-            // Fixed text only: the exception may carry query or page data.
-            debug('Error listing pages with literal prefix');
-            return c.json(INTERNAL_ERROR_BODY, 500);
-          }
-          debug('Error listing pages:', (err as Error).message);
-          // Legacy behaviour: an unexpected error collapses to an empty
-          // list rather than 500. Preserved for wire compatibility.
-          return c.json(
-            {
-              pages: [],
-              pager: { prev: null, next: null, offset: 0 },
-              portalPage: null,
-              contentPage: null,
-              total: 0,
-            },
-            200,
-          );
+        } catch {
+          // Fixed text only: the exception may carry query or page data.
+          debug('Error listing pages');
+          return c.json(INTERNAL_ERROR_BODY, 500);
         }
       })
       // --------------------------------------------------------------
