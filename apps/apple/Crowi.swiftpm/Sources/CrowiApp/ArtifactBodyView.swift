@@ -14,6 +14,9 @@ import WebKit
 ///
 /// The URL expires within a minute, so it is minted right before each load
 /// and never kept.
+///
+/// A wiki link the reader taps inside the artifact opens in the reader, by
+/// the same rules the web follows (`ArtifactLinkBridge`, `ArtifactPageLink`).
 struct ArtifactBodyView: View {
     enum Presentation {
         /// Inside a page's scroll view, at the web's own proportions.
@@ -25,6 +28,9 @@ struct ArtifactBodyView: View {
     let session: WorkspaceSession
     let pageId: String
     let revisionId: String?
+    /// The page holding the artifact: what a relative link resolves from.
+    let sourcePath: String
+    let onSelectDestination: (ReadDestination) -> Void
     var presentation: Presentation = .inline
 
     private enum Phase: Equatable {
@@ -56,7 +62,19 @@ struct ArtifactBodyView: View {
             }
             .fullScreenCover(isPresented: $showsFullScreen) {
                 NavigationStack {
-                    ArtifactBodyView(session: session, pageId: pageId, revisionId: revisionId, presentation: .fill)
+                    ArtifactBodyView(
+                        session: session,
+                        pageId: pageId,
+                        revisionId: revisionId,
+                        sourcePath: sourcePath,
+                        // Closed first, so the page opens in the stack under
+                        // the cover rather than behind it.
+                        onSelectDestination: { destination in
+                            showsFullScreen = false
+                            onSelectDestination(destination)
+                        },
+                        presentation: .fill
+                    )
                         .ignoresSafeArea(edges: .bottom)
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
@@ -94,6 +112,7 @@ struct ArtifactBodyView: View {
         let webView = ArtifactWebView(
             url: url,
             onOpenExternally: open,
+            onPageLinkActivated: openPageLink,
             onLoadFailed: {
                 phase = .unavailable(title: "Couldn't start this page", message: "The page didn't load.", canRetry: true)
             },
@@ -156,6 +175,13 @@ struct ArtifactBodyView: View {
         }
     }
 
+    /// A link the resolver refuses does nothing, as on the web: the artifact
+    /// gets no feedback it could probe with.
+    private func openPageLink(_ href: String) {
+        guard let path = ArtifactPageLink.resolve(sourcePagePath: sourcePath, rawHref: href) else { return }
+        onSelectDestination(.page(path: path))
+    }
+
     /// Same rule as a Markdown body's links: the in-app browser when the
     /// reader asked for it, the system browser otherwise.
     private func open(_ url: URL) {
@@ -171,10 +197,16 @@ struct ArtifactBodyView: View {
 /// server's CSP; what this adds is what the web gets from the document that
 /// frames it: the artifact may not navigate itself anywhere else
 /// (`ArtifactNavigationPolicy`), may not open windows, and shares no storage
-/// with anything (a non-persistent data store, no script message handlers).
+/// with anything (a non-persistent data store).
+///
+/// The one channel back to the app is the link bridge's message handler,
+/// registered only in the bridge's own script world, where the artifact's
+/// scripts cannot reach it.
 struct ArtifactWebView: UIViewRepresentable {
     let url: URL
     let onOpenExternally: (URL) -> Void
+    /// The raw `href` of a wiki link the reader tapped.
+    let onPageLinkActivated: (String) -> Void
     /// The delivery route answered with something other than the page — an
     /// expired or reused token reads as a plain-text 404.
     let onLoadFailed: () -> Void
@@ -188,6 +220,15 @@ struct ArtifactWebView: UIViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        let linkWorld = WKContentWorld.world(name: ArtifactLinkBridge.worldName)
+        configuration.userContentController.addUserScript(
+            WKUserScript(source: ArtifactLinkBridge.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: linkWorld)
+        )
+        configuration.userContentController.add(
+            WeakScriptMessageHandler(context.coordinator),
+            contentWorld: linkWorld,
+            name: ArtifactLinkBridge.handlerName
+        )
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
@@ -204,12 +245,13 @@ struct ArtifactWebView: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeAllScriptMessageHandlers()
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: ArtifactWebView
         private(set) var deliveryURL: URL?
         /// The app's own request is let through as issued rather than judged
@@ -293,6 +335,11 @@ struct ArtifactWebView: UIViewRepresentable {
             reportUnlessCancelled(error)
         }
 
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.frameInfo.isMainFrame, let href = ArtifactLinkBridge.acceptedHref(from: message.body) else { return }
+            parent.onPageLinkActivated(href)
+        }
+
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             parent.onContentProcessTerminated()
         }
@@ -316,5 +363,20 @@ struct ArtifactWebView: UIViewRepresentable {
             guard !interruptedByPolicy, !cancelled else { return }
             parent.onLoadFailed()
         }
+    }
+}
+
+/// `WKUserContentController` retains its message handlers, and the web view
+/// retains the controller, so registering the coordinator directly would keep
+/// it (and the view state it captures) alive for as long as the web view.
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    private weak var target: WKScriptMessageHandler?
+
+    init(_ target: WKScriptMessageHandler) {
+        self.target = target
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.userContentController(userContentController, didReceive: message)
     }
 }

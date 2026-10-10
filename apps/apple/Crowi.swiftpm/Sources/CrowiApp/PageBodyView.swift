@@ -59,7 +59,13 @@ struct PageBodyView: View {
         )
         Group {
             if contentType == .artifact {
-                ArtifactBodyView(session: session, pageId: pageId, revisionId: revisionId)
+                ArtifactBodyView(
+                    session: session,
+                    pageId: pageId,
+                    revisionId: revisionId,
+                    sourcePath: sourcePath,
+                    onSelectDestination: onSelectDestination
+                )
             } else if case .envelope(let document)? = renderedAst {
                 RenderedAstView(
                     document: document,
