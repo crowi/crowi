@@ -173,7 +173,7 @@ export const listPagesRoute = createRoute({
       content: { 'application/json': { schema: InsufficientScopeErrorSchema } },
     },
     500: {
-      description: 'Internal error while listing with `path_prefix` (never returned for requests without a prefix, which keep the legacy empty-list fallback)',
+      description: 'Internal error while listing, for any request shape (never an empty list)',
       content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
