@@ -4272,6 +4272,11 @@ components:
               type: string
               minLength: 6
               pattern: ^[\x20-\x7F]{6,}$
+            lang:
+              type: string
+              enum:
+                - en
+                - ja
           required:
             - username
             - name
@@ -5661,6 +5666,11 @@ paths:
                       type: string
                       minLength: 6
                       pattern: ^[\x20-\x7F]{6,}$
+                    lang:
+                      type: string
+                      enum:
+                        - en
+                        - ja
                   required:
                     - username
                     - name
@@ -5911,6 +5921,11 @@ paths:
                 password:
                   type: string
                   minLength: 6
+                lang:
+                  type: string
+                  enum:
+                    - en
+                    - ja
               required:
                 - username
                 - name
@@ -7568,6 +7583,11 @@ paths:
                   minLength: 1
                   maxLength: 64
                   pattern: ^[A-Za-z0-9_-]+$
+                lang:
+                  type: string
+                  enum:
+                    - en
+                    - ja
               required:
                 - username
       responses:
@@ -7831,6 +7851,11 @@ paths:
                 password:
                   type: string
                   minLength: 6
+                lang:
+                  type: string
+                  enum:
+                    - en
+                    - ja
               required:
                 - token
                 - username

@@ -40,6 +40,7 @@ export const TokenAuthRegisterRequestSchema = z.object({
   name: z.string(),
   email: z.string().email(),
   password: z.string().min(6),
+  lang: z.enum(['en', 'ja']).optional(),
 });
 
 /**

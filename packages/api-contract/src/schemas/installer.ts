@@ -15,6 +15,7 @@ export const CreateAdminRequestSchema = z.object({
       .string()
       .min(6)
       .regex(/^[\x20-\x7F]{6,}$/, 'password must be 6+ printable ASCII characters'),
+    lang: z.enum(['en', 'ja']).optional(),
   }),
 });
 

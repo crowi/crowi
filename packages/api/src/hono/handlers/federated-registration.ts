@@ -25,6 +25,7 @@ import { provisionPendingRegistration, terminalExpiry } from 'src/services/auth-
 import type { CrowiHonoBindings } from '../app';
 
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
+import { resolveRequestLang } from 'src/util/request-lang';
 
 const debug = Debug('crowi:hono:handlers:federatedRegistration');
 
@@ -84,10 +85,10 @@ export function submitPendingRegistration(deps: FederatedRegistrationRouteDeps):
   const { crowi, handoffStore } = deps;
   return async (c) => {
     const { token } = c.req.valid('param');
-    const { username } = c.req.valid('json');
+    const { username, lang } = c.req.valid('json');
 
     try {
-      const outcome = await provisionPendingRegistration(crowi, token, username);
+      const outcome = await provisionPendingRegistration(crowi, token, username, resolveRequestLang(c.req.raw.headers, lang));
       switch (outcome.kind) {
         case 'not_found':
           return c.json(GRANT_NOT_FOUND_BODY, 404);

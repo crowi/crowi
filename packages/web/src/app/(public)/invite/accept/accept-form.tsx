@@ -14,6 +14,7 @@ import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
 import { defaultLandingPath } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
 
 export function AcceptInviteForm() {
   const router = useRouter();
@@ -63,7 +64,7 @@ export function AcceptInviteForm() {
 
     try {
       const response = await apiClient.invite.accept.$post({
-        json: { token, username: formData.username, name: formData.name, password: formData.password },
+        json: { token, username: formData.username, name: formData.name, password: formData.password, lang: getLocale() },
       });
 
       if (response.status === 200) {

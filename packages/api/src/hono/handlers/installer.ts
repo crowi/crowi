@@ -28,6 +28,7 @@ import type { ConfigModel } from 'src/models/config';
 import type { UserDocument } from 'src/models/user';
 
 import type { CrowiHonoBindings } from '../app';
+import { resolveRequestLang } from 'src/util/request-lang';
 
 const debug = Debug('crowi:hono:handlers:installer');
 
@@ -58,14 +59,12 @@ export const registerInstallerRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
         return c.json({ status: 'error' as const, message: 'Application is already installed' }, 400);
       }
 
-      const { name, username, email, password } = c.req.valid('json').registerForm;
+      const { name, username, email, password, lang } = c.req.valid('json').registerForm;
+      const userLang = resolveRequestLang(c.req.raw.headers, lang);
 
       try {
         const userData = await new Promise<UserDocument>((resolve, reject) => {
-          // Seed admin language defaults to English; the legacy flow
-          // sniffed i18next from the request, but we don't have that on
-          // this pipeline.
-          User.createUserByEmailAndPassword(name, username, email, password, 'en', (err: Error | null, user: UserDocument) => {
+          User.createUserByEmailAndPassword(name, username, email, password, userLang, (err: Error | null, user: UserDocument) => {
             if (err) return reject(err);
             resolve(user);
           });
