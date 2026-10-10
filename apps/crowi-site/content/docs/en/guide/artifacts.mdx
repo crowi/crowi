@@ -43,6 +43,30 @@ Links inside an artifact can take you to other pages in the same wiki.
 
 Links inside the artifact do not navigate when you open the artifact's own URL directly in a browser.
 
+## Editing the body
+
+The Web editor cannot edit the body of an artifact page. No edit button appears on the page view, the history view, a portal, a user page, the draft notice, or the list of pages you are creating. If you open an edit URL directly (`/_edit?page_id=…`, or `/_edit?path=…` pointing at an existing artifact page), Crowi shows “This editor cannot edit artifact pages. Use the CLI or MCP to edit the body.” and a “Back to page” link instead of the editor.
+
+- Update the body with `crowi update` in the [CLI](./cli) or `crowi_update_page` in [MCP](./mcp). If you omit the type (`--type` / `content_type`), the page's current type is kept, and the HTML is validated on every save.
+- Viewing history, downloading the HTML, renaming and changing visibility keep working on the Web.
+- Restoring an older version (“Revert to this version”) also keeps working. It is separate from editing the body by hand: the version being restored is validated against the current rules, as on a normal save, and a version that no longer passes cannot be restored. A version cannot be restored across types (Markdown to artifact or the other way round).
+- Editing Markdown pages, new drafts and realtime collaborative editing work as before. Artifact pages do not take part in realtime collaboration.
+
+<Callout type="info">
+The Web editor declares its text as Markdown when it saves, so it can never overwrite an artifact body. Calling the general API directly from a browser can still update an artifact page with valid artifact HTML. What is guaranteed is the body type and its validation, not a restriction by client product.
+</Callout>
+
+### Upgrade procedure (for administrators)
+
+The protection is also enforced in the server's save path, so roll the update out in this order:
+
+1. Ask editors to save their unsaved Markdown changes before you stop the replicas.
+2. Stop every API and collab replica.
+3. Deploy the new build together with the matching Web build, then start them again.
+4. Ask users to reload browser tabs that were left open.
+
+Make any direct database repair of a page's type or pointers while the replicas are stopped. The protection is not guaranteed for the period during which you skip the stop and leave an old build running, because an old build's writes can bypass it.
+
 ## Page menu
 
 Artifact pages still support history, renaming, deletion, likes, watching, sharing and comments as Markdown pages do. The page menu differs in these ways:
