@@ -44,6 +44,8 @@ export interface PageHistoryRepairSummary {
   };
   unsequencedRevisions?: {
     scannedPages: number;
+    /** Optional so a summary from an older api module still formats. */
+    restored?: { pageId: string; restoredSequence: number; trackingStartedAt: string; reason: string }[];
     repaired: { pageId: string; revisionId: string; assignedSequence: number; reason: string }[];
     blocked: { pageId: string; revisionId?: string; duplicateSequence: number; reason: string }[];
     failed: { pageId: string; revisionId?: string; sequence?: number; reason: string }[];
@@ -157,9 +159,15 @@ export function formatRepairReport(summary: PageHistoryRepairSummary): RepairRep
 
   if (summary.unsequencedRevisions) {
     const { scannedPages, repaired, blocked, failed, lastPageId } = summary.unsequencedRevisions;
+    const restored = summary.unsequencedRevisions.restored ?? [];
     lines.push(
-      `unsequenced-revision scan: scanned=${scannedPages} repaired=${repaired.length} blocked=${blocked.length} failed=${failed.length} lastPageId=${lastPageId ?? '(none)'}`,
+      `unsequenced-revision scan: scanned=${scannedPages} restored=${restored.length} repaired=${repaired.length} blocked=${blocked.length} failed=${failed.length} lastPageId=${lastPageId ?? '(none)'}`,
     );
+    if (restored.length > 0) {
+      lines.push('  restored pages (tracking put back to ready):');
+      for (const r of restored)
+        lines.push(`    page ${r.pageId}: historySequence=${r.restoredSequence} trackingStartedAt=${r.trackingStartedAt} — ${r.reason}`);
+    }
     if (repaired.length > 0) {
       lines.push('  assigned sequences:');
       for (const r of repaired) lines.push(`    page ${r.pageId} revision ${r.revisionId}: sequence ${r.assignedSequence} — ${r.reason}`);
@@ -222,7 +230,9 @@ export function formatRepairReport(summary: PageHistoryRepairSummary): RepairRep
  *
  * `--scan`: walks every `ready` Page for a Revision missing
  * `historySequence` and assigns one (oldest first), or blocks the Page for
- * manual repair if it finds a duplicate/inconsistent sequence instead. NOT
+ * manual repair if it finds a duplicate/inconsistent sequence instead. It
+ * also puts back to `ready` any Page that holds sequenced history but was
+ * marked `untracked` (reported as `restored`). NOT
  * the default and NOT auto-run at boot — Phase 1 populates `ready` from
  * new-Page creation only, so unlike outbox repair this is a real, visible
  * mutation an operator should choose to run, not one this CLI defaults to.
@@ -240,10 +250,10 @@ export function registerPageHistoryRepair(program: Command): void {
   pageHistory
     .command('repair')
     .description(
-      "Repair page-history outbox/sequence state. --outbox (default) drains any crashed writer's leftover pendingHistoryEntry. --scan assigns historySequence to unsequenced Revisions on ready Pages (not run by default).",
+      "Repair page-history outbox/sequence state. --outbox (default) drains any crashed writer's leftover pendingHistoryEntry. --scan assigns historySequence to unsequenced Revisions on ready Pages and puts demoted pages back to ready (not run by default).",
     )
     .option('--outbox', 'Run the outbox (pendingHistoryEntry) repair scan.', false)
-    .option('--scan', 'Run the unsequenced-Revision sequence-assignment scan.', false)
+    .option('--scan', 'Run the unsequenced-Revision sequence-assignment scan and restore demoted pages to ready.', false)
     .option('--transitions', 'Sweep path-move operations that never finished, settling or reporting each one.', false)
     .option('--batch-size <n>', 'Bound how many Pages are loaded into memory per round-trip.', '200')
     .option('--resume-after <pageId>', 'Resume a previous run: only Pages with _id greater than this value are visited.')
