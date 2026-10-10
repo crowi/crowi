@@ -4213,6 +4213,11 @@ components:
           type: string
         updatedAt:
           type: string
+        contentType:
+          type: string
+          enum:
+            - markdown
+            - artifact
       required:
         - pageId
         - path
@@ -4234,6 +4239,11 @@ components:
                 type: string
               updatedAt:
                 type: string
+              contentType:
+                type: string
+                enum:
+                  - markdown
+                  - artifact
             required:
               - pageId
               - path
@@ -24035,6 +24045,11 @@ paths:
                           type: string
                         updatedAt:
                           type: string
+                        contentType:
+                          type: string
+                          enum:
+                            - markdown
+                            - artifact
                       required:
                         - pageId
                         - path

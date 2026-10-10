@@ -10659,6 +10659,8 @@ export interface paths {
                                 path: string;
                                 createdAt: string;
                                 updatedAt: string;
+                                /** @enum {string} */
+                                contentType?: "markdown" | "artifact";
                             }[];
                         };
                     };
@@ -18473,6 +18475,8 @@ export interface components {
             path: string;
             createdAt: string;
             updatedAt: string;
+            /** @enum {string} */
+            contentType?: "markdown" | "artifact";
         };
         ListDraftsResponse: {
             drafts: {
@@ -18480,6 +18484,8 @@ export interface components {
                 path: string;
                 createdAt: string;
                 updatedAt: string;
+                /** @enum {string} */
+                contentType?: "markdown" | "artifact";
             }[];
         };
         InstallerStatusResponse: {
