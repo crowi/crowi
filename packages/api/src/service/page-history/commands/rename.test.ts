@@ -627,7 +627,7 @@ describe('service/page-history/commands/rename (RFC-0021 Phase 2c-2a)', () => {
         expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
       });
 
-      test('(b) a page with historySequence explicitly null moves without being promoted', async () => {
+      test('(b) a page with historySequence explicitly null is promoted and then moves', async () => {
         const page = await createUntrackedPageWithRevision('/rename/null-sequence');
         await Page.updateOne({ _id: page._id }, { $set: { historySequence: null } });
         const reloaded = await Page.findById(page._id);
@@ -637,9 +637,26 @@ describe('service/page-history/commands/rename (RFC-0021 Phase 2c-2a)', () => {
         expect(outcome.status).toBe('committed');
         const raw = await Page.collection.findOne({ _id: page._id });
         expect(raw.path).toBe('/rename/null-sequence-moved');
+        expect(raw.historyTracking.state).toBe('ready');
+        expect(raw.historySequence).toBe(2);
+        expect((await Revision.findById(raw.revision).lean())?.historySequence).toBe(1);
+        const events = await PageHistoryEvent.find({ page: page._id, kind: 'page_renamed' }).lean();
+        expect(events).toHaveLength(1);
+        expect(events[0].sequence).toBe(2);
+      });
+
+      test('a demoted page (sequenced history, marked untracked) moves without being promoted and records no event', async () => {
+        const page = await createUntrackedPageWithRevision('/rename/demoted');
+        await Revision.create({ page: page._id, path: '/rename/demoted', body: 'old', format: 'markdown', author: user._id, historySequence: 1 });
+        const reloaded = await Page.findById(page._id);
+
+        const outcome = await run(reloaded, '/rename/demoted-moved');
+
+        expect(outcome.status).toBe('committed');
+        const raw = await Page.collection.findOne({ _id: page._id });
+        expect(raw.path).toBe('/rename/demoted-moved');
         expect(raw.historyTracking?.state ?? 'untracked').toBe('untracked');
-        expect(raw.historySequence).toBeNull();
-        expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+        expect(await PageHistoryEvent.countDocuments({ page: page._id, kind: 'page_renamed' })).toBe(0);
       });
 
       test('(c) a page whose own outbox is occupied moves without being promoted, and the outbox stays occupied', async () => {

@@ -2,6 +2,7 @@ import { STATUS_DELETED } from 'src/models/page';
 import type { RevisionDocument } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
 import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
+import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { crowi, Fixture } from 'src/test/setup';
 
 import { assessReplaceSafety, replaceUrlInBody, runReplaceUrl } from './replace-url';
@@ -165,6 +166,35 @@ describe('util/replace-url — runReplaceUrl (persistence)', () => {
 
     const newRev = await Revision.findById(page?.revision).lean();
     expect(newRev?.historySequence).toBe(2);
+  });
+
+  it('does not demote a legacy page another path promoted between the read and the save, and sequences the rewrite after it (AC-3)', async () => {
+    const created = await Page.createPage(`${PATH_PREFIX}/stale-promotion`, `x ${FROM}/y`, creator, {});
+    const firstRevisionId = (await Page.findById(created._id).select('revision').lean())?.revision;
+    // Legacy shape: neither history field on the page, first Revision unsequenced.
+    await Page.collection.updateOne({ _id: created._id }, { $unset: { historyTracking: '', historySequence: '' } });
+    await Revision.collection.updateOne({ _id: firstRevisionId }, { $unset: { historySequence: '', historyOperationId: '' } });
+
+    const originalSave = Revision.prototype.save;
+    let interrupted = false;
+    jest.spyOn(Revision.prototype, 'save').mockImplementation(async function (this: RevisionDocument, ...args: Parameters<typeof originalSave>) {
+      if (!interrupted) {
+        interrupted = true;
+        // quietRewrite already holds its hydrated Page; promote the page behind its back.
+        await allocateContentSequence(crowi, created._id, firstRevisionId);
+      }
+      return originalSave.apply(this, args);
+    } as typeof originalSave);
+
+    await runReplaceUrl(crowi, { from: FROM, to: TO, userEmail: operator.email });
+
+    expect(interrupted).toBe(true);
+    const raw = await Page.collection.findOne({ _id: created._id });
+    expect(raw?.historyTracking?.state).toBe('ready');
+    expect(raw?.historySequence).toBe(2);
+    const rewritten = await Revision.findById(raw?.revision).lean();
+    expect(rewritten?.historySequence).toBe(2);
+    expect((await Revision.findById(firstRevisionId).lean())?.historySequence).toBe(1);
   });
 
   it('does not bump updatedAt or change grant / grantedUsers', async () => {

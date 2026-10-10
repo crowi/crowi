@@ -1,7 +1,8 @@
 import { Types } from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import Crowi from 'src/crowi';
-import type { PendingHistoryEntry } from 'src/models/page';
+import type { HistoryTrackingState, PendingHistoryEntry } from 'src/models/page';
+import { createLogger } from 'src/util/logger';
 import { drainPendingHistoryEntry, materializePendingEntry } from './materialize';
 
 /**
@@ -32,6 +33,56 @@ import { drainPendingHistoryEntry, materializePendingEntry } from './materialize
 export type ContentSequenceOutcome =
   | { allocated: false; reason: 'not-eligible' | 'contended' }
   | { allocated: true; sequence: number; materialized: boolean; alreadySequenced: boolean };
+
+const logger = createLogger('crowi:page-history:content-sequence');
+
+/**
+ * `historyTracking` and `historySequence` carry no schema default (a default
+ * hydrated onto a stale Page would be written back by its next `save()` and
+ * demote a promoted Page), so a raw document can lack either, or hold an
+ * explicit null. Every reader treats all of those shapes as untracked /
+ * counter 0 through the helpers below, so the JS check and the Mongo CAS
+ * filter cannot drift apart.
+ */
+export function readHistoryTrackingState(page: { historyTracking?: { state?: HistoryTrackingState | null } | null } | null | undefined): HistoryTrackingState {
+  return page?.historyTracking?.state ?? 'untracked';
+}
+
+export function isUnassignedHistorySequence(value: unknown): boolean {
+  return value == null || value === 0;
+}
+
+export function isPromotableTrackingShape(page: { historyTracking?: { state?: HistoryTrackingState | null } | null; historySequence?: unknown }): boolean {
+  return readHistoryTrackingState(page) === 'untracked' && isUnassignedHistorySequence(page.historySequence);
+}
+
+// `{ 'historyTracking.state': null }` matches the subdocument missing, `state`
+// missing and `state: null`; `{ historySequence: null }` matches missing and null.
+export const UNTRACKED_STATE_FILTER: Readonly<Record<string, unknown>> = {
+  $or: [{ 'historyTracking.state': 'untracked' }, { 'historyTracking.state': null }],
+};
+
+export const UNASSIGNED_SEQUENCE_FILTER: Readonly<Record<string, unknown>> = {
+  $or: [{ historySequence: 0 }, { historySequence: null }],
+};
+
+export const PROMOTABLE_TRACKING_FILTER: Readonly<Record<string, unknown>> = {
+  $and: [UNTRACKED_STATE_FILTER, UNASSIGNED_SEQUENCE_FILTER],
+};
+
+/**
+ * A Page only ever holds sequenced rows after it was `ready` once, and no
+ * writer moves it back, so sequenced rows on an untracked Page mean it was
+ * demoted by a stale document save.
+ */
+export async function hasSequencedHistory(crowi: Crowi, pageId: Types.ObjectId): Promise<boolean> {
+  const Revision = crowi.model('Revision');
+  if ((await Revision.exists({ page: pageId, historySequence: { $ne: null } })) != null) {
+    return true;
+  }
+  const PageHistoryEvent = crowi.model('PageHistoryEvent');
+  return (await PageHistoryEvent.exists({ page: pageId })) != null;
+}
 
 const DEFAULT_MAX_CLAIM_ATTEMPTS = 3;
 const DEFAULT_MAX_DRAIN_ASSISTS = 5;
@@ -111,6 +162,10 @@ export async function allocateContentSequence(
 
     let claimAttemptsUsed = 0;
     let drainAssistsUsed = 0;
+    // Set once `hasSequencedHistory` was positive. The Page snapshot may predate
+    // a legitimate concurrent promotion, so the first positive only re-reads the
+    // Page; a second positive on a still-promotable Page is a demotion.
+    let sawSequencedHistory = false;
 
     for (;;) {
       // §D-2 step 1 — checked at the very top of every iteration, BEFORE
@@ -135,18 +190,23 @@ export async function allocateContentSequence(
         return { allocated: false, reason: 'not-eligible' };
       }
 
-      const state = page.historyTracking?.state ?? 'untracked';
+      const state = readHistoryTrackingState(page);
       // §D-4(a) eligibility mirrors that write's own filter exactly (down to
       // `revision: revisionId` — "この Revision の pointer が既に確定していること
       // を表す"): a Page whose current pointer is NOT `revisionId` yet is not
       // eligible for promotion by this call.
-      const eligibleForPromotion =
-        state === 'untracked' && page.historySequence === 0 && page.pendingHistoryEntry == null && String(page.revision) === String(revisionId);
+      const eligibleForPromotion = isPromotableTrackingShape(page) && page.pendingHistoryEntry == null && String(page.revision) === String(revisionId);
       // §D-4(b) has no such pointer check — the contract explicitly defers
       // Revision/Page ownership to `materializePendingEntry`'s
       // `assertRevisionOwnedByPage` (spec's Validation contract).
       const eligibleForNext = state === 'ready' && !promotionOnly;
       if (!eligibleForPromotion && !eligibleForNext) {
+        return { allocated: false, reason: 'not-eligible' };
+      }
+
+      // A `ready` Page without a numeric counter cannot seed a CAS filter or an
+      // increment; fail closed instead of writing NaN.
+      if (eligibleForNext && (typeof page.historySequence !== 'number' || !Number.isFinite(page.historySequence))) {
         return { allocated: false, reason: 'not-eligible' };
       }
 
@@ -162,6 +222,18 @@ export async function allocateContentSequence(
           // `repair.ts` exists for that; the drain-assist budget above
           // bounds how many times we retry past it before giving up.
         }
+        continue;
+      }
+
+      if (eligibleForPromotion && (await hasSequencedHistory(crowi, pageId))) {
+        if (sawSequencedHistory) {
+          logger.warn('content save refused to promote a page that already has sequenced history; run crowi-admin page-history repair --outbox --scan', {
+            pageId: String(pageId),
+            revisionId: String(revisionId),
+          });
+          return { allocated: false, reason: 'not-eligible' };
+        }
+        sawSequencedHistory = true;
         continue;
       }
 
@@ -201,25 +273,9 @@ export async function allocateContentSequence(
         const result = await Page.findOneAndUpdate(
           {
             _id: pageId,
-            // A Page whose raw document predates Phase 1's schema fields
-            // (never resaved through a full `Page.prototype.save()` since —
-            // e.g. a collab-only pointer write, which is a raw `updateOne`
-            // that never touches these paths) can be missing `historySequence`
-            // and/or `historyTracking` entirely, OR can have a `historyTracking`
-            // subdocument present with `state` itself missing/null (a partial
-            // write). Querying the DOTTED path `historyTracking.state` against
-            // `null` matches all of: the whole subdocument missing, the
-            // subdocument present with `state` missing, and `state` explicitly
-            // `null` — the same "missing ≡ null" equality rule
-            // `pendingHistoryEntry: null` below already relies on — so a single
-            // `$or` on the leaf path covers every shape a partial write can
-            // leave without needing a separate `historyTracking: null` clause.
-            // `revision: revisionId` still requires the pointer write itself to
-            // have landed.
-            $and: [
-              { $or: [{ 'historyTracking.state': 'untracked' }, { 'historyTracking.state': null }] },
-              { $or: [{ historySequence: 0 }, { historySequence: null }] },
-            ],
+            // Absent, partial and null `historyTracking` / `historySequence` all
+            // read as untracked / 0; see PROMOTABLE_TRACKING_FILTER.
+            ...PROMOTABLE_TRACKING_FILTER,
             pendingHistoryEntry: null,
             revision: revisionId,
           },
@@ -243,7 +299,8 @@ export async function allocateContentSequence(
           claimedSequence = 1;
         }
       } else {
-        const n = page.historySequence;
+        // Narrowed above for `eligibleForNext`; `page.historySequence` is a finite number here.
+        const n = page.historySequence as number;
         const result = await Page.findOneAndUpdate(
           {
             _id: pageId,

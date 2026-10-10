@@ -108,7 +108,7 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
       const Page = crowi.model('Page');
       const Revision = crowi.model('Revision');
       const page = await Page.findById(res.body.pageId);
-      expect(page?.historyTracking.state).toBe('ready');
+      expect(page?.historyTracking?.state).toBe('ready');
       expect(page?.historySequence).toBe(1);
       expect(page?.pendingHistoryEntry).toBeUndefined();
 
