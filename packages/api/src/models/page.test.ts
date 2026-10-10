@@ -1,3 +1,4 @@
+import { RESERVED_TOP_LEVEL_NAMES, USER_TAB_NAMES } from '@crowi/api-contract';
 import { Types } from 'mongoose';
 import {
   PageContentTypeConflictError,
@@ -123,6 +124,15 @@ describe('Page', () => {
   });
 
   describe('.isCreatableName', () => {
+    it.each(RESERVED_TOP_LEVEL_NAMES)('rejects the reserved top-level name /%s', (name) => {
+      expect(Page.isCreatableName(`/${name}`)).toBe(false);
+      expect(Page.isCreatableName(`/${name}/x`)).toBe(false);
+    });
+
+    it.each(USER_TAB_NAMES)('rejects the reserved user tab /user/alice/%s', (tab) => {
+      expect(Page.isCreatableName(`/user/alice/${tab}`)).toBe(false);
+    });
+
     test('should decide creatable or not', () => {
       expect(Page.isCreatableName('/hoge')).toBe(true);
 
