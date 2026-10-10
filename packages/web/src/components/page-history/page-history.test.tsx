@@ -1,4 +1,5 @@
 import type { PageHistoryContentRow, PageHistoryEntry, PageHistoryEventRow, PageUser } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement, type PropsWithChildren } from 'react';
@@ -250,6 +251,17 @@ describe('PageHistory merged timeline', () => {
     render(createElement(PageHistory, { pageId: 'page-1', pagePath: '/some/page' }), { wrapper: makeWrapper() });
 
     expect(screen.getByRole('link', { name: 'sion-new' })).toHaveAttribute('href', '/some/page?revision_id=revision-new');
+  });
+
+  it('AC-04: an artifact page history still lists its revisions with deep links to each version, and offers no body-edit control', () => {
+    // The timeline rows carry no body, so an artifact page's history is the same shape: view and navigation only.
+    mockHistory([baseContentRow({ id: 'content-new', revisionId: 'artifact-rev-new' }), baseContentRow({ id: 'content-old', revisionId: 'artifact-rev-old' })]);
+
+    render(createElement(PageHistory, { pageId: 'artifact-page-1', pagePath: '/team/artifact-page' }), { wrapper: makeWrapper() });
+
+    expect(screen.getByRole('link', { name: '-rev-new' })).toHaveAttribute('href', '/team/artifact-page?revision_id=artifact-rev-new');
+    expect(screen.getByRole('link', { name: '-rev-old' })).toHaveAttribute('href', '/team/artifact-page?revision_id=artifact-rev-old');
+    expect(screen.queryByRole('button', { name: m['page.action_edit']() })).toBeNull();
   });
 
   it('loads the next page of timeline entries', () => {

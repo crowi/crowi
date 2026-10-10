@@ -214,6 +214,38 @@ describe('PageHeader — expanded state', () => {
   });
 });
 
+describe('PageHeader — edit entry (artifact-edit-guard, AC-01)', () => {
+  const editName = () => m['page.action_edit']();
+
+  it('without onEdit, neither the wide nor the narrow layout renders an edit control, while metadata actions stay', () => {
+    for (const wide of [true, false]) {
+      cleanup();
+      if (wide) mockWideViewport();
+      else vi.restoreAllMocks();
+      renderHeader(<PageHeader page={makePage()} showActions />);
+      expect(screen.queryAllByRole('button', { name: editName() })).toHaveLength(0);
+      // The like action (a metadata operation) is untouched.
+      expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('with onEdit, the edit control is present and fires the callback', () => {
+    const onEdit = vi.fn();
+    mockWideViewport();
+    renderHeader(<PageHeader page={makePage()} showActions onEdit={onEdit} />);
+    const buttons = screen.getAllByRole('button', { name: editName() });
+    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(buttons[0]);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the compact bar free of an edit control without onEdit', () => {
+    mockCompact();
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.queryAllByRole('button', { name: editName() })).toHaveLength(0);
+  });
+});
+
 describe('PageHeader — compact state', () => {
   beforeEach(() => {
     mockCompact();

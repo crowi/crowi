@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { render, cleanup, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * RFC-0005 Phase 3 — the `_edit?path=X` create flow (`CreatePageEditor`).
@@ -49,16 +50,58 @@ vi.mock('@/lib/use-auth', () => ({
 // --- heavy editor / collab deps (only the update branch needs them) --
 vi.mock('@/components/editor/collaborative-markdown-editor', () => ({
   CollaborativeMarkdownEditor: () => null,
-  useCollabSession: () => ({ status: 'connecting', yText: null, awareness: null }),
+  useCollabSession: () => ({
+    status: 'connecting',
+    yText: null,
+    yUndoManager: null,
+    awareness: null,
+    synced: false,
+    hasEverSynced: false,
+    authRecoveryExhausted: false,
+    subscribeStateless: () => () => undefined,
+    sendStateless: () => undefined,
+    doc: null,
+  }),
 }));
 vi.mock('@/components/editor/markdown-editor', () => ({ MarkdownEditor: () => null }));
 vi.mock('@/components/editor/markdown-preview', () => ({ MarkdownPreview: () => null }));
-vi.mock('@/lib/use-page', () => ({ usePage: () => ({ page: null, isLoading: true, isError: false }) }));
-vi.mock('@/lib/use-presence', () => ({ usePresence: () => undefined }));
+// `usePage` is driven per test through `pageResults` (keyed by the `page_id` / `path` it is asked for).
+const { usePage, pageResults, presenceMounts, presenceUnmounts } = vi.hoisted(() => {
+  type PageResult = { page: unknown; isLoading: boolean; isError: boolean; error: Error | null; notFound: boolean; notGranted: boolean };
+  const loading: PageResult = { page: null, isLoading: true, isError: false, error: null, notFound: false, notGranted: false };
+  const pageResults = { byId: new Map<string, PageResult>(), byPath: new Map<string, PageResult>(), loading };
+  return {
+    pageResults,
+    presenceMounts: { value: 0 },
+    presenceUnmounts: { value: 0 },
+    usePage: vi.fn((params: { page_id?: string; path?: string }) => {
+      if (params.page_id) return pageResults.byId.get(params.page_id) ?? loading;
+      if (params.path) return pageResults.byPath.get(params.path) ?? loading;
+      return loading;
+    }),
+  };
+});
+vi.mock('@/lib/use-page', () => ({ usePage }));
+// Mounted only by `MarkdownPageEditor`: counting it proves whether the editing stack started at all.
+vi.mock('@/lib/use-presence', async () => {
+  const { useEffect } = await import('react');
+  return {
+    usePresence: () => {
+      useEffect(() => {
+        presenceMounts.value += 1;
+        return () => {
+          presenceUnmounts.value += 1;
+        };
+      }, []);
+      return undefined;
+    },
+  };
+});
 // `usePageTitle` pulls in `useAppInfo` (`useQuery`); mock to a no-op so the
 // test doesn't need a `QueryClientProvider`. Document-title behaviour is
 // covered separately and not in scope for the create-flow tests here.
 vi.mock('@/lib/use-page-title', () => ({ usePageTitle: vi.fn() }));
+vi.mock('@/lib/use-app-info', () => ({ useLinkCardEnabled: () => false }));
 // `UpdatePageEditor` mounts these unconditionally; the real hooks call
 // `useQueryClient()` and would throw without a `QueryClientProvider`.
 vi.mock('@/lib/use-page-mutations', () => ({
@@ -74,19 +117,25 @@ vi.mock('@tanstack/react-query', async () => {
   return { ...actual, useQueryClient: () => ({ invalidateQueries: vi.fn() }) };
 });
 
-import { DraftPathConflictError } from '@/lib/use-drafts';
 import { m } from '@paraglide/messages.js';
+import { DraftPathConflictError } from '@/lib/use-drafts';
 import { EditPageClient } from './edit-page-client';
 
 beforeEach(() => {
+  usePage.mockClear();
+  pageResults.byId.clear();
+  pageResults.byPath.clear();
+  presenceMounts.value = 0;
+  presenceUnmounts.value = 0;
   replace.mockReset();
   back.mockReset();
   searchParamsGet.mockReset();
   createDraftMutateAsync.mockReset();
   draftsData.value = { drafts: [] };
   authUser.value = { id: 'me' };
-  // Default: `?path=/new/page`, no `page_id`.
+  // Default: `?path=/new/page`, no `page_id`, and that path is free (an explicit 404).
   searchParamsGet.mockImplementation((key: string) => (key === 'path' ? '/new/page' : null));
+  pageResults.byPath.set('/new/page', { page: null, isLoading: false, isError: false, error: null, notFound: true, notGranted: false });
 });
 
 afterEach(() => {
@@ -184,5 +233,152 @@ describe('CreatePageEditor (_edit?path=)', () => {
     // orphaned on the destroyed first-mount observer).
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/_edit?page_id=draft-1'));
     expect(createDraftMutateAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * artifact-edit-guard (R-4) — the route decides from the fetched page before
+ * it mounts anything of the editing stack. `usePresence` is mounted only by
+ * the Markdown editor child, so `presenceMounts` is the "did the editor
+ * start" probe (the collab session, recovery buffer, session-reauth provider
+ * and save mutation live in the same subtree).
+ */
+describe('EditPageClient — artifact guard (artifact-edit-guard)', () => {
+  const found = (overrides: Record<string, unknown>) => ({
+    page: {
+      _id: 'page-1',
+      path: '/team/some page',
+      grant: 1,
+      revision: { _id: 'rev-1', path: '/team/some page', body: '# body', contentType: 'markdown' },
+      ...overrides,
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    notFound: false,
+    notGranted: false,
+  });
+  const artifactPage = () => found({ revision: { _id: 'rev-a', path: '/team/some page', body: '<html></html>', contentType: 'artifact' } });
+  const blockedTitle = () => m['edit.artifact_blocked_title']();
+  const blockedBody = () => m['edit.artifact_blocked_body']();
+
+  // The Markdown editor's children use react-query mutations (attachments), so they need a real provider.
+  const renderEdit = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return render(<EditPageClient />, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+  };
+
+  const queryIs = (params: Record<string, string>) => searchParamsGet.mockImplementation((key: string) => params[key] ?? null);
+
+  it('?page_id= of an artifact page: shows the notice with a way back derived from the fetched path, and starts nothing', () => {
+    queryIs({ page_id: 'page-1' });
+    pageResults.byId.set('page-1', artifactPage());
+    renderEdit();
+
+    expect(screen.getByText(blockedTitle())).toBeTruthy();
+    expect(screen.getByText(blockedBody())).toBeTruthy();
+    const back = screen.getByRole('link', { name: m['edit.back_to_page']() });
+    expect(back.getAttribute('href')).toBe('/team/some+page');
+    expect(presenceMounts.value).toBe(0);
+    expect(createDraftMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('the notice carries the exact product wording', () => {
+    expect(m['edit.artifact_blocked_body']({}, { locale: 'ja' })).toBe(
+      'この編集画面では artifact を編集できません。本文の編集には CLI または MCP を使用してください。',
+    );
+    expect(m['edit.back_to_page']({}, { locale: 'ja' })).toBe('ページに戻る');
+    expect(m['edit.artifact_blocked_body']({}, { locale: 'en' })).toBe('This editor cannot edit artifact pages. Use the CLI or MCP to edit the body.');
+  });
+
+  it('?path= of an existing artifact page: shows the same notice, never creates a draft, never starts the editor', () => {
+    queryIs({ path: '/team/some page' });
+    pageResults.byPath.set('/team/some page', artifactPage());
+    renderEdit();
+
+    expect(screen.getByText(blockedBody())).toBeTruthy();
+    expect(screen.getByRole('link', { name: m['edit.back_to_page']() }).getAttribute('href')).toBe('/team/some+page');
+    expect(createDraftMutateAsync).not.toHaveBeenCalled();
+    expect(presenceMounts.value).toBe(0);
+  });
+
+  it.each([
+    ['loading', { page: null, isLoading: true, isError: false, error: null, notFound: false, notGranted: false }],
+    ['a 401 / network failure', { page: null, isLoading: false, isError: true, error: new Error('Failed to fetch page'), notFound: false, notGranted: false }],
+    ['a 403', { page: null, isLoading: false, isError: false, error: null, notFound: false, notGranted: true }],
+    ['a 404', { page: null, isLoading: false, isError: false, error: null, notFound: true, notGranted: false }],
+  ])('?page_id= while %s: no editor, no presence, no draft POST', (_label, result) => {
+    queryIs({ page_id: 'page-1' });
+    pageResults.byId.set('page-1', result);
+    renderEdit();
+
+    expect(presenceMounts.value).toBe(0);
+    expect(createDraftMutateAsync).not.toHaveBeenCalled();
+    expect(screen.queryByText(blockedBody())).toBeNull();
+  });
+
+  it.each([
+    ['loading', { page: null, isLoading: true, isError: false, error: null, notFound: false, notGranted: false }],
+    ['a failure', { page: null, isLoading: false, isError: true, error: new Error('Failed to fetch page'), notFound: false, notGranted: false }],
+    ['a 403', { page: null, isLoading: false, isError: false, error: null, notFound: false, notGranted: true }],
+  ])('?path= while %s: waits or errors without POSTing a draft or starting the editor', (_label, result) => {
+    queryIs({ path: '/team/some page' });
+    pageResults.byPath.set('/team/some page', result);
+    renderEdit();
+
+    expect(createDraftMutateAsync).not.toHaveBeenCalled();
+    expect(presenceMounts.value).toBe(0);
+  });
+
+  it('?path= that is free (explicit 404) still creates a draft, and a later page refetch does not swap the draft flow out', async () => {
+    queryIs({ path: '/team/free' });
+    pageResults.byPath.set('/team/free', { page: null, isLoading: false, isError: false, error: null, notFound: true, notGranted: false });
+    mutateResolvesWith('draft-9');
+    const view = renderEdit();
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/_edit?page_id=draft-9'));
+    expect(createDraftMutateAsync).toHaveBeenCalledTimes(1);
+
+    // The draft POST invalidates page queries; the path now resolves to the new draft. No remount, no second POST.
+    pageResults.byPath.set('/team/free', found({ _id: 'draft-9', path: '/team/free' }));
+    view.rerender(<EditPageClient />);
+    expect(createDraftMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('?path= of an existing Markdown page opens its editor instead of creating a draft', () => {
+    queryIs({ path: '/team/some page' });
+    pageResults.byPath.set('/team/some page', found({}));
+    pageResults.byId.set('page-1', found({}));
+    renderEdit();
+
+    expect(createDraftMutateAsync).not.toHaveBeenCalled();
+    expect(usePage).toHaveBeenCalledWith({ page_id: 'page-1' });
+  });
+
+  it('switching the query from a Markdown page to an artifact page discards the editor session', () => {
+    queryIs({ page_id: 'page-1' });
+    pageResults.byId.set('page-1', found({}));
+    pageResults.byId.set('page-2', found({ _id: 'page-2', revision: { _id: 'rev-a', path: '/x', body: '<html></html>', contentType: 'artifact' } }));
+    const view = renderEdit();
+    expect(presenceMounts.value).toBe(1);
+    expect(presenceUnmounts.value).toBe(0);
+
+    queryIs({ page_id: 'page-2' });
+    view.rerender(<EditPageClient />);
+    expect(presenceUnmounts.value).toBe(1);
+    expect(screen.getByText(blockedBody())).toBeTruthy();
+  });
+
+  it('switching between two Markdown pages remounts the editor (no state carried across ids)', () => {
+    queryIs({ page_id: 'page-1' });
+    pageResults.byId.set('page-1', found({}));
+    pageResults.byId.set('page-2', found({ _id: 'page-2' }));
+    const view = renderEdit();
+    expect(presenceMounts.value).toBe(1);
+
+    queryIs({ page_id: 'page-2' });
+    view.rerender(<EditPageClient />);
+    expect(presenceUnmounts.value).toBe(1);
+    expect(presenceMounts.value).toBe(2);
   });
 });

@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createElement, type PropsWithChildren } from 'react';
 import { overwriteGetLocale } from '@paraglide/runtime.js';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type PropsWithChildren } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock `apiClient` so every mutation call hits our fake instead of the
 // network. Each mutation owns its own dedicated fn so a test only needs to
@@ -30,6 +30,8 @@ vi.mock('./api-client', () => ({
   },
 }));
 
+import { PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
+import { draftsKeys } from './use-drafts';
 import {
   invalidatePageContentQueries,
   PageRevisionConflictError,
@@ -41,8 +43,6 @@ import {
   useSetPageGrant,
   useUpdatePage,
 } from './use-page-mutations';
-import { PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
-import { draftsKeys } from './use-drafts';
 
 beforeEach(() => {
   putPage.mockReset();
@@ -123,6 +123,31 @@ describe('useUpdatePage', () => {
     const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
     expect(keys).toContainEqual(pageKeys.all);
     expect(keys).toContainEqual(PAGE_LIST_FAMILY_ROOT);
+  });
+
+  it('AC-03: declares the Markdown body kind on every update, and the revert / grant mutations send no such header', async () => {
+    putPage.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/some-page/' } }) });
+    revertToRevision.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/some-page/' } }) });
+    putGrant.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/some-page/' } }) });
+    const { wrapper } = makeMutationContext();
+
+    const update = renderHook(() => useUpdatePage(), { wrapper });
+    await act(async () => {
+      await update.result.current.mutateAsync({ page_id: 'p1', body: '# updated' });
+    });
+    expect(putPage).toHaveBeenCalledWith({ json: { page_id: 'p1', body: '# updated' }, header: { 'x-crowi-page-content-type': 'markdown' } });
+
+    const revert = renderHook(() => useRevertToRevision(), { wrapper });
+    await act(async () => {
+      await revert.result.current.mutateAsync({ page_id: 'p1', revision_id: 'r1' });
+    });
+    expect(revertToRevision).toHaveBeenCalledWith({ json: { page_id: 'p1', revision_id: 'r1' } });
+
+    const grant = renderHook(() => useSetPageGrant(), { wrapper });
+    await act(async () => {
+      await grant.result.current.mutateAsync({ page_id: 'p1', grant: 1 });
+    });
+    expect(putGrant).toHaveBeenCalledWith({ json: { page_id: 'p1', grant: 1 } });
   });
 
   // feature-user-page-subpages-tab — `useUpdatePage` doubles as the `grant`

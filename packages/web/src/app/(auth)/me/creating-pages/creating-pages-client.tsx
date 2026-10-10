@@ -6,6 +6,7 @@ import { FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { CreatePageDialog } from '@/components/create-page/create-page-dialog';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -17,10 +18,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { CreatePageDialog } from '@/components/create-page/create-page-dialog';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
+import { pagePathToHref } from '@/lib/page-path';
 import { draftEditHref, useCancelDraft, useDrafts } from '@/lib/use-drafts';
 import { usePageTitle } from '@/lib/use-page-title';
 
@@ -153,6 +154,10 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const editHref = draftEditHref(draft.pageId);
+  // An artifact draft's body is not editable in the Web: its path links to the page view instead, and the edit
+  // icon is dropped. A response from an older server has no `contentType` and means Markdown.
+  const canEditInWeb = (draft.contentType ?? 'markdown') === 'markdown';
+  const pathHref = canEditInWeb ? editHref : pagePathToHref(draft.path);
   const showUpdated = hasMeaningfulEdit(draft.createdAt, draft.updatedAt);
 
   const handleCancel = () => {
@@ -174,7 +179,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
         <div className="min-w-0 flex-1 space-y-0.5">
           {/* Line 1 — path (links to the editor) */}
           <Link
-            href={editHref}
+            href={pathHref}
             className="block truncate font-mono text-sm font-medium text-foreground transition-colors hover:text-primary"
             title={draft.path}
           >
@@ -198,15 +203,17 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
         {/* Icon action column — Edit / Cancel. Icon-only keeps the row
             tight; aria-label + title carry the accessible label. */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => router.push(editHref)}
-            aria-label={m['creating_pages.action_edit']()}
-            title={m['creating_pages.action_edit']()}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {canEditInWeb && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => router.push(editHref)}
+              aria-label={m['creating_pages.action_edit']()}
+              title={m['creating_pages.action_edit']()}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
