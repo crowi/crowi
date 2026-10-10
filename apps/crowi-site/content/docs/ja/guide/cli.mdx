@@ -3,9 +3,9 @@ title: CLI (コマンドライン)
 description: "`@crowi/cli` でターミナルから wiki を検索・読み取り・作成・編集する"
 ---
 
-`@crowi/cli` は、ターミナルから Crowi を操作するための **エンドユーザー向け
-コマンドラインツール** です。`npm i -g @crowi/cli` で配布され、`crowi` という
-名前で使えます。HTTP のみで wiki を叩き (DB には触れません)、OAuth で
+`@crowi/cli` は、ターミナルから Crowi を操作するためのエンドユーザー向けの
+コマンドラインツールです。`npm i -g @crowi/cli` で配布され、`crowi` という
+名前で使えます。HTTP だけで wiki にアクセスし (DB には触れません)、OAuth で
 **あなた自身として** ページの検索 / 読み取り / 作成 / 編集を行います。
 
 <Callout title="運用者向けの admin-cli とは別物です">
@@ -29,12 +29,12 @@ Node.js 18 以上が必要です。
 
 ## 認証
 
-`crowi` は **public OAuth クライアント** で PKCE を使います (クライアント
+`crowi` は public OAuth クライアントで、PKCE を使います (クライアント
 シークレットはありません)。トークンは `~/.config/crowi/contexts.json`
 (`$XDG_CONFIG_HOME` を尊重) に **ファイルモード `0600`** の JSON として保存
 されます。
 
-ログインの宛先 URL は、接続先 Crowi の **公開オリジン** (OAuth issuer。
+ログインの宛先 URL には、接続先 Crowi の公開オリジン (OAuth issuer。
 通常は web を配信しているホスト) を指定します。3 つのフローがあります。
 
 ```bash
@@ -64,7 +64,7 @@ crowi login --token <pat> https://wiki.example.com
 [crowi CLI](../reference/cli) のコマンド表を参照してください。
 
 `--scope` は **既定を上書き** します。ページ系も使い続けるなら
-`pages:read pages:write` も含めて列挙するか、アンブレラ `read write` を要求
+`pages:read pages:write` も含めて列挙するか、すべての対象をまとめて指定する `read write` を要求
 してください (サーバ側が発行可能な全 `*:read` / `*:write` に展開します)。
 
 ```bash
@@ -78,28 +78,28 @@ crowi login https://wiki.example.com --scope "read write"   # 発行可能な全
 
 ### スコープが足りないコマンドを実行したとき
 
-事前チェックは行わず、コマンドは実際に API を叩きます。スコープが不足して
-いると、サーバが `403 INSUFFICIENT_SCOPE` を返し、CLI はそれを **実行可能な
-ヒント** に変換して非ゼロ終了 (コード `3`) します。
+CLI は事前にチェックせず、そのまま API を呼び出します。スコープが不足して
+いると、サーバが `403 INSUFFICIENT_SCOPE` を返し、CLI はそれを対処方法の分かる
+ヒントに変換して非ゼロ終了 (コード `3`) します。
 
 ```console
 $ crowi comment add /onboarding -m "looks good"
 crowi: your token lacks the required scope — re-login granting it: `crowi login --scope "comments:write"`
 ```
 
-クラッシュも黙殺もせず、「どのスコープが要るか」と「どう再ログインするか」を
-提示して落ちます。
+クラッシュしたり黙って失敗したりせず、「どのスコープが要るか」と「どう再ログインするか」を
+示して終了します。
 
 ## プロファイル (マルチエンドポイント / マルチアカウント)
 
 複数の Crowi サーバ・アカウントを名前付きプロファイルで併用できます
-(`gh` / `kubectl` の context と同型)。トークンは **エンドポイント単位** で
+(`gh` / `kubectl` の context と同じ考え方です)。トークンはエンドポイント単位で
 保存されます。
 
 `-p, --profile <alias>` はどのコマンドでも、コマンド名の **前後どちらにも**
 置けます。コマンド名より後ろに置く場合は、`<url>` のような引数の前後どちら
-でも構いません (`login` の position 引数とは独立な option なので)。両方に
-指定した場合はコマンド名以降 (コマンド側) の指定が優先されます:
+でも構いません (`--profile` は `login` の位置引数とは独立したオプションです)。両方に
+指定した場合はコマンド名以降 (コマンド側) の指定が優先されます。
 
 ```bash
 # コマンド名の後、引数の後ろ (自然な語順)
@@ -124,7 +124,7 @@ crowi --profile old login https://wiki.example.com --profile new
 ### current プロファイルの切り替え
 
 `--profile` を毎回指定したくない場合は、`crowi profiles use <alias>` で
-current プロファイル (`--profile` 未指定時の既定) を切り替えられます:
+current プロファイル (`--profile` 未指定時の既定) を切り替えられます。
 
 ```bash
 crowi profiles use almoha
@@ -139,23 +139,69 @@ crowi search "release notes"   # --profile なしで almoha に対して実行�
 ## コマンド一覧
 
 サブコマンド・固有のフラグ・必要なスコープの一覧は
-[crowi CLI](../reference/cli) にあります。引数は送信前に対応する API
+[crowi CLI](../reference/cli) にあります。引数はリクエストの送信前に対応する API
 リクエストスキーマで検証されるため、不正な path などは往復せずローカルで
 明確なエラーになります。
 
+### 最近更新されたページを探す (`recent`)
+
+検索語がなくても、閲覧できるページを最終更新の新しい順に一覧できます。1 行は更新イベントではなくページの現在の状態です。
+
+```bash
+crowi recent --limit 20 --json
+crowi recent --prefix /team/ --limit 20 --offset 20
+```
+
+一覧はライブなので、`--offset` で順に取得する間にページが更新されると重複や取りこぼしが起こり得ます。`--prefix` は `path_prefix` に対応したサーバが必要で、適用を確認できない場合は一覧を出さずに失敗します。引数と列の詳細は [crowi CLI](../reference/cli) か `crowi recent --help` を見てください。
+
 ### artifact ページを書く (`--type`)
 
-`create` / `update` は `--type markdown` または `--type artifact` でページの種別を宣言できます。省略するとサーバの既定に従います — `create` は markdown のページになり、`update` は現在の種別をそのまま保ちます。`--type` を省略した update が artifact ページを markdown に戻すことはありません。いずれの場合も種別は `--file` の拡張子や本文の中身から推測されません。`--type artifact` を指定するときの本文は、**単一の自己完結 HTML document** である必要があります — 外部の script / stylesheet / image / module を参照せず、相対パスも使わず、バイナリは `data:` URI で埋め込みます。
+`create` / `update` は `--type markdown` または `--type artifact` でページの種別を宣言できます。省略するとサーバの既定に従い、`create` は markdown のページになり、`update` は現在の種別をそのまま保ちます。`--type` を省略した update が artifact ページを markdown に戻すことはありません。いずれの場合も種別は `--file` の拡張子や本文の中身から推測されません。`--type artifact` を指定するときの本文は、単一の自己完結した HTML 文書である必要があります。具体的には、外部の script / stylesheet / image / module を参照せず、リソースを指す相対パスも使わず、バイナリは `data:` URI で埋め込みます。禁止されるのはリソース参照の相対パスだけで、他の wiki ページへのリンクは別です (次節)。
 
-`edit` は artifact ページでも markdown ページと同じように使えます。`.md` ではなく `.html` の一時ファイルを開く (エディタのシンタックスハイライトが本文と噛み合う) だけで、保存時にページの種別が変わることはありません。
+#### artifact から wiki ページへリンクする
 
-artifact の書き込みが拒否されると終了コード `6` (invalid) になり、サーバの固定メッセージに規則の識別子と理由が付いて表示されます:
+HTML の `a[href]` / `area[href]` に wiki ページのパスを書けます。基準は artifact 自身のページのパスで、解決は兄弟基準です (末尾に `/` が付いたページ名でも同じです)。例として `/team/artifact` に置いたページからは次のように解決されます。
+
+| 書き方 | 移動先 |
+| --- | --- |
+| `/team/guide` | `/team/guide` (ルートからの絶対パス) |
+| `./guide` / `guide` | `/team/guide` |
+| `../guide#overview` | `/guide` の `#overview` |
+| `./` | `/team/` |
+
+- `area` は対応する画像地図として書きます。`img[usemap]` には同一文書の `#名前` だけを書けます。
+- ページ名の空白は、そのまま・`+`・`%20` のどれでも書けます。ページ名に含まれる `%` は `%25` と書きます (`100%25done` はページ `100%done` に解決されます)。`%` に続く 2 桁の 16 進数が作れない `100%done` / `100%off` / `%ZZ` / `%2G` / 末尾の `%` は保存時に拒否されます。
+- `:` を含むページ名は、`/team/section:1` か `./section:1` と書きます。`section:1` のように先頭が `scheme:` に見える相対表記は URL と区別できないため拒否されます。
+- ページのパスには `?` (query) を付けられません。`/guide?edit=1` は保存時に拒否されます。`?` を禁じるのはページのパス部分だけで、`/guide#what?next` のように fragment の中の `?` は fragment の一部です。`#section` は artifact 内の移動のままで、`/page#section` は移動先ページの fragment を指します。同じ文書内のリンクは `#id` と書き、`#` だけや `#a?b` は拒否されます。`#section%` のような fragment だけのリンクは従来どおり保存でき、fragment にページ名の `%25` の規則は流用されません。
+- 外部 URL (`https:` / `mailto:` / `tel:` / `//host/...` のような protocol-relative URL) はリンクにできません。`href` を外してアドレスを本文のテキストとして残します。同じ wiki の完全 URL や protocol-relative URL は `/team/guide` のようなページのパスに直します。`//` で始まる値は protocol-relative URL として扱うので、`//example.com/guide` を `/example.com/guide` に直してはいけません。`:` を含むページ名に `./` を付けるのは、そのページが実在するときだけです。
+- システム用の経路 (`/admin` / `/api` / `/login` など)、`/_` で始まる経路、`/user` (一覧)、ページ ID だけの経路への**絶対**リンクは、保存時に拒否されます。`<wiki origin>/<page id>` の完全 URL も、`/<page id>` の形も使えません。相対リンクは保存時には字句だけを検査し、リンクが押されたときに親がページの位置から解決します。たとえば `../admin` は `/team/artifact` からは `/admin` になって移動せず、`/team/sub/artifact` からは `/team/admin` になって移動します。
+
+```html
+<map name="m"><area href="guide" shape="rect" coords="0,0,80,80"></map>
+<img src="data:image/png;base64,..." usemap="#m">
+```
+
+読者が artifact 内で通常のクリックや Enter でリンクを操作すると、wiki の画面が同じタブでそのページへ移動します。cmd / ctrl を押しながらのクリックと `target="_blank"` は新しいタブで開き、新しいタブから元のページを操作することはできません。ブラウザがポップアップを拒否した場合、同じタブへの置き換えや再試行はしません。中クリック・右クリック・Shift / Alt・`download`・`_top` / `_parent` / 名前付き `target` は何も起きません。
+
+この移動は artifact の中で本当に操作があったときだけ行われます。ページを開いただけの時点や、コメント欄などページ側の入力欄を操作している間に artifact が移動を要求しても、移動しません。ページを開いた直後や、ページ側で操作した直後 (Tab で artifact に移った直後を含む) に artifact 内のリンクを操作したときは、すぐには移動せず、artifact の下に移動先のページパスを示す確認表示が出て、そのボタンを押したときだけ移動します。移動先は wiki 側が検査して閲覧権限のあるページだけを開くので、リンクが新しい閲覧権限を与えることはありません。存在しないページへのリンクを開いてもページは作られず、通常の「ページを作成」の表示になります。
+
+作者のスクリプトがクリックをあとからキャンセルしても、すでに wiki へ送られた移動を取り消すことはできません。リンクを「押したら何かを開閉する」ようなトリガーとして使わないでください。保証の対象は、保存本文に書かれた静的な `a` / `area` に限ります。それらは配信時に差し込まれるガードスクリプトよりあとに解析されるため、描画された時点から介入が有効で、リンク操作で artifact 自身が別 URL に遷移することはありません。ガードより前に実行される作者の head 内スクリプトが生成したリンクや、作者のスクリプトによる frame 自身の遷移は保証の外です。配信 URL を単独のタブで開いたときは、wiki へのリンクは何も起きません。
+
+`edit` は artifact ページでも markdown ページと同じように使えます。`.md` ではなく `.html` の一時ファイルを開く (エディタのシンタックスハイライトが本文に合う) だけで、保存時にページの種別が変わることはありません。
+
+外部の stylesheet は使えませんが、管理者が Web フォントを許可している wiki では Google Fonts の stylesheet だけは使え、許可されていなければ FONT_REFERENCE_FORBIDDEN で拒否されます。
+
+artifact の書き込みが拒否されると終了コード `6` (invalid) になり、サーバの固定メッセージに規則の識別子と理由が付いて表示されます。リンクやリソースの問題には診断コードも付きます。`--json` や `--quiet` を付けても拒否の表示は同じ stderr に出て、stdout には何も出力されません。
 
 ```console
 $ crowi create /demo --type artifact --file page.html
-crowi: This script type is not allowed in an artifact page. (AI-R13 / SCRIPT_TYPE_FORBIDDEN)
-target: script[type]
+crowi: Query strings are not allowed in wiki page links; use a page path such as /guide or /guide#overview. (AI-R11 / EXTERNAL_REFERENCE) [diagnostic: PAGE_LINK_QUERY]
+target: a[href]
 ```
+
+`target` は要素や属性の名前で、本文中の一意な位置ではありません。同じ `a[href]` が複数あるときは自分の本文と規則を照らし合わせてください。表示には拒否された値や HTML の断片は含まれません。直し方は [MCP ガイド](./mcp#artifact-ページを書く) の診断コードの表にまとめてあります。外部 URL は `href` を外して本文のテキストにし、同じ wiki の URL はページのパスに直し、`?` は取り除き、ページ名の `%` は `%25` と書き、リソースは許可された位置の `data:` URI に埋め込み、`@import` は URL ではなく規則ごと除きます。
+
+過去に保存できた予約された経路へのリンクを含む版を、web の「この版に戻す」や `crowi_revert_to_revision` で復元しようとすると、同じ検査で 400 になることがあります。保存済みの本文や表示は書き換えません。MCP または CLI でその版の本文を取得して HTML の問題を直し、現在版の `revision_id` を取得して、その ID を付けて `update` で保存します。CLI の場合は `crowi get <path> --revision <id>` で過去版の本文を、`crowi get <path> --json` で現在版の `revisionId` を取得できます。MCP では `crowi_get_revision` で過去版の本文を取得し、`crowi_get_page` で現在版の `revision_id` を取得してから、その ID を付けて `crowi_update_page` を呼びます。過去版の `revision_id` をそのまま渡すと 409 になります。
 
 ### `edit` の競合 (409)
 
@@ -182,19 +228,19 @@ crowi attach download 6650f0c1a2b3c4d5e6f70123 > design.pdf   # -o 省略時は 
 
 ### 添付ファイルのアップロード
 
-`attach add <path-or-id> <file>` は、送信する前に **サーバへ「何を受け付けるか」を聞きます** (`GET /api/attachments/upload-policy`)。サーバが答えるのは、受理する MIME タイプの一覧・拡張子から MIME への対応表・経路ごとのサイズ上限です。CLI はこれを 2 つに使います。ファイル名の拡張子から宣言する `Content-Type` を決めることと、通らないと分かっているアップロードを送信前に手元で弾くことです。大きなファイルを送りきってから `413` を受け取る、という往復が無くなります。
+`attach add <path-or-id> <file>` は、送信する前に、サーバへ「何を受け付けるか」を問い合わせます (`GET /api/attachments/upload-policy`)。サーバが答えるのは、受理する MIME タイプの一覧・拡張子から MIME への対応表・経路ごとのサイズ上限です。CLI はこれを 2 つの用途に使います。ファイル名の拡張子から宣言する `Content-Type` を決めることと、通らないと分かっているアップロードを送信前に手元で弾くことです。大きなファイルを送りきってから `413` を受け取る、という往復が無くなります。
 
-手元で弾かれたときは終了コード `6` (invalid) で、理由が stderr に出ます:
+手元で弾かれたときは終了コード `6` (invalid) で、理由が stderr に出ます。
 
 ```
 upload rejected: video.mkv has type application/octet-stream, which this server does not accept for attachments
 ```
 
-取得した policy はプロファイルに 10 分キャッシュされるので、実行のたびに往復はしません。**この endpoint を持たない古いサーバ**は `404` を返し、CLI は同梱の拡張子テーブルに切り替えます — 事前チェックが無くなるだけで、アップロード自体は従来どおり動きます。
+取得した policy はプロファイルに 10 分キャッシュされるので、実行のたびに往復はしません。この endpoint を持たない古いサーバは `404` を返し、CLI は同梱の拡張子テーブルに切り替えます。事前チェックが無くなるだけで、アップロード自体は従来どおり動きます。
 
 ## 出力フォーマットとスクリプティング
 
-`search` と `ls` は `--format` / `--template` で出力を整形でき、パイプ処理に
+`search` / `ls` / `recent` は `--format` / `--template` で出力を整形でき、パイプ処理に
 向きます。指定できる値と終了コードの一覧は
 [crowi CLI](../reference/cli) にあります。
 
@@ -224,7 +270,7 @@ crowi completion fish > ~/.config/fish/completions/crowi.fish
 
 Crowi は self-hosted なので、`crowi` と接続先サーバのバージョンがずれることがあります。CLI がそれを理由にコマンドを拒否することはありません。
 
-サーバの API が CLI の想定と違う場合は 1 行の注意を出したうえで実行を続け、そのサーバが持たない機能 (検索バックエンド未設定時の `search` など) は「このサーバでは利用できません」と表示します。
+サーバの API が CLI の想定と違う場合は 1 行の注意を出したうえで実行を続け、そのサーバが持たない機能 (検索バックエンド未設定時の `search` など) は「このサーバでは利用できません」と表示します。ただし、適用を確認できない絞り込みは例外で、`crowi recent --prefix` は絞り込まれていないかもしれない一覧を出す代わりに終了コード `7` で失敗します。
 
 ## 関連ページ
 

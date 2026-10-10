@@ -2,6 +2,7 @@
 
 import { UsernameSchema } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
 import { AtSign, LogIn, Mail, MailCheck, ShieldAlert } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -114,7 +115,7 @@ export function FederatedRegisterForm() {
     setErrors([]);
 
     try {
-      // AC-4/AC-8: the request carries `username` ONLY — never a sender
+      // AC-4/AC-8: the request carries `username` and the UI `lang` ONLY — never a sender
       // key. The server binds the Open-mode success handoff to the
       // ORIGINAL `/auth/providers/{name}/start` sender key this journal
       // row was minted against (never a key THIS request could supply),
@@ -122,7 +123,7 @@ export function FederatedRegisterForm() {
       // handoff to an attacker's own key.
       const response = await apiClient.auth['federated-registration'][':token'].$post({
         param: { token },
-        json: { username: parsedUsername.data },
+        json: { username: parsedUsername.data, lang: getLocale() },
       });
 
       if (response.status === 200) {

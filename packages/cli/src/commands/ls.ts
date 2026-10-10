@@ -46,6 +46,7 @@ export function registerLs(program: Command): void {
   program
     .command('ls [path]')
     .description('List child pages under a path (defaults to the top level)')
+    .addHelpText('after', '\nFor recently updated pages, use crowi recent.')
     .option('--format <mode>', 'output format: human | table | template | json')
     .option('--template <tpl>', "row template with {{field}} placeholders, e.g. '{{path}}\\t{{count}}'")
     .action(async (path: string | undefined, options: { format?: string; template?: string }, command: Command) => {

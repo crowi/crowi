@@ -78,11 +78,11 @@ As of 2026-08 that is 22 packages:
 
 **When you add a new published package, publish that one package by hand once.** npm only lets you configure a Trusted Publisher on a package that **already exists on the registry**, so a name that has never been published cannot be registered. The order is: run `npm publish` once locally → register the Trusted Publisher for it on npmjs.com → every release after that goes through CI's OIDC publish. Release before registering and that package's publish is the one step that fails to authenticate.
 
-### 2. GitHub: allow Actions to create PRs
+### 2. GitHub: the bot App that opens the Version PR
 
-In repo Settings → Actions → General → Workflow permissions, turn
-**"Allow GitHub Actions to create and approve pull requests" ON**. With it OFF,
-`changesets/action` cannot open the Version PR.
+The Version PR is opened and pushed with an installation token of the org's bot GitHub App. A PR opened with `GITHUB_TOKEN` leaves every `pull_request` CI run waiting at "workflow awaiting approval" until someone approves it by hand.
+
+Install the App on crowi/crowi with write access to Contents and Pull requests, then register `BOT_CLIENT_ID` (the App's Client ID) and `BOT_PRIVATE_KEY` (the App's private key, PEM) as org secrets. The repo setting "Allow GitHub Actions to create and approve pull requests" is not needed.
 
 ### 3. GitHub secrets (Docker Hub)
 
@@ -133,12 +133,7 @@ reference).
    (amd64 + arm64).
 
 <Callout type="warn">
-  A tag pushed by `GITHUB_TOKEN` **does not trigger another workflow's
-  `on: push: tags`** (GitHub's loop-prevention rule). That is why `docker.yml`
-  fires on **`workflow_run` (Release completion)**, not on the distribution-tag
-  push, and decides "was this a publishing run?" by whether the Release run
-  uploaded a `dist-version` artifact. A run that only opened a Version PR (no
-  publish) does not build images.
+  Release pushes its tags with the bot App's token, so they **do** trigger other workflows' `on: push: tags`. `docker.yml` nonetheless fires on **`workflow_run` (Release completion)**, not on the distribution-tag push: it decides "was this a publishing run?" by whether the Release run uploaded a `dist-version` artifact, and a tag trigger added next to it would build every release twice. A run that only opened a Version PR (no publish) does not build images.
 </Callout>
 
 <Callout type="warn">
@@ -303,8 +298,7 @@ an `es-v*` tag push (auxiliary).
   npmjs.com (repo / workflow filename match). If it still fails, the fallback is to
   replace the publish step in `release.yml` from `pnpm changeset publish` with a
   script that runs **`npm publish`** instead.
-- **No Version PR is created**: check that "Allow GitHub Actions to create and
-  approve pull requests" is ON and that there are accumulated changesets.
+- **No Version PR is created**: check that Release's "Create bot App token" step succeeded (the secrets are registered, and the App is installed with the permissions above) and that there are accumulated changesets.
 - **No Docker image appears**: check that `docker.yml` fired on `workflow_run` and
   that the triggering Release run uploaded a `dist-version` artifact (i.e. it was an
   actual publishing run). A Version-PR-only run with no publish does not build

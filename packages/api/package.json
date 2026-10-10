@@ -1,6 +1,6 @@
 {
   "name": "@crowi/api",
-  "version": "2.0.0-alpha.21",
+  "version": "2.0.0-alpha.23",
   "main": "dist/app.js",
   "types": "dist/app.d.ts",
   "bin": {
@@ -99,7 +99,7 @@
     "@crowi/plugin-storage-gcs": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@eslint/js": "catalog:",
-    "@faker-js/faker": "^9.9.0",
+    "@faker-js/faker": "^10.6.0",
     "@google-cloud/storage": "7.21.0",
     "@hocuspocus/provider": "^4.0.0",
     "@types/bcryptjs": "^3.0.0",
@@ -119,7 +119,7 @@
     "jest-environment-node": "catalog:",
     "mdast-util-to-hast": "^13.2.1",
     "mongodb-memory-server": "^11.2.0",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.0.13",
     "regenerator-runtime": "^0.13.3",
     "supertest": "^7.2.2",
     "ts-jest": "catalog:",

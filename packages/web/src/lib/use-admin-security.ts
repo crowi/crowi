@@ -3,6 +3,7 @@
 import { apiClient } from './api-client';
 import { createAdminSettingsHooks } from './admin-settings-factory';
 import { appInfoKeys } from './use-app-info';
+import { adminAppSettingsKeys } from './use-admin-app-settings';
 import type { SecuritySettings, UpdateSecuritySettingsRequest } from '@crowi/api-contract';
 
 export const adminSecurityKeys = {
@@ -28,6 +29,10 @@ const hooks = createAdminSettingsHooks<SecuritySettings, UpdateSecuritySettingsR
   updateErrorMessage: 'Failed to update security settings',
   onUpdateSuccess: (_data, queryClient) => {
     queryClient.invalidateQueries({ queryKey: appInfoKeys.all });
+    // registrationMode on the App settings page is read from this same
+    // config key; without this, a stale App page (staleTime 5min,
+    // refetchOnWindowFocus off) keeps showing the mode from before the save.
+    queryClient.invalidateQueries({ queryKey: adminAppSettingsKeys.settings });
   },
 });
 

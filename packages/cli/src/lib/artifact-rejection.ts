@@ -16,6 +16,13 @@ const ArtifactRejectionEnvelopeSchema = z.object({
     code: z.literal('ARTIFACT_WRITE_REJECTED'),
     reason: z.string(),
     ruleId: z.string(),
+    // Read leniently like `reason`: a future code still prints, and a malformed value drops only the code.
+    diagnosticCode: z
+      .string()
+      .max(64)
+      .regex(/^[A-Z][A-Z0-9_]*$/)
+      .optional()
+      .catch(undefined),
     message: z.string(),
     target: z.string().optional(),
   }),
@@ -41,7 +48,7 @@ export function formatArtifactRejection(body: unknown): string | null {
   const parsed = ArtifactRejectionEnvelopeSchema.safeParse(body);
   if (!parsed.success) return null;
 
-  const { message, ruleId, reason, target } = parsed.data.error;
-  const base = `${message} (${ruleId} / ${reason})`;
+  const { message, ruleId, reason, target, diagnosticCode } = parsed.data.error;
+  const base = `${message} (${ruleId} / ${reason})${diagnosticCode === undefined ? '' : ` [diagnostic: ${diagnosticCode}]`}`;
   return target === undefined ? base : `${base}\ntarget: ${target}`;
 }

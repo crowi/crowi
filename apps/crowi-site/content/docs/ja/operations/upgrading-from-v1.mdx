@@ -79,10 +79,10 @@ docker compose run --rm --entrypoint node api \
 
 - **boot** 移行は、api 起動時に自動で適用されます。
 - **preflight** 移行は重い / 破壊的になりうるため、自動では適用されません。
-  起動のたびに probe され、未適用だったときの挙動は移行ごとの **severity**
-  (重大度、下記参照) で決まります。`blocking` の移行は **起動を拒否** し
-  (デフォルトの `block` ポリシー)、`cosmetic` の移行は **警告を出して起動を
-  継続** します。preflight 移行はメンテナンスウィンドウで
+  起動のたびに probe され、未適用だったときの挙動は移行ごとの severity
+  (重大度、下記参照) で決まります。`blocking` の移行は起動を拒否し
+  (デフォルトの `block` ポリシー)、`cosmetic` の移行は警告を出して起動を
+  継続します。preflight 移行はメンテナンスウィンドウで
   `crowi-admin migrate apply` を使って明示的に適用します。
 
 各移行は、未適用の preflight 移行が起動にどう影響するかを決める `severity` を
@@ -90,9 +90,9 @@ docker compose run --rm --entrypoint node api \
 
 - **`blocking`** — インデックス・データ整合性に関わる移行 (`user-unique-prepare` と `page-liker-seenusers-to-relations` の 2 本)。未適用だとデフォルトの `block` ポリシー下で api は起動を拒否します。準備されていないデータに対して起動すると、一意インデックスの構築時に `E11000` で失敗する恐れがあるためです。`migrate plan` / `migrate list` では `[blocking]` タグが付きます。
 - **`cosmetic`** — 本文表示のみに関わる移行 (`wikilink-format` など)。未適用
-  でも api は **起動し**、警告ログを出すだけです (**`block` ポリシー下でも
+  でも api は起動し、警告ログを出すだけです (**`block` ポリシー下でも
   同様**)。cosmetic 移行はライブのコーパスを再スキャンするため、古い記法で
-  新しいページが書かれると再び未適用扱いになり続けます。これを起動拒否の
+  新しいページが書かれるたびに再び未適用扱いになります。これを起動拒否の
   対象にするとクラスタがデッドロックします。`migrate plan` / `migrate list`
   では `[cosmetic]` タグが付きます。
 
@@ -111,18 +111,18 @@ crowi-admin migrate status
 
 > **Tip**: `crowi-admin` の stdout はコマンド本来の出力だけです。boot 時の
 > `[crowi] Loaded N plugin(s)` は開発時は stderr へ、`NODE_ENV=production` では
-> 完全に抑制されるため、`crowi-admin migrate plan --json | jq` のような
-> パイプが壊れません。Node 自体の非推奨警告 (`DEP0169` など) も
+> 完全に抑制されるため、`crowi-admin migrate plan --json | jq` のように
+> パイプしても出力がおかしくなりません。Node 自体の非推奨警告 (`DEP0169` など) も
 > `crowi-admin` では常に出ません。ただし `pnpm migrate plan` 経由だと
 > pnpm 自身のスクリプトバナー (`> crowi@... migrate` など) が stdout に
-> 出ます — これはコード側からは消せない pnpm の挙動なので、パイプする
+> 出ます。これはコード側からは消せない pnpm の挙動なので、パイプする
 > ときは `pnpm -s migrate plan --json | jq` のように `-s` (silent) を
 > 付けてください。
 
-> **Tip**: `block` ポリシーが効くのは `blocking` の移行だけです。そのため
-> 本番ではデフォルトの `block` のままで問題ありません。`cosmetic` の移行
-> (表示のみに関わるもの) はポリシーに関係なく起動を拒否せず、起動を拒否
-> するのはデータ整合性に関わる `blocking` の移行だけだからです。いずれかの
+> **Tip**: `block` ポリシーが効くのは、データ整合性に関わる `blocking` の
+> 移行だけです。`cosmetic` の移行 (表示のみに関わるもの) はポリシーに関係なく
+> 起動を拒否しません。そのため本番ではデフォルトの `block` のままで問題
+> ありません。いずれかの
 > `blocking` の移行が未適用のまま起動したい場合 (たとえば単一インスタンスでの調査用)
 > は、`MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定すると、その起動拒否
 > を警告に格下げできます。
@@ -130,7 +130,7 @@ crowi-admin migrate status
 > **マルチインスタンスの注意**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY`
 > (環境変数) は、管理画面の Config (`migration.preflightUnappliedPolicy`)
 > より優先されます。環境変数を持つレプリカと Config だけに頼るレプリカが
-> 混在すると、同一のデータベースに対して **異なる** ポリシーが解決される
+> 混在すると、同一のデータベースに対して異なるポリシーが解決される
 > 可能性があります。クラスタ全体で一致させるため、環境変数を **全レプリカに
 > 一貫して** 設定してください (例: Kubernetes の ConfigMap を全 Pod に注入)。
 
@@ -147,7 +147,7 @@ crowi-admin migrate status
 | `wikilink-html-recover` | preflight | cosmetic | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
 | `page-liker-seenusers-to-relations` | preflight | **blocking** | `pages.liker` / `pages.seenUsers` を `likes` / `seens` relation collection へ移行 |
 
-(severity は `preflight` 移行にのみ適用されます。`boot` 移行は自動適用され probe されないため、起動拒否の severity を持ちません。`blocking` は `user-unique-prepare` と `page-liker-seenusers-to-relations` の 2 本で、残りは `cosmetic` です。`cosmetic` が未適用でも警告は出ますが起動は拒否されません。)
+severity は `preflight` 移行にのみ適用されます。`boot` 移行は自動適用され probe されないため、起動拒否の severity を持ちません。`blocking` は `user-unique-prepare` と `page-liker-seenusers-to-relations` の 2 本で、残りは `cosmetic` です。`cosmetic` が未適用でも警告は出ますが起動は拒否されません。
 
 boot 移行 (`page-status-default` / `revisions-schema-unify`) は api 起動時に
 自動適用されるので、運用者の操作は不要です。以下では、明示的な適用が必要な
@@ -168,14 +168,14 @@ crowi-admin migrate apply --id wikilink-format
 
 `migrate plan` は対象ページのスキャンとレポートだけを行い、実際の書き込みは
 行いません。適用前に必ず影響範囲を確認してください。この移行は書き換えの
-帰属先となる管理者ユーザーを必要とします — 管理者ユーザーが解決できない
+帰属先となる管理者ユーザーを必要とします。管理者ユーザーが解決できない
 場合は `CROWI_MIGRATE_USER=<email>` を設定してください。
 
-この移行は **コード領域を除外** します — フェンスコードブロックやインライン
+この移行は **コード領域を除外** します。フェンスコードブロックやインライン
 コードの中にある `</…>` や wikilink ふうの文字列は誤検知せず、そのまま残します。
-また **適用してもページの最終更新日時と最終更新者は変わりません**（移行に
+また **適用してもページの最終更新日時と最終更新者は変わりません**。移行に
 よる書き換えは保守オペレーションでありユーザー編集ではないため、ページ一覧の
-並び順や「最終更新者」はそのままです）。
+並び順や「最終更新者」はそのままです。
 
 > **Tip**: v1 由来の wikilink 記法は、`@crowi/plugin-renderer-crowi-legacy`
 > プラグインによってレンダリング時にも解釈できます。データ自体を変換
@@ -186,18 +186,18 @@ crowi-admin migrate apply --id wikilink-format
 ### 誤変換された HTML 終了タグの復旧 (wikilink-html-recover)
 
 `wikilink-format` 移行を古い Crowi で実行した環境では、見出しなどで使われる
-**非推奨の HTML 終了タグ** (`</font>` `</center>` `</marquee>` `</blink>`
+非推奨の HTML 終了タグ (`</font>` `</center>` `</marquee>` `</blink>`
 `</applet>`) が `[[/font]]` のような wikilink 記法に化けていることがあります。
 現在の `wikilink-format` はこれらを書き換えませんが、既に化けた本文は移行が
 再実行されないため自動では直りません。
 
 `wikilink-html-recover` preflight 移行は、化けた `[[/<x>]]` を `</x>` へ
 逆変換します。対象は**この 5 つの非推奨タグ**
-(`font` / `center` / `marquee` / `blink` / `applet`) **だけ**で、誤変換が
+(`font` / `center` / `marquee` / `blink` / `applet`) **だけ**です。誤変換が
 生み出しえた終了タグがこれらに限られるためです。それ以外の単一セグメント
 wikilink は、
 たとえ名前が標準 HTML 要素であっても (`[[/section]]` `[[/div]]` `[[/br]]` など)
-**温存**されます — これらは常に既知だったため `wikilink-format` が書き換えて
+温存されます。これらは常に既知だったため `wikilink-format` が書き換えて
 おらず、**本来の wikilink** だからです。複数セグメント (`[[/foo/bar]]`)・
 alias 付き (`[[/font|alias]]`)・大文字 (`[[/Font]]`) の形も温存されます。
 
@@ -214,17 +214,17 @@ crowi-admin migrate apply --id wikilink-html-recover
 > 移行は、`/<x>` と**同名の実ページ (生きている公開ページ) が存在する**
 > `[[/<x>]]` は自動変換せず、`migrate plan` の結果に一覧として報告します
 > (運用者が個別に判断してください)。一方、同名ページが存在しない `[[/font]]`
-> (5 つの非推奨タグ) は **逆変換されます** — 削除済み / 未作成のページへの
+> (5 つの非推奨タグ) は **逆変換されます**。削除済み / 未作成のページへの
 > dangling リンクも含みます。実際には `/font` `/center` `/marquee` `/blink`
 > `/applet` という名前の実ページは非常に稀ですが、もし存在する場合は
 > `migrate plan` の collision 一覧を確認し、まず dev / stg で検証してから
 > 本番に適用してください。
 
-この移行は冪等です — 逆変換後の `</x>` は復旧対象の検出にも `wikilink-format`
+この移行は冪等です。逆変換後の `</x>` は復旧対象の検出にも `wikilink-format`
 の変換にも当たらないため、再実行しても二重には作用しません。
 
 > **Note**: コードフェンス (```` ``` ````) やインラインコード (`` `…` ``) の中に
-> 書かれた `[[/font]]` などの記述は、この移行の **対象外** です — 移行の説明として
+> 書かれた `[[/font]]` などの記述は、この移行の **対象外** です。移行の説明として
 > コード例に書かれた `[[/font]]` は `</font>` へ逆変換されず、そのまま温存されます。
 > `wikilink-format` (`</…>`)・`files-url-to-attachments` (`/files/<id>`) と同じ
 > コード除外挙動で、3 つの本文書き換え移行はいずれも同一です。このためコード内に
@@ -236,7 +236,7 @@ crowi-admin migrate apply --id wikilink-html-recover
 v1 は API を `/_api/*`(アンダースコア付き)で提供していたため、`/api/*`
 (アンダースコアなし)は通常の wiki ページパスでした。v2 は `/api` を
 リバースプロキシ先のバックエンド(`/api/*`)用に予約するので、v1 で
-`/api/*` 配下に残っているページは行き場を失います — web アプリは予約名前
+`/api/*` 配下に残っているページは開けなくなります。web アプリは予約名前
 空間を 404 にし、同じパスはプロキシに完全に隠れます。
 
 `relocate-reserved-api-paths` preflight 移行は、該当する全ページを
@@ -329,7 +329,7 @@ crowi-admin migrate apply --id <残りの blocking migration の ID>
 
 > **Note**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` でこの移行を pending のまま起動した場合、その窓の間は移行前の Like / 閲覧済みが数えられません。また、その窓で利用者が unlike した Like は legacy 配列側に反映されないため、後で `apply` すると legacy 配列由来の Like が復活することがあります。`$unset` が完了したら旧 binary へは戻さず、問題があれば fix-forward するか、移行前のバックアップ全体へ復元してください。
 
-> **Note**: この移行は、無効な要素と Page 内の重複要素を除外して実在する relation 行数へ揃えるため、以前の配列の長さをそのまま数えていた場合と比べて `likerCount` / `seenUsersCount` が減ることがあります。非配列 (スカラ) で保存された値については、無効な値だけが除外されます — **有効な** ObjectId (現在も 1 件の Like として数えられている状態) は除外されず、1 relation として移行され、この件数是正には含まれません。
+> **Note**: この移行は、無効な要素と Page 内の重複要素を除外して実在する relation 行数へ揃えるため、以前の配列の長さをそのまま数えていた場合と比べて `likerCount` / `seenUsersCount` が減ることがあります。非配列 (スカラ) で保存された値については、無効な値だけが除外されます。**有効な** ObjectId (現在も 1 件の Like として数えられている状態) は除外されず、1 relation として移行され、この件数是正には含まれません。
 
 ### 検索インデックスの再構築
 
@@ -361,8 +361,8 @@ crowi-admin rebuild storage copy --from local --to s3
 
 ### ドメイン変更後の本文 URL 一括置換 (replace url)
 
-v1 → v2 で **公開ドメイン (ホスト) を変更した** 場合、ページ本文に埋め込まれた
-**絶対 URL** (画像埋め込みやリンク。例: `![shot.png](https://old.example/files/<id>)`)
+v1 → v2 で公開ドメイン (ホスト) を変更した場合、ページ本文に埋め込まれた
+絶対 URL (画像埋め込みやリンク。例: `![shot.png](https://old.example/files/<id>)`)
 は旧ホストのまま残ります。ページ / ファイルの id は引き継がれるため、必要なのは
 **ホスト (URL 接頭辞) の単純な置換** であって id の振り直しではありません。
 
@@ -378,7 +378,7 @@ crowi-admin replace url --from https://old.example --to https://new.example --dr
 crowi-admin replace url --from https://old.example --to https://new.example
 ```
 
-この置換は **エンドユーザーから見えない静かな書き換え** として行われます。
+この置換は、エンドユーザーからは見えない書き換えとして行われます。
 ページごとに新しいリビジョンを積みますが、最終更新日時 / 最終更新者 / 公開範囲
 は変更せず、ウォッチャーへの通知や自動ウォッチも行いません。一覧の
 並びや通知が動かないので、ドメイン移行のクリーンアップに適しています。
@@ -387,7 +387,7 @@ crowi-admin replace url --from https://old.example --to https://new.example
 
 > **Caution**: `--from` に `old.example` のような **スキームの無い裸のホスト**
 > を渡すと、`old.example.com` のような「接頭辞が一致するより長いホスト」まで
-> 壊す恐れがあります。CLI は既定でこれを拒否し、`--force` が必要です。可能な
+> 置換され、URL がおかしくなる恐れがあります。CLI は既定でこれを拒否し、`--force` が必要です。可能な
 > 限り `https://old.example` のように完全なオリジンを指定してください。
 
 置換後、ページのレンダリング済み HTML は新リビジョンとして再生成されるため
@@ -405,9 +405,9 @@ v1 はページ本文の添付ファイル / 画像を **v1 のファイル URL*
 (`![shot.png](/files/<id>)` の相対形、またはエディタがフル URL を貼り付けた
 `![shot.png](https://wiki.example/files/<id>)` の絶対形)。Crowi 2.0 は添付を
 専用のストリームエンドポイント `/api/attachments/<id>` で配信し、レガシーの
-`/files/<id>` 互換ルートは削除されたため、**v1 形式の URL は 404 =
-画像が壊れます**。id は v1 / v2 で同一の 24-hex の添付 ID なので、必要なのは
-**URL の書き換えだけ** (id の振り直しは不要) です。
+`/files/<id>` 互換ルートは削除されたため、**v1 形式の URL は 404 になり、
+画像が表示されません**。id は v1 / v2 で同一の 24-hex の添付 ID なので、必要なのは
+URL の書き換えだけ (id の振り直しは不要) です。
 
 `files-url-to-attachments` preflight 移行は、公開ページ (+ レガシーの `null`
 ステータス) の現リビジョン本文を走査し、Markdown 画像 `![alt](url)` / リンク
@@ -434,7 +434,7 @@ crowi-admin migrate apply --id files-url-to-attachments
 変換されません。書き換えの帰属先となる管理者ユーザーを必要とするため、解決
 できない場合は `CROWI_MIGRATE_USER=<email>` を設定してください。
 
-> **Tip**: **ドメインを変更した** 場合は、先に [replace url](#ドメイン変更後の本文-url-一括置換-replace-url)
+> **Tip**: ドメインを変更した場合は、先に [replace url](#ドメイン変更後の本文-url-一括置換-replace-url)
 > で旧ホスト → 新ホストを揃えてから本移行を適用してください。`replace url` で
 > 自サイトの絶対 URL が `CLIENT_URL` のホストに揃うと、本移行がそれらを相対化
 > できます。逆順だと旧ホストの絶対 URL が「外部」と判定され書き換えられません。
@@ -442,12 +442,12 @@ crowi-admin migrate apply --id files-url-to-attachments
 > **Note**: 移行漏れや未変換の本文への保険として、API には
 > `/files/<id>` → `302` `/api/attachments/<id>` のリダイレクトが復活して
 > います。実行時に相対 `/files/<id>` へアクセスがあっても正規の形式へ転送される
-> ため、本文の書き換えが間に合わなくても画像が壊れたままにはなりません
-> (ただし外部ホストを指す絶対 URL はリダイレクトでは救えないため、本文の
-> 書き換えが本筋です)。
+> ため、本文の書き換えが間に合わなくても画像は表示されます。
+> ただし外部ホストを指す絶対 URL はリダイレクトでは転送できないため、本文の
+> 書き換えが本筋です。
 
 > **Note**: コードフェンス (```` ``` ````) やインラインコード (`` `…` ``) の中に
-> 書かれた `/files/<id>` URL は、この移行の **対象外** です — コード例として
+> 書かれた `/files/<id>` URL は、この移行の **対象外** です。コード例として
 > 書かれた `![pic](/files/<id>)` は書き換えられず、そのまま温存されます。
 > `wikilink-format` (`</…>`)・`wikilink-html-recover` (`[[/font]]`) と同じ
 > コード除外挙動で、3 つの本文書き換え移行はいずれも同一です。このためコード内に

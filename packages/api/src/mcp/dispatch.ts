@@ -24,6 +24,7 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type { CrowiHonoBindings } from '../hono/app';
+import { REQUEST_ID_HEADER } from '../hono/middleware/request-scope';
 
 /**
  * Thrown by `dispatch` when the in-process route returns a non-2xx
@@ -104,8 +105,15 @@ const stripAuthAndContentType = (headers: Record<string, string> | undefined): R
  * The host is irrelevant for in-process dispatch (no socket is opened),
  * but `honoApp.request` needs an absolute-or-rooted URL; a rooted path
  * is what we pass, matching the test harness (`hono/path-rewrite.ts`).
+ *
+ * RFC-0025 §9 Phase 2 — `requestId` is the outer `/mcp` dispatch's
+ * own canonical `X-Request-Id` (`c.get('requestId')`, forwarded by
+ * `mcp/attach.ts`). Forwarding it as the inner request's header lets the
+ * inner `requestId()` accept the same value by construction (it already
+ * satisfies the grammar), so the outer and inner dispatches correlate
+ * under one request ID without any request-scope middleware special case.
  */
-export const makeDispatch = (honoApp: OpenAPIHono<CrowiHonoBindings>, authorization: string): Dispatch => {
+export const makeDispatch = (honoApp: OpenAPIHono<CrowiHonoBindings>, authorization: string, requestId: string): Dispatch => {
   return async (method, path, init) => {
     const url = `${path}${init?.query ? buildQueryString(init.query) : ''}`;
 
@@ -115,6 +123,7 @@ export const makeDispatch = (honoApp: OpenAPIHono<CrowiHonoBindings>, authorizat
       headers: {
         ...stripAuthAndContentType(init?.headers),
         Authorization: authorization,
+        [REQUEST_ID_HEADER]: requestId,
         ...(hasJsonBody ? { 'content-type': 'application/json' } : {}),
       },
       body: hasJsonBody ? JSON.stringify(init?.json) : undefined,

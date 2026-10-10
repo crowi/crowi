@@ -1,10 +1,12 @@
-import { crowi } from 'src/test/setup';
+import { Types } from 'mongoose';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
+import { crowi, Fixture } from 'src/test/setup';
 
 import { relocateReservedApiPaths } from './migrations/relocate-reserved-api-paths';
 import { userUniquePrepare } from './migrations/user-unique-prepare';
 import { createRegistry, MigrationRegistry } from './registry';
-import { runBootMigrations, PreflightBlockedError } from './run-boot-migrations';
+import { PreflightBlockedError, runBootMigrations } from './run-boot-migrations';
 import { MigrationRunner } from './runner';
 import { defineMigration, type MigrationContext, type MigrationDefinition } from './types';
 
@@ -302,5 +304,81 @@ describe('registered migration severities (regression guard)', () => {
 
   it('keeps relocate-reserved-api-paths cosmetic (a path move is no E11000 hazard; must not gate boot)', () => {
     expect(relocateReservedApiPaths.severity).toBe('cosmetic');
+  });
+});
+
+describe('rewritePageBody — artifact pages are never rewritten (RFC-0020 §1)', () => {
+  const PATH_PREFIX = '/runner-rewrite-body';
+  let admin: Awaited<ReturnType<typeof Fixture.generate>>[number];
+
+  beforeAll(async () => {
+    [admin] = await Fixture.generate('User', [
+      { name: 'Rewrite Admin', username: `rewriteAdmin${Date.now()}`, email: `rewrite-admin-${Date.now()}@example.com`, admin: true },
+    ]);
+  });
+
+  afterEach(async () => {
+    await crowi.model('Page').deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
+    await crowi.model('Revision').deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
+  });
+
+  /** Runs one stage that calls `ctx.rewritePageBody` for `pageId`. */
+  const rewriteViaRunner = async (id: string, pageId: string, body: string, userId?: string) => {
+    const def = defineMigration({
+      id,
+      fromVersion: '1.x',
+      toVersion: '2.0',
+      layer: 'preflight',
+      severity: 'cosmetic',
+      description: 'rewrite fixture',
+      isPending: async () => true,
+      stages: [
+        {
+          name: 'rewrite',
+          fn: async (ctx: MigrationContext) => {
+            await ctx.rewritePageBody(pageId, body, userId ? { userId } : undefined);
+            return { name: 'rewrite', transformed: 1 };
+          },
+        },
+      ],
+    });
+    await new MigrationRunner(crowi).apply(def);
+  };
+
+  it.each([
+    ['the Page hint is artifact', 'artifact' as const],
+    ['the Page hint is missing (the current Revision is the authority)', null],
+    ['the Page hint wrongly says markdown', 'markdown' as const],
+  ])('AC-07: is a no-op when %s and the current Revision is an artifact', async (_label, hint) => {
+    const { pageId, revisionId } = await seedStoredArtifactPage({
+      path: `${PATH_PREFIX}/artifact-${hint ?? 'none'}`,
+      body: '<html></html>',
+      userId: admin._id,
+      pageContentType: hint,
+    });
+    const Page = crowi.model('Page');
+    const Revision = crowi.model('Revision');
+    const before = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+
+    await rewriteViaRunner(`frt-rewrite-artifact-${hint ?? 'none'}`, pageId, '# markdown over an artifact');
+
+    expect(await Page.collection.findOne({ _id: before?._id })).toEqual(before);
+    expect(await Revision.countDocuments({ page: before?._id })).toBe(1);
+    expect((await Revision.findById(revisionId).lean())?.body).toBe('<html></html>');
+  });
+
+  it('AC-07: rewrites a Markdown page declaring markdown, keeping timestamps and grant', async () => {
+    const Page = crowi.model('Page');
+    const created = await Page.createPage(`${PATH_PREFIX}/markdown`, '# before', admin, { grant: Page.GRANT_RESTRICTED });
+    const before = await Page.findById(created._id).lean();
+
+    await rewriteViaRunner('frt-rewrite-markdown', String(created._id), '# after', String(admin._id));
+
+    const after = await Page.findById(created._id).populate('revision');
+    expect(after?.revision.body).toBe('# after');
+    expect(after?.revision.contentType).toBe('markdown');
+    expect(after?.grant).toBe(before?.grant);
+    expect(after?.updatedAt?.getTime()).toBe(before?.updatedAt?.getTime());
+    expect(String(after?.lastUpdateUser)).toBe(String(before?.lastUpdateUser));
   });
 });

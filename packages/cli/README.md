@@ -107,16 +107,36 @@ profile: <alias>`, see [Errors & exit codes](#errors--exit-codes)).
 ## Commands
 
 Auth / lifecycle: `login`, `logout`, `whoami`, `profiles`. Read: `search`,
-`get` (alias `cat`), `ls`. Write: `create`, `edit`, `update`, `mv`, `rm`.
+`get` (alias `cat`), `ls`, `recent`. Write: `create`, `edit`, `update`, `mv`, `rm`.
 Phase 2 (need extra scopes): `comment`, `attach`, `bookmark`, `watch`, `open`.
+
+### Recently updated pages (`recent`)
+
+`crowi recent [--prefix <path>] [--limit N] [--offset N] [--json]` lists the pages you can read, most recently updated first, as a flat list. It needs no search query and no search plugin, and requires the `pages:read` scope. Each row is a page's current state (a page updated several times is one row), not an update event, and the columns are `path`, `updatedAt` (UTC), `lastUpdateUser` (the last updater, not the creator) and `_id`.
+
+```bash
+crowi recent
+crowi recent --limit 20 --json
+crowi recent --prefix /team/ --limit 20 --offset 20
+crowi recent --prefix /team --format table
+crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{{_id}}'
+```
+
+- `--limit` is 1-100 (default 50) and `--offset` is 0-2147483647 (default 0); both take plain decimal digits only. Invalid values fail with exit `6` before anything is sent.
+- `--prefix` is a literal, case-sensitive prefix of the stored path. `/team` matches `/team`, `/team/` and `/teamwork`; `/team/` matches `/team/` and everything under it but not `/team`. A missing leading `/` is added, and `--prefix /` is the same as no prefix. An empty `--prefix` is rejected.
+- The list is live. Paging with `--offset` can repeat or skip pages that were updated between calls, and pages with the same update time have no defined order. There is no cursor and no automatic walk over all pages.
+- `--json` prints the whole server response unchanged. `--format template` without `--template` renders the same four fields from the raw page, so `lastUpdateUser` is a JSON object there; use `{{lastUpdateUser.username}}` for the name.
+- `--prefix` needs a server that supports `path_prefix`. The CLI checks that the response confirms the prefix and otherwise exits `7` with `server did not confirm literal prefix filtering; upgrade Crowi and retry`, writing nothing to stdout. Without `--prefix` (or with `--prefix /`) the command works against older servers.
 
 ### Artifact pages (RFC-0020)
 
-`create` / `update` accept `--type <markdown|artifact>` to declare a page's kind for that write. Omit it and the server keeps its default (markdown on create, the page's current kind on update) — the kind is never inferred from a file extension or from the body itself. An `artifact` body must be a single self-contained HTML document: no external script/stylesheet/image/module references, no relative paths — embed any binary asset as a `data:` URI. `edit` works on an artifact page exactly like a markdown one (it opens an `.html` temp file instead of `.md`, and never changes the page's kind on save). A rejected artifact write exits `6` (see below) and prints the rule identifier / reason / (when the rule names one) `target` alongside the server's fixed message.
+`create` / `update` accept `--type <markdown|artifact>` to declare a page's kind for that write. Omit it and the server keeps its default (markdown on create, the page's current kind on update) — the kind is never inferred from a file extension or from the body itself. An `artifact` body must be a single self-contained HTML document: no external script/stylesheet/image/module references, no relative resource paths — embed any binary asset as a `data:` URI. Links to other wiki pages are the exception: an HTML `a` / `area` `href` may be a page path relative to the artifact's own page (`/team/guide`, `./guide`, `../guide#section`, `guide`), and a literal `%` in a page name is written `%25` in the `href` (`100%25done` for the page `100%done`; `100%done` is rejected). `edit` works on an artifact page exactly like a markdown one (it opens an `.html` temp file instead of `.md`, and never changes the page's kind on save). A page path cannot carry a query (`/guide?edit=1`), and an absolute link to a reserved route (`/admin`, `/logout`, API or delivery paths, a bare page ID, or the full-origin `<wiki origin>/<page id>` form) is rejected on save; a relative link is checked by the parent when it is clicked. Use `#id`, not `#` or `#a?b`, for a same-document link. External URLs (`https:`, `mailto:`, `tel:`, protocol-relative `//host/...`) cannot be links: remove the `href` and keep the address as body text; rewrite a full or protocol-relative URL for this wiki as a page path such as `/team/guide`, never `//example.com/guide` as `/example.com/guide`. External stylesheets are not allowed except Google Fonts stylesheets when the wiki administrator has enabled web fonts; otherwise, Google Fonts references are rejected with FONT_REFERENCE_FORBIDDEN.
+
+A rejected artifact write exits `6` (see below) and prints the server's fixed message with the rule identifier / reason, a `[diagnostic: CODE]` for link and resource problems, and (when the rule names one) `target`, all on stderr even with `--json` or `--quiet`. `target` is an element or attribute name, not a unique position, and the output never contains the rejected value. If restoring an artifact revision is rejected, retrieve that revision's body (`crowi get <path> --revision <id>` or MCP `crowi_get_revision`), fix the reported HTML issues, retrieve the current revision ID (`revisionId` from `crowi get <path> --json`, or MCP `crowi_get_page`), and save the corrected body with `update` / `crowi_update_page` passing that current revision ID; the past revision's ID returns 409.
 
 ## Output formats & scripting
 
-`search` and `ls` accept `--format` and `--template` so their output can be
+`search`, `ls` and `recent` accept `--format` and `--template` so their output can be
 shaped for piping:
 
 | Flag | Effect |
@@ -180,6 +200,8 @@ capability mismatch**:
   suppressed, so it keeps working silently.
 
 All of these notes go to stderr, so `--json` stdout stays clean for scripts.
+
+The one exception to "never refuses" is a filter the server cannot be shown to have applied: `crowi recent --prefix` fails with exit `7` rather than print a list that may not be filtered.
 
 ## Errors & exit codes
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import type { GetAppSettingsResponse, UpdateAppSettingsRequest } from '@crowi/api-contract';
+import type { GetAppSettingsResponse, RegistrationMode, UpdateAppSettingsRequest } from '@crowi/api-contract';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,26 +53,18 @@ function buildUpdateBody(state: FormState, initial: FormState): UpdateAppSetting
 }
 
 /**
- * Localise the `registrationMode` enum returned by the API. Falls back to the
- * raw key so future modes still render something readable.
+ * Localise the `registrationMode` enum, using the same labels as the
+ * Security admin page (`admin.security.mode_*_label`) so the two pages never
+ * describe the same mode differently.
  */
-function formatRegistrationMode(modes: Record<string, string>): string {
-  const labels: Record<string, () => string> = {
-    open: () => m['admin.app.registration_mode_open'](),
-    restricted: () => m['admin.app.registration_mode_restricted'](),
-    closed: () => m['admin.app.registration_mode_closed'](),
-  };
-  // The API may shape this as { current: 'open' } or { open: 'Open' } depending
-  // on legacy code paths — handle both by preferring a `current` key.
-  const current = modes.current;
-  if (typeof current === 'string') {
-    return labels[current]?.() ?? current;
-  }
-  // Fallback: pick the first key we recognise.
-  for (const key of Object.keys(modes)) {
-    if (key in labels) return labels[key]();
-  }
-  return Object.values(modes)[0] ?? m['admin.app.registration_mode_unknown']();
+const REGISTRATION_MODE_LABELS: Record<RegistrationMode, () => string> = {
+  Open: () => m['admin.security.mode_open_label'](),
+  Resricted: () => m['admin.security.mode_restricted_label'](),
+  Closed: () => m['admin.security.mode_closed_label'](),
+};
+
+function formatRegistrationMode(mode: RegistrationMode): string {
+  return REGISTRATION_MODE_LABELS[mode]();
 }
 
 export function AppSettingsForm() {

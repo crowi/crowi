@@ -22,12 +22,13 @@
  * `linkCardEnabled` succeeded). This ordering ensures failed
  * `linkCardEnabled` prevents the registration batch from running.
  */
-import { type RegistrationMode, type SecuritySettings, adminSecurityRoutes } from '@crowi/api-contract';
+import type { SecuritySettings } from '@crowi/api-contract';
+import { adminSecurityRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceStringArray, getCrowiConfigNamespace, isLinkCardEnabled } from 'src/util/admin-config';
+import { coerceStringArray, getCrowiConfigNamespace, isLinkCardEnabled, readRegistrationMode } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -35,19 +36,12 @@ import { INTERNAL_ERROR_BODY } from '../_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:admin:security');
 
-const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'Open';
-
-const toRegistrationMode = (value: unknown): RegistrationMode => {
-  if (value === 'Open' || value === 'Resricted' || value === 'Closed') return value;
-  return DEFAULT_REGISTRATION_MODE;
-};
-
 const sanitizeWhiteList = (list: string[]): string[] => list.map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 
 const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
   const ns = getCrowiConfigNamespace(crowi);
   return {
-    registrationMode: toRegistrationMode(ns['security:registrationMode']),
+    registrationMode: readRegistrationMode(crowi),
     registrationWhiteList: coerceStringArray(ns['security:registrationWhiteList']),
     // `isLinkCardEnabled` is the single source of truth for the
     // default-on-missing/non-boolean fallback — shared with `app.ts`'s

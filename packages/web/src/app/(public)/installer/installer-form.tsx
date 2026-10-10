@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
 import { loginWithPassword } from '@/lib/auth-login';
+import { getLocale } from '@paraglide/runtime.js';
 
 export function InstallerForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +39,7 @@ export function InstallerForm() {
       // installed (also carrying `status: 'error'`).
       const response = await apiClient.installer.createAdmin.$post({
         json: {
-          registerForm: formData,
+          registerForm: { ...formData, lang: getLocale() },
         },
       });
 

@@ -1,5 +1,38 @@
 # @crowi/api
 
+## 2.0.0-alpha.23
+
+### Minor Changes
+
+- af3068c: Artifact pages can now link to other wiki pages with ordinary `a` / `area` links (absolute, relative to the artifact's own page, or with a `#fragment`): a normal click or Enter moves the wiki to the page in the same tab, cmd/ctrl-click and `target="_blank"` open a new tab, and the wiki only follows links to regular wiki pages while the reader is actually interacting with the artifact, asking for confirmation instead when the link was activated right after the page opened or after the reader acted on the page around the artifact.
+
+### Patch Changes
+
+- c9e05ae: Artifacts whose height scales with the viewport, such as a stack of full-screen slides, no longer make the frame grow endlessly up to its cap; the frame stops at the height it first reached and the content scrolls inside it.
+- c494fa1: Update the dependency `nodemailer` to 10.0.13, which fixes a malformed SMTP envelope recipient produced from an address whose local part is quoted. Crowi hands it the recipient addresses of the mail it sends, such as user invitations and notifications.
+- Updated dependencies [af3068c]
+  - @crowi/api-contract@2.0.0-alpha.23
+
+## 2.0.0-alpha.22
+
+### Minor Changes
+
+- 0b2ea32: An HTML artifact page now grows to fit its content, so the page scrolls as one document instead of showing a second scrollbar inside the artifact's frame, and the page title carries an "Artifact" pill above it, like the one a portal carries in its header.
+
+  To make the height measurable, the artifact delivery route (`GET /api/artifact/{pageId}/{revisionId}`) now appends one fixed script after the stored document that reports the document's height to the page, and its `Content-Security-Policy` always authorises that script by hash — so `script-src` is no longer `'none'` for an artifact without scripts of its own. The stored HTML is unchanged, and the download route still returns exactly what was stored. A document that sizes itself from the viewport (for example `min-height: 100vh` plus padding) stops growing the frame after one step and scrolls the remainder inside it; until the first report arrives, the frame keeps its previous fixed height.
+
+- 79fd616: The api now emits structured NDJSON log records with per-request correlation (`LOG_LEVEL` selects the severity floor, default `info`), and every fatal process event (a startup failure, an uncaught exception, or an unhandled promise rejection) is now captured by an installed handler and reported as one such record before the process exits — previously, an unhandled rejection under Node's `warn`, `warn-with-error-code`, or `none` unhandled-rejection modes left the process running instead of exiting, and it now exits with status 1 the same way the `default`/`throw` modes always did, which means any collaborative-editing checkpoint still inside its debounce window at that moment is no longer flushed by graceful shutdown and is lost.
+
+### Patch Changes
+
+- 746d2c1: The App admin page's status card now shows the actual configured registration mode (Open / Restricted / Closed) instead of always displaying the literal string "open", and Restricted is now correctly described as requiring admin approval rather than being invitation-only, matching the Security admin page's labels and wording.
+- b687b99: An HTML artifact page can now be maximized to fill the browser window, for artifacts wider than the page column, and from there switched to full screen where the browser supports full screen for page elements (not on iPhone). The artifact keeps its state across both: its frame is restyled in place, never reloaded. Escape or the Restore button returns to the normal page; Escape works even while focus is inside the artifact, forwarded by the script artifact delivery appends, unless the artifact handles Escape itself. The sandboxed-content notice stays visible while maximized.
+- 053de40: The page-history repair scan (`crowi-admin page-history repair --scan`) no longer jams a page's history outbox when two scans race over the same unsequenced Revision: the claim now reads the page's allocator before re-checking the Revision, so a claim that lost to a concurrent scan is retried instead of committing an entry that could never materialize and burning a sequence number.
+- 6f874b9: Fix a subtree rename reporting failure for pages that actually moved. A page whose history tracking has not started and cannot be started by the rename itself — it has no revision, or its revision pointer fails the ownership check — moves without producing a `page_renamed` event, and a subtree move containing such a page was reported as a deterministic `partial` failure even though every page in the tree had landed at its destination. The member and root operations were also left permanently unfinished rather than settling as completed. A member record that could not be carried by the move at all (its recorded source and destination are the same path) continues to report failure as before; only pages that genuinely moved are affected by this fix.
+- Updated dependencies [746d2c1]
+- Updated dependencies [0b2ea32]
+  - @crowi/api-contract@2.0.0-alpha.22
+
 ## 2.0.0-alpha.21
 
 ### Minor Changes

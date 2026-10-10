@@ -1,7 +1,8 @@
 import Debug from 'debug';
 import { DEFAULT_ARTIFACT_MAX_BYTES } from 'src/artifact/constants';
 import { buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from 'src/artifact/csp';
-import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, resolveArtifactTokenKey } from 'src/artifact/delivery';
+import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, prepareArtifactDelivery, resolveArtifactTokenKey } from 'src/artifact/delivery';
+import { ARTIFACT_FRAME_BRIDGE_SCRIPT, ARTIFACT_NAVIGATION_GUARD_SCRIPT } from 'src/artifact/frame-bridge';
 import { ingestHtmlArtifact } from 'src/artifact/ingest';
 import * as artifactPolicy from 'src/artifact/policy';
 import { STATUS_DRAFT, STATUS_RENAMING } from 'src/models/page';
@@ -58,8 +59,9 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
 
   const createArtifactPage = async (path: string, body: string) => {
     const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
-    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact' });
-    return Page.pushRevision(page, newRevision, user);
+    const artifactPreWrite = { ok: true as const, body };
+    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact', artifactPreWrite });
+    return Page.pushRevision(page, newRevision, user, { artifactPreWrite });
   };
 
   const insufficientScopeHeaders = async () => {
@@ -341,7 +343,7 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       expect(res.status).toBe(200);
     });
 
-    test('AC-DL-3 / AC-DL-4: a URL minted by the mint route serves the exact stored bytes with the full response header set', async () => {
+    test('AC-DL-3 / AC-DL-4: a URL minted by the mint route serves the exact stored bytes followed by the frame bridge, with the full response header set', async () => {
       await enableArtifactDelivery();
       const body = await ingestedBody(VALID_ARTIFACT_HTML);
       const page = await createArtifactPage(`${PATH_PREFIX}full-flow`, body);
@@ -355,26 +357,24 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
         .buffer(true)
         .parse(bufferParser);
       expect(res.status).toBe(200);
+      const expected = prepareArtifactDelivery(body, artifactPolicy.resolveArtifactPolicySnapshot(crowi));
+      if (!expected.ok) throw new Error('fixture unexpectedly fails delivery preparation');
       // AC-DL-3 requires a byte-exact match, not merely equal decoded
-      // strings — compare the raw response `Buffer` against the stored
+      // strings — compare the raw response `Buffer` against the expected
       // bytes' own UTF-8 encoding.
-      expect(Buffer.compare(res.body as Buffer, Buffer.from(body, 'utf8'))).toBe(0);
+      expect(Buffer.compare(res.body as Buffer, Buffer.from(expected.body, 'utf8'))).toBe(0);
+      expect(expected.body).toContain(`<script>${ARTIFACT_NAVIGATION_GUARD_SCRIPT}</script></head>`);
+      expect(expected.body.endsWith(`<script>${ARTIFACT_FRAME_BRIDGE_SCRIPT}</script>`)).toBe(true);
 
       expect(res.headers['content-type']).toBe('text/html; charset=utf-8');
       expect(res.headers['referrer-policy']).toBe('no-referrer');
       expect(res.headers['cache-control']).toBe('no-store');
-      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(body, 'utf8')));
+      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(expected.body, 'utf8')));
       expect(res.headers['set-cookie']).toBeUndefined();
       expect(res.headers['x-frame-options']).toBeUndefined();
       // Global middleware adds exactly 1 occurrence — the route itself must not duplicate it.
       expect(res.headers['x-content-type-options']).toBe('nosniff');
-
-      const snapshot = artifactPolicy.resolveArtifactPolicySnapshot(crowi);
-      const markers = extractArtifactDigestMarkers(body);
-      if (!markers.ok) throw new Error('fixture unexpectedly has no digest markers');
-      const csp = buildArtifactContentSecurityPolicy(markers.markers, snapshot);
-      if (!csp.ok) throw new Error('fixture unexpectedly fails CSP assembly');
-      expect(res.headers['content-security-policy']).toBe(csp.header);
+      expect(res.headers['content-security-policy']).toBe(expected.header);
     });
 
     test('AC-DL-7: the serve route success logs only pageId/revisionId/outcome — never the token, its payload segment, or the secret', async () => {
@@ -497,8 +497,8 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}dl-revision-switch`, v1Body);
       const v1RevisionId = page.revision._id.toString();
       const v2Body = await ingestedBody(validArtifactHtml({ body: '<p>v2</p>' }));
-      const v2Revision = await Revision.prepareRevision(page, v2Body, user, { contentType: 'artifact' });
-      await Page.pushRevision(page, v2Revision, user);
+      const v2Revision = await Revision.prepareRevision(page, v2Body, user, { contentType: 'artifact', artifactPreWrite: { ok: true, body: v2Body } });
+      await Page.pushRevision(page, v2Revision, user, { artifactPreWrite: { ok: true, body: v2Body } });
 
       const res = await request(app)
         .get(`/api/pages/${page._id}/artifact-download?revision=${v1RevisionId}`)

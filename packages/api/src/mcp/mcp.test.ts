@@ -21,6 +21,7 @@
  *       `User.findById` throw surfaces as 500, not a masked 401.
  */
 
+import { Types } from 'mongoose';
 import type { UserDocument } from 'src/models/user';
 import { VALID_ARTIFACT_HTML, validArtifactHtml } from 'src/test/artifact-fixtures';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
@@ -151,6 +152,33 @@ describe('MCP server (/api/mcp)', () => {
     expect(names).toHaveLength(14);
   });
 
+  it('list tool keeps legacy input and output', async () => {
+    const listRes = await callMcp(fullPatToken, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const tools = (parseRpc(listRes).result?.tools ?? []) as Array<{ name: string; inputSchema: { properties: Record<string, unknown> } }>;
+    const listTool = tools.find((t) => t.name === 'crowi_list_pages');
+    expect(Object.keys(listTool?.inputSchema.properties ?? {}).sort()).toEqual([
+      'include_deleted',
+      'limit',
+      'offset',
+      'order',
+      'path',
+      'revision_id',
+      'sort',
+      'user',
+    ]);
+
+    const res = await callMcp(fullPatToken, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'crowi_list_pages', arguments: { path: PATH_PREFIX, path_prefix: '/' } },
+    });
+    expect(res.status).toBe(200);
+    const result = parseRpc(res).result as { isError?: boolean; structuredContent?: Record<string, unknown> };
+    expect(result.isError).toBeFalsy();
+    expect(Object.keys(result.structuredContent ?? {}).sort()).toEqual(['pager', 'pages']);
+  });
+
   it('advertises Crowi path conventions via the initialize `instructions`', async () => {
     const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
@@ -182,6 +210,11 @@ describe('MCP server (/api/mcp)', () => {
     expect(instructions).toContain('<wiki origin>/<page id>');
     expect(instructions).toContain('a space in a page path is written `+`');
     expect(instructions).toContain('%2520');
+    // AC-AAG-1: the general ID-form advice has one exception, artifact HTML.
+    expect(instructions).toContain('links inside artifact HTML must use page paths such as');
+    expect(instructions).toContain('/team/guide');
+    expect(instructions).toContain('./guide');
+    expect(instructions).toContain('/<page id>');
   });
 
   it('crowi_get_page returns the body in both content text and structuredContent', async () => {
@@ -375,8 +408,8 @@ describe('MCP server (/api/mcp)', () => {
       const dispatchModule = await import('./dispatch');
       const inits: DispatchInit[] = [];
       const original = dispatchModule.makeDispatch;
-      const spy = jest.spyOn(dispatchModule, 'makeDispatch').mockImplementation((honoAppArg, authorization) => {
-        const real = original(honoAppArg, authorization);
+      const spy = jest.spyOn(dispatchModule, 'makeDispatch').mockImplementation((honoAppArg, authorization, requestId) => {
+        const real = original(honoAppArg, authorization, requestId);
         return async (method, path, init) => {
           inits.push(init ?? {});
           return real(method, path, init);
@@ -482,7 +515,7 @@ describe('MCP server (/api/mcp)', () => {
         .mockResolvedValue(new Response(JSON.stringify({ page: { _id: 'p1' } }), { status: 200, headers: { 'content-type': 'application/json' } }));
       const fakeHonoApp = { request: requestMock } as unknown as Parameters<typeof dispatchModule.makeDispatch>[0];
 
-      const dispatch = dispatchModule.makeDispatch(fakeHonoApp, 'Bearer real-token');
+      const dispatch = dispatchModule.makeDispatch(fakeHonoApp, 'Bearer real-token', 'test-request-id');
       // A JSON body is required to exercise the `content-type` strip — a
       // bodyless GET never sets `content-type` at all (either forged or
       // real), so it can't tell "stripped" apart from "never applied". A
@@ -527,9 +560,37 @@ describe('MCP server (/api/mcp)', () => {
       for (const name of ['crowi_create_page', 'crowi_update_page']) {
         const description = byName(name);
         expect(description).toContain('self-contained HTML');
-        expect(description.toLowerCase()).toContain('no external');
-        expect(description).toContain('data:');
+        expect(description.toLowerCase()).toContain('external or relative script, image, or module references');
+        expect(description).toContain('data: URIs');
+        // Page links: the four forms, the fragment rules, query / reserved routes, %25.
+        for (const form of ['/team/guide', './guide', '../guide', 'guide', '/guide#overview', '#section']) expect(description).toContain(form);
+        expect(description).toContain('#id, not # or #a?b');
+        expect(description).toContain('/guide?edit=1');
+        expect(description).toContain('reserved routes such as /admin');
+        expect(description).toContain('Absolute reserved targets are rejected on save');
+        expect(description).toContain('/discount/100%25off, not /discount/100%off');
+        // Full-origin and root-level page-ID share links are not page paths.
+        expect(description).toContain('<wiki origin>/<page id>');
+        expect(description).toContain('/<page id>');
+        // External URLs: drop the href, keep the address as text; same-wiki URLs become page paths.
+        expect(description).toContain('protocol-relative //host/...');
+        expect(description).toContain('remove the href and show the address as body text');
+        expect(description).toContain('Rewrite a full or protocol-relative URL for this wiki as a page path such as /team/guide');
+        expect(description).not.toContain('/example.com/guide');
+        expect(description).toContain('./ADR:0001');
+        expect(description).toContain('Remove a placeholder or javascript: href');
+        // Resource vs page link, @import, Google Fonts exception.
+        expect(description).toContain('remove unsupported @import rules rather than replacing only their URLs');
+        expect(description).toContain('Google Fonts stylesheets when the wiki administrator has enabled web fonts');
+        expect(description).toContain('FONT_REFERENCE_FORBIDDEN');
+        expect(description).toContain('diagnosticCode when present');
       }
+      const revertDescription = byName('crowi_revert_to_revision');
+      for (const step of ['crowi_get_revision', 'fix the reported HTML issues', 'crowi_get_page', 'current revision_id', 'crowi_update_page']) {
+        expect(revertDescription).toContain(step);
+      }
+      expect(revertDescription).not.toMatch(/retry the (same )?revert/i);
+      expect(tools).toHaveLength(14);
       // Negative checks alone would pass on an emptied-out description too —
       // assert the replacement text actually mentions the discriminator.
       expect(byName('crowi_get_page')).not.toMatch(/^Read a wiki page \(markdown body/);
@@ -681,6 +742,248 @@ describe('MCP server (/api/mcp)', () => {
         expect(updateResult.structuredContent?.content_type).toBe('artifact');
       });
 
+      it('AC-04: crowi_update_page without content_type keeps an artifact page artifact and validates the HTML; a markdown declaration or invalid HTML is refused with the page untouched', async () => {
+        const createRes = await callMcp(fullPatToken, {
+          jsonrpc: '2.0',
+          id: 130,
+          method: 'tools/call',
+          params: { name: 'crowi_create_page', arguments: { path: `${PATH_PREFIX}mcp-artifact-omit`, body: VALID_ARTIFACT_HTML, content_type: 'artifact' } },
+        });
+        const created = parseRpc(createRes).result as { structuredContent?: { page_id?: string; revision_id?: string } };
+        const pageId = created.structuredContent?.page_id;
+        const call = async (id: number, args: Record<string, unknown>) =>
+          parseRpc(
+            await callMcp(fullPatToken, {
+              jsonrpc: '2.0',
+              id,
+              method: 'tools/call',
+              params: { name: 'crowi_update_page', arguments: { page_id: pageId, ...args } },
+            }),
+          ).result as { isError?: boolean; structuredContent?: { content_type?: string; error?: Record<string, unknown> } };
+
+        const omitted = await call(131, { body: validArtifactHtml({ body: '<p>omitted</p>' }) });
+        expect(omitted.isError).toBeFalsy();
+        expect(omitted.structuredContent?.content_type).toBe('artifact');
+
+        const Page = crowi.model('Page');
+        const before = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+        const markdown = await call(132, { body: '# markdown', content_type: 'markdown' });
+        expect(markdown.isError).toBe(true);
+        const invalid = await call(133, { body: '<p>not a document</p>' });
+        expect(invalid.isError).toBe(true);
+        expect(await Page.collection.findOne({ _id: new Types.ObjectId(pageId) })).toEqual(before);
+      });
+
+      type ToolResult = {
+        isError?: boolean;
+        content: Array<{ text: string }>;
+        structuredContent?: { status?: number; error?: Record<string, unknown>; page_id?: string; revision_id?: string; body?: string };
+      };
+      let rpcId = 1000;
+      // The MCP route rate-limits per user (120 / min); the repair table alone would exhaust a shared user's budget.
+      let repairUser: UserDocument;
+      let repairToken: string;
+      let recoveryUser: UserDocument;
+      let recoveryToken: string;
+      beforeAll(async () => {
+        repairUser = await createTestUser({ name: 'MCP Repair', username: 'mcpRepair', email: 'mcp-repair@example.com' });
+        repairToken = await patToken(repairUser, ['write']);
+        recoveryUser = await createTestUser({ name: 'MCP Recovery', username: 'mcpRecovery', email: 'mcp-recovery@example.com' });
+        recoveryToken = await patToken(recoveryUser, ['write']);
+      });
+      afterAll(async () => {
+        await crowi.model('User').deleteMany({ email: { $in: ['mcp-repair@example.com', 'mcp-recovery@example.com'] } });
+      });
+      const callTool = async (name: string, args: Record<string, unknown>, token: string = repairToken): Promise<ToolResult> => {
+        rpcId += 1;
+        const res = await callMcp(token, { jsonrpc: '2.0', id: rpcId, method: 'tools/call', params: { name, arguments: args } });
+        return parseRpc(res).result as ToolResult;
+      };
+
+      const ID = '507f1f77bcf86cd799439011';
+      const imageDataUri = 'data:image/png;base64,iVBORw0KGgo=';
+      // [label, rejected body, diagnosticCode, fixed body, text the fixed guidance must contain]
+      const repairCases: Array<[string, string, string, string, string]> = [
+        ['query', '<a href="/guide?edit=1">g</a>', 'PAGE_LINK_QUERY', '<a href="/guide">g</a>', 'Query strings are not allowed'],
+        ['raw percent', '<a href="/100%off">g</a>', 'PAGE_LINK_PERCENT_ENCODING', '<a href="/100%25off">g</a>', '%25'],
+        ['reserved route', '<a href="/admin">g</a>', 'PAGE_LINK_RESERVED_ROUTE', '<a href="/guide">g</a>', 'reserved route'],
+        ['root-level page id', `<a href="/${ID}">g</a>`, 'PAGE_LINK_RESERVED_ROUTE', '<a href="/team/guide">g</a>', 'page-ID share link'],
+        [
+          'full-origin page id',
+          `<a href="http://localhost:13001/${ID}">g</a>`,
+          'PAGE_LINK_INVALID',
+          '<a href="/team/guide">g</a>',
+          'full or protocol-relative URL',
+        ],
+        [
+          'https URL',
+          '<a href="https://example.com">https://example.com</a>',
+          'PAGE_LINK_INVALID',
+          '<a>https://example.com</a>',
+          'show the address as body text',
+        ],
+        [
+          'protocol-relative URL',
+          '<a href="//example.com/guide">//example.com/guide</a>',
+          'PAGE_LINK_INVALID',
+          '<a>//example.com/guide</a>',
+          'protocol-relative',
+        ],
+        ['mailto', '<a href="mailto:a@b.com">a@b.com</a>', 'PAGE_LINK_INVALID', '<a>a@b.com</a>', 'mailto:'],
+        ['tel', '<a href="tel:+1234567890">+1234567890</a>', 'PAGE_LINK_INVALID', '<a>+1234567890</a>', 'tel:'],
+        [
+          'same-wiki full URL',
+          '<a href="https://localhost:13001/team/guide">g</a>',
+          'PAGE_LINK_INVALID',
+          '<a href="/team/guide">g</a>',
+          'Rewrite a full or protocol-relative URL',
+        ],
+        [
+          'same-wiki protocol-relative URL',
+          '<a href="//localhost:13001/team/guide">g</a>',
+          'PAGE_LINK_INVALID',
+          '<a href="/team/guide">g</a>',
+          'Rewrite a full or protocol-relative URL',
+        ],
+        ['javascript placeholder', '<a href="javascript:void(0)">x</a>', 'PAGE_LINK_INVALID', '<a>x</a>', 'javascript: href'],
+        ['colon page name', '<a href="ADR:0001">x</a>', 'PAGE_LINK_INVALID', '<a href="./ADR:0001">x</a>', './ADR:0001'],
+        ['bare hash placeholder', '<a href="#">x</a>', 'PAGE_LINK_INVALID', '<a href="#top">x</a>', 'not # or #a?b'],
+        ['fragment with a query', '<a href="#a?b">x</a>', 'PAGE_LINK_INVALID', '<a href="#a">x</a>', 'not # or #a?b'],
+        ['external image', '<img src="https://example.com/x.png" alt="x">', 'RESOURCE_REFERENCE_FORBIDDEN', `<img src="${imageDataUri}" alt="x">`, 'data: URI'],
+      ];
+
+      it.each(
+        repairCases,
+      )('AC-AAG-9 create and update: %s is rejected with a fixed diagnostic, then the corrected body saves', async (_label, badBody, diagnosticCode, goodBody, guidance) => {
+        const path = `${PATH_PREFIX}repair-${rpcId + 1}`;
+        const bad = validArtifactHtml({ body: badBody });
+        const good = validArtifactHtml({ body: goodBody });
+
+        const rejectedCreate = await callTool('crowi_create_page', { path, body: bad, content_type: 'artifact' });
+        expect(rejectedCreate.isError).toBe(true);
+        expect(rejectedCreate.structuredContent?.status).toBe(400);
+        expect(rejectedCreate.structuredContent?.error).toMatchObject({
+          code: 'ARTIFACT_WRITE_REJECTED',
+          reason: 'EXTERNAL_REFERENCE',
+          ruleId: 'AI-R11',
+          diagnosticCode,
+        });
+        expect(String(rejectedCreate.structuredContent?.error?.message)).toContain(guidance);
+        expect(rejectedCreate.content[0].text).toContain(`[diagnostic: ${diagnosticCode}]`);
+        expect(rejectedCreate.content[0].text).not.toContain('/example.com/guide');
+        expect(await crowi.model('Page').findOne({ path })).toBeNull();
+
+        const created = await callTool('crowi_create_page', { path, body: good, content_type: 'artifact' });
+        expect(created.isError).toBeFalsy();
+
+        const base = await callTool('crowi_create_page', { path: `${path}-base`, body: VALID_ARTIFACT_HTML, content_type: 'artifact' });
+        expect(base.isError).toBeFalsy();
+        const rejectedUpdate = await callTool('crowi_update_page', {
+          page_id: base.structuredContent?.page_id,
+          revision_id: base.structuredContent?.revision_id,
+          body: bad,
+          content_type: 'artifact',
+        });
+        expect(rejectedUpdate.isError).toBe(true);
+        expect(rejectedUpdate.structuredContent?.error).toMatchObject({ diagnosticCode });
+        const fixedUpdate = await callTool('crowi_update_page', {
+          page_id: base.structuredContent?.page_id,
+          revision_id: base.structuredContent?.revision_id,
+          body: good,
+          content_type: 'artifact',
+        });
+        expect(fixedUpdate.isError).toBeFalsy();
+      });
+
+      it('AC-AAG-9 a CSS @import is rejected as a resource reference and saves once the rule is removed', async () => {
+        const path = `${PATH_PREFIX}repair-import`;
+        const rejected = await callTool('crowi_create_page', {
+          path,
+          body: validArtifactHtml({ style: '@import url("https://example.com/a.css");' }),
+          content_type: 'artifact',
+        });
+        expect(rejected.isError).toBe(true);
+        expect(rejected.structuredContent?.error).toMatchObject({ diagnosticCode: 'RESOURCE_REFERENCE_FORBIDDEN' });
+        expect(String(rejected.structuredContent?.error?.message)).toContain('remove the @import rule');
+        const fixed = await callTool('crowi_create_page', { path, body: VALID_ARTIFACT_HTML, content_type: 'artifact' });
+        expect(fixed.isError).toBeFalsy();
+      });
+
+      it('AC-AAG-8 a pages:read token cannot write and receives no body diagnostic', async () => {
+        const readOnly = await patToken(user, ['pages:read']);
+        const result = await callTool(
+          'crowi_create_page',
+          { path: `${PATH_PREFIX}read-only-artifact`, body: validArtifactHtml({ body: '<a href="/admin">x</a>' }), content_type: 'artifact' },
+          readOnly,
+        );
+        expect(result.isError).toBe(true);
+        expect(result.structuredContent?.status).toBe(403);
+        expect(result.structuredContent?.error).not.toHaveProperty('diagnosticCode');
+        expect(result.content[0].text).not.toContain('diagnostic');
+      });
+
+      it('AC-AAG-9 a revert to a revision holding a reserved link is rejected, then recovered via get_revision, get_page and update with the CURRENT revision_id', async () => {
+        const Page = crowi.model('Page');
+        const Revision = crowi.model('Revision');
+        const path = `${PATH_PREFIX}revert-recovery`;
+
+        const created = await callTool('crowi_create_page', { path, body: VALID_ARTIFACT_HTML, content_type: 'artifact' }, recoveryToken);
+        const pageId = String(created.structuredContent?.page_id);
+        const firstRevisionId = String(created.structuredContent?.revision_id);
+
+        // A revision saved before the reserved-route check existed.
+        const badBody = validArtifactHtml({ body: '<a href="/admin">go</a>' });
+        const stale = await Revision.create({ path, page: pageId, body: badBody, author: recoveryUser._id, contentType: 'artifact' });
+        const staleRevisionId = stale._id.toString();
+
+        const updated = await callTool(
+          'crowi_update_page',
+          {
+            page_id: pageId,
+            revision_id: firstRevisionId,
+            body: validArtifactHtml({ body: '<p>current v2</p>' }),
+            content_type: 'artifact',
+          },
+          recoveryToken,
+        );
+        expect(updated.isError).toBeFalsy();
+        const currentRevisionId = String(updated.structuredContent?.revision_id);
+        const revisionCount = await Revision.countDocuments({ page: pageId });
+        const pointerBefore = String((await Page.findById(pageId))?.revision);
+
+        const reverted = await callTool('crowi_revert_to_revision', { page_id: pageId, revision_id: staleRevisionId }, recoveryToken);
+        expect(reverted.isError).toBe(true);
+        expect(reverted.structuredContent?.status).toBe(400);
+        expect(reverted.structuredContent?.error).toMatchObject({ code: 'ARTIFACT_WRITE_REJECTED', diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE' });
+        expect(await Revision.countDocuments({ page: pageId })).toBe(revisionCount);
+        expect(String((await Page.findById(pageId))?.revision)).toBe(pointerBefore);
+
+        const fetched = await callTool('crowi_get_revision', { id: staleRevisionId }, recoveryToken);
+        expect(fetched.structuredContent?.revision_id).toBe(staleRevisionId);
+        const fixedBody = String(fetched.structuredContent?.body).replace('/admin', '/team/guide');
+        expect(fixedBody).not.toContain('/admin');
+
+        // The revision_id crowi_get_revision returned is the PAST one: the optimistic lock refuses it.
+        const withPastId = await callTool(
+          'crowi_update_page',
+          { page_id: pageId, revision_id: staleRevisionId, body: fixedBody, content_type: 'artifact' },
+          recoveryToken,
+        );
+        expect(withPastId.isError).toBe(true);
+        expect(withPastId.structuredContent?.status).toBe(409);
+
+        const current = await callTool('crowi_get_page', { page_id: pageId }, recoveryToken);
+        expect(current.structuredContent?.revision_id).toBe(currentRevisionId);
+        expect(currentRevisionId).not.toBe(staleRevisionId);
+        const recovered = await callTool(
+          'crowi_update_page',
+          { page_id: pageId, revision_id: currentRevisionId, body: fixedBody, content_type: 'artifact' },
+          recoveryToken,
+        );
+        expect(recovered.isError).toBeFalsy();
+        expect((await Revision.findById(staleRevisionId))?.body).toBe(badBody);
+      });
+
       it('an ingest rejection with a fixed-identifier target surfaces reason/ruleId/message/target through errorResult, never the offending value (AC-CL-9)', async () => {
         const secretType = 'application/x-should-not-leak-mcp-test-token';
         const rejectingBody = validArtifactHtml({ body: `<script type="${secretType}">1;</script>` });
@@ -801,10 +1104,11 @@ describe('MCP server (/api/mcp)', () => {
 
     it('a rejected credential never reaches dispatch — the dispatcher is never constructed and a mutating tool call has no side effect (AC-7)', async () => {
       // `attach.ts`'s `app.all('/mcp', ...)` handler only calls
-      // `makeDispatch(app, authorization)` AFTER `createMcpAuth` lets the
-      // request through — asserting the dispatcher factory itself was never
-      // invoked proves dispatch never runs, rather than only inferring it
-      // from the absence of a downstream side effect.
+      // `makeDispatch(app, authorization, c.get('requestId'))` AFTER
+      // `createMcpAuth` lets the request through — asserting the
+      // dispatcher factory itself was never invoked proves dispatch never
+      // runs, rather than only inferring it from the absence of a
+      // downstream side effect.
       const dispatchModule = await import('./dispatch');
       const spy = jest.spyOn(dispatchModule, 'makeDispatch');
       try {

@@ -228,6 +228,12 @@ export type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
 export const ClaimPageLinkAccessResponseSchema = GetPageResponseSchema.extend({ granted: z.boolean() });
 export type ClaimPageLinkAccessResponse = z.infer<typeof ClaimPageLinkAccessResponseSchema>;
 
+// The page list enforces these on `limit` / `offset` only when `path_prefix`
+// is set; the schema itself stays unbounded because callers without a prefix
+// probe with `limit: 0`.
+export const LIST_PAGES_PREFIX_LIMIT = { min: 1, max: 100 } as const;
+export const LIST_PAGES_PREFIX_OFFSET = { min: 0, max: 2147483647 } as const;
+
 // List pages request schema
 export const ListPagesRequestSchema = z.object({
   path: z.string().optional(),
@@ -255,6 +261,14 @@ export const ListPagesRequestSchema = z.object({
   // Only the `portalPage` is rewound — the child rows always reflect the
   // latest. Absent for normal listings.
   revision_id: z.string().optional(),
+  path_prefix: z
+    .string()
+    .min(1)
+    .startsWith('/')
+    .optional()
+    .describe(
+      'Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise).',
+    ),
 });
 export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
 export type ListPagesSort = ListPagesRequest['sort'];
@@ -287,6 +301,10 @@ export const ListPagesResponseSchema = z.object({
   // of `PagerSchema` — mirrors `ListUsersResponseSchema.total`, a sibling
   // top-level field alongside `pager`.
   total: z.number(),
+  appliedPathPrefix: z
+    .string()
+    .optional()
+    .describe('Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested.'),
 });
 export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 
@@ -530,6 +548,21 @@ export const ArtifactIngestRejectionReasonSchema = z.enum(ARTIFACT_INGEST_REJECT
 export type ArtifactIngestRejectionReason = z.infer<typeof ArtifactIngestRejectionReasonSchema>;
 
 /**
+ * Closed set of fixed diagnostics an artifact author can act on without the
+ * rejected value being echoed back. Each maps to a fixed correction message.
+ */
+export const ARTIFACT_DIAGNOSTIC_CODES = [
+  'PAGE_LINK_QUERY',
+  'PAGE_LINK_PERCENT_ENCODING',
+  'PAGE_LINK_RESERVED_ROUTE',
+  'PAGE_LINK_INVALID',
+  'PAGE_LINK_CONTEXT_FORBIDDEN',
+  'RESOURCE_REFERENCE_FORBIDDEN',
+] as const;
+export const ArtifactDiagnosticCodeSchema = z.enum(ARTIFACT_DIAGNOSTIC_CODES);
+export type ArtifactDiagnosticCode = z.infer<typeof ArtifactDiagnosticCodeSchema>;
+
+/**
  * RFC-0020 — the write-only content-type declaration for POST/PUT `/pages`.
  * Deliberately `z.string().optional()` rather than an enum: OpenAPIHono's
  * shared `defaultHook` (`packages/api/src/hono/middleware/default-hook.ts`)
@@ -553,13 +586,15 @@ export const ArtifactContentTypeHeaderSchema = z.object({
  * union above; `message` is a fixed per-reason string (never a parser/
  * library message or author content); `target` is an optional bounded
  * identifier (offending tag/attribute/rule name), never a value/URL/source
- * excerpt.
+ * excerpt; `diagnosticCode` is an optional fixed classification of the
+ * rejection (see `ARTIFACT_DIAGNOSTIC_CODES`).
  */
 export const ArtifactWriteRejectionSchema = ApiErrorSchema.extend({
   error: z.object({
     code: z.literal('ARTIFACT_WRITE_REJECTED'),
     reason: ArtifactIngestRejectionReasonSchema,
     ruleId: z.string().regex(/^AI-(R\d{2}[a-c]?|D0[1-3])$/),
+    diagnosticCode: ArtifactDiagnosticCodeSchema.optional(),
     message: z.string(),
     target: z.string().optional(),
   }),

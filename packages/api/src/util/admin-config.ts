@@ -1,3 +1,4 @@
+import { type RegistrationMode, RegistrationModeSchema } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 
 /**
@@ -79,6 +80,22 @@ export const coerceNumber = (value: unknown, fallback = 0): number => {
  * key, so a future change to either can't silently drift between call sites.
  */
 export const isLinkCardEnabled = (crowi: Crowi): boolean => coerceBoolean(getCrowiConfigNamespace(crowi)['security:linkCardEnabled'], true);
+
+const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'Open';
+
+/**
+ * Read the `security:registrationMode` value, default `'Open'` on a missing
+ * row or an out-of-enum value (hand-edited data, older schema). The single
+ * source of truth for both the value and its fallback so the App and
+ * Security admin pages can't independently drift on what "unset" means.
+ * Validity is delegated to `RegistrationModeSchema` rather than re-listing
+ * the enum values here, so a future mode addition only needs the one edit.
+ */
+export const readRegistrationMode = (crowi: Crowi): RegistrationMode => {
+  const value = getCrowiConfigNamespace(crowi)['security:registrationMode'];
+  const parsed = RegistrationModeSchema.safeParse(value);
+  return parsed.success ? parsed.data : DEFAULT_REGISTRATION_MODE;
+};
 
 /**
  * Coerce an unknown config value to a string[]. Array → filter to strings,

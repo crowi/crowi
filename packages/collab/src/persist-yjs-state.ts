@@ -1,6 +1,7 @@
 import Debug from 'debug';
-import type { Model } from 'mongoose';
 import * as Y from 'yjs';
+import type { CollabModels } from './models';
+import { readCollabBodyEligibility } from './page-body-kind';
 import { DELETED_STATUS } from './page-status';
 import { type AntiShrinkVerdict, evaluateAntiShrink } from './yjs-anti-shrink';
 
@@ -36,10 +37,6 @@ const debug = Debug('crowi:collab:persist');
  * `allowShrink: true` here — a deliberate empty clear / large deletion
  * always persists.
  */
-
-/** Minimal `Page` model surface this chokepoint touches. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PageModelLike = Pick<Model<any>, 'updateOne'>;
 
 export interface PersistYjsStateInput {
   /** Page id (= Hocuspocus documentName) being checkpointed. */
@@ -104,6 +101,15 @@ export type PersistYjsStateResult =
        */
       ok: false;
       reason: 'epoch-mismatch';
+    }
+  | {
+      /**
+       * The Page (or a Revision it points at) is an artifact, or its stored
+       * kind / pointers are inconsistent. Nothing was written and nothing was
+       * encoded; callers treat it like any other reject (folded rows stay).
+       */
+      ok: false;
+      reason: 'content-type';
     };
 
 /**
@@ -125,7 +131,19 @@ const rejectCounts = new Map<string, number>();
  * The caller owns its own try/catch (the existing write sites already wrap
  * their persistence in one) — a thrown Mongo error propagates unchanged.
  */
-export async function persistYjsState(page: PageModelLike, input: PersistYjsStateInput): Promise<PersistYjsStateResult> {
+export async function persistYjsState(models: Pick<CollabModels, 'Page' | 'Revision'>, input: PersistYjsStateInput): Promise<PersistYjsStateResult> {
+  // RFC-0020 §1 — decided before anything is encoded or evaluated, so an
+  // artifact Page never has Yjs bytes produced for it. A missing Page maps to
+  // the same zero-match outcome the conditional update below would report.
+  const eligibility = await readCollabBodyEligibility(models, input.pageId);
+  if (!eligibility.ok) {
+    if (eligibility.reason === 'missing') return { ok: false, reason: 'epoch-mismatch' };
+    console.warn(
+      `[crowi:collab] persistYjsState: refused the ${input.origin} checkpoint for page ${input.pageId} (reason=${eligibility.reason}); nothing written.`,
+    );
+    return { ok: false, reason: 'content-type' };
+  }
+
   const verdict = evaluateAntiShrink({
     candidate: input.document,
     baselineBody: input.baselineBody,
@@ -156,18 +174,23 @@ export async function persistYjsState(page: PageModelLike, input: PersistYjsStat
   // deleted page); `collabLifecycleVersion` is added only when
   // `expectedEpoch` is known (see `PersistYjsStateInput.expectedEpoch`'s
   // doc comment for the fail-safe-fallback rationale).
-  // RFC-0020 §1 — artifact Pages never accept a Yjs checkpoint. Matches a
-  // missing field too (legacy Markdown / never-set hint), same as
-  // `status: { $ne: DELETED_STATUS }` above. This is what closes the
-  // window where a live doc's Page acquires artifact kind mid-session
-  // (the 3 connect-time gates in `on-authenticate.ts` / `on-load-document.ts`
-  // can't catch that): the checkpoint falls through to the existing
-  // zero-match `epoch-mismatch` reject below, writing nothing.
-  const filter: Record<string, unknown> = { _id: input.pageId, status: { $ne: DELETED_STATUS }, contentType: { $ne: 'artifact' } };
+  // RFC-0020 §1 — the pointers observed above are folded into the filter, so a
+  // Page that acquired an artifact Revision between the metadata read and this
+  // write (its pointers move) matches nothing and falls into the zero-match
+  // reject below. `$ne: 'artifact'` also matches a missing hint (legacy Markdown).
+  const filter: Record<string, unknown> = {
+    _id: input.pageId,
+    revision: eligibility.revisionId,
+    currentRevision: eligibility.currentRevisionId,
+    status: { $ne: DELETED_STATUS },
+    contentType: { $ne: 'artifact' },
+  };
   if (input.expectedEpoch !== undefined) {
     filter.collabLifecycleVersion = input.expectedEpoch;
   }
-  const writeResult = (await page.updateOne(filter, { $set: { yjsState: stateBuf, yjsCheckpointAt: new Date() } }).exec()) as { matchedCount?: number } | null;
+  const writeResult = (await models.Page.updateOne(filter, { $set: { yjsState: stateBuf, yjsCheckpointAt: new Date() } }).exec()) as {
+    matchedCount?: number;
+  } | null;
   if ((writeResult?.matchedCount ?? 0) === 0) {
     // RFC-0017 Phase 1 §4.2/AC-16 — zero-match means "do not persist": the
     // lifecycle transitioned (or the page is deleted) since `expectedEpoch`

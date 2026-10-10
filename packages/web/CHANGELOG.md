@@ -1,5 +1,37 @@
 # @crowi/web
 
+## 2.0.0-alpha.23
+
+### Minor Changes
+
+- af3068c: Artifact pages can now link to other wiki pages with ordinary `a` / `area` links (absolute, relative to the artifact's own page, or with a `#fragment`): a normal click or Enter moves the wiki to the page in the same tab, cmd/ctrl-click and `target="_blank"` open a new tab, and the wiki only follows links to regular wiki pages while the reader is actually interacting with the artifact, asking for confirmation instead when the link was activated right after the page opened or after the reader acted on the page around the artifact.
+
+### Patch Changes
+
+- e0add21: In a maximized artifact, the sandboxed-content notice now sits below the artifact and scrolls into view instead of staying pinned to the bottom of the screen, where it took up a large share of a phone's height.
+- 8e804d5: Update the dependency Next.js to 16.3.6, which fixes a remote code execution reported in `next/og`'s `ImageResponse`. Crowi does not use `next/og`, so its pages did not reach that code.
+- Updated dependencies [af3068c]
+  - @crowi/api-contract@2.0.0-alpha.23
+
+## 2.0.0-alpha.22
+
+### Minor Changes
+
+- 0b2ea32: An HTML artifact page now grows to fit its content, so the page scrolls as one document instead of showing a second scrollbar inside the artifact's frame, and the page title carries an "Artifact" pill above it, like the one a portal carries in its header.
+
+  To make the height measurable, the artifact delivery route (`GET /api/artifact/{pageId}/{revisionId}`) now appends one fixed script after the stored document that reports the document's height to the page, and its `Content-Security-Policy` always authorises that script by hash — so `script-src` is no longer `'none'` for an artifact without scripts of its own. The stored HTML is unchanged, and the download route still returns exactly what was stored. A document that sizes itself from the viewport (for example `min-height: 100vh` plus padding) stops growing the frame after one step and scrolls the remainder inside it; until the first report arrives, the frame keeps its previous fixed height.
+
+- b687b99: An HTML artifact page can now be maximized to fill the browser window, for artifacts wider than the page column, and from there switched to full screen where the browser supports full screen for page elements (not on iPhone). The artifact keeps its state across both: its frame is restyled in place, never reloaded. Escape or the Restore button returns to the normal page; Escape works even while focus is inside the artifact, forwarded by the script artifact delivery appends, unless the artifact handles Escape itself. The sandboxed-content notice stays visible while maximized.
+
+### Patch Changes
+
+- 746d2c1: The App admin page's status card now shows the actual configured registration mode (Open / Restricted / Closed) instead of always displaying the literal string "open", and Restricted is now correctly described as requiring admin approval rather than being invitation-only, matching the Security admin page's labels and wording.
+- e61d490: Fixed scroll sync between the editor and the preview on the edit page running away: scrolling down no longer keeps both panes scrolling far past where you stopped, and scrolling up in either pane is no longer pushed back down.
+- ec48b94: Shorten the settings security tab label in Japanese and English to fit narrow screens and describe security and integration settings collectively.
+- Updated dependencies [746d2c1]
+- Updated dependencies [0b2ea32]
+  - @crowi/api-contract@2.0.0-alpha.22
+
 ## 2.0.0-alpha.21
 
 ### Minor Changes

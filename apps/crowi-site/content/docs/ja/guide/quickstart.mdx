@@ -29,7 +29,7 @@ docker compose --profile app up -d --build
 
 `--profile app` は Crowi 本体 (api / web) と前段のリバースプロキシに加えて、MongoDB・Redis・Elasticsearch・メール確認用の Mailpit をまとめて起動します。初回はイメージのビルドが走るため数分かかります。
 
-起動したらブラウザで **http://localhost:4302** を開いてください。これが唯一の入口です。リアルタイム共同編集や通知の WebSocket は前段のプロキシ経由でのみつながるため、他のポートを直接開かないでください。
+起動したらブラウザで **http://localhost:4302** を開いてください。アクセスに使うのはこの URL だけです。リアルタイム共同編集や通知の WebSocket は前段のプロキシ経由でのみつながるため、他のポートを直接開かないでください。
 
 ## 2. 管理者アカウントを作る
 

@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PageSchema } from './page';
+import { ARTIFACT_DIAGNOSTIC_CODES, ArtifactWriteRejectionSchema, ListPagesRequestSchema, ListPagesResponseSchema, PageSchema } from './page';
 
 const basePage = {
   _id: '000000000000000000000001',
@@ -60,6 +60,64 @@ describe('schemas/page', () => {
       if (result.success) {
         assert.equal('liker' in result.data, false);
       }
+    });
+  });
+
+  describe('list prefix field and applied metadata schema', () => {
+    it('keeps the legacy defaults when path_prefix is absent', () => {
+      const parsed = ListPagesRequestSchema.parse({});
+      assert.equal(parsed.limit, 50);
+      assert.equal(parsed.offset, 0);
+      assert.equal(parsed.include_deleted, false);
+      assert.equal(parsed.sort, 'updatedAt');
+      assert.equal(parsed.order, 'desc');
+      assert.equal(parsed.path_prefix, undefined);
+    });
+
+    it('rejects an empty or slash-less path_prefix', () => {
+      assert.equal(ListPagesRequestSchema.safeParse({ path_prefix: '' }).success, false);
+      assert.equal(ListPagesRequestSchema.safeParse({ path_prefix: 'team' }).success, false);
+    });
+
+    it('accepts root and prefixes carrying regex symbols literally', () => {
+      for (const value of ['/', '/team', '/team/', '/a.b[c]+*?\\$', '/日本語']) {
+        const result = ListPagesRequestSchema.safeParse({ path_prefix: value });
+        assert.equal(result.success, true, value);
+        if (result.success) {
+          assert.equal(result.data.path_prefix, value);
+        }
+      }
+    });
+
+    it('keeps appliedPathPrefix optional on the response', () => {
+      const base = { pages: [], pager: { prev: null, next: null, offset: 0 }, total: 0 };
+      assert.equal(ListPagesResponseSchema.safeParse(base).success, true);
+      assert.equal(ListPagesResponseSchema.safeParse({ ...base, appliedPathPrefix: '/team' }).success, true);
+      assert.equal(ListPagesResponseSchema.safeParse({ ...base, appliedPathPrefix: 1 }).success, false);
+    });
+  });
+  describe('ArtifactWriteRejectionSchema diagnosticCode (AC-AAG-5)', () => {
+    const envelope = (extra: Record<string, unknown> = {}) => ({
+      error: { code: 'ARTIFACT_WRITE_REJECTED', reason: 'EXTERNAL_REFERENCE', ruleId: 'AI-R11', message: 'm', ...extra },
+    });
+
+    it('accepts an envelope with and without a code', () => {
+      assert.equal(ArtifactWriteRejectionSchema.safeParse(envelope()).success, true);
+      for (const code of ARTIFACT_DIAGNOSTIC_CODES) {
+        const parsed = ArtifactWriteRejectionSchema.safeParse(envelope({ diagnosticCode: code }));
+        assert.equal(parsed.success && parsed.data.error.diagnosticCode, code);
+      }
+    });
+
+    it('rejects an unknown code and keeps required fields required', () => {
+      assert.equal(ArtifactWriteRejectionSchema.safeParse(envelope({ diagnosticCode: 'NOPE' })).success, false);
+      assert.equal(ArtifactWriteRejectionSchema.safeParse(envelope({ ruleId: undefined })).success, false);
+    });
+
+    it('strips extra fields', () => {
+      const parsed = ArtifactWriteRejectionSchema.safeParse(envelope({ href: '/admin', detail: 'x' }));
+      assert.equal(parsed.success, true);
+      assert.deepEqual(Object.keys(parsed.success ? parsed.data.error : {}).sort(), ['code', 'message', 'reason', 'ruleId']);
     });
   });
 });

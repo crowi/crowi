@@ -61,7 +61,9 @@ Linking to a page:
 - The stable link is the ID form, \`<wiki origin>/<page id>\` — the \`_id\`
   crowi_get_page returns. It needs no encoding, survives renames, and is what
   Crowi's own share button copies. Prefer it whenever you hand a link to a
-  person.
+  person. However, links inside artifact HTML must use page paths such as
+  /team/guide or ./guide; ID forms, including <wiki origin>/<page id> and
+  /<page id>, cannot be used.
 - In a path URL, a space in a page path is written \`+\` (\`/notes/my page\` →
   \`/notes/my+page\`). \`%20\` reads the same way, and a literal \`+\` cannot
   occur in a path.

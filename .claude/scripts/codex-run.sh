@@ -22,9 +22,9 @@
 #                                         # start its workers. Pass it whenever
 #                                         # codex must run the suite itself.
 #                [--tier sol|terra|luna]                 # semantic model tier:
-#                                         # sol=hardest (gpt-5.6-sol, effort high)
-#                                         # terra=general (gpt-5.6-terra, medium)
-#                                         # luna=simple (gpt-5.6-luna, low).
+#                                         # sol=hardest (gpt-6-astra, effort high)
+#                                         # terra=general (gpt-6-sol, medium)
+#                                         # luna=simple (gpt-6-luna, low).
 #                                         # Model ids live only here; callers pass
 #                                         # the tier. Omit → codex config default.
 #                [--model <m>] [--effort <e>]            # override tier defaults
@@ -82,11 +82,16 @@ done
 # carries a default reasoning effort (sol runs hard, luna runs cheap).
 # Explicit --model / --effort still win over the tier defaults (escape hatch),
 # and passing no --tier keeps the legacy behavior (codex config default).
+# The tier names are difficulty labels, not model names: codex renames and
+# re-ranks its models between generations (in gpt-6, "sol" is the mid model and
+# "astra" the top one, and there is no gpt-6-terra). Map a new generation by
+# rank — `priority` in ~/.codex/models_cache.json, lower is stronger — never by
+# matching names, or terra fails with a 400 and sol silently drops a rank.
 if [ -n "$TIER" ]; then
   case "$TIER" in
-    sol)   TIER_MODEL="gpt-5.6-sol";   TIER_EFFORT="high" ;;
-    terra) TIER_MODEL="gpt-5.6-terra"; TIER_EFFORT="medium" ;;
-    luna)  TIER_MODEL="gpt-5.6-luna";  TIER_EFFORT="low" ;;
+    sol)   TIER_MODEL="gpt-6-astra"; TIER_EFFORT="high" ;;
+    terra) TIER_MODEL="gpt-6-sol";   TIER_EFFORT="medium" ;;
+    luna)  TIER_MODEL="gpt-6-luna";  TIER_EFFORT="low" ;;
     *) echo "[$LABEL] invalid --tier: $TIER (want sol|terra|luna)" >&2; exit 3 ;;
   esac
   [ -z "$MODEL" ] && MODEL="$TIER_MODEL"

@@ -156,6 +156,10 @@ Required / commonly-set:
   When unset, the web app derives it from `window.location.host` and
   `NEXT_PUBLIC_API_URL`, so leave it blank if `/collab/*` is reverse-proxied
   to the same host as the api.
+- `LOG_LEVEL` — structured-log (RFC-0025) severity floor, default `info`
+  (`debug` / `info` / `warn` / `error`). `DEBUG` does not move this floor —
+  a `debug`-level record additionally needs its namespace selected via
+  `DEBUG`, same as any other `debug`-package trace.
 
 Search backend connection settings (Elasticsearch / OpenSearch URL, index
 name, analyzer, etc.) live in the plugin Config namespace and are edited
@@ -284,6 +288,8 @@ When it is close, do not weigh how likely the finding is — ask **whether the
 person who hits it can get back to a good state, on their own or through an
 admin**. If they can, drop it.
 
+**Mixed replicas are an operating procedure, not a runtime mechanism.** A deployment runs one or a few api replicas. When a change is only safe if every replica runs the same build or sees the same switch (an authorization arm, a cutover, a data migration), the answer is the maintenance procedure: stop the replicas, run the migration if one is needed, start them again. Do not design heartbeats, fleet version or closure proofs, live-replica admission, or two-phase flip fences, and do not raise their absence as a finding. A spec states the procedure and the one window it leaves (an operator who skips it) for operators, and stops there.
+
 ### Flaky test / CI-infra root cause: delegate the investigation+design, don't reason it out inline
 When a CI failure turns out to be flaky/nondeterministic or CI-infra-shaped
 (turbo build/task-graph races, jest harness/worker behavior, GHA runner
@@ -291,7 +297,7 @@ timing, port/process reuse) rather than a straightforward deterministic
 regression, **do not diagnose the root cause and design the fix by reasoning
 inline in a Claude Sonnet session.** Stop, and hand the investigation +
 countermeasure design to Codex at `--tier sol` (`.claude/scripts/codex-run.sh
---tier sol`, `gpt-5.6-sol`, high effort) or a Fable-model subagent (`Agent`
+--tier sol`, the top-ranked codex model at high effort) or a Fable-model subagent (`Agent`
 with `model: "fable"`). Claude's job is to execute/glue/gate the design that
 comes back — write the repro, apply the fix, run the gates, commit — not to
 originate the root-cause theory itself.

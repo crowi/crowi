@@ -29,6 +29,7 @@ description: crowi の planner ロールでセッションを起動/再起動し
 - **Workflow の args は script に JSON 文字列で届く**: 閉じ括弧欠け等の JSON 破損は `parseArgs` の fallback で空 `{}` になり `FAILED (got: {})` で即死する。args は送信前に構造を確認。
 - **収束規律**: 小 spec は指摘ゼロを追わない(性質が「設計の穴」→「文言精度」に移ったら畳む)。large は「大 RFC 収束ルール」(approach 合意済みなら残りを gate/OQ 化して Draft 確定)。
 - **指摘が「事実の精度」に移ったら、brief 再生成をやめて spec を直接手直しする**: そこから先を Workflow B の write→review ループで回すと、writer が毎ラウンド brief から書き直すため未検証の主張が新しく混入し、それが次ラウンドの指摘になって発散する。切り替え後は (1) 指摘を実コードで裏取りし、(2) spec の restate 箇所を**全列挙してから**一括で直し、(3) 裏取り済みの事実だけを brief へ記録して次の writer が引用できるようにし、(4) `reviewOnly` を `_round` を変えて 1 回だけ回す。誤指摘は直さず rebut して brief に「この規則は存在しない」と根拠つきで書く(再燃を防ぐ)。
+- **再 ground で「既存の X を残す」と決めたら、X が無いことを前提にしている記述を全部洗う**: 行番号のズレを直すのは機械的にできるが、本当に危険なのは**意味の依存**のほう。実装が既に入っていて spec の前提が変わった箇所に「これは残す」と書き足すと、その前提に乗っていた設計判断・フロー・AC・テスト名が一斉に偽になる。grep するのは変更したファイル名ではなく、**残すと決めたコードが担っていた役割の語**(今回なら constructor failure / marker / handler 配送)。1 箇所だけ足して残りを放置すると、実装セッションが着手前に ESCALATE して止まる (2026-09-18 に実際に発生。6 箇所の矛盾を実装者が列挙してきた)。
 - **cross-phase の板挟みは後段でなく発生源を直す**: 先行 phase の spec が「file 5 本」のような**成功すると偽になる数**を prose・AC・テストケース名に書いていると、後段 phase が out-of-scope 契約と衝突する。後段に例外条項を足すのではなく、先行 phase を pattern 表記へ直す(approved 後でも validator を再実行すればよい)。
 - **wiki publish の手順**: CLAUDE.md の二段階手順(Write→Read→そのまま渡す・応答長の照合)を厳守。ローカル dev が落ちていると MCP(`http://localhost:4301/mcp`)が繋がらない — 必要なら `pnpm dev:api` を一時起動し、終わったら止める。
 

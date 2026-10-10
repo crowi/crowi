@@ -181,5 +181,36 @@ describe('Hono cors middleware', () => {
       // emitted because the browser CORS check doesn't apply.
       expect(res.status).toBe(200);
     });
+
+    // Response readability and browser request permission are different
+    // contracts:
+    // exposing `X-Request-Id` on the actual response lets browser code READ
+    // it, but must not also grant permission to SEND it as a cross-origin
+    // request header (that stays governed by the existing `allowHeaders`).
+    it('exposes X-Request-Id on responses without allowing it as a request header', async () => {
+      const honoApp = buildHonoApp(crowi);
+
+      const actual = await honoApp.fetch(
+        new Request(`${BASE_ORIGIN}/app/info`, {
+          method: 'GET',
+          headers: { Origin: BASE_ORIGIN },
+        }),
+      );
+      expect(actual.status).toBe(200);
+      expect(actual.headers.get('access-control-expose-headers')).toContain('X-Request-Id');
+
+      const preflight = await honoApp.fetch(
+        new Request(`${BASE_ORIGIN}/app/info`, {
+          method: 'OPTIONS',
+          headers: {
+            Origin: BASE_ORIGIN,
+            'Access-Control-Request-Method': 'GET',
+            'Access-Control-Request-Headers': 'X-Request-Id',
+          },
+        }),
+      );
+      const allowHeaders = preflight.headers.get('access-control-allow-headers') ?? '';
+      expect(allowHeaders.toLowerCase()).not.toContain('x-request-id');
+    });
   });
 });

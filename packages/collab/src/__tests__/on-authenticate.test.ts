@@ -110,7 +110,7 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
       .updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } })
       .exec();
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
   });
 
@@ -123,7 +123,7 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
       .updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 2 } })
       .exec();
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
   });
 
@@ -136,7 +136,7 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
       .updateOne({ _id: pageId }, { $set: { status: 'deleted' }, $inc: { collabLifecycleVersion: 1 } })
       .exec();
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
   });
 
@@ -150,7 +150,7 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
       .exec();
     const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 1 });
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
   });
 
@@ -166,7 +166,7 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { token: legacyToken } = apiUtil.signWsToken({ userId, pageId, readonly: false } as any);
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     // Rejected before onLoadDocument would ever run — this hook IS that boundary.
     await expect(onAuthenticate(makeAuthPayload(legacyToken, pageId))).rejects.toThrow('invalid token');
 
@@ -184,7 +184,7 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
       .exec();
     const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 5 });
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
     expect(ctx).toEqual({ userId, pageId, readonly: false, epoch: 5 });
   });
@@ -211,16 +211,68 @@ describe('createOnAuthenticate — RFC-0017 Phase 1 epoch gate + deleted reject'
       },
     };
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page }, editorCapCounter });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision }, editorCapCounter });
     await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
     expect(acquireCalled).toBe(false);
+  });
+
+  test('AC-05: a valid token is refused when only the current Revision (or currentRevision) is an artifact, before the editor cap is touched', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    for (const field of ['revision', 'currentRevision'] as const) {
+      const { pageId, userId } = await seedPage();
+      const markdown = await Revision.collection.insertOne({
+        path: '/p',
+        body: 'md',
+        format: 'markdown',
+        author: new mongoose.Types.ObjectId(),
+        createdAt: new Date(),
+      });
+      const artifact = await Revision.collection.insertOne({
+        path: '/p',
+        body: '<html></html>',
+        format: 'markdown',
+        author: new mongoose.Types.ObjectId(),
+        createdAt: new Date(),
+        contentType: 'artifact',
+      });
+      await Page().collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(pageId) },
+        { $set: { revision: markdown.insertedId, currentRevision: markdown.insertedId, [field]: artifact.insertedId } },
+      );
+      const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 0 });
+      const tryAcquire = jest.fn(async () => ({ acquired: true, count: 1, cap: 20 }));
+      const onAuthenticate = createOnAuthenticate({
+        wsTokenUtil,
+        models: { Page: models.Page, Revision: models.Revision },
+        editorCapCounter: {
+          maxEditorsPerPage: 20,
+          peek: async () => ({ count: 0, cap: 20 }),
+          tryAcquire,
+          release: async () => undefined,
+          disconnect: async () => undefined,
+        },
+      });
+      await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
+      expect(tryAcquire).not.toHaveBeenCalled();
+    }
+  });
+
+  test('AC-05: a soft-deleted Markdown Page keeps the existing generic rejection, and a dangling pointer fails closed', async () => {
+    const deleted = await seedPage({ status: 'deleted' });
+    const dangling = await seedPage({ revision: new mongoose.Types.ObjectId() });
+    for (const { pageId, userId } of [deleted, dangling]) {
+      const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 0 });
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
+      await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow('invalid token');
+    }
   });
 
   test('a missing contentType hint (legacy Markdown) still authenticates normally', async () => {
     const { pageId, userId } = await seedPage();
     const { token } = apiUtil.signWsToken({ userId, pageId, readonly: false, epoch: 0 });
 
-    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+    const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page, Revision: models.Revision } });
     const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
     expect(ctx.epoch).toBe(0);
   });

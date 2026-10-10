@@ -630,6 +630,12 @@ const TAXONOMY_ONLY_NAMES = [
   // disables the grace window), which `validatePositiveInt` would reject.
   // Malformed values already fall back to the module's own default.
   'OAUTH_REFRESH_REUSE_GRACE_MS',
+  // `util/logger.ts` — severity floor, resolved lazily on first admission
+  // check. An invalid value is already reported once by the logger itself
+  // (a bounded `crowi:logger` warn record) and must not fail boot, so no
+  // `check` is registered here — this entry exists only so typo-detection
+  // recognises the name.
+  'LOG_LEVEL',
 ] as const;
 
 const TAXONOMY_ONLY_DESCRIPTORS: EnvVarDescriptor[] = TAXONOMY_ONLY_NAMES.map((name) => ({ name }));

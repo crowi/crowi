@@ -1,6 +1,13 @@
 'use client';
 
-import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
+import {
+  ArtifactWriteRejectionSchema,
+  type PageWithRevision,
+  type RenamePageRequest,
+  type RenameSubtreeRequest,
+  type SetPageGrantRequest,
+  type UpdatePageRequest,
+} from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
@@ -138,12 +145,12 @@ export function useUpdatePage() {
 
   return useMutation({
     mutationFn: async (data: UpdatePageRequest): Promise<PageWithRevision> => {
-      // RFC-0020 — the PUT route now declares an optional
-      // `X-Crowi-Page-Content-Type` header (typed client requires the key
-      // even when empty). web never sends it: omitting the value keeps the
-      // page's current content-type kind, which is what the Markdown editor
-      // always wants.
-      const response = await apiClient.pages.$put({ json: data, header: {} });
+      // RFC-0020 — this mutation carries the Markdown editor's text, so it
+      // says so explicitly. Without the declaration the server would inherit
+      // the page's current kind, and a stale editor tab opened before the page
+      // became an artifact could silently overwrite the artifact body; with
+      // it, the server refuses a Markdown body for an artifact page.
+      const response = await apiClient.pages.$put({ json: data, header: { 'x-crowi-page-content-type': 'markdown' } });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -328,6 +335,14 @@ export function useRevertToRevision() {
       if (response.status === 404) {
         // 404 covers grant-denied as well (existence-leak guard).
         throw new Error(m['errors.page_not_found']());
+      }
+      if (response.status === 400) {
+        // A stored artifact revision can carry a link the save-time check now refuses. Show the fixed reason together
+        // with the recovery path (fix the body through MCP / CLI), not the generic failure.
+        const rejection = ArtifactWriteRejectionSchema.safeParse(await response.json().catch(() => undefined));
+        if (rejection.success) {
+          throw new Error(`${errorMessage('ARTIFACT_WRITE_REJECTED')}\n${rejection.data.error.message}`);
+        }
       }
       throw new Error(m['errors.revert_failed']());
     },

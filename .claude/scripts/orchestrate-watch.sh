@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # orchestrate-watch.sh — event emitter for crowi-orchestrate's watch mode.
 #
-# Runs the WATCHER half of the orchestrate lanes in plain bash under a
-# persistent Monitor, so the model spends zero tokens while nothing happens
-# and wakes only on an actionable event (the anti-/loop: /loop burns a tick's
-# tokens even when idle and sleeps through events).
+# Runs the WATCHER half of the orchestrate lanes in plain bash, so the model
+# spends zero tokens while nothing happens and wakes only on an actionable
+# event (the anti-/loop: /loop burns a tick's tokens even when idle and sleeps
+# through events). Agents run it with `--until-event` as a background Bash
+# command, which notifies once when it exits: a Monitor watch is capped at 30
+# minutes and every expiry wakes the model with nothing to act on.
 #
-# One line per event (the Monitor turns each into a notification):
+# One line per event:
 #   READY_TO_INTEGRATE: <id>                          (lane A — act: verify + /integrate-worktree)
 #   STALLED: <id> (<n> ahead, last commit <d>d ago)   (lane E — act: report only)
 #   REVIEW_THRESHOLD: <n> impl commits since <sha>    (lane C — act: /crowi-review <sha>..main)
@@ -14,15 +16,20 @@
 #   NEW_FLAKY_ISSUE: #<num> <title>                   (lane F — act: report only; fix is /crowi-fix)
 #   UPDATED_FLAKY_ISSUE: #<num> <title>               (lane F — act: report only; fix is /crowi-fix)
 #
-# Read-only by design: state files (.feature-state/orchestrate-state.json) are
-# only READ here; the model updates them when it acts on an event (keeps the
-# existing lane contracts unchanged). Dedup is in-memory per watcher lifetime —
-# a restarted watcher may re-emit current facts once, which is safe (the model
-# re-verifies before acting).
+# The lane state files (.feature-state/orchestrate-state.json) are only READ
+# here; the model updates them when it acts on an event (keeps the existing
+# lane contracts unchanged). The only file this script writes is its own dedup
+# record (ORCH_SEEN_FILE): every emitted event is appended there, so a
+# restarted watcher does not report the same facts again — with --until-event
+# the watcher restarts after every event, and re-emitting known facts would
+# wake the model again at once.
 #
-# Usage: orchestrate-watch.sh [--once]     (--once: single pass for testing)
+# Usage: orchestrate-watch.sh [--once | --until-event]
+#          --once:        single pass (tests)
+#          --until-event: exit after the first pass that emitted anything
 # Env:   ORCH_ROOT (override the repo root; test-only, see
 #        orchestrate-watch.test.sh — unset in normal agent use),
+#        ORCH_SEEN_FILE (default .feature-state/orchestrate-watch.seen),
 #        ORCH_WATCH_INTERVAL (default 60s), ORCH_STALL_DAYS (default 3),
 #        ORCH_STALL_DAYS_LONG (default 14 — used instead of ORCH_STALL_DAYS
 #        for worktrees whose task.json has "longLived": true, e.g. multi-phase
@@ -42,11 +49,33 @@ STALL_DAYS="${ORCH_STALL_DAYS:-3}"
 STALL_DAYS_LONG="${ORCH_STALL_DAYS_LONG:-14}"
 DEP_EVERY="${ORCH_DEP_EVERY:-30}"
 FLAKE_EVERY="${ORCH_FLAKE_EVERY:-30}"
-ONCE=0; [ "${1:-}" = "--once" ] && ONCE=1
+SEEN_FILE="${ORCH_SEEN_FILE:-$ROOT/.feature-state/orchestrate-watch.seen}"
+ONCE=0 UNTIL_EVENT=0
+case "${1:-}" in
+  --once) ONCE=1 ;;
+  --until-event) UNTIL_EVENT=1 ;;
+esac
 
 seen_ready="" seen_stall="" seen_review="" seen_dep="" seen_flake=""
 flake_baseline_seeded=0
 has() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# One "<lane> <key>" per line; `flake-seeded` marks lane F's silent baseline.
+if [ -f "$SEEN_FILE" ]; then
+  while read -r lane key; do
+    case "$lane" in
+      ready) seen_ready="$seen_ready $key" ;;
+      stall) seen_stall="$seen_stall $key" ;;
+      review) seen_review="$seen_review $key" ;;
+      dep) seen_dep="$seen_dep $key" ;;
+      flake) seen_flake="$seen_flake $key" ;;
+      flake-seeded) flake_baseline_seeded=1 ;;
+    esac
+  done <"$SEEN_FILE"
+fi
+remember() { mkdir -p "$(dirname "$SEEN_FILE")" && echo "$1 $2" >>"$SEEN_FILE"; }
+emitted=0
+emit() { echo "$1"; emitted=1; }
 
 pass=0
 while true; do
@@ -56,7 +85,10 @@ while true; do
     [ -f "$f" ] || continue
     [ "$(jq -r '.status // empty' "$f" 2>/dev/null)" = "READY_TO_INTEGRATE" ] || continue
     id="$(basename "$f" .json)"
-    has "$id" "$seen_ready" || { echo "READY_TO_INTEGRATE: $id"; seen_ready="$seen_ready $id"; }
+    # Keyed on the signalled head, so a worktree that is reworked and signals
+    # again at a new head is reported again.
+    key="$id:$(jq -r '.readyForMerge.headSha // ""' "$f" 2>/dev/null)"
+    has "$key" "$seen_ready" || { emit "READY_TO_INTEGRATE: $id"; seen_ready="$seen_ready $key"; remember ready "$key"; }
   done
 
   # ---- lane E: stalled worktrees (commits ahead, no/stale signal, old) -----
@@ -80,7 +112,7 @@ while true; do
     age_d=$(( ($(date +%s) - last) / 86400 ))
     [ "$age_d" -ge "$threshold" ] || continue
     key="$id:$head"
-    has "$key" "$seen_stall" || { echo "STALLED: $id ($n ahead, last commit ${age_d}d ago, no fresh signal)"; seen_stall="$seen_stall $key"; }
+    has "$key" "$seen_stall" || { emit "STALLED: $id ($n ahead, last commit ${age_d}d ago, no fresh signal)"; seen_stall="$seen_stall $key"; remember stall "$key"; }
   done <<EOF
 $(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
 EOF
@@ -105,8 +137,9 @@ EOF
 $(git -C "$ROOT" log --first-parent --no-merges --format=%H "$base..main" 2>/dev/null)
 EOF
       if [ "$cnt" -ge 2 ]; then
-        echo "REVIEW_THRESHOLD: $cnt impl commits on main since ${base:0:8}"
+        emit "REVIEW_THRESHOLD: $cnt impl commits on main since ${base:0:8}"
         seen_review="$seen_review $base"
+        remember review "$base"
       fi
     fi
   fi
@@ -119,7 +152,7 @@ EOF
     while IFS=$'\t' read -r num sev pkg; do
       [ -n "$num" ] || continue
       has "$num" "$known" && continue
-      has "$num" "$seen_dep" || { echo "NEW_DEPENDABOT: #$num $sev $pkg"; seen_dep="$seen_dep $num"; }
+      has "$num" "$seen_dep" || { emit "NEW_DEPENDABOT: #$num $sev $pkg"; seen_dep="$seen_dep $num"; remember dep "$num"; }
     done <<EOF
 $alerts
 EOF
@@ -136,10 +169,11 @@ EOF
       --jq '.[] | "\(.number)\t\(.updatedAt)\t\(.title)"' 2>/dev/null)"; then
       # Seeding pass: no on-disk baseline yet (`knownFlakyTestIssues` key
       # absent — state is only ever written by the model, after it acts on a
-      # report, never by this read-only script). Absorb the CURRENT open set
-      # into the in-memory dedup set silently instead of reporting every
-      # pre-existing flaky-test issue as NEW (AC-7/AC-8). Once per watcher
-      # lifetime (`flake_baseline_seeded`) — later passes compare normally
+      # report, never by this script). Absorb the CURRENT open set into the
+      # dedup set silently instead of reporting every pre-existing flaky-test
+      # issue as NEW (AC-7/AC-8). Only once, recorded in the seen file
+      # (`flake_baseline_seeded`) so a restarted watcher does not seed again
+      # and swallow issues opened in between — later passes compare normally
       # even while the on-disk key is still unset (it becomes accurate as soon
       # as the model acts on any reported event and writes the known set).
       seeding=0
@@ -156,16 +190,20 @@ EOF
         key="$num:$updated"
         has "$key" "$seen_flake" && continue
         seen_flake="$seen_flake $key"
+        remember flake "$key"
         [ "$seeding" -eq 1 ] && continue
         if ! has "$num" "$known_nums"; then
-          echo "NEW_FLAKY_ISSUE: #$num $title"
+          emit "NEW_FLAKY_ISSUE: #$num $title"
         elif ! has "$key" "$known_keys"; then
-          echo "UPDATED_FLAKY_ISSUE: #$num $title"
+          emit "UPDATED_FLAKY_ISSUE: #$num $title"
         fi
       done <<EOF
 $flaky_issues
 EOF
-      [ "$seeding" -eq 1 ] && flake_baseline_seeded=1
+      if [ "$seeding" -eq 1 ]; then
+        flake_baseline_seeded=1
+        remember flake-seeded 1
+      fi
     fi
     # else: `gh issue list` itself failed this pass (rate limit/network/auth
     # blip) — skip lane F ENTIRELY for this pass, do not touch
@@ -178,6 +216,7 @@ EOF
   fi
 
   [ "$ONCE" = 1 ] && exit 0
+  [ "$UNTIL_EVENT" = 1 ] && [ "$emitted" = 1 ] && exit 0
   pass=$((pass + 1))
   sleep "$INTERVAL"
 done

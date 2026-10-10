@@ -7,11 +7,13 @@
  * §1 — the `CLIENT_URL`-derivation error paths embed the raw `CLIENT_URL` the
  * same way `env-schema.ts` embeds a malformed `MONGO_URI`/`REDIS_URL`, so both
  * need the same redaction). A malformed-scheme URI can still embed real
- * credentials, and these messages can reach an *uncaught* top-level exception
- * (the `Crowi` constructor throws before `app.ts`'s error handler is even
- * installed), so they can end up printed unredacted to stdout/stderr — unlike
- * the pre-existing mongoose driver's own connect-time parse error, which
- * never includes the raw connection string at all.
+ * credentials, and these messages reach the machine-readable fatal record
+ * even on a synchronous `Crowi` constructor failure (`app.ts`'s
+ * `createCrowiOrExit()` hands the caught error straight to the structured
+ * fatal path), so only the redacted message — never the credentials — may
+ * travel into that record; unlike the pre-existing mongoose driver's own
+ * connect-time parse error, which never includes the raw connection string
+ * at all.
  */
 export function redactUserinfo(raw: string): string {
   // The userinfo segment is matched with `[^@]*` (not `[^/@]*`) deliberately:

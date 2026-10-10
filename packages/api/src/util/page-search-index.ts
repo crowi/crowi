@@ -148,12 +148,16 @@ async function refetchPopulated(crowi: Crowi, id: string): Promise<PageLike | nu
  * `indexPageInSearch` — so the same status/redirect exclusions above apply
  * here for free.
  *
- * MUST swallow every error itself (not just the ones `indexPageInSearch`
- * already swallows internally): every call site is a `void`-fire-and-
- * forget, and this function's own refetch + the "document is already gone"
- * remove branch below sit OUTSIDE of `indexPageInSearch`'s internal
- * try/catch. The api process installs no `unhandledRejection` handler, so
- * an uncaught rejection here would crash it on a transient Mongo/ES error.
+ * The whole-body `try`/`catch` below swallows every failure — not just the
+ * ones `indexPageInSearch` already swallows internally — into a `debug`
+ * call: this function's own refetch and the "document is already gone"
+ * remove branch sit OUTSIDE of `indexPageInSearch`'s internal try/catch, so
+ * without this one they would be uncontained too. Every production call
+ * site hands the returned promise to `crowi.trackSideEffect()`
+ * (`crowi/index.ts`), which registers it in a set with a `.finally()` but
+ * never handles a rejection itself — an uncaught rejection escaping this
+ * fire-and-forget call would terminate the api process on what is
+ * otherwise a transient Mongo/ES error.
  */
 export async function indexPageInSearchById(crowi: Crowi, id: string): Promise<void> {
   try {

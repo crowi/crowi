@@ -36,8 +36,10 @@ import { getYjsTokenRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
+import { ArtifactInternalError } from 'src/artifact/ingest';
 import type Crowi from 'src/crowi';
 import { STATUS_DELETED, STATUS_DRAFT } from 'src/models/page';
+import { isArtifactBody } from 'src/service/page-body-write';
 import { checkEditorCap } from 'src/util/collab-cap';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 import { createWsTokenUtil } from 'src/util/ws-token';
@@ -100,7 +102,20 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
     // pre-signing checks above so a token is never minted for one — no
     // new response code distinguishes "artifact" from "not found" /
     // "not granted" / "deleted". A missing hint is legacy Markdown.
-    if (loaded.page.contentType === 'artifact') {
+    // The kind is the CURRENT Revision's, not the Page hint alone: a wrong or
+    // missing hint must not let an artifact body reach the Yjs editor. An
+    // unresolvable pointer is internal-state corruption, never "Markdown".
+    let isArtifact: boolean;
+    try {
+      isArtifact = await isArtifactBody(crowi, loaded.page);
+    } catch (err) {
+      if (err instanceof ArtifactInternalError) {
+        debug('getYjsToken rejected: page %s has an unresolvable revision pointer', pageId);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+      throw err;
+    }
+    if (isArtifact) {
       debug('getYjsToken rejected: page %s is an artifact page', pageId);
       return c.json(PAGE_NOT_FOUND_BODY, 404);
     }

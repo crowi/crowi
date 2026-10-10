@@ -1,7 +1,9 @@
 import type { MentionResponse, PageContentType, RevisionMetaShape, RevisionType, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import { Document, Model, model, Schema, Types } from 'mongoose';
+import { ArtifactInternalError } from 'src/artifact/ingest';
 import Crowi from 'src/crowi';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import { type ArtifactPreWriteAccepted, getRawRevisionPointer, PageContentTypeConflictError, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
 import { applyRevisionAstBudget } from 'src/util/revision-size-guard';
 import { actorFromUser } from 'src/util/ts-rest-helpers';
 import { PageDocument } from './page';
@@ -180,12 +182,17 @@ export interface PrepareRevisionOptions {
   parentRevisionId?: Types.ObjectId | null;
   editVia?: 'web' | 'oauth' | 'pat';
   /**
-   * RFC-0020 §1 — explicit body content discriminator for the new
-   * Revision. Callers that omit it get the pointer-aware resolution in
-   * `prepareRevision` (current Page kind when a pointer exists, else
-   * `'markdown'`).
+   * RFC-0020 §1 — declared body kind for the new Revision. Omitted means
+   * "keep the current Revision's kind" (or `'markdown'` for a pointerless
+   * Page); a declaration that differs from the current Revision's kind is
+   * rejected. Markdown-only writers declare `'markdown'` explicitly.
    */
   contentType?: PageContentType;
+  /**
+   * The handler's artifact pre-write success value. Required (with a body
+   * equal to the one being stored) whenever the resolved kind is artifact.
+   */
+  artifactPreWrite?: ArtifactPreWriteAccepted;
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -446,12 +453,18 @@ export default (crowi: Crowi) => {
     newRevision.format = format;
     newRevision.author = user._id;
     newRevision.createdAt = new Date();
-    // RFC-0020 §1 — resolve the explicit kind for the new Revision.
-    // `pageData.contentType` is only trusted as a fallback when a pointer
-    // (`pageData.revision`) exists: a pointerless Page's hint (if any
-    // happens to be on disk) is not an authority — see the storage spec's
-    // "pointerless recovery と kind 不変条件" section.
-    const resolvedContentType: PageContentType = opts.contentType ?? (pageData.revision != null ? pageData.contentType : undefined) ?? 'markdown';
+    // RFC-0020 §1 — resolve the kind from the CURRENT Revision (never the
+    // Page hint) BEFORE any body processing, so a mismatched or unproven
+    // artifact body never reaches the renderer.
+    const rawPointer = getRawRevisionPointer(pageData);
+    const current = await resolveCurrentPageBodyKind(crowi, pageData, rawPointer);
+    if (rawPointer != null && opts.contentType != null && opts.contentType !== current.contentType) {
+      throw new PageContentTypeConflictError(pageData._id);
+    }
+    const resolvedContentType: PageContentType = opts.contentType ?? current.contentType;
+    if (resolvedContentType === 'artifact' && (opts.artifactPreWrite?.ok !== true || opts.artifactPreWrite.body !== body)) {
+      throw new ArtifactInternalError('prepareRevision: an artifact body requires a matching pre-write success value');
+    }
     newRevision.contentType = resolvedContentType;
     // Artifact bodies are opaque HTML, not Markdown source: skip the
     // renderer / metadata / AST-budget pipeline entirely (RFC-0020 §1 —

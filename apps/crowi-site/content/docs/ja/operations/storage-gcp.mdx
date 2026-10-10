@@ -3,7 +3,7 @@ title: GCS ストレージのセットアップ
 description: GCS ドライバのために Google Cloud 側でバケット・サービスアカウント・権限を用意する
 ---
 
-このページは **Google Cloud 側の準備手順** だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順) は [ストレージ設定](./storage) を参照してください。
+このページでは Google Cloud 側の準備手順だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順) は [ストレージ設定](./storage) を参照してください。
 
 コマンドはすべて `gcloud` CLI 前提です。同じ操作は Google Cloud コンソールからも行えます。
 
@@ -21,7 +21,7 @@ gcloud projects list
 
 ### 課金アカウントを紐付ける
 
-Cloud Storage はバケット作成の時点で課金アカウントを要求します。未紐付けのプロジェクトではコンソールの **Create** ボタンが無効化され、CLI もエラーになります。
+Cloud Storage はバケット作成の時点で課金アカウントを要求します。課金アカウントを紐付けていないプロジェクトではコンソールの **Create** ボタンが無効化され、CLI もエラーになります。
 
 ```bash
 gcloud billing accounts list
@@ -53,9 +53,9 @@ gcloud storage buckets create gs://<BUCKET_NAME> \
 バケット名には次の制約があります。
 
 - Cloud Storage 全体でグローバルに一意であること
-- **`google` という文字列を含められません**。含めると `Use of this bucket name is restricted` で作成に失敗します
+- **`google` という文字列を含まないこと**。含めると `Use of this bucket name is restricted` で作成に失敗します
 
-Crowi 側で **設定しなくてよいもの** は次のとおりです。
+Crowi 側で設定しなくてよいものは次のとおりです。
 
 - **CORS** — 添付ファイルは Crowi の API プロキシ経由で配信され、ブラウザが GCS を直接叩くことはありません
 - **公開アクセス** — バケットは非公開のままにしてください
@@ -107,7 +107,7 @@ gcloud auth application-default login
 gcloud auth application-default set-quota-project <PROJECT_ID>
 ```
 
-ただし素のユーザーアカウントは自分のプロジェクトに対して強い権限を持っていることが多く、**権限不足を再現できません**。サービスアカウントに与えた権限がちょうど足りているかを検証するには、impersonation を使ってそのサービスアカウントとして ADC を解決させます。
+ただし、素のユーザーアカウントは自分のプロジェクトに対して強い権限を持っていることが多く、**権限不足を再現できません**。サービスアカウントに与えた権限がちょうど足りているかを検証するには、impersonation を使ってそのサービスアカウントとして ADC を解決させます。
 
 ```bash
 gcloud iam service-accounts add-iam-policy-binding <SA_EMAIL> \
@@ -140,7 +140,7 @@ gcloud iam service-accounts keys delete <KEY_ID> --iam-account=<SA_EMAIL>
 
 ## 5. Crowi に設定する前に疎通を確認する
 
-先にここで通しておくと、Crowi 側でエラーが出たときに「GCP の権限設定」と「Crowi の設定」を切り分けられます。
+先にここで疎通を確認しておくと、Crowi 側でエラーが出たときに「GCP の権限設定」と「Crowi の設定」を切り分けられます。
 
 ```bash
 echo test > /tmp/crowi-gcs-check.txt
@@ -161,12 +161,12 @@ gcloud storage rm gs://<BUCKET_NAME>/healthcheck.txt \
 - **キー JSON 方式** — 秘密鍵でローカル署名するため、追加の権限も API 呼び出しも不要です
 - **ADC 方式** — IAM Credentials の `signBlob` 権限が必要です (`roles/iam.serviceAccountTokenCreator` を自分自身に付与するか、`iam.serviceAccounts.signBlob` を個別付与)
 
-ただし Crowi の添付ファイル配信ルートは現状 署名付き URL を発行せず、常に Crowi の API プロキシ経由で配信します。**`signBlob` が無くても通常のアップロード・ダウンロードには影響しません。**
+ただし、Crowi の添付ファイル配信ルートは現状では署名付き URL を発行せず、常に Crowi の API プロキシ経由で配信します。**`signBlob` が無くても通常のアップロード・ダウンロードには影響しません。**
 
 ## 7. Crowi 側の設定へ
 
 バケットとクレデンシャルが用意できたら、[ストレージ設定](./storage) の GCS の節に進んでください。
 
-**GCS バケット** 欄にはバケット名を入力します。`gs://` スキーマと末尾のスラッシュは Google Cloud Storage SDK 側で除去されるため、`gs://<BUCKET_NAME>` の形で入力しても正しく解決されます。
+**GCS バケット** 欄にはバケット名を入力します。`gs://` スキームと末尾のスラッシュは Google Cloud Storage SDK 側で除去されるため、`gs://<BUCKET_NAME>` の形で入力しても正しく解決されます。
 
-ただし **バケット名の存在確認は保存時に行われません**。名前を打ち間違えても保存は成功し、その状態で添付を開くと、GCS が返す 404 が「オブジェクトが存在しない」場合と区別できないため、設定ミスではなくファイル欠損として表示されます。バケット名を変更したときは、実際に添付をアップロードして意図したバケットに入ることを確認してください。
+ただし、**バケット名の存在確認は保存時に行われません**。名前を打ち間違えても保存は成功します。その状態で添付を開くと、GCS が返す 404 を「オブジェクトが存在しない」場合と区別できないため、設定ミスではなくファイル欠損として表示されます。バケット名を変更したときは、実際に添付をアップロードして意図したバケットに入ることを確認してください。

@@ -282,15 +282,19 @@ export async function allocateContentSequence(
         await materializePendingEntry(crowi, pageId);
         materialized = true;
       } catch {
-        // §D-10 self-heal — across two documents with no shared
-        // transaction, the precheck above narrows but cannot fully close
-        // the race against a concurrent sequencer of the SAME Revision
-        // (repair, past its own grace window). If that is what just
-        // happened, the target Revision now durably holds a DIFFERENT
-        // sequence than the one we claimed: `materializePendingEntry`'s own
-        // `historySequence: null` filter can never match again, so every
-        // future attempt (drain-assist, repair) would throw the exact same
-        // way forever, jamming the outbox permanently. Detect that specific,
+        // §D-10 self-heal. Against every sequencer that goes through the
+        // outbox slot (this function, page-event commands, the repair scan)
+        // the race is already closed without a transaction: each of them
+        // claims with a Page CAS that bumps `historySequence`, so with the
+        // Page read before the precheck above, a claim that sequenced THIS
+        // Revision either drained before our Page read (and the precheck
+        // returned its value) or could not have committed at all while our
+        // entry occupies the slot. What is left is a Revision that received
+        // a different sequence outside that protocol — a direct write or
+        // corruption. Then `materializePendingEntry`'s own `historySequence:
+        // null` filter can never match again, so every future attempt
+        // (drain-assist, repair) would throw the exact same way forever,
+        // jamming the outbox permanently. Detect that specific,
         // unrecoverable-by-retry state and drain our own entry directly —
         // the claimed sequence number simply goes unused, which is safe
         // (`historySequence` only needs to order, never to be dense).

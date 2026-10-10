@@ -1,0 +1,77 @@
+---
+title: Artifact pages
+description: Viewing HTML pages, expanding them and following their links
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+An artifact page contains a single HTML document instead of a Markdown body. It gives an AI a way to put tables, charts, slides and other content that is difficult to express in Markdown into the wiki. You can create artifact pages through [Using Crowi from AI tools (MCP)](./mcp) or [CLI (command line)](./cli).
+
+## Viewing an artifact
+
+When you open an artifact page, Crowi shows “Preparing artifact...” and then runs the HTML inside an isolated sandboxed frame. The document in the frame cannot navigate to another site, submit a form, open a popup or access Crowi's data.
+
+- An “Artifact” label appears above the page title. An artifact icon also appears beside the title in page lists, the sidebar tree and search suggestions.
+- The frame grows to fit its content so you can scroll the page as one document. Content that grows with the viewport, such as a series of full-screen slides, stops expanding at its initial height; you can scroll the rest inside the frame.
+- The notice “Running sandboxed, agent-generated content.” always appears below the frame.
+
+<Callout type="warn">
+  Anything you type inside an artifact is not guaranteed to stay private. Although the artifact cannot access Crowi's data, the sandbox cannot guarantee that the artifact will not send text entered into its own fields elsewhere. Do not enter passwords or other secrets.
+</Callout>
+
+If you switch to another revision in the page history, Crowi closes the displayed frame and runs that revision's HTML in a new one.
+
+On a server where an administrator has not configured artifact delivery, the HTML does not run. Crowi shows “This page can't run here”, but you can still download the HTML from the page menu.
+
+## Maximize and full screen
+
+Select “Maximize” above the frame to expand the artifact across the browser window. This is useful when the artifact is wider than the page column.
+
+- While maximized, select “Full screen” to fill the entire screen. This button appears only when the browser supports full-screen display for page elements; it is unavailable on iPhone.
+- Select “Restore” or press Escape to return to the normal view. In full screen, the first Escape leaves full screen and a second one returns to the normal view. Escape also works when focus is inside the artifact, unless the artifact handles Escape itself; in that case, the artifact's action takes priority.
+- Maximizing or entering full screen does not reload the artifact, so its current state stays in place.
+- While maximized, the notice remains below the artifact and comes into view when you scroll down.
+
+## Links inside an artifact
+
+Links inside an artifact can take you to other pages in the same wiki.
+
+- Click a link normally or press Enter on it to open the page in the same tab.
+- Cmd/Ctrl-click and links set to open a new tab open the page in a new tab.
+- Crowi follows links only to ordinary pages in the same wiki. Links to other sites and to screens such as the admin area, invitation acceptance or password reset do not navigate.
+- If a link is activated just after the page loads or just after you interact outside the artifact, Crowi first shows the destination under “This page links to”. Select “Go” or “Open in new tab” to continue, or “Dismiss” to cancel. This prevents an artifact from moving you to another page while pretending the action came from you.
+
+Links inside the artifact do not navigate when you open the artifact's own URL directly in a browser.
+
+## Editing the body
+
+The Web editor cannot edit the body of an artifact page. No edit button appears on the page view, the history view, a portal, a user page, the draft notice, or the list of pages you are creating. If you open an edit URL directly (`/_edit?page_id=…`, or `/_edit?path=…` pointing at an existing artifact page), Crowi shows “This editor cannot edit artifact pages. Use the CLI or MCP to edit the body.” and a “Back to page” link instead of the editor.
+
+- Update the body with `crowi update` in the [CLI](./cli) or `crowi_update_page` in [MCP](./mcp). If you omit the type (`--type` / `content_type`), the page's current type is kept, and the HTML is validated on every save.
+- Viewing history, downloading the HTML, renaming and changing visibility keep working on the Web.
+- Restoring an older version (“Revert to this version”) also keeps working. It is separate from editing the body by hand: the version being restored is validated against the current rules, as on a normal save, and a version that no longer passes cannot be restored. A version cannot be restored across types (Markdown to artifact or the other way round).
+- Editing Markdown pages, new drafts and realtime collaborative editing work as before. Artifact pages do not take part in realtime collaboration.
+
+<Callout type="info">
+The Web editor declares its text as Markdown when it saves, so it can never overwrite an artifact body. Calling the general API directly from a browser can still update an artifact page with valid artifact HTML. What is guaranteed is the body type and its validation, not a restriction by client product.
+</Callout>
+
+### Upgrade procedure (for administrators)
+
+The protection is also enforced in the server's save path, so roll the update out in this order:
+
+1. Ask editors to save their unsaved Markdown changes before you stop the replicas.
+2. Stop every API and collab replica.
+3. Deploy the new build together with the matching Web build, then start them again.
+4. Ask users to reload browser tabs that were left open.
+
+Make any direct database repair of a page's type or pointers while the replicas are stopped. The protection is not guaranteed for the period during which you skip the stop and leave an old build running, because an old build's writes can bypass it.
+
+## Page menu
+
+Artifact pages still support history, renaming, deletion, likes, watching, sharing and comments as Markdown pages do. The page menu differs in these ways:
+
+- “Download HTML” appears instead of “Download markdown”. The HTML is always downloaded as a file rather than opened in the browser.
+- “Copy markdown” and “Make this a portal” do not appear.
+
+Search indexes an artifact page's path, but not its HTML body. See [Search](./search) for details.

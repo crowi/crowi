@@ -35,7 +35,7 @@
  */
 import { createRoute, z } from '@hono/zod-openapi';
 
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPageIdErrorSchema, ValidationErrorSchema } from '../schemas/common';
 // Shared with `GET /pages/autocomplete` — same per-user fixed-window
 // limiter envelope, reused verbatim (see claimPageLinkAccessRoute's 429
 // below) so the wire shape isn't duplicated across resources.
@@ -149,19 +149,32 @@ export const listPagesRoute = createRoute({
   path: '/pages/list',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'List pages by path or creator (paginated)',
+  summary: 'List pages by path, creator or literal path prefix (paginated)',
   request: {
     query: ListPagesRequestSchema,
   },
   responses: {
     200: {
       description:
-        'Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
+        'Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). A successful `path_prefix` request lists the viewer-visible pages whose path literally starts with the prefix (portalPage/contentPage are null) and echoes it as `appliedPathPrefix`, even for an empty result.',
       content: { 'application/json': { schema: ListPagesResponseSchema } },
+    },
+    400: {
+      description:
+        'Validation error. With `path_prefix`: combined with `path` / `user` / `revision_id`, `include_deleted=true`, `limit` outside 1-100, or `offset` outside 0-2147483647 (checked in that order, fixed messages).',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
     },
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Token lacks the `pages:read` scope',
+      content: { 'application/json': { schema: InsufficientScopeErrorSchema } },
+    },
+    500: {
+      description: 'Internal error while listing, for any request shape (never an empty list)',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });
@@ -211,7 +224,7 @@ export const createPageRoute = createRoute({
     400: {
       description:
         'Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01)',
-      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
+      content: { 'application/json': { schema: z.union([ArtifactWriteRejectionSchema, PageBadRequestErrorSchema]) } },
     },
     401: {
       description: 'Authentication required',
@@ -254,7 +267,7 @@ export const updatePageRoute = createRoute({
     },
     400: {
       description: 'Invalid request (PAGE_UPDATE_FAILED / INVALID_GRANT / ARTIFACT_WRITE_REJECTED AI-D01/AI-D02)',
-      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
+      content: { 'application/json': { schema: z.union([ArtifactWriteRejectionSchema, PageBadRequestErrorSchema]) } },
     },
     401: {
       description: 'Authentication required',
@@ -668,7 +681,7 @@ export const revertToRevisionRoute = createRoute({
     },
     400: {
       description: 'PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page) / ARTIFACT_WRITE_REJECTED (RFC-0020 AI-D02)',
-      content: { 'application/json': { schema: z.union([PageBadRequestErrorSchema, ArtifactWriteRejectionSchema]) } },
+      content: { 'application/json': { schema: z.union([ArtifactWriteRejectionSchema, PageBadRequestErrorSchema]) } },
     },
     401: {
       description: 'Authentication required',

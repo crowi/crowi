@@ -79,11 +79,17 @@ interface UseScrollSyncOptions {
  * opposite side.
  *
  * **Recursion guard**: the scroll we trigger on the opposite side
- * would normally fire that side's listener and bounce back. A simple
- * `lock` variable, cleared on the next animation frame, absorbs the
- * bounce. Required `[&_.cm-scroller]:scroll-auto` + `scroll-auto` on
- * the preview container so programmatic scrolls don't animate past
- * the rAF window — see `EditorPane` / `PreviewPane` for those styles.
+ * fires that side's listener too, and treating it as input bounces the
+ * sync back. The browser dispatches that reflected `scroll` in the next
+ * frame's scroll steps — after the current frame's animation-frame
+ * callbacks — so no frame-timed lock can cover it. Instead each write
+ * records the scrollTop read back right after it (clamping and sub-pixel
+ * rounding already applied), and a `scroll` arriving with the pane still
+ * at that position is dropped as the echo. Required
+ * `[&_.cm-scroller]:scroll-auto` + `scroll-auto` on the preview
+ * container: a smooth programmatic scroll would emit events at
+ * intermediate positions that no recorded value matches — see
+ * `EditorPane` / `PreviewPane` for those styles.
  *
  * **Invariant**: DOM order of `[data-source-line]` markers ascends
  * monotonically with both source-line number and visual top. The
@@ -98,7 +104,9 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
     const previewScroll = previewRef.current;
     if (!previewScroll) return;
 
-    let lock: 'editor' | 'preview' | null = null;
+    let expectedEditorTop: number | null = null;
+    let expectedPreviewTop: number | null = null;
+    const isEcho = (el: HTMLElement | null, expected: number | null): boolean => el !== null && expected !== null && Math.abs(el.scrollTop - expected) < 1;
     let lastForwardTarget: { progress: number; target: number } | null = null;
 
     type MarkerSnapshot = { sourceLine: number; top: number };
@@ -196,9 +204,10 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
     };
 
     const onEditorScroll = () => {
-      if (lock === 'preview') return;
-      lock = 'editor';
       const editorScroll = editorRef.current?.getScrollDOM() ?? null;
+      const echo = isEcho(editorScroll, expectedEditorTop);
+      expectedEditorTop = null;
+      if (echo) return;
       const sourceProgress = editorScroll ? computeScrollProgress(editorScroll.scrollTop, editorScroll.scrollHeight, editorScroll.clientHeight) : 0;
       // Map the editor viewport's two edges. Their separation in preview
       // pixels is the local density signal: when it exceeds the preview
@@ -228,17 +237,16 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
       if (target !== null) {
         const forwardTarget = lastForwardTarget !== null && sourceProgress >= lastForwardTarget.progress ? Math.max(target, lastForwardTarget.target) : target;
         previewScroll.scrollTop = forwardTarget;
+        expectedPreviewTop = previewScroll.scrollTop;
         lastForwardTarget =
           isProgressNearStart(sourceProgress) || isProgressNearEnd(sourceProgress) ? null : { progress: sourceProgress, target: forwardTarget };
       }
-      requestAnimationFrame(() => {
-        if (lock === 'editor') lock = null;
-      });
     };
 
     const onPreviewScroll = () => {
-      if (lock === 'editor') return;
-      lock = 'preview';
+      const echo = isEcho(previewScroll, expectedPreviewTop);
+      expectedPreviewTop = null;
+      if (echo) return;
       const sourceProgress = computeScrollProgress(previewScroll.scrollTop, previewScroll.scrollHeight, previewScroll.clientHeight);
       if (isProgressNearStart(sourceProgress) || isProgressNearEnd(sourceProgress)) {
         // Symmetric endpoint pin: bypass the anchor lookup entirely (a
@@ -257,7 +265,10 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
             targetViewportHeight: editorScroll.clientHeight,
             targetMaxScroll: Math.max(0, editorScroll.scrollHeight - editorScroll.clientHeight),
           });
-          if (target !== null) editorScroll.scrollTop = target;
+          if (target !== null) {
+            editorScroll.scrollTop = target;
+            expectedEditorTop = editorScroll.scrollTop;
+          }
         }
       } else {
         // Reference point = the fractional line sitting at `sourceProgress`
@@ -265,11 +276,11 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
         // direction above.
         const referenceY = previewScroll.scrollTop + sourceProgress * previewScroll.clientHeight;
         const prog = editorFractionalLineForPreviewY(referenceY);
-        if (prog) editorRef.current?.scrollToLineProgressAt(prog.line, prog.ratio, sourceProgress);
+        if (prog) {
+          editorRef.current?.scrollToLineProgressAt(prog.line, prog.ratio, sourceProgress);
+          expectedEditorTop = editorRef.current?.getScrollDOM()?.scrollTop ?? null;
+        }
       }
-      requestAnimationFrame(() => {
-        if (lock === 'preview') lock = null;
-      });
     };
 
     // Editor → preview: the CodeMirror `.cm-scroller` element is *replaced*

@@ -89,7 +89,7 @@ const RevertToRevisionShape = {
  * server default: markdown on create, the page's current kind on update.
  */
 const ARTIFACT_DESCRIPTION_NOTE =
-  "When `content_type` is 'artifact', `body` MUST be a single self-contained HTML document: no external script/stylesheet/image/module references and no relative paths — embed any binary asset as a `data:` URI.";
+  "When content_type is 'artifact', supply one self-contained HTML document: no external or relative script, image, or module references; embed supported binary assets as data: URIs in permitted positions, and remove unsupported @import rules rather than replacing only their URLs. External stylesheets are not allowed except Google Fonts stylesheets when the wiki administrator has enabled web fonts; otherwise, Google Fonts references are rejected with FONT_REFERENCE_FORBIDDEN. Relative stylesheet references are not allowed. HTML a/area href may link within this document (#section) or to wiki pages (/team/guide, ./guide, ../guide, guide), optionally with a page fragment (/guide#overview). Use #id, not # or #a?b, for a same-document fragment; fragment-only links retain their existing rules, including an allowed literal %. Relative page links resolve from the artifact page's directory. External URLs such as http(s):, mailto:, tel:, and protocol-relative //host/... cannot be links; remove the href and show the address as body text. Rewrite a full or protocol-relative URL for this wiki as a page path such as /team/guide, and use the ./ prefix for a colon only when it belongs to a real wiki page name, such as ./ADR:0001. Treat an href beginning with // as a protocol-relative URL, not as a page path with repeated slashes. Remove a placeholder or javascript: href from script-controlled elements rather than turning it into a page path. Links inside artifact HTML must use page paths such as /team/guide or ./guide; neither the full-origin ID form <wiki origin>/<page id> nor the root-level /<page id> form is allowed. Wiki page paths cannot contain a query (/guide?edit=1) or target reserved routes such as /admin, /logout, /-/, API, or delivery paths. Absolute reserved targets are rejected on save; relative targets are checked after resolution when clicked. In page names, every percent escape must be valid %HH; write a literal % as %25 (/discount/100%25off, not /discount/100%off). On rejection, use ruleId, target, diagnosticCode when present, and the message to fix and save the HTML.";
 const ContentTypeField = z
   .enum(['markdown', 'artifact'])
   .optional()
@@ -228,7 +228,7 @@ export const pageTools: ToolDescriptor[] = [
     description: 'List wiki pages under a `path` or created by a `user`, paginated. Returns page paths and metadata, not bodies.',
     method: 'GET',
     path: '/pages/list',
-    schema: ListPagesRequestSchema.shape,
+    schema: ListPagesRequestSchema.omit({ path_prefix: true }).shape,
     kind: 'query',
     scope: 'pages:read',
     resultMapper: mapPageListResult,
@@ -343,7 +343,7 @@ export const pageTools: ToolDescriptor[] = [
   {
     name: 'crowi_revert_to_revision',
     description:
-      'Revert a page (`page_id`) to one of its PAST revisions (`revision_id`, from `crowi_get_page_history`). Non-destructive: the old body is stacked as a new revision on top of the current latest, so the full history is preserved. Distinct from `crowi_revert_page`, which restores a soft-deleted page from the trash. Returns the page with the reverted body as its new latest revision.',
+      'Revert a page (`page_id`) to one of its PAST revisions (`revision_id`, from `crowi_get_page_history`). Non-destructive: the old body is stacked as a new revision on top of the current latest, so the full history is preserved. Distinct from `crowi_revert_page`, which restores a soft-deleted page from the trash. Returns the page with the reverted body as its new latest revision. If restoring an artifact revision is rejected, retrieve that revision’s body with crowi_get_revision, fix the reported HTML issues, retrieve the current revision_id with crowi_get_page, and pass that current revision_id to crowi_update_page to save the corrected body.',
     method: 'POST',
     path: '/pages/revert-to-revision',
     schema: RevertToRevisionShape,

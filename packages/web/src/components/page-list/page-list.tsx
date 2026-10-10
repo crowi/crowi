@@ -7,12 +7,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CreatePageCtaButton, CreatePageListButton } from '@/components/create-page/create-page-dialog';
+import { CopyPageMarkdownButton } from '@/components/page-view/copy-page-markdown-button';
 import { PageContent } from '@/components/page-view/page-content';
 import { useTocScrollSpy } from '@/components/page-view/page-toc';
-import { CopyPageMarkdownButton } from '@/components/page-view/copy-page-markdown-button';
 import { PageTocColumns } from '@/components/page-view/page-toc-columns';
 import { PortalizeBanner } from '@/components/page-view/portalize-dialog';
-import { PortalMetaBar } from './portal-meta-bar';
 import { RenameDialog } from '@/components/page-view/rename-dialog';
 import { StaleRevisionBanner } from '@/components/page-view/stale-revision-banner';
 import { Button } from '@/components/ui/button';
@@ -20,16 +19,19 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { canEditPageBodyInWeb } from '@/lib/page-editability';
 import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { draftEditHref } from '@/lib/use-drafts';
+import { usePage } from '@/lib/use-page';
 import { usePageList } from '@/lib/use-page-list';
 import type { PageListVariant } from './page-list-item';
 import { PageListEmptyCard, PageListSectionHeader, PageRowsCard, PageRowsSkeleton } from './page-list-shared';
 import { PageSortMenu } from './page-sort-menu';
 import { Pagination } from './pagination';
 import { PortalHeader, PortalOverline } from './portal-header';
+import { PortalMetaBar } from './portal-meta-bar';
 
 /**
  * A portal document whose body leads with a level-1 heading lets that
@@ -115,6 +117,14 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
 
   const { data, isLoading, error } = usePageList(params);
 
+  // A portal opened at a past revision carries that old version in `revision`,
+  // so whether the Markdown editor may be offered is judged from the portal's
+  // CURRENT revision, fetched only for that view (empty params keep the query
+  // disabled). Called before the early returns to keep the hook order stable.
+  const listedPortalPage = isTrash ? undefined : (data?.portalPage as PageWithRevision | undefined);
+  const isViewingPastPortalRevision = isStalePageRevision(listedPortalPage);
+  const currentPortalQuery = usePage({ page_id: isViewingPastPortalRevision && listedPortalPage ? listedPortalPage._id : undefined });
+
   // Scroll-spy for the portal body's TOC rail. Computed before the early
   // returns so the hook order stays stable; the source is the raw portal
   // document (independent of the draft/render gating below), and it no-ops
@@ -182,6 +192,9 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   // (page-view.tsx) so the portal gets the same "this version" warning banner
   // + one-click "revert to this version" button.
   const isStalePortalRevision = isStalePageRevision(portalPage);
+  const canEditPortalBody = canEditPageBodyInWeb(isStalePortalRevision ? currentPortalQuery.page : portalPage);
+  // An own draft portal carries its current revision, so its kind is known without another fetch.
+  const canContinueDraftPortal = canEditPageBodyInWeb(isDraftPortal ? rawPortalPage : undefined);
 
   // The content page at the stripped path (`/foo`) is not under `/foo/`, but
   // it is the page the folder is named after: left out, it is missing from
@@ -207,7 +220,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
               <StaleRevisionBanner pagePath={portalPage.path} pageId={portalPage._id} revisionId={portalPage.revision._id} />
             </div>
           )}
-          <PortalHeader page={portalPage} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`)} />
+          <PortalHeader page={portalPage} onEdit={canEditPortalBody ? () => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`) : undefined} />
           <div className="mt-6">
             {/* The portal body's own leading heading is the page title.
                 Only when it has none do we name the folder ourselves so
@@ -244,6 +257,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
             path={portalPath}
             showCreatePortal={!isTrash && !ownDraftPortalId && !disableCreatePortal}
             draftPortalId={disableCreatePortal ? undefined : ownDraftPortalId}
+            canContinueDraft={canContinueDraftPortal}
             // A portal-less folder can still be renamed (moving its whole
             // subtree). Same gating as the create-page button: own, non-root,
             // non-trash, non-reserved namespace.
@@ -336,11 +350,14 @@ function PortalFallbackHeader({
   path,
   showCreatePortal = false,
   draftPortalId,
+  canContinueDraft = true,
   renamable = false,
 }: {
   path: string;
   showCreatePortal?: boolean;
   draftPortalId?: string;
+  /** False when the draft's body is an artifact: the notice stays, the editor entry point goes. */
+  canContinueDraft?: boolean;
   renamable?: boolean;
 }) {
   const router = useRouter();
@@ -368,10 +385,12 @@ function PortalFallbackHeader({
           {draftPortalId && <p className="mt-1 text-sm text-muted-foreground">{m['page_list.portal_draft_notice']()}</p>}
         </div>
         {draftPortalId ? (
-          <Button size="sm" className="shrink-0" onClick={() => router.push(draftEditHref(draftPortalId))}>
-            <Pencil className="mr-1 h-4 w-4" />
-            {m['page_list.continue_portal_draft']()}
-          </Button>
+          canContinueDraft && (
+            <Button size="sm" className="shrink-0" onClick={() => router.push(draftEditHref(draftPortalId))}>
+              <Pencil className="mr-1 h-4 w-4" />
+              {m['page_list.continue_portal_draft']()}
+            </Button>
+          )
         ) : (
           // Layout: [?] [Create Portal] [⋮]. The help icon sits left of the
           // CTA it explains; the overflow menu (rename) takes the conventional

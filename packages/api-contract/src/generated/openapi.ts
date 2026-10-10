@@ -152,6 +152,8 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             password: string;
+                            /** @enum {string} */
+                            lang?: "en" | "ja";
                         };
                     };
                 };
@@ -355,6 +357,8 @@ export interface paths {
                         /** Format: email */
                         email: string;
                         password: string;
+                        /** @enum {string} */
+                        lang?: "en" | "ja";
                     };
                 };
             };
@@ -1715,6 +1719,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         username: string;
+                        /** @enum {string} */
+                        lang?: "en" | "ja";
                     };
                 };
             };
@@ -1951,6 +1957,8 @@ export interface paths {
                         username: string;
                         name: string;
                         password: string;
+                        /** @enum {string} */
+                        lang?: "en" | "ja";
                     };
                 };
             };
@@ -6812,18 +6820,20 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
-                                message: string;
-                            };
-                        } | {
-                            error: {
                                 /** @enum {string} */
                                 code: "ARTIFACT_WRITE_REJECTED";
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
+                            };
+                        } | {
+                            error: {
+                                code: string;
+                                message: string;
                             };
                         };
                     };
@@ -6889,6 +6899,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -6908,6 +6920,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -7080,18 +7094,20 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
-                                message: string;
-                            };
-                        } | {
-                            error: {
                                 /** @enum {string} */
                                 code: "ARTIFACT_WRITE_REJECTED";
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
+                            };
+                        } | {
+                            error: {
+                                code: string;
+                                message: string;
                             };
                         };
                     };
@@ -7126,6 +7142,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -7145,6 +7163,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -7409,7 +7429,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List pages by path or creator (paginated) */
+        /** List pages by path, creator or literal path prefix (paginated) */
         get: {
             parameters: {
                 query?: {
@@ -7421,6 +7441,8 @@ export interface paths {
                     sort?: "updatedAt" | "createdAt" | "path";
                     order?: "asc" | "desc";
                     revision_id?: string;
+                    /** @description Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise). */
+                    path_prefix?: string;
                 };
                 header?: never;
                 path?: never;
@@ -7428,7 +7450,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
+                /** @description Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). A successful `path_prefix` request lists the viewer-visible pages whose path literally starts with the prefix (portalPage/contentPage are null) and echoes it as `appliedPathPrefix`, even for an empty result. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -7771,6 +7793,29 @@ export interface paths {
                                 contentType: "markdown" | "artifact";
                             } | null;
                             total: number;
+                            /** @description Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested. */
+                            appliedPathPrefix?: string;
+                        };
+                    };
+                };
+                /** @description Validation error. With `path_prefix`: combined with `path` / `user` / `revision_id`, `include_deleted=true`, `limit` outside 1-100, or `offset` outside 0-2147483647 (checked in that order, fixed messages). */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
                         };
                     };
                 };
@@ -7787,6 +7832,40 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Authentication is required";
                                 redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Token lacks the `pages:read` scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Internal error while listing, for any request shape (never an empty list) */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
                             };
                         };
                     };
@@ -9485,18 +9564,20 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
-                                message: string;
-                            };
-                        } | {
-                            error: {
                                 /** @enum {string} */
                                 code: "ARTIFACT_WRITE_REJECTED";
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
+                            };
+                        } | {
+                            error: {
+                                code: string;
+                                message: string;
                             };
                         };
                     };
@@ -9547,6 +9628,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -9566,6 +9649,8 @@ export interface paths {
                                 /** @enum {string} */
                                 reason: "BODY_TOO_LARGE" | "DOM_LIMIT_EXCEEDED" | "HTML_PARSE_ERROR" | "DOCTYPE_INVALID" | "DOCUMENT_STRUCTURE_INVALID" | "ELEMENT_FORBIDDEN" | "INLINE_CODE_CONTENT_INVALID" | "ATTRIBUTE_FORBIDDEN" | "META_FORBIDDEN" | "EXTERNAL_REFERENCE" | "FONT_REFERENCE_FORBIDDEN" | "SCRIPT_TYPE_FORBIDDEN" | "MODULE_SPECIFIER_FORBIDDEN" | "CSS_PARSE_ERROR" | "CSS_AT_RULE_FORBIDDEN" | "CSS_FUNCTION_FORBIDDEN" | "CSS_STRING_ARGUMENT_FORBIDDEN" | "URL_FORBIDDEN" | "CSS_VALUE_NODE_LIMIT_EXCEEDED" | "CSS_VALUE_DEPTH_EXCEEDED" | "CSS_SOURCE_TOO_LARGE" | "NORMALIZER_MARKER_INVALID" | "NORMALIZATION_NOT_IDEMPOTENT" | "CONTENT_TYPE_INVALID" | "CONTENT_TYPE_CONFLICT" | "ARTIFACT_DELIVERY_NOT_CONFIGURED";
                                 ruleId: string;
+                                /** @enum {string} */
+                                diagnosticCode?: "PAGE_LINK_QUERY" | "PAGE_LINK_PERCENT_ENCODING" | "PAGE_LINK_RESERVED_ROUTE" | "PAGE_LINK_INVALID" | "PAGE_LINK_CONTEXT_FORBIDDEN" | "RESOURCE_REFERENCE_FORBIDDEN";
                                 message: string;
                                 target?: string;
                             };
@@ -10582,6 +10667,8 @@ export interface paths {
                                 path: string;
                                 createdAt: string;
                                 updatedAt: string;
+                                /** @enum {string} */
+                                contentType?: "markdown" | "artifact";
                             }[];
                         };
                     };
@@ -12718,9 +12805,8 @@ export interface paths {
                                 confidential: string;
                             };
                             isUploadable: boolean;
-                            registrationMode: {
-                                [key: string]: string;
-                            };
+                            /** @enum {string} */
+                            registrationMode: "Open" | "Resricted" | "Closed";
                             setupChecklistDismissed: boolean;
                         };
                     };
@@ -17521,6 +17607,8 @@ export interface components {
              */
             order: "asc" | "desc";
             revision_id?: string;
+            /** @description Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise). */
+            path_prefix?: string;
         };
         ListPagesResponse: {
             pages: {
@@ -17859,6 +17947,8 @@ export interface components {
                 contentType: "markdown" | "artifact";
             } | null;
             total: number;
+            /** @description Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested. */
+            appliedPathPrefix?: string;
         };
         GetPageResponse: {
             page: {
@@ -18393,6 +18483,8 @@ export interface components {
             path: string;
             createdAt: string;
             updatedAt: string;
+            /** @enum {string} */
+            contentType?: "markdown" | "artifact";
         };
         ListDraftsResponse: {
             drafts: {
@@ -18400,6 +18492,8 @@ export interface components {
                 path: string;
                 createdAt: string;
                 updatedAt: string;
+                /** @enum {string} */
+                contentType?: "markdown" | "artifact";
             }[];
         };
         InstallerStatusResponse: {
@@ -18413,6 +18507,8 @@ export interface components {
                 /** Format: email */
                 email: string;
                 password: string;
+                /** @enum {string} */
+                lang?: "en" | "ja";
             };
         };
         CreateAdminResponse: {
@@ -18569,9 +18665,8 @@ export interface components {
                 confidential: string;
             };
             isUploadable: boolean;
-            registrationMode: {
-                [key: string]: string;
-            };
+            /** @enum {string} */
+            registrationMode: "Open" | "Resricted" | "Closed";
             setupChecklistDismissed: boolean;
         };
         UpdateAppSettingsRequest: {

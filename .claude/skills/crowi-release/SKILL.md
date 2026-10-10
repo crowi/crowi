@@ -30,9 +30,7 @@ Trusted Publisher 等はそちら)。この skill はエージェント手順に
 | **team wiki の記録**(詳細ページ + index の 1 行) | **この skill(verify モード)** | CI は書かない — portal `/crowi/release/` の運用契約 |
 | ES image | 別 workflow(`docker-elasticsearch.yml`) | 必要時のみ確認 |
 
-> tag push は GITHUB_TOKEN の anti-recursion で docker.yml を**起動しない**。連鎖は
-> workflow_run。Version-PR-only run は dist-version artifact を上げないため image build
-> は自然に skip される — 「publish したときだけ build」はこの仕組みで担保。
+> tag push は bot App のトークンで行うので `on: push: tags` のワークフローを起動する。docker.yml は tag ではなく workflow_run で連鎖させている (tag トリガーを足すと 1 回のリリースで二重に build される)。Version-PR-only run は dist-version artifact を上げないため image build は自然に skip される — 「publish したときだけ build」はこの仕組みで担保。
 
 ## モード
 
@@ -108,6 +106,12 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
    日付はタグの作成日(`git log -1 --format=%ci <tag>`)を**ローカル時刻で**使う。UTC で
    採ると日付が 1 日ずれることがある。書式は既存ページに合わせる(詳細ページは「前の
    リリースからの変更点」+ 立場ごとの対応要否の表から始める。index は 1 行要約)。
+
+   **index の 1 行は 300 文字程度まで**に収める。表は「自分に関係あるか」を判断して詳細
+   ページへ入るための目次で、説明は詳細ページの仕事である。破壊的変更・停止窓・
+   セキュリティのように読者の行動が変わるものを先に書き、残りは語を並べる程度に留める
+   (2026-09-21 に是正: 500 → 540 → 911 → 1047 → 1291 文字と毎リリース伸び、表として
+   読めなくなっていた)。
 
    依存パッケージの脆弱性対応を書くときは主語を取り違えない(`crowi-changesets` の
    「依存パッケージの脆弱性対応の書き方」が正本)。詳細ページと index の 1 行の両方に

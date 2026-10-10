@@ -41,6 +41,7 @@ import { createJwtAuth } from '../middleware/auth';
 import { AUTH_REQUIRED_BODY, INTERNAL_ERROR_BODY } from './_helpers/errors';
 import { toAuthUser } from './_helpers/user-shape';
 import { isAppInstalled } from './installer';
+import { resolveRequestLang } from 'src/util/request-lang';
 
 const debug = Debug('crowi:hono:handlers:tokenAuth');
 
@@ -130,7 +131,7 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
       }
     })
     .openapi(tokenRegisterRoute, async (c) => {
-      const { username, name, email, password } = c.req.valid('json');
+      const { username, name, email, password, lang } = c.req.valid('json');
 
       try {
         if (!(await isAppInstalled(Config))) {
@@ -168,7 +169,7 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
         newUser.username = username;
         newUser.email = email;
         newUser.setPassword(password);
-        newUser.lang = 'en';
+        newUser.lang = resolveRequestLang(c.req.raw.headers, lang);
         newUser.status = User.STATUS_REGISTERED;
         newUser.emailConfirmedAt = null;
         await newUser.save();

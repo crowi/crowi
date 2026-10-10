@@ -5,6 +5,7 @@ import type { DocBaseRevisionStore } from '../doc-base-revision';
 import { type DocEpochStore, resolvePageEpoch } from '../doc-epoch';
 import type { InvalidatedPagesStore } from '../invalidation';
 import type { CollabModels } from '../models';
+import { readCollabBodyEligibility } from '../page-body-kind';
 import { DELETED_STATUS } from '../page-status';
 import type { CollabContext } from '../types';
 import { CONTENT_FIELD } from '../yjs-doc';
@@ -290,23 +291,25 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   return async (data: onLoadDocumentPayload<CollabContext>): Promise<void> => {
     const { documentName, document, instance } = data;
 
-    const page = await Page.findById(documentName).select('_id revision currentRevision yjsState status collabLifecycleVersion contentType').exec();
+    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus. Decided from the
+    // Page hint AND the Revisions it points at, before the epoch store, any
+    // Yjs checkpoint restore, Revision body fetch, Y.Text seed or residual-update
+    // replay (so nothing about an artifact body is materialised and no doc
+    // base / epoch is registered). Same generic message as not-found: no leak of
+    // existence or kind. A soft-deleted Markdown Page passes here, records its
+    // epoch below, and is rejected by the status check.
+    const eligibility = await readCollabBodyEligibility(deps.models, String(documentName));
+    if (!eligibility.ok) {
+      debug('page %s is not eligible for collab at load time (%s) — rejecting materialisation', documentName, eligibility.reason);
+      throw new Error('page not found');
+    }
+
+    const page = await Page.findById(documentName).select('_id revision currentRevision yjsState status collabLifecycleVersion').exec();
     if (!page) {
       // Defensive — `onAuthenticate` already confirmed existence, so
       // this branch only fires on a race where the page was deleted
       // between auth and load.
       debug('page %s not found at load time', documentName);
-      throw new Error('page not found');
-    }
-
-    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus. Rejected
-    // here, before the epoch store, any Yjs checkpoint restore, Revision
-    // body fetch, Y.Text seed, or residual-update replay — this is
-    // defence-in-depth for the case where `onAuthenticate` accepted a
-    // token minted before the page became an artifact page. Same generic
-    // message as the not-found branch above (no leak of existence/kind).
-    if (page.contentType === 'artifact') {
-      debug('page %s is an artifact page at load time — rejecting materialisation', documentName);
       throw new Error('page not found');
     }
 

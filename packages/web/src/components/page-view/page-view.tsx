@@ -16,6 +16,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { apiClient } from '@/lib/api-client';
+import { canEditPageBodyInWeb } from '@/lib/page-editability';
 import { isUserHomePath, pagePathToHref, recoverOverEncodedPagePath } from '@/lib/page-path';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
@@ -94,6 +95,14 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const router = useRouter();
   const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path, revision_id: revisionId });
   const revertMutation = useRevertDeletedPage();
+
+  // A historical view's `revision` is a past version, so the editor's
+  // availability is judged from the page's CURRENT revision, fetched only for
+  // that view (an empty param set keeps the query disabled). Until it
+  // resolves, no edit entry point is offered.
+  const isViewingPastRevision = isStalePageRevision(page);
+  const currentPageQuery = usePage({ page_id: isViewingPastRevision && page ? page._id : undefined });
+  const canEditBody = canEditPageBodyInWeb(isViewingPastRevision ? currentPageQuery.page : page);
 
   // Does this content page have descendants (`/path/...`)? If so it can be
   // turned into a portal that indexes them. Querying the portal-path children
@@ -789,7 +798,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
             page={renderedPage}
-            onEdit={handleEdit}
+            onEdit={canEditBody ? handleEdit : undefined}
             showActions={!isStaleRevision}
             showPresence={!isStaleRevision && !isDraft}
             sticky={!isStaleRevision}
@@ -815,10 +824,12 @@ export function PageView({ path, revisionId }: PageViewProps) {
                       <AlertTitle>{m['page.draft_notice_title']()}</AlertTitle>
                       <AlertDescription>{m['page.draft_notice_body']()}</AlertDescription>
                     </div>
-                    <Button variant="default" size="sm" onClick={handleEdit} className="shrink-0">
-                      <Edit2 className="h-4 w-4 mr-1" />
-                      {m['page.action_edit']()}
-                    </Button>
+                    {canEditBody && (
+                      <Button variant="default" size="sm" onClick={handleEdit} className="shrink-0">
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        {m['page.action_edit']()}
+                      </Button>
+                    )}
                   </div>
                 </Alert>
               ) : (

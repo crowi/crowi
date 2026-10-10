@@ -111,10 +111,10 @@ const BOOT_FAILURE_REASON_MAX_LENGTH = 2000;
  * deliberately multi-line message (one bullet per invalid variable, plus a
  * docs link), and dropping everything after the first line hid exactly the
  * detail an operator needs to fix the failure. `formatFailMarker` collapses
- * the newlines into a single space-joined line for the marker itself. Shared
- * by `crowi/index.ts`'s `exitOnError` (async boot failures) and `app.ts`'s
- * construction-time guard (a failure inside `new Crowi(...)` itself, before
- * `exitOnError` exists to catch it).
+ * the newlines into a single space-joined line for the marker itself. Used by
+ * `app.ts`'s `createCrowiOrExit()` guard, for a failure inside
+ * `new Crowi(...)` itself — before `exitOnError` exists to catch it (there is
+ * no instance yet).
  */
 export function formatBootFailureReason(err: unknown): string {
   return (err instanceof Error ? err.message : String(err)).slice(0, BOOT_FAILURE_REASON_MAX_LENGTH);
@@ -168,8 +168,9 @@ export interface BootReporter {
    * Idempotent teardown for the failure path: stops any running spinner,
    * clears the current spinner line and restores the cursor. Safe to call
    * multiple times (e.g. from a try/finally *and* from `exitOnError`). Must run
-   * before a fatal `console.error` so the spinner doesn't overwrite the stack
-   * trace and the hidden cursor is restored before the process exits.
+   * before the machine-readable fatal output is handed off, so the spinner
+   * doesn't corrupt it and the hidden cursor is restored before the process
+   * exits.
    */
   dispose(): void;
 }
@@ -298,8 +299,9 @@ export function createBootReporter(options: CreateBootReporterOptions = {}): Boo
     const spinning = timer !== null;
     stopSpinner();
     if (tty && spinning) {
-      // Wipe the half-drawn spinner line so a following console.error stack
-      // starts clean, and restore the cursor we hid in startSpinner().
+      // Wipe the half-drawn spinner line so the machine-readable fatal
+      // output that follows starts clean, and restore the cursor we hid in
+      // startSpinner().
       write(`${ANSI.cursorStart}${ANSI.clearLine}`);
       write(ANSI.showCursor);
     }

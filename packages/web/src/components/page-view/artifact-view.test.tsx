@@ -1,8 +1,14 @@
-import type { AppInfoResponse, PageWithRevision } from '@crowi/api-contract';
+import {
+  ARTIFACT_ESCAPE_MESSAGE_TYPE,
+  ARTIFACT_HEIGHT_MESSAGE_TYPE,
+  ARTIFACT_NAVIGATE_MESSAGE_TYPE,
+  type AppInfoResponse,
+  type PageWithRevision,
+} from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { createElement } from 'react';
+import { createElement, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeAppInfo } from '@/lib/use-app-info.test-helpers';
 
@@ -13,6 +19,13 @@ const { useMintArtifactUrl } = vi.hoisted(() => ({ useMintArtifactUrl: vi.fn() }
 // the `vi.fn()` above — every other test in this file only ever sees the
 // mocked hook and never reaches this.
 const { mintArtifactUrlRequest } = vi.hoisted(() => ({ mintArtifactUrlRequest: vi.fn() }));
+
+const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }));
+// A stable router object, like Next's: the navigation listener depends on it.
+vi.mock('next/navigation', () => {
+  const router = { push: routerPush };
+  return { useRouter: () => router };
+});
 
 vi.mock('@/lib/use-app-info', () => ({ useAppInfo }));
 vi.mock('@/lib/use-artifact-url', async () => {
@@ -26,7 +39,15 @@ vi.mock('@/lib/api-client', () => ({
 // read live from `process.env` so per-test `vi.stubEnv` actually takes
 // effect (matches resolve-ws-url.test.ts's established pattern).
 vi.mock('@/lib/runtime-env', () => ({ env: (key: string) => process.env[key] }));
+// Wrapped, not replaced: one test feeds the component a target the real
+// resolver would never produce, to reach the last-moment origin check.
+vi.mock('@/lib/artifact-navigation', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/artifact-navigation')>('@/lib/artifact-navigation');
+  return { ...actual, resolveArtifactNavigation: vi.fn(actual.resolveArtifactNavigation) };
+});
 
+import { resolveArtifactNavigation } from '@/lib/artifact-navigation';
+import { installParentInputClock, resetParentInputClockForTest } from '@/lib/parent-input-clock';
 import { ArtifactUrlUnavailableFailure } from '@/lib/use-artifact-url';
 import { ArtifactView } from './artifact-view';
 
@@ -143,6 +164,32 @@ afterEach(() => {
   mintArtifactUrlRequest.mockReset();
 });
 
+/**
+ * Renders a running artifact and stands in for what `/_artifact-frame`
+ * loads: one nested frame, whose window is the only sender whose
+ * height reports count.
+ */
+async function renderRunningFrame() {
+  mockAppInfo({ data: ENABLED_APP_INFO });
+  mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+  render(createElement(ArtifactView, { page: makePage() }));
+  await flush();
+  const frame = document.querySelector('iframe');
+  if (!frame?.contentDocument) throw new Error('the outer frame did not render');
+  // jsdom never loads the outer frame's `src`, so its document is empty.
+  const outerDocument = frame.contentDocument;
+  const root = outerDocument.appendChild(outerDocument.createElement('html'));
+  const artifactFrame = root.appendChild(outerDocument.createElement('iframe'));
+  if (!artifactFrame.contentWindow) throw new Error('the nested frame has no window');
+  return { frame, artifactWindow: artifactFrame.contentWindow };
+}
+
+function post(source: Window, data: unknown) {
+  act(() => {
+    window.dispatchEvent(new MessageEvent('message', { data, source }));
+  });
+}
+
 describe('ArtifactView', () => {
   it('AC-SH-1: auto-mints as soon as delivery is confirmed enabled, showing only the preparing spinner until the mint resolves', () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
@@ -243,7 +290,7 @@ describe('ArtifactView', () => {
     expect(inputNoteContainer?.parentElement).toBe(iframe?.parentElement);
   });
 
-  it('AC-SH-5: the running state offers no controls — only the frame and the notice', async () => {
+  it('AC-SH-5: the running state offers no run or stop control — its one control maximizes the frame', async () => {
     mockAppInfo({ data: ENABLED_APP_INFO });
     mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
     render(createElement(ArtifactView, { page: makePage() }));
@@ -251,7 +298,7 @@ describe('ArtifactView', () => {
     await flush();
 
     expect(document.querySelectorAll('iframe')).toHaveLength(1);
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([m['page.artifact.maximize']()]);
   });
 
   it('AC-SH-5: retrying after a failed mint mints again rather than reusing anything from the failed attempt', async () => {
@@ -510,6 +557,598 @@ describe('ArtifactView', () => {
       expect(screen.queryByRole('button', { name: m['page.artifact.retry_button']() })).toBeNull();
       expect(document.body.textContent).not.toContain(mismatchedOrigin);
       expectNoConsoleLeak(consoleSpies, mismatchedOrigin);
+    });
+  });
+
+  describe('the frame takes the height the artifact reports', () => {
+    it('keeps the fixed fallback height until a report arrives', async () => {
+      const { frame } = await renderRunningFrame();
+      expect(frame.className).toContain('h-[70vh]');
+      expect(frame.style.height).toBe('');
+    });
+
+    it('sizes the frame to a report from the artifact window and drops the fallback height', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400.4 });
+      expect(frame.style.height).toBe('2401px');
+      expect(frame.className).not.toContain('h-[70vh]');
+      expect(frame.className).not.toContain('min-h-');
+    });
+
+    it('ignores a report from any other window', async () => {
+      const { frame } = await renderRunningFrame();
+      post(window, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+      if (!frame.contentWindow) throw new Error('the outer frame has no window');
+      post(frame.contentWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+      expect(frame.style.height).toBe('');
+    });
+
+    it.each([
+      ['another message type', { type: 'something-else', height: 2400 }],
+      ['a non-numeric height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: '2400' }],
+      ['a zero height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 0 }],
+      ['an infinite height', { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: Number.POSITIVE_INFINITY }],
+      ['a bare number', 2400],
+    ])('ignores %s', async (_label, data) => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, data);
+      expect(frame.style.height).toBe('');
+    });
+
+    it('caps an oversized report so a runaway artifact cannot stretch the page without bound', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 10_000_000 });
+      expect(frame.style.height).toBe('100000px');
+    });
+  });
+  describe('maximizing the running artifact', () => {
+    const maximizeButton = () => screen.getByRole('button', { name: m['page.artifact.maximize']() });
+    const restoreButton = () => screen.getByRole('button', { name: m['page.artifact.restore']() });
+
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'fullscreenEnabled');
+      Reflect.deleteProperty(document, 'fullscreenElement');
+    });
+
+    it('restyles the same frame into a viewport-filling dialog instead of moving (and so reloading) it', async () => {
+      const { frame } = await renderRunningFrame();
+      const src = frame.getAttribute('src');
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      fireEvent.click(maximizeButton());
+
+      const dialog = screen.getByRole('dialog', { name: 'agent-output' });
+      expect(dialog.getAttribute('aria-modal')).toBe('true');
+      expect(dialog.className).toContain('fixed');
+      expect(dialog.className.split(' ')).toContain('m-0');
+      expect(dialog.contains(frame)).toBe(true);
+      expect(document.querySelector('iframe')).toBe(frame);
+      expect(frame.getAttribute('src')).toBe(src);
+    });
+
+    it('fills the overlay while maximized and takes the reported height back when restored', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      post(artifactWindow, { type: ARTIFACT_HEIGHT_MESSAGE_TYPE, height: 2400 });
+
+      fireEvent.click(maximizeButton());
+      expect(frame.style.height).toBe('');
+      // The frame fills the scroll region under the title bar, so the
+      // sandbox notice sits below it and scrolls into view instead of
+      // pinning itself to the bottom of the screen.
+      const scroller = frame.parentElement as HTMLElement;
+      expect(scroller.className.split(' ')).toEqual(expect.arrayContaining(['flex-1', 'overflow-y-auto']));
+      expect(frame.className.split(' ')).toContain('h-full');
+      const notice = screen.getByText(m['page.artifact.sandbox_notice_generated']());
+      expect(scroller.contains(notice)).toBe(true);
+
+      fireEvent.click(restoreButton());
+      expect(frame.style.height).toBe('2400px');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('keeps the page behind from scrolling, and Escape restores', async () => {
+      await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+      expect(document.documentElement.style.overflow).toBe('hidden');
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.documentElement.style.overflow).toBe('');
+      expect(document.activeElement).toBe(maximizeButton());
+    });
+
+    it('restores on an Escape forwarded from inside the artifact, where the page cannot hear keys', async () => {
+      const { artifactWindow } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.documentElement.style.overflow).toBe('');
+      expect(document.activeElement).toBe(maximizeButton());
+    });
+
+    it('leaves focus in an inline artifact on an Escape the artifact forwards', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      act(() => frame.focus());
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(frame);
+    });
+
+    it('ignores a forwarded Escape from any other window', async () => {
+      await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      post(window, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('leaves a forwarded Escape to the browser while in full screen', async () => {
+      const { artifactWindow } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+      Object.defineProperty(document, 'fullscreenElement', { value: screen.getByRole('dialog'), configurable: true });
+
+      post(artifactWindow, { type: ARTIFACT_ESCAPE_MESSAGE_TYPE });
+
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('wraps focus that leaves the overlay back into it', async () => {
+      const { frame } = await renderRunningFrame();
+      fireEvent.click(maximizeButton());
+
+      act(() => screen.getByTestId('artifact-focus-end').focus());
+      expect(document.activeElement).toBe(restoreButton());
+      act(() => screen.getByTestId('artifact-focus-start').focus());
+      expect(document.activeElement).toBe(frame);
+    });
+
+    it('offers full screen only inside the overlay, and only where the browser supports it', async () => {
+      await renderRunningFrame();
+      const fullscreenButton = () => screen.queryByRole('button', { name: m['page.artifact.enter_fullscreen']() });
+      fireEvent.click(maximizeButton());
+      expect(fullscreenButton()).toBeNull();
+      fireEvent.click(restoreButton());
+
+      Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+      expect(fullscreenButton()).toBeNull();
+      fireEvent.click(maximizeButton());
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const dialog = screen.getByRole('dialog');
+      dialog.requestFullscreen = requestFullscreen;
+
+      const button = fullscreenButton();
+      if (!button) throw new Error('no full screen button');
+      fireEvent.click(button);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('ArtifactView page links', () => {
+  const NAVIGATE = (href: string, disposition: 'same-tab' | 'new-tab' = 'same-tab') => ({ type: ARTIFACT_NAVIGATE_MESSAGE_TYPE, href, disposition });
+
+  let openSpy: ReturnType<typeof vi.spyOn>;
+
+  /** Puts the document in the state "the reader just acted inside this frame", or a chosen variation of it. */
+  function setReaderState({
+    activation = { isActive: true },
+    hasFocus = true,
+    activeElement,
+  }: {
+    activation?: { isActive: boolean; hasBeenActive?: boolean } | null;
+    hasFocus?: boolean;
+    activeElement: Element | null;
+  }) {
+    if (activation === null) Reflect.deleteProperty(navigator, 'userActivation');
+    else Object.defineProperty(navigator, 'userActivation', { value: activation, configurable: true });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+    Object.defineProperty(document, 'activeElement', { get: () => activeElement, configurable: true });
+  }
+
+  beforeEach(() => {
+    openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    // jsdom's dispatched events are untrusted, so with the default trust the
+    // clock stays quiet and messages that pass S-1 act directly.
+    installParentInputClock();
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'userActivation');
+    Reflect.deleteProperty(document, 'activeElement');
+    resetParentInputClockForTest();
+  });
+
+  it('same-tab: pushes the resolved wiki href on the router', async () => {
+    const { frame, artifactWindow } = await renderRunningFrame();
+    setReaderState({ activeElement: frame });
+    post(artifactWindow, NAVIGATE('guide#intro'));
+    expect(routerPush).toHaveBeenCalledTimes(1);
+    expect(routerPush).toHaveBeenCalledWith('/docs/guide#intro');
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('new-tab: opens the same-origin href with noopener and does not touch the router', async () => {
+    const { frame, artifactWindow } = await renderRunningFrame();
+    setReaderState({ activeElement: frame });
+    post(artifactWindow, NAVIGATE('/team/my page', 'new-tab'));
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(`${window.location.origin}/team/my+page`, '_blank', 'noopener');
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  describe.each(['same-tab', 'new-tab'] as const)('%s focus containment', (disposition) => {
+    const cases = [
+      ['activation true, focus true, the current frame', true, true, 'frame', true],
+      ['activation true, focus false, the current frame', true, false, 'frame', false],
+      ['activation true, focus true, another element in the page', true, true, 'other', false],
+      ['activation true, focus false, another element in the page', true, false, 'other', false],
+      ['activation true, focus true, no active element', true, true, 'none', false],
+      ['activation true, focus false, no active element', true, false, 'none', false],
+      ['activation false, focus true, the current frame', false, true, 'frame', false],
+    ] as const;
+
+    it.each(cases)('%s', async (_label, active, hasFocus, where, accepted) => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      const other = document.body.appendChild(document.createElement('input'));
+      setReaderState({ activation: { isActive: active }, hasFocus, activeElement: where === 'frame' ? frame : where === 'other' ? other : null });
+      post(artifactWindow, NAVIGATE('/team/guide', disposition));
+      const acted = disposition === 'same-tab' ? routerPush.mock.calls.length : openSpy.mock.calls.length;
+      expect(acted).toBe(accepted ? 1 : 0);
+    });
+
+    it('is refused when the API is missing or only reports past activation', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activation: null, activeElement: frame });
+      post(artifactWindow, NAVIGATE('/team/guide', disposition));
+      setReaderState({ activation: { isActive: false, hasBeenActive: true }, activeElement: frame });
+      post(artifactWindow, NAVIGATE('/team/guide', disposition));
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  it('accepts messages only from the current inner window', async () => {
+    const { frame, artifactWindow } = await renderRunningFrame();
+    setReaderState({ activeElement: frame });
+    const sibling = (frame.contentDocument?.documentElement.appendChild(frame.contentDocument.createElement('iframe')) as HTMLIFrameElement).contentWindow;
+    if (!frame.contentWindow || !sibling) throw new Error('missing windows');
+    post(frame.contentWindow, NAVIGATE('/team/guide'));
+    post(sibling, NAVIGATE('/team/guide'));
+    post(window, NAVIGATE('/team/guide'));
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: NAVIGATE('/team/guide'), origin: 'null' }));
+    });
+    expect(routerPush).not.toHaveBeenCalled();
+    post(artifactWindow, NAVIGATE('/team/guide'));
+    expect(routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['an unknown field', { ...NAVIGATE('/team/guide'), isTrusted: true }],
+    ['an unknown disposition', { ...NAVIGATE('/team/guide'), disposition: 'top' }],
+    ['another type', { type: 'crowi:other', href: '/team/guide', disposition: 'same-tab' }],
+    ['an empty href', NAVIGATE('')],
+    ['an array', [NAVIGATE('/team/guide')]],
+    ['null', null],
+    ['an absolute URL', NAVIGATE('https://evil.example/')],
+    ['a same-origin absolute URL', NAVIGATE(`${window.location.origin}/team/guide`)],
+    ['a query', NAVIGATE('/team/guide?x=1')],
+    ['a reserved route', NAVIGATE('/admin')],
+    ['a dot-segment route', NAVIGATE('/x/%2e%2e/admin')],
+    ['a raw percent', NAVIGATE('/100%done')],
+    ['root overflow', NAVIGATE('../../../guide')],
+    ['an ObjectId shortcut', NAVIGATE('/507f1f77bcf86cd799439011')],
+  ])('ignores %s', async (_label, data) => {
+    const { frame, artifactWindow } = await renderRunningFrame();
+    setReaderState({ activeElement: frame });
+    const spies = spyOnAllConsoleMethods();
+    post(artifactWindow, data);
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+    for (const spy of Object.values(spies)) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('leaves a refused or throwing popup alone: no fallback navigation, no output', async () => {
+    const { frame, artifactWindow } = await renderRunningFrame();
+    setReaderState({ activeElement: frame });
+    const spies = spyOnAllConsoleMethods();
+    post(artifactWindow, NAVIGATE('/team/guide', 'new-tab'));
+    openSpy.mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    post(artifactWindow, NAVIGATE('/team/guide', 'new-tab'));
+    expect(openSpy).toHaveBeenCalledTimes(2);
+    expect(routerPush).not.toHaveBeenCalled();
+    for (const spy of Object.values(spies)) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('resolves against the page path, not the displayed Revision path', async () => {
+    mockAppInfo({ data: ENABLED_APP_INFO });
+    mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+    const base = makePage({ path: '/current/place/page' });
+    render(createElement(ArtifactView, { page: { ...base, revision: { ...base.revision, path: '/old/name/page' } } }));
+    await flush();
+    const frame = document.querySelector('iframe') as HTMLIFrameElement;
+    const doc = frame.contentDocument as Document;
+    const artifactWindow = doc.appendChild(doc.createElement('html')).appendChild(doc.createElement('iframe')).contentWindow as Window;
+    setReaderState({ activeElement: frame });
+    post(artifactWindow, NAVIGATE('guide'));
+    expect(routerPush).toHaveBeenCalledWith('/current/place/guide');
+  });
+
+  it('keeps the frame and the mint when only the page path changes, and uses the new path from then on', async () => {
+    mockAppInfo({ data: ENABLED_APP_INFO });
+    const mutateAsync = mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+    const { rerender } = render(createElement(ArtifactView, { page: makePage({ path: '/a/one' }) }));
+    await flush();
+    const frame = document.querySelector('iframe') as HTMLIFrameElement;
+    const src = frame.getAttribute('src');
+    const doc = frame.contentDocument as Document;
+    const artifactWindow = doc.appendChild(doc.createElement('html')).appendChild(doc.createElement('iframe')).contentWindow as Window;
+    setReaderState({ activeElement: frame });
+    post(artifactWindow, NAVIGATE('guide'));
+    expect(routerPush).toHaveBeenLastCalledWith('/a/guide');
+
+    rerender(createElement(ArtifactView, { page: makePage({ path: '/b/two' }) }));
+    expect(document.querySelector('iframe')).toBe(frame);
+    expect(frame.getAttribute('src')).toBe(src);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    post(artifactWindow, NAVIGATE('guide'));
+    expect(routerPush).toHaveBeenLastCalledWith('/b/guide');
+    expect(routerPush).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a message from the old frame after the Revision changes and a new frame is minted', async () => {
+    mockAppInfo({ data: ENABLED_APP_INFO });
+    mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+    const { rerender } = render(createElement(ArtifactView, { page: makePage() }));
+    await flush();
+    const oldFrame = document.querySelector('iframe') as HTMLIFrameElement;
+    const oldDoc = oldFrame.contentDocument as Document;
+    const oldWindow = oldDoc.appendChild(oldDoc.createElement('html')).appendChild(oldDoc.createElement('iframe')).contentWindow as Window;
+
+    rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-2') }));
+    await flush();
+    const newFrame = document.querySelector('iframe') as HTMLIFrameElement;
+    expect(newFrame).not.toBe(oldFrame);
+    const newDoc = newFrame.contentDocument as Document;
+    const newWindow = newDoc.appendChild(newDoc.createElement('html')).appendChild(newDoc.createElement('iframe')).contentWindow as Window;
+    setReaderState({ activeElement: newFrame });
+
+    post(oldWindow, NAVIGATE('/team/guide'));
+    expect(routerPush).not.toHaveBeenCalled();
+    post(newWindow, NAVIGATE('/team/guide'));
+    expect(routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops listening on unmount', async () => {
+    const { frame, artifactWindow } = await renderRunningFrame();
+    setReaderState({ activeElement: frame });
+    cleanup();
+    post(artifactWindow, NAVIGATE('/team/guide'));
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('acts once per message under StrictMode, whose effect cleanup must not leave a duplicate listener', async () => {
+    mockAppInfo({ data: ENABLED_APP_INFO });
+    mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+    render(createElement(StrictMode, null, createElement(ArtifactView, { page: makePage() })));
+    await flush();
+    const frame = document.querySelector('iframe') as HTMLIFrameElement;
+    const doc = frame.contentDocument as Document;
+    const artifactWindow = doc.appendChild(doc.createElement('html')).appendChild(doc.createElement('iframe')).contentWindow as Window;
+    setReaderState({ activeElement: frame });
+    post(artifactWindow, NAVIGATE('/team/guide'));
+    expect(routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when the reader recently acted on the page itself', () => {
+    const chip = () => screen.queryByTestId('artifact-navigate-confirm');
+    const goButton = () => screen.getByRole('button', { name: m['page.artifact.navigate_confirm_open']() });
+    const newTabButton = () => screen.getByRole('button', { name: m['page.artifact.navigate_confirm_open_new_tab']() });
+    const dismissButton = () => screen.getByRole('button', { name: m['page.artifact.navigate_confirm_dismiss']() });
+
+    /** The page just received the reader's own input, as an arrival click or a Tab into the frame does. */
+    function enterQuarantine() {
+      resetParentInputClockForTest();
+      installParentInputClock({ trust: () => true });
+      window.dispatchEvent(new Event('pointerdown'));
+    }
+
+    it('holds a same-tab link for confirmation, showing only the resolved page path', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('my%20page#secret-fragment'));
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(openSpy).not.toHaveBeenCalled();
+      const held = chip();
+      expect(held).not.toBeNull();
+      expect(held?.textContent).toContain('/docs/my page');
+      expect(held?.textContent).not.toContain('my%20page');
+      expect(held?.textContent).not.toContain('secret-fragment');
+      expect(screen.queryByRole('button', { name: m['page.artifact.navigate_confirm_open_new_tab']() })).toBeNull();
+
+      fireEvent.click(goButton());
+      expect(routerPush).toHaveBeenCalledTimes(1);
+      expect(routerPush).toHaveBeenCalledWith('/docs/my+page#secret-fragment');
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(chip()).toBeNull();
+    });
+
+    it('holds a new-tab link and opens it with noopener when confirmed', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/guide', 'new-tab'));
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: m['page.artifact.navigate_confirm_open']() })).toBeNull();
+      fireEvent.click(newTabButton());
+      expect(openSpy).toHaveBeenCalledTimes(1);
+      expect(openSpy).toHaveBeenCalledWith(`${window.location.origin}/team/guide`, '_blank', 'noopener');
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(chip()).toBeNull();
+    });
+
+    it('holds the link when the input clock was never installed (fail closed)', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      resetParentInputClockForTest();
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(chip()?.textContent).toContain('/team/guide');
+    });
+
+    it.each([
+      ['focus on another element in the page', 'other', { isActive: true }],
+      ['no transient activation', 'frame', { isActive: false }],
+    ] as const)('shows no confirmation for a message that fails the frame checks (%s)', async (_label, where, activation) => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      const other = document.body.appendChild(document.createElement('textarea'));
+      setReaderState({ activation, activeElement: where === 'frame' ? frame : other });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      expect(chip()).toBeNull();
+      expect(routerPush).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a reserved route', NAVIGATE('/admin')],
+      ['an unknown field', { ...NAVIGATE('/team/guide'), base: '/' }],
+    ])('shows no confirmation for %s', async (_label, data) => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, data);
+      expect(chip()).toBeNull();
+    });
+
+    it('shows no confirmation for a message from another window', async () => {
+      const { frame } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(window, NAVIGATE('/team/guide'));
+      expect(chip()).toBeNull();
+    });
+
+    it('replaces a held link with the next one instead of stacking them', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/first'));
+      post(artifactWindow, NAVIGATE('/team/second', 'new-tab'));
+      expect(screen.getAllByTestId('artifact-navigate-confirm')).toHaveLength(1);
+      expect(chip()?.textContent).toContain('/team/second');
+      expect(chip()?.textContent).not.toContain('/team/first');
+      fireEvent.click(newTabButton());
+      expect(openSpy).toHaveBeenCalledTimes(1);
+      expect(openSpy).toHaveBeenCalledWith(`${window.location.origin}/team/second`, '_blank', 'noopener');
+      expect(routerPush).not.toHaveBeenCalled();
+    });
+
+    it('drops the held link on dismiss', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      fireEvent.click(dismissButton());
+      expect(chip()).toBeNull();
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+
+    it('drops the held link when the page path changes, keeping the frame', async () => {
+      mockAppInfo({ data: ENABLED_APP_INFO });
+      mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+      const { rerender } = render(createElement(ArtifactView, { page: makePage({ path: '/a/one' }) }));
+      await flush();
+      const frame = document.querySelector('iframe') as HTMLIFrameElement;
+      const doc = frame.contentDocument as Document;
+      const artifactWindow = doc.appendChild(doc.createElement('html')).appendChild(doc.createElement('iframe')).contentWindow as Window;
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('guide'));
+      expect(chip()?.textContent).toContain('/a/guide');
+      rerender(createElement(ArtifactView, { page: makePage({ path: '/b/two' }) }));
+      expect(document.querySelector('iframe')).toBe(frame);
+      expect(chip()).toBeNull();
+      post(artifactWindow, NAVIGATE('guide'));
+      expect(chip()?.textContent).toContain('/b/guide');
+    });
+
+    it('drops the held link when the Revision changes and the frame is replaced', async () => {
+      mockAppInfo({ data: ENABLED_APP_INFO });
+      mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+      const { rerender } = render(createElement(ArtifactView, { page: makePage() }));
+      await flush();
+      const frame = document.querySelector('iframe') as HTMLIFrameElement;
+      const doc = frame.contentDocument as Document;
+      const artifactWindow = doc.appendChild(doc.createElement('html')).appendChild(doc.createElement('iframe')).contentWindow as Window;
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      expect(chip()).not.toBeNull();
+      rerender(createElement(ArtifactView, { page: pageWithRevisionId('rev-2') }));
+      await flush();
+      expect(document.querySelector('iframe')).not.toBe(frame);
+      expect(chip()).toBeNull();
+    });
+
+    it('drops the held link on unmount', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      expect(chip()).not.toBeNull();
+      cleanup();
+      expect(chip()).toBeNull();
+      expect(routerPush).not.toHaveBeenCalled();
+    });
+
+    it('stays inside the overlay while maximized', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      fireEvent.click(screen.getByRole('button', { name: m['page.artifact.maximize']() }));
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      expect(screen.getByRole('dialog').contains(chip())).toBe(true);
+    });
+
+    it('acts directly again once the page has been quiet for the whole quarantine', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      enterQuarantine();
+      const now = performance.now();
+      const later = vi.spyOn(performance, 'now').mockReturnValue(now + 6000);
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      later.mockRestore();
+      expect(routerPush).toHaveBeenCalledTimes(1);
+      expect(chip()).toBeNull();
+    });
+
+    it('re-checks the origin when the confirmation is pressed, as the direct path does', async () => {
+      const { frame, artifactWindow } = await renderRunningFrame();
+      setReaderState({ activeElement: frame });
+      const crafted = { pagePath: '/team/guide', href: '//evil.example/team/guide' };
+      vi.mocked(resolveArtifactNavigation).mockReturnValueOnce(crafted);
+      post(artifactWindow, NAVIGATE('/team/guide', 'new-tab'));
+      expect(openSpy).not.toHaveBeenCalled();
+
+      enterQuarantine();
+      vi.mocked(resolveArtifactNavigation).mockReturnValueOnce(crafted);
+      post(artifactWindow, NAVIGATE('/team/guide', 'new-tab'));
+      fireEvent.click(newTabButton());
+      vi.mocked(resolveArtifactNavigation).mockReturnValueOnce({ pagePath: '/team/guide', href: '/team/guide?edit=1' });
+      post(artifactWindow, NAVIGATE('/team/guide'));
+      fireEvent.click(goButton());
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(chip()).toBeNull();
     });
   });
 });

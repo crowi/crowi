@@ -2,6 +2,7 @@ import type { onAuthenticatePayload } from '@hocuspocus/server';
 import Debug from 'debug';
 import { resolvePageEpoch } from '../doc-epoch';
 import type { CollabModels } from '../models';
+import { readCollabBodyEligibility } from '../page-body-kind';
 import { DELETED_STATUS, DRAFT_STATUS } from '../page-status';
 import { type CollabContext, type CollabWsTokenUtil, type EditorCapCounter, noopEditorCapCounter } from '../types';
 
@@ -57,13 +58,11 @@ interface DraftablePageRow {
   creator?: unknown;
   /** RFC-0017 Phase 1 §5/§D5. */
   collabLifecycleVersion?: number;
-  /** RFC-0020 §1 — a missing/undefined value means legacy Markdown. */
-  contentType?: string;
 }
 
 export interface OnAuthenticateDeps {
   wsTokenUtil: CollabWsTokenUtil;
-  models: Pick<CollabModels, 'Page'>;
+  models: Pick<CollabModels, 'Page' | 'Revision'>;
   /**
    * Defaults to the api-side cap check (currently `peek`-based via
    * Redis; falls back to readonly:false when Redis is unconfigured).
@@ -168,28 +167,29 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
       throw new Error('invalid token');
     }
 
+    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus. Decided from the
+    // Page hint AND the Revisions it points at (so even a valid, already-issued
+    // token is useless once the page's body is an artifact), before the epoch /
+    // draft / cap paths so a rejected connection never takes an editor slot.
+    // Generic message: no leak of existence or kind. A soft-deleted Markdown
+    // Page passes here and is rejected by the status check below.
+    const eligibility = await readCollabBodyEligibility(deps.models, claims.pageId);
+    if (!eligibility.ok) {
+      debug('reject: page %s is not eligible for collab (%s)', claims.pageId, eligibility.reason);
+      throw new Error('invalid token');
+    }
+
     // RFC-0004: also pull `status` + `creator` so a draft page can be
     // gated to its author below. RFC-0017 Phase 1: also pull
     // `collabLifecycleVersion` for the epoch gate. `lean()` returns a
     // plain object, so `creator` is an ObjectId — compare via `String(...)`.
     const page = (await (deps.models.Page as DraftablePageModel)
       .findById(claims.pageId)
-      .select('_id status creator collabLifecycleVersion contentType')
+      .select('_id status creator collabLifecycleVersion')
       .lean()
       .exec()) as DraftablePageRow | null;
     if (!page) {
       debug('reject: page %s not found', claims.pageId);
-      throw new Error('invalid token');
-    }
-
-    // RFC-0020 §1 — artifact Pages never join Yjs/Hocuspocus. This is
-    // defence-in-depth for a token minted BEFORE storage's live-doc-kind
-    // guard is even relevant: it also rejects the case where a valid,
-    // already-issued token is presented for a page that has SINCE become
-    // an artifact page. Generic message, checked before epoch/draft/cap
-    // so a rejected artifact connection never touches those paths.
-    if (page.contentType === 'artifact') {
-      debug('reject: page %s is an artifact page', claims.pageId);
       throw new Error('invalid token');
     }
 

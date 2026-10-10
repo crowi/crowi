@@ -3,6 +3,7 @@ import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import type { MigrationApplicationModel, MigrationResult } from 'src/models/migration-application';
+import { isArtifactBody } from 'src/service/page-body-write';
 
 import type {
   DetectReport,
@@ -95,6 +96,13 @@ function buildContext(
       opts.logger.warn(`rewritePageBody: page ${pageId} not found, skipping`);
       return;
     }
+    // RFC-0020 §1 — a body-rewrite migration only ever produces Markdown, so an
+    // artifact Page (by its current Revision, or by an inconsistent hint) is a
+    // no-op rather than a rewrite that would be rejected mid-run.
+    if (await isArtifactBody(crowi, page)) {
+      opts.logger.warn(`rewritePageBody: page ${pageId} is an artifact page, skipping`);
+      return;
+    }
     // Route through the updatePage-equivalent path: it repoints
     // currentRevision and nulls yjsState / yjsCheckpointAt (page.ts), so the
     // next onLoadDocument rebuilds the Y.Doc from the new body (§4.3.1).
@@ -107,7 +115,7 @@ function buildContext(
     // also keeps the search index consistent: the `update` event fires with the
     // original `updatedAt`, so `indexPageInSearch` indexes the original value
     // and never diverges from Mongo (RFC-0008 follow-up — see the migration spec).
-    await Page.updatePage(page, newBody, user, { preserveTimestamps: true });
+    await Page.updatePage(page, newBody, user, { preserveTimestamps: true, contentType: 'markdown' });
   };
 
   const invalidateYjsPersistence = async (pageIds: string[]): Promise<void> => {

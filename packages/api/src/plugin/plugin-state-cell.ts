@@ -28,15 +28,11 @@ export function createStateCell<T>(initial: T): StateCell<T> {
     generations.delete(gen);
     if (entry.dispose) {
       const dispose = entry.dispose;
-      // `.catch()` only guards against an unhandled promise rejection
-      // crashing the process (Node's default `unhandledRejection`
-      // policy) — the error itself is swallowed here since this cell
-      // has no logging channel of its own. `dispose` implementations
-      // must self-handle/self-log their own errors (see the doc
-      // comment on `StateCell.set()` in `@crowi/plugin-api`); every
-      // driver in this repo already does (e.g. the Elasticsearch
-      // plugin's `reconfigure` logs via `ctx.log.warn` inside its own
-      // `.catch()`).
+      // `.catch()` swallows the rejection here — this cell has no logging
+      // channel of its own, and an unhandled rejection escaping this
+      // fire-and-forget call would terminate the process. `dispose`
+      // implementations must self-handle/self-log their own errors (see
+      // the doc comment on `StateCell.set()` in `@crowi/plugin-api`).
       Promise.resolve()
         .then(() => dispose(entry.value))
         .catch(() => {});

@@ -84,4 +84,16 @@ describe('completion', () => {
       expect(duplicated).toEqual(['--token']);
     });
   });
+
+  describe('recent', () => {
+    it.each(SUPPORTED_SHELLS)('recent options appear in the %s completion of the real program', (shell) => {
+      const spec = describeProgram(createProgram());
+      const recent = spec.commands.find((c) => c.name === 'recent');
+      expect(recent?.flags.map((f) => f.flag).sort()).toEqual(['--format', '--limit', '--offset', '--prefix', '--template']);
+      const script = renderCompletion(createProgram(), shell);
+      for (const token of ['recent', 'prefix', 'limit', 'offset', 'format', 'template']) {
+        expect(script).toContain(token);
+      }
+    });
+  });
 });

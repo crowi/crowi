@@ -4,12 +4,12 @@ description: Crowi の全文検索バックエンド (Elasticsearch) のセッ�
 ---
 
 Crowi の全文検索は **検索ドライバ** という差し替え可能な仕組みで提供
-されます。**デフォルトのドライバは `mongo`** で、MongoDB の `$regex` を
+されます。デフォルトのドライバは `mongo` で、MongoDB の `$regex` を
 使った検索です。暗黙のデフォルトプラグイン `@crowi/plugin-search-mongo`
 として実装されており、追加のインフラを必要としないため、新規インストール
 でも MongoDB だけですぐに検索できます。
 
-より大規模な構成向けには、**Elasticsearch を opt-in で選択** できます。
+より大規模な構成向けには、Elasticsearch を opt-in で選択できます。
 `@crowi/plugin-search-elasticsearch` プラグインとして実装されており、
 大量の文書でもスケールしやすく、日本語解析 (`analysis-kuromoji`) にも
 対応します。このページは運用者向けに、Elasticsearch ドライバの
@@ -68,7 +68,7 @@ Elasticsearch (または OpenSearch) は運用者が用意します。日本語�
 
 | 設定キー | 説明 |
 | -------- | ---- |
-| `url` | Elasticsearch のエンドポイント。`https://[user:pass@]host[:port][/indexName]` 形式。URL にパスワードを含められるため、機密値として暗号化されます。空文字のまま起動するとドライバは**登録されません**。あとから url を設定しても、登録されていないドライバを設定し直すことはできないため、**有効にするには api の再起動が必要**です。 |
+| `url` | Elasticsearch のエンドポイント。`https://[user:pass@]host[:port][/indexName]` 形式。URL にパスワードを含められるため、機密値として暗号化されます。空文字のまま起動するとドライバは登録されません。あとから url を設定しても未登録のドライバは設定し直せないため、**有効にするには api の再起動が必要**です。 |
 | `indexName` | ベースとなるインデックス名 (デフォルト `crowi`)。URL のパスで指定しない場合に使われます。 |
 | `requestTimeout` | リクエストタイムアウト (ミリ秒、デフォルト `5000`)。 |
 | `analyzer` | マッピングの種類。`default` / `kuromoji` / `sudachi` から選択。 |
@@ -91,13 +91,13 @@ Elasticsearch (または OpenSearch) は運用者が用意します。日本語�
 
 検索インデックスの全件再構築は、Web の管理画面からではなく
 `crowi-admin` CLI で行います。長時間かかる処理を管理リクエストに
-紐付けないための設計です。
+紐付けない設計にしているためです。
 
 ```bash
 crowi-admin rebuild search
 ```
 
-このコマンドは:
+このコマンドは次の処理を行います。
 
 1. `.env` を読み込み、`MONGO_URI` などを Crowi のブート時と同じ経路で
    解決します。
@@ -112,8 +112,8 @@ crowi-admin rebuild search
 してください。オプションと終了コードは [crowi-admin](../reference/admin-cli)
 にあります。
 
-> **Tip**: エイリアス方式により、再構築中もダウンタイムなく既存
-> インデックスへの検索が継続できます。新インデックスの構築完了後に
+> **Tip**: エイリアスを切り替える方式なので、再構築中もダウンタイムなく既存
+> インデックスで検索を続けられます。新インデックスの構築完了後に
 > 一括でエイリアスが切り替わります。
 
 再構築すべき永続インデックスを持たないドライバの場合、管理画面の
@@ -123,8 +123,8 @@ Search セクションには再構築のヒントは表示されません。
 
 管理画面の Search セクション (`/admin/search`) は read-only で、現在
 アクティブな検索ドライバとインストール済みドライバの一覧を表示します。
-ドライバの切り替えは `crowi.config.json` の `search.driver` 変更 +
-api 再起動で行います。管理画面全般については [管理画面](./admin) を
+ドライバを切り替えるには、`crowi.config.json` の `search.driver` を変更して
+api を再起動します。管理画面全般については [管理画面](./admin) を
 参照してください。
 
 ## トラブルシューティング

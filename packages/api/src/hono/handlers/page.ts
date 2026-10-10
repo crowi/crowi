@@ -31,11 +31,12 @@ import {
   getSeenUsersRoute,
   getWatchStatusRoute,
   IDEMPOTENCY_KEY_PATTERN,
+  LIST_PAGES_PREFIX_LIMIT,
+  LIST_PAGES_PREFIX_OFFSET,
   likePageRoute,
   listPageChildrenRoute,
   listPagesRoute,
   type PageContentType,
-  PageContentTypeSchema,
   PageGrantEnum,
   renamePageRoute,
   renameSubtreeRoute,
@@ -54,18 +55,20 @@ import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import {
-  ARTIFACT_REJECTION_MESSAGES,
   type ArtifactIngestOptions,
   type ArtifactIngestRejection,
   type ArtifactInputSource,
   ArtifactInternalError,
   type ArtifactWriteFailure,
+  getArtifactRejectionMessage,
   ingestHtmlArtifact,
-  truncateArtifactIdentifier,
+  sanitizeArtifactTarget,
+  selectArtifactDiagnosticCode,
 } from 'src/artifact/ingest';
 import { type ArtifactPolicySnapshot, isArtifactWriteEnabled, resolveArtifactPolicySnapshot } from 'src/artifact/policy';
 import type Crowi from 'src/crowi';
 import {
+  type CreatePageOptions,
   creatorPageListMatch,
   isTransitionalPageStatus,
   PageContentTypeConflictError,
@@ -81,6 +84,7 @@ import {
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 import type { SeenDocument } from 'src/models/seen';
 import type { UserDocument } from 'src/models/user';
+import { type ArtifactPreWriteAccepted, getRawRevisionPointer, resolveCurrentPageBodyKind, validatedStoredContentType } from 'src/service/page-body-write';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
 import { restorePageCommand } from 'src/service/page-history/commands/restore';
 import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-history/commands/subtree-rename';
@@ -91,6 +95,7 @@ import { computeRevisionRenderArtifactsAsync, type EnrichedPage, isPopulatedRevi
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
+import { escapeRegExp } from 'src/util/regex';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { actorFromUser, isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
@@ -227,40 +232,15 @@ function readArtifactContentTypeDeclaration(value: string | undefined): PageCont
 }
 
 /**
- * Narrows a Revision's stored `contentType` (typed as `PageContentType` at
- * compile time, but never re-validated by Mongoose on read/populate — only
- * on `save()`) to the actual `markdown | artifact` union. An unrecognized
- * runtime value is treated as internal-state corruption (fixed 500), never
- * silently coerced to either kind: falling back to `'markdown'` would let a
- * corrupt row bypass artifact ingest entirely on a header-omitted PUT/revert
- * (the stray value would never `=== 'artifact'`), and comparing it as-is
- * against an explicit header would surface a normal author-facing AI-D02
- * conflict for what is actually a broken invariant.
+ * The current Revision's own content-type kind, resolved from the raw
+ * revision pointer so a populate that came back empty for a pointer-bearing
+ * Page (a dangling reference) is internal-state corruption (a thrown
+ * `ArtifactInternalError` -> the fixed 500), never mistaken for a pointerless
+ * Page. `hasPointer: false` means the Page has no settled kind yet.
  */
-function validatedStoredContentType(value: string | undefined, context: string): PageContentType {
-  if (value === undefined) return 'markdown';
-  const parsed = PageContentTypeSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new ArtifactInternalError(`${context}: unrecognized stored contentType`);
-  }
-  return parsed.data;
-}
-
-/**
- * The current Revision's own content-type kind for a pointer-bearing Page.
- * Callers must already know `pageData.revision != null` — a pointerless
- * Page has no settled kind and is handled separately. A non-null,
- * unpopulated `revision` here means `Page.findPageByIdAndGrantedUser`'s
- * populate contract broke: an internal-state error, not something an
- * artifact author can trigger or correct, so it throws rather than
- * returning a fallback kind.
- */
-function selectedRevisionContentType(pageData: PageDocument): PageContentType {
-  const revision = pageData.revision;
-  if (!isPopulatedRevision(revision)) {
-    throw new ArtifactInternalError(`selectedRevisionContentType: Page ${pageData._id} has a non-null, unpopulated revision`);
-  }
-  return validatedStoredContentType(revision.contentType, `selectedRevisionContentType: Revision ${revision._id}`);
+async function selectedRevisionKind(crowi: Crowi, pageData: PageDocument): Promise<{ hasPointer: boolean; contentType: PageContentType }> {
+  const current = await resolveCurrentPageBodyKind(crowi, pageData, getRawRevisionPointer(pageData));
+  return { hasPointer: current.revisionId !== null, contentType: current.contentType };
 }
 
 /**
@@ -280,29 +260,24 @@ async function ingestArtifactBodyForWrite(
 }
 
 /**
- * `ingestHtmlArtifact`'s `target` is already generated as a bounded, fixed
- * identifier (never an attribute value/URL) — this is a redundant guard at
- * the wire/log boundary this handler owns per the ingest-core spec's
- * allowlist assignment, so a future ingest rule that forgets the bound
- * still can't push more than 128 code points out through this handler.
- */
-function boundedArtifactTarget(target: string | undefined): string | undefined {
-  return target === undefined ? undefined : truncateArtifactIdentifier(target);
-}
-
-/**
  * `ArtifactWriteFailure` -> the wire `ArtifactWriteRejectionSchema`
- * envelope. `message` comes ONLY from the fixed per-reason table — never a
- * parser/library message or author content.
+ * envelope. `message` comes ONLY from the fixed tables — never a
+ * parser/library message or author content — and `diagnosticCode` is kept
+ * only when it is valid for the failure's reason.
  */
 function artifactWriteRejectionBody(failure: ArtifactWriteFailure): ArtifactWriteRejection {
+  const diagnosticCode = selectArtifactDiagnosticCode(failure.reason, failure.diagnosticCode);
   return {
     error: {
       code: 'ARTIFACT_WRITE_REJECTED',
       reason: failure.reason,
       ruleId: failure.ruleId,
-      message: ARTIFACT_REJECTION_MESSAGES[failure.reason],
-      target: boundedArtifactTarget(failure.target),
+      ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
+      message: getArtifactRejectionMessage(failure.reason, diagnosticCode),
+      // Ingest already emits a bounded identifier; re-checking at this
+      // boundary keeps a future rule that forgets the bound from leaking
+      // author content into the response or the log.
+      target: sanitizeArtifactTarget(failure.target),
     },
   };
 }
@@ -313,11 +288,11 @@ function artifactWriteRejectionBody(failure: ArtifactWriteFailure): ArtifactWrit
  * raw header value, or a parser/library message.
  */
 function logArtifactWriteRejection(failure: ArtifactWriteFailure, ids: Readonly<{ pageId?: string; revisionId?: string }>): void {
-  debug('Artifact write rejected:', { reason: failure.reason, ruleId: failure.ruleId, target: boundedArtifactTarget(failure.target), ...ids });
+  debug('Artifact write rejected:', { reason: failure.reason, ruleId: failure.ruleId, target: sanitizeArtifactTarget(failure.target), ...ids });
 }
 
 type ArtifactPreWriteResult =
-  | { ok: true; body: string }
+  | ArtifactPreWriteAccepted
   | { ok: false; httpStatus: 400 | 413 | 422; body: ArtifactWriteRejection }
   | { ok: false; httpStatus: 500 };
 
@@ -588,9 +563,30 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       // --------------------------------------------------------------
       .openapi(listPagesRoute, async (c) => {
         const user = c.get('user');
-        const { path, user: userParam, limit, offset, include_deleted, sort, order, revision_id } = c.req.valid('query');
+        const { path, user: userParam, limit, offset, include_deleted, sort, order, revision_id, path_prefix } = c.req.valid('query');
         // Mongoose sort direction: 1 ascending, -1 descending.
         const sortDir = order === 'asc' ? 1 : -1;
+
+        // Combination / range checks that a single-field schema cannot
+        // express. They run before any DB read, in a fixed order with fixed
+        // messages (the input is never echoed back).
+        if (path_prefix !== undefined) {
+          const reject = (message: string) => c.json({ error: { code: 'VALIDATION_ERROR' as const, message } }, 400);
+          if (path !== undefined || userParam !== undefined || revision_id !== undefined) {
+            return reject('path_prefix cannot be combined with path, user, or revision_id');
+          }
+          if (include_deleted) {
+            return reject('path_prefix does not support include_deleted=true');
+          }
+          const L = LIST_PAGES_PREFIX_LIMIT;
+          const O = LIST_PAGES_PREFIX_OFFSET;
+          if (!Number.isSafeInteger(limit) || limit < L.min || limit > L.max) {
+            return reject(`limit must be an integer between ${L.min} and ${L.max}`);
+          }
+          if (!Number.isSafeInteger(offset) || offset < O.min || offset > O.max) {
+            return reject(`offset must be an integer between ${O.min} and ${O.max}`);
+          }
+        }
 
         // Force-enable include_deleted for /trash and /trash/<sub> requests so
         // the legacy deletedPageListShow semantics are preserved even when
@@ -716,6 +712,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (!includeDeletedPage) {
               andClauses.push({ $or: visiblePageStatusOr(user._id) });
             }
+            // Literal prefix (escaped, start-anchored, case-sensitive).
+            if (path_prefix !== undefined) {
+              andClauses.push({ path: new RegExp(`^${escapeRegExp(path_prefix)}`) });
+            }
             const baseConditions = {
               redirectTo: null,
               $and: andClauses,
@@ -830,23 +830,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               portalPage: portalPageResponse,
               contentPage: contentPageResponse,
               total,
+              ...(path_prefix !== undefined ? { appliedPathPrefix: path_prefix } : {}),
             },
             200,
           );
-        } catch (err) {
-          debug('Error listing pages:', (err as Error).message);
-          // Legacy behaviour: an unexpected error collapses to an empty
-          // list rather than 500. Preserved for wire compatibility.
-          return c.json(
-            {
-              pages: [],
-              pager: { prev: null, next: null, offset: 0 },
-              portalPage: null,
-              contentPage: null,
-              total: 0,
-            },
-            200,
-          );
+        } catch {
+          // Fixed text only: the exception may carry query or page data.
+          debug('Error listing pages');
+          return c.json(INTERNAL_ERROR_BODY, 500);
         }
       })
       // --------------------------------------------------------------
@@ -919,7 +910,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           // RFC-0010 — record the edit channel (web / oauth / pat) so the
           // history view can flag API-token edits.
-          const createOptions: { grant?: number; editVia: 'web' | 'oauth' | 'pat'; contentType?: PageContentType } = { editVia: c.get('authContext').kind };
+          const createOptions: CreatePageOptions = { editVia: c.get('authContext').kind, contentType: declaredContentType };
           if (grant !== undefined) createOptions.grant = grant;
 
           // RFC-0020 — a new Page is always pointerless, so there is no
@@ -933,20 +924,18 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               return preWrite.httpStatus === 500 ? c.json(INTERNAL_ERROR_BODY, 500) : c.json(preWrite.body, preWrite.httpStatus);
             }
             acceptedBody = preWrite.body;
-            createOptions.contentType = 'artifact';
+            createOptions.artifactPreWrite = preWrite;
           }
-
-          // `path` (author-controlled) reaches the debug log only once the
-          // request has cleared every check that can still reject it — the
-          // path/twin checks above and, for kind=artifact, the AI-D03
-          // delivery gate and ingest validation inside `runArtifactPreWrite`
-          // — so a request rejected by any of those never logs it.
-          debug('createPage called with:', { path, grant, userId: user._id });
 
           const created = (await Page.createPage(path, acceptedBody, user, createOptions)) as PageDocument | null;
           if (!created) {
             throw new Error('Failed to create page.');
           }
+
+          // `path` (author-controlled) reaches the debug log only once the
+          // request has been durably saved, so a request rejected by the
+          // delivery gate, ingest or the save boundary never logs it.
+          debug('createPage called with:', { path, grant, userId: user._id });
 
           const populated = await populateAndEnrich(created, user);
           return c.json({ page: pageToResponse(populated) }, 200);
@@ -1007,13 +996,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               logArtifactWriteRejection(declared, { pageId: String(pageData._id) });
               return c.json(artifactWriteRejectionBody(declared), declared.httpStatus);
             }
-            if (pageData.revision != null && declared !== selectedRevisionContentType(pageData)) {
+            const current = await selectedRevisionKind(crowi, pageData);
+            if (current.hasPointer && declared !== current.contentType) {
               logArtifactWriteRejection(AI_D02_CONTENT_TYPE_CONFLICT, { pageId: String(pageData._id) });
               return c.json(artifactWriteRejectionBody(AI_D02_CONTENT_TYPE_CONFLICT), 400);
             }
             resolvedContentType = declared;
           } else {
-            resolvedContentType = pageData.revision != null ? selectedRevisionContentType(pageData) : 'markdown';
+            resolvedContentType = (await selectedRevisionKind(crowi, pageData)).contentType;
           }
 
           // RFC-0010 — record the edit channel (web / oauth / pat) so the
@@ -1021,6 +1011,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const updateOptions: UpdatePageOptions = {
             grant: grant ?? pageData.grant,
             editVia: c.get('authContext').kind,
+            contentType: resolvedContentType,
           };
 
           let acceptedBody = body;
@@ -1030,7 +1021,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               return preWrite.httpStatus === 500 ? c.json(INTERNAL_ERROR_BODY, 500) : c.json(preWrite.body, preWrite.httpStatus);
             }
             acceptedBody = preWrite.body;
-            updateOptions.contentType = 'artifact';
+            updateOptions.artifactPreWrite = preWrite;
           }
 
           const updated = (await Page.updatePage(pageData, acceptedBody, user, updateOptions)) as PageDocument;
@@ -1754,13 +1745,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // の update / revert / quiet rewrite" section) would let artifact
           // HTML sneak into a Markdown Revision and reach the renderer.
           // Authority is the populated current Revision
-          // (`selectedRevisionContentType`), not the `Page.contentType`
+          // (`selectedRevisionKind`), not the `Page.contentType`
           // hint, so a mismatch here returns the structured AI-D02
           // rejection. A pointerless Page has no settled kind to compare
           // against, so the target Revision's kind is accepted (first save)
           // rather than compared.
           const targetContentType: PageContentType = validatedStoredContentType(oldRevision.contentType, `revertToRevision: Revision ${oldRevision._id}`);
-          if (pageData.revision != null && targetContentType !== selectedRevisionContentType(pageData)) {
+          const currentKind = await selectedRevisionKind(crowi, pageData);
+          if (currentKind.hasPointer && targetContentType !== currentKind.contentType) {
             logArtifactWriteRejection(AI_D02_CONTENT_TYPE_CONFLICT, { pageId: String(pageData._id), revisionId: String(oldRevision._id) });
             return c.json(artifactWriteRejectionBody(AI_D02_CONTENT_TYPE_CONFLICT), 400);
           }
@@ -1771,6 +1763,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // stored). A Markdown target's body is stacked unchanged, exactly
           // as before this leaf.
           let acceptedBody = oldRevision.body;
+          const updateOptions: UpdatePageOptions = { editVia: c.get('authContext').kind, contentType: targetContentType };
           if (targetContentType === 'artifact') {
             const preWrite = await runArtifactPreWrite(crowi, oldRevision.body, 'stored-revision', {
               pageId: String(pageData._id),
@@ -1780,6 +1773,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               return preWrite.httpStatus === 500 ? c.json(INTERNAL_ERROR_BODY, 500) : c.json(preWrite.body, preWrite.httpStatus);
             }
             acceptedBody = preWrite.body;
+            updateOptions.artifactPreWrite = preWrite;
           }
 
           // Stack the old body as a new revision on top of the latest. The
@@ -1791,7 +1785,6 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // pointerless) so the pointer-bearing case's resolution matches
           // the guard above verbatim rather than relying on a separate
           // "current kind" fallback path.
-          const updateOptions = { editVia: c.get('authContext').kind, contentType: targetContentType };
           const updated = (await Page.updatePage(pageData, acceptedBody, user, updateOptions)) as PageDocument;
           const populated = await populateAndEnrich(updated, user);
           return c.json({ page: pageToResponse(populated) }, 200);

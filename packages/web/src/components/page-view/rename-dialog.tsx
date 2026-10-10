@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -145,7 +146,11 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
   // `limit: 0` fetches the whole subtree (Mongoose treats `.limit(0)` as no
   // limit) so the count is exact and the user can expand to verify every page
   // that would move — the server-side renameTree scans the same full subtree.
-  const { data: descendantData } = usePageList({ path: descendantRoot, limit: 0, offset: 0, include_deleted: false }, { enabled: !isRoot });
+  const {
+    data: descendantData,
+    error: descendantError,
+    refetch: refetchDescendants,
+  } = usePageList({ path: descendantRoot, limit: 0, offset: 0, include_deleted: false }, { enabled: !isRoot });
   // When a portal page '/foo/bar/' is being renamed, findListByStartWith
   // also returns the un-slashed leaf '/foo/bar' (see Page.findListByStartWith
   // — it appends `path.substr(0, path.length-1)` to the path conditions).
@@ -179,7 +184,9 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
 
   // A folder move needs at least one visible page under it — the folder path
   // itself has no page, so an empty subtree means there is nothing to move.
-  const canSubmit = !isSubmitting && !isUnchanged && !isInvalid && (!isFolder || descendantCount > 0);
+  // Without the list the subtree is unknown, so a move could silently leave
+  // descendants behind — block it rather than treat the failure as "empty".
+  const canSubmit = !isSubmitting && !isUnchanged && !isInvalid && !descendantError && (!isFolder || descendantCount > 0);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -286,6 +293,8 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
         <DialogDescription>{isFolder ? m['page.rename.folder_description']() : m['page.rename.description']()}</DialogDescription>
       </DialogHeader>
 
+      {descendantError && <ErrorAlert message={m['page_list.failed_to_load']()} onRetry={() => void refetchDescendants()} />}
+
       {feedback && feedback.kind !== 'tree_conflict' && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -334,7 +343,7 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
 
       {/* Folder mode: always a subtree move (the folder has no page of its
           own), so there is no toggle — just the count + preview. */}
-      {isFolder && (
+      {isFolder && !descendantError && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground">
             {descendantCount > 0 ? m['page.rename.folder_note']({ count: descendantCount }) : m['page.rename.folder_empty']()}

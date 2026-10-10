@@ -76,7 +76,7 @@ services:
       - "443:443"
 ```
 
-web コンテナにホストポートを与えていないのは意図的です。ブラウザに見せるのはプロキシの 1 オリジンだけで、`/api`・`/files` とリアルタイムの WebSocket はそこから api へ振り分けます。 既定のポート割り当ては [ポートと URL](../reference/ports) にあります。
+web コンテナにホストポートを与えていないのは意図的です。ブラウザに見せるのはプロキシの 1 オリジンだけで、`/api`・`/files` とリアルタイムの WebSocket はそこから api へ振り分けます。既定のポート割り当ては [ポートと URL](../reference/ports) にあります。
 
 </Step>
 
@@ -84,7 +84,7 @@ web コンテナにホストポートを与えていないのは意図的です�
 
 ### 前段プロキシを設定する
 
-Caddy / nginx / Traefik の具体的な設定行と、WebSocket の `Upgrade` 透過・アップロードの body size 上限は [デプロイ構成](./deployment) にまとめてあります。**本番投入前に必ず読んでください** — ここを外すとリアルタイム共同編集と通知が静かに動かなくなります。
+Caddy / nginx / Traefik の具体的な設定行と、WebSocket の `Upgrade` 透過・アップロードの body size 上限は [デプロイ構成](./deployment) にまとめてあります。**本番投入前に必ず読んでください。** ここの設定を誤ると、リアルタイム共同編集と通知が気づかないうちに動かなくなります。
 
 </Step>
 
@@ -100,7 +100,7 @@ SECRET_TOKEN=...             # openssl rand -base64 32 — required, api won't b
 PASSWORD_SEED=...
 ```
 
-各変数の意味と既定値は [環境変数](../reference/env) を参照してください。`SECRET_TOKEN` は必須です — 未設定・空・空白のみ・既知の placeholder のいずれかだと api は起動しません。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
+各変数の意味と既定値は [環境変数](../reference/env) を参照してください。`SECRET_TOKEN` は必須で、未設定・空・空白のみ・既知の placeholder のいずれかだと api は起動しません。`CROWI_ENCRYPTION_KEY` を設定しないと、管理画面から保存する認証情報が平文で保存されます ([機密設定の暗号化](./encryption))。
 
 </Step>
 

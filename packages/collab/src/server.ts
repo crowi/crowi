@@ -191,7 +191,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
 
   const baseOnAuthenticate = createOnAuthenticate({
     wsTokenUtil,
-    models: { Page: models.Page },
+    models: { Page: models.Page, Revision: models.Revision },
     checkEditorCap,
     editorCapCounter,
   });

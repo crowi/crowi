@@ -7,6 +7,7 @@ import type { RevisionModel } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
 import * as contentSequenceModule from 'src/service/page-history/content-sequence';
 import * as materializeModule from 'src/service/page-history/materialize';
+import { hasOperationCompletionEvidence } from 'src/service/page-history/operation';
 import { readPageHistory } from 'src/service/page-history/read';
 import { crowi, Fixture } from 'src/test/setup';
 import { runPageHistoryRepair } from 'src/util/page-history-repair';
@@ -62,13 +63,27 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
    * writes so the promotion step under test is the only writer that ever
    * touches `historyTracking`/`historySequence` — going through
    * `Page.pushRevision` (like `createReadyPage` above) would promote it
-   * before the test even starts. `status` is written explicitly: the schema
-   * default only fills a HYDRATED document's gap, but `enterTransition`'s
-   * CAS pins the literal `status` value (`transition.ts:155`), so a raw doc
-   * missing it can never enter a transition at all — unrelated to the
-   * promotion logic this fixture exists to isolate.
+   * before the test even starts.
    */
   async function createUntrackedPageWithRevision(path: string, body = 'v0'): Promise<PageDocument> {
+    const page = await createUntrackedPageWithoutRevision(path);
+    const revision = await Revision.create({ page: page._id, path, body, format: 'markdown', author: user._id });
+    await Page.updateOne({ _id: page._id }, { $set: { revision: revision._id } });
+    return (await Page.findById(page._id)) as PageDocument;
+  }
+
+  /**
+   * An untracked page with no revision pointer at all — the first of the
+   * three non-promoting paths `commands/rename.ts:120`'s `freshRevision !=
+   * null` check exists for. The shared raw-insert base for the sibling
+   * fixtures above and below, which each add a revision on top of it.
+   * `status` is written explicitly: the schema default only fills a
+   * HYDRATED document's gap, but `enterTransition`'s CAS pins the literal
+   * `status` value (`transition.ts:155`), so a raw doc missing it can never
+   * enter a transition at all — unrelated to the promotion logic these
+   * fixtures exist to isolate.
+   */
+  async function createUntrackedPageWithoutRevision(path: string): Promise<PageDocument> {
     const insertResult = await Page.collection.insertOne({
       path,
       status: STATUS_PUBLISHED,
@@ -79,10 +94,22 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const pageId = insertResult.insertedId;
-    const revision = await Revision.create({ page: pageId, path, body, format: 'markdown', author: user._id });
-    await Page.updateOne({ _id: pageId }, { $set: { revision: revision._id } });
-    return (await Page.findById(pageId)) as PageDocument;
+    return (await Page.findById(insertResult.insertedId)) as PageDocument;
+  }
+
+  /**
+   * An untracked page whose revision pointer references a Revision missing
+   * its own `page` field (orphan) — the second non-promoting path
+   * (`commands/rename.ts:128`'s ownership check, `Revision.exists({_id,
+   * page})`, never matches). A foreign-owned Revision fails the same check
+   * the same way; orphan needs no second page to set it up.
+   */
+  async function createUntrackedPageWithOrphanRevision(path: string, body = 'v0'): Promise<PageDocument> {
+    const page = await createUntrackedPageWithoutRevision(path);
+    const revision = await Revision.create({ page: page._id, path, body, format: 'markdown', author: user._id });
+    await Revision.updateOne({ _id: revision._id }, { $unset: { page: '' } });
+    await Page.updateOne({ _id: page._id }, { $set: { revision: revision._id } });
+    return (await Page.findById(page._id)) as PageDocument;
   }
 
   const run = (page: PageDocument, toPath: string, idempotencyKey = nextKey()) =>
@@ -1468,6 +1495,280 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
       const events = await PageHistoryEvent.find({ page: child._id, kind: 'page_renamed' }).lean();
       expect(events).toHaveLength(1);
       expect(events[0].sequence).toBe(2);
+    });
+  });
+
+  describe('feature-subtree-rename-no-event-member: subtree members that never produce a page_renamed event', () => {
+    test('settles a revision-less member from the untracked projection instead of reporting a partial failure', async () => {
+      const root = await createReadyPage('/subtree/no-event-member/no-pointer');
+      const child = await createUntrackedPageWithoutRevision('/subtree/no-event-member/no-pointer/child');
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, child],
+        toPath: '/subtree/no-event-member/no-pointer-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: nextKey(),
+        requestFingerprint: `fingerprint-${String(root._id)}-no-pointer`,
+        createRedirectPage: false,
+      });
+
+      expect(outcome.status).toBe('completed');
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+
+      const reloadedChild = await Page.findById(child._id).lean();
+      expect(reloadedChild).toMatchObject({ path: '/subtree/no-event-member/no-pointer-moved/child' });
+      expect(reloadedChild?.historyTracking?.state ?? 'untracked').toBe('untracked');
+      expect(reloadedChild?.pendingHistoryEntry ?? null).toBeNull();
+      expect(await PageHistoryEvent.countDocuments({ page: child._id })).toBe(0);
+    });
+
+    test('settles a member whose revision pointer fails the ownership check', async () => {
+      const root = await createReadyPage('/subtree/no-event-member/ownership-check');
+      const child = await createUntrackedPageWithOrphanRevision('/subtree/no-event-member/ownership-check/child');
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, child],
+        toPath: '/subtree/no-event-member/ownership-check-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: nextKey(),
+        requestFingerprint: `fingerprint-${String(root._id)}-ownership-check`,
+        createRedirectPage: false,
+      });
+
+      expect(outcome.status).toBe('completed');
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+
+      const reloadedChild = await Page.findById(child._id).lean();
+      expect(reloadedChild).toMatchObject({ path: '/subtree/no-event-member/ownership-check-moved/child' });
+      expect(reloadedChild?.historyTracking?.state ?? 'untracked').toBe('untracked');
+      expect(await PageHistoryEvent.countDocuments({ page: child._id })).toBe(0);
+    });
+
+    test('terminates both the no-event member and its root as succeeded', async () => {
+      const root = await createReadyPage('/subtree/no-event-member/terminates');
+      const child = await createUntrackedPageWithoutRevision('/subtree/no-event-member/terminates/child');
+      const key = nextKey();
+
+      await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, child],
+        toPath: '/subtree/no-event-member/terminates-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: key,
+        requestFingerprint: `fingerprint-${String(root._id)}-terminates`,
+        createRedirectPage: false,
+      });
+
+      const childMember = await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: child._id }).lean();
+      const rootMember = await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: root._id }).lean();
+      const rootOperation = await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean();
+
+      expect(childMember?.result?.status).toBe('succeeded');
+      expect(rootMember?.result?.status).toBe('succeeded');
+      expect(rootOperation?.result?.status).toBe('succeeded');
+    });
+
+    test('terminates every member of a subtree that mixes no-event and tracked pages', async () => {
+      const root = await createReadyPage('/subtree/no-event-member/mixed');
+      const trackedChild = await createReadyPage('/subtree/no-event-member/mixed/tracked-child');
+      const noEventChild = await createUntrackedPageWithoutRevision('/subtree/no-event-member/mixed/no-event-child');
+      const key = nextKey();
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, trackedChild, noEventChild],
+        toPath: '/subtree/no-event-member/mixed-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: key,
+        requestFingerprint: `fingerprint-${String(root._id)}-mixed`,
+        createRedirectPage: false,
+      });
+
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+      const memberKeys = [root._id, trackedChild._id, noEventChild._id].map((pageId) => deriveMemberKey(key, pageId));
+      const members = await PageHistoryOperation.find({ command: 'subtree_rename_member', idempotencyKey: { $in: memberKeys } }).lean();
+      expect(members).toHaveLength(3);
+      for (const member of members) expect(member.result?.status).toBe('succeeded');
+      expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean())?.result?.status).toBe('succeeded');
+      expect(await PageHistoryEvent.countDocuments({ page: trackedChild._id, kind: 'page_renamed' })).toBe(1);
+      expect(await PageHistoryEvent.countDocuments({ page: noEventChild._id })).toBe(0);
+    });
+
+    test('still settles an event-producing member through the existing evidence path', async () => {
+      const root = await createReadyPage('/subtree/no-event-member/tracked-regression');
+      const child = await createReadyPage('/subtree/no-event-member/tracked-regression/child');
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, child],
+        toPath: '/subtree/no-event-member/tracked-regression-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: nextKey(),
+        requestFingerprint: `fingerprint-${String(root._id)}-tracked-regression`,
+        createRedirectPage: false,
+      });
+
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([]);
+      const events = await PageHistoryEvent.find({ page: child._id, kind: 'page_renamed' }).lean();
+      expect(events).toHaveLength(1);
+      expect((await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: child._id }).lean())?.result?.status).toBe('succeeded');
+    });
+
+    test('refuses projection for a ready member without an event row', async () => {
+      const operation = {
+        page: new Types.ObjectId(),
+        operationId: 'unit-ready-member',
+        command: 'subtree_rename_member',
+        fromPath: '/subtree/no-event-member/unit/ready',
+        toPath: '/subtree/no-event-member/unit/ready-moved',
+        fromStatus: STATUS_PUBLISHED,
+        fromStatusPresent: true,
+        toStatus: STATUS_PUBLISHED,
+      } as never;
+      const page = {
+        path: '/subtree/no-event-member/unit/ready-moved',
+        status: STATUS_PUBLISHED,
+        historyTransition: null,
+        historyTracking: { state: 'ready' as const },
+        pendingHistoryEntry: null,
+      };
+
+      expect(await hasOperationCompletionEvidence(crowi, operation, { eventOperationId: 'unit-ready-event-op', page })).toBe(false);
+    });
+
+    test('accepts projection for an untracked member only when the page is at toPath with its transition released', async () => {
+      const operation = {
+        page: new Types.ObjectId(),
+        operationId: 'unit-untracked-member',
+        command: 'subtree_rename_member',
+        fromPath: '/subtree/no-event-member/unit/untracked',
+        toPath: '/subtree/no-event-member/unit/untracked-moved',
+        fromStatus: STATUS_PUBLISHED,
+        fromStatusPresent: true,
+        toStatus: STATUS_PUBLISHED,
+      } as never;
+      const eventOperationId = 'unit-untracked-event-op';
+      const atDestinationReleased = {
+        path: '/subtree/no-event-member/unit/untracked-moved',
+        status: STATUS_PUBLISHED,
+        historyTransition: null,
+        historyTracking: null,
+        pendingHistoryEntry: null,
+      };
+
+      expect(await hasOperationCompletionEvidence(crowi, operation, { eventOperationId, page: atDestinationReleased })).toBe(true);
+
+      const heldByAnotherOperation = { ...atDestinationReleased, historyTransition: { operationId: 'unit-other-operation', kind: 'rename' } };
+      expect(await hasOperationCompletionEvidence(crowi, operation, { eventOperationId, page: heldByAnotherOperation })).toBe(false);
+
+      const stillAtOrigin = { ...atDestinationReleased, path: '/subtree/no-event-member/unit/untracked' };
+      expect(await hasOperationCompletionEvidence(crowi, operation, { eventOperationId, page: stillAtOrigin })).toBe(false);
+    });
+
+    test('keeps reporting failure for a member the subtree move could not carry, even on an untracked page', async () => {
+      const root = await createReadyPage('/subtree/no-event-member/immovable');
+      const strandedChild = await createUntrackedPageWithoutRevision('/subtree/elsewhere/no-event-member-child');
+
+      const outcome = await subtreeRenameCommand(crowi, {
+        page: root,
+        pageId: root._id,
+        memberPages: [root, strandedChild],
+        toPath: '/subtree/no-event-member/immovable-moved',
+        actor: user._id,
+        user,
+        source: 'web',
+        idempotencyKey: nextKey(),
+        requestFingerprint: `fingerprint-${String(root._id)}-immovable`,
+        createRedirectPage: false,
+      });
+
+      expect(outcome.status).toBe('completed');
+      expect(outcome.status === 'completed' && outcome.failures).toEqual([
+        { oldPath: strandedChild.path, error: `Failed to update page (${strandedChild.path}).` },
+      ]);
+
+      const reloadedStranded = await Page.findById(strandedChild._id).lean();
+      expect(reloadedStranded?.path).toBe(strandedChild.path);
+
+      const memberOperation = await PageHistoryOperation.findOne({ command: 'subtree_rename_member', page: strandedChild._id }).lean();
+      expect(memberOperation?.fromPath).toBe(memberOperation?.toPath);
+      expect(memberOperation?.result).toBeNull();
+    });
+
+    test('settles a no-event member from a replay, from the resumer, and from the repair sweep', async () => {
+      // already-settled redelivery: the move landed (page at destination,
+      // transition released) but the prior delivery never reached
+      // `completeOperation` — a resend must settle it from the same
+      // projection, not attempt to move an already-moved page again.
+      {
+        const root = await createReadyPage('/subtree/no-event-member/replay');
+        const child = await createUntrackedPageWithoutRevision('/subtree/no-event-member/replay/child');
+        const destination = '/subtree/no-event-member/replay-moved';
+        const key = nextKey();
+        const { childDestination, childMember } = await createSealedSubtreeState(root, child, destination, key);
+        await Page.updateOne({ _id: child._id }, { $set: { path: childDestination } });
+
+        await run(root, destination, key);
+
+        expect((await PageHistoryOperation.findById(childMember._id).lean())?.result?.status).toBe('succeeded');
+        expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean())?.result?.status).toBe('succeeded');
+      }
+
+      // resumeSubtreeMemberCommand: a prior delivery crashed between the
+      // enter and exit CAS, so the page is mid-transition, still owned by
+      // this member's operationId.
+      {
+        const root = await createReadyPage('/subtree/no-event-member/resume');
+        const child = await createUntrackedPageWithoutRevision('/subtree/no-event-member/resume/child');
+        const destination = '/subtree/no-event-member/resume-moved';
+        const key = nextKey();
+        const { childDestination, childMember } = await createSealedSubtreeState(root, child, destination, key);
+        await Page.updateOne(
+          { _id: child._id },
+          { $set: { path: childDestination, status: STATUS_RENAMING, historyTransition: { operationId: childMember.operationId, kind: 'rename' } } },
+        );
+
+        expect(await resumeSubtreeMemberCommand(crowi, childMember)).toBe('resumed');
+
+        expect((await PageHistoryOperation.findById(childMember._id).lean())?.result?.status).toBe('succeeded');
+        expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean())?.result?.status).toBe('succeeded');
+      }
+
+      // repair sweep: same stranded-mid-transition shape as above, but
+      // found and finished by the operator sweep instead of a live request.
+      {
+        const root = await createReadyPage('/subtree/no-event-member/sweep');
+        const child = await createUntrackedPageWithoutRevision('/subtree/no-event-member/sweep/child');
+        const destination = '/subtree/no-event-member/sweep-moved';
+        const key = nextKey();
+        const { childDestination, childMember } = await createSealedSubtreeState(root, child, destination, key);
+        await Page.updateOne(
+          { _id: child._id },
+          { $set: { path: childDestination, status: STATUS_RENAMING, historyTransition: { operationId: childMember.operationId, kind: 'rename' } } },
+        );
+
+        await runPageHistoryRepair(crowi, { transitions: true, minAgeMs: 0 });
+
+        expect((await PageHistoryOperation.findById(childMember._id).lean())?.result?.status).toBe('succeeded');
+        expect((await PageHistoryOperation.findOne({ command: 'subtree_rename', idempotencyKey: key }).lean())?.result?.status).toBe('succeeded');
+      }
     });
   });
 });

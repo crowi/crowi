@@ -7,6 +7,10 @@ import crypto from 'node:crypto';
 import { timingSafeEqualStrings } from 'src/util/federated-auth-state';
 import { resolveSignedTokenSecret } from 'src/util/signed-token-factory';
 
+import { type ArtifactPolicyError, buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from './csp';
+import { ARTIFACT_FRAME_BRIDGE_DIGEST, ARTIFACT_NAVIGATION_GUARD_DIGEST, appendArtifactFrameBridge, insertArtifactNavigationGuard } from './frame-bridge';
+import type { ArtifactPolicySnapshot } from './policy';
+
 // Distinct info string prevents key collision with oauth-state HMAC,
 // allowing both to coexist from the same signing secret.
 export const ARTIFACT_TOKEN_HKDF_INFO = 'crowi:artifact-delivery-hmac:v1';
@@ -166,4 +170,25 @@ export function artifactDownloadFilename(path: string): string {
   const segments = path.split('/');
   const last = segments[segments.length - 1];
   return `${last.length > 0 ? last : 'artifact'}.html`;
+}
+
+export type ArtifactDeliveryResult = { readonly ok: true; readonly body: string; readonly header: string } | ArtifactPolicyError;
+
+/**
+ * The served body and the `Content-Security-Policy` that authorises it, built
+ * together so the policy names exactly the scripts the body carries: the
+ * stored document's own, the navigation guard placed right before `</head>`
+ * (so every link the stored body declares is parsed after it), and the frame
+ * bridge appended after the document.
+ */
+export function prepareArtifactDelivery(storedBody: string, snapshot: ArtifactPolicySnapshot): ArtifactDeliveryResult {
+  const markersResult = extractArtifactDigestMarkers(storedBody);
+  if (!markersResult.ok) return markersResult;
+  const { scriptDigests, styleDigests } = markersResult.markers;
+  const ownDigests = `${ARTIFACT_NAVIGATION_GUARD_DIGEST} ${ARTIFACT_FRAME_BRIDGE_DIGEST}`;
+  const servedScriptDigests = scriptDigests === '' ? ownDigests : `${ownDigests} ${scriptDigests}`;
+  const cspResult = buildArtifactContentSecurityPolicy({ scriptDigests: servedScriptDigests, styleDigests }, snapshot);
+  if (!cspResult.ok) return cspResult;
+  const guarded = insertArtifactNavigationGuard(storedBody, markersResult.headCloseIndex);
+  return { ok: true, body: appendArtifactFrameBridge(guarded), header: cspResult.header };
 }

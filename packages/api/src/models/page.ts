@@ -1,22 +1,17 @@
 import type { PageContentType, PageUser } from '@crowi/api-contract';
+import { RESERVED_TOP_LEVEL_NAMES, USER_TAB_NAMES } from '@crowi/api-contract';
 import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
+import { ArtifactInternalError } from 'src/artifact/ingest';
 import Crowi from 'src/crowi';
+import { type ArtifactPreWriteAccepted, getRawRevisionPointer, PageContentTypeConflictError, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
 import { changePageVisibility } from 'src/service/page-history/commands/visibility';
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { deletePageWithMode, PageCleanupIncompleteError, type PageDeletionInput } from 'src/service/page-history/deletion';
-import { escapeRegExp } from 'src/util/regex';
 import { mapWithConcurrency, RENAME_TREE_CONCURRENCY } from 'src/util/map-with-concurrency';
+import { escapeRegExp } from 'src/util/regex';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
-import {
-  PAGE_HISTORY_EVENT_KINDS,
-  PAGE_HISTORY_EVENT_SOURCES,
-  type PageHistoryEventKind,
-  type PageHistoryEventSource,
-  type PageHistoryPayloadByKind,
-  pageHistoryEventPayloadSchema,
-} from './page-history-event';
 // Split into their own leaf module (feature-page-history-phase1-model) so
 // `page-history-event.ts` can depend on `GRANTS` without a page.ts <->
 // page-history-event.ts import cycle — see `page-grants.ts`'s doc comment
@@ -25,11 +20,18 @@ import {
 // this file's own use) AND re-exported below unchanged, so every existing
 // `from 'src/models/page'` import site keeps working.
 import { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR } from './page-grants';
+import {
+  PAGE_HISTORY_EVENT_KINDS,
+  PAGE_HISTORY_EVENT_SOURCES,
+  type PageHistoryEventKind,
+  type PageHistoryEventSource,
+  type PageHistoryPayloadByKind,
+  pageHistoryEventPayloadSchema,
+} from './page-history-event';
 import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
-export { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR };
-export { PageCleanupIncompleteError };
+export { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR, PageCleanupIncompleteError };
 
 export const STATUS_WIP = 'wip';
 export const STATUS_PUBLISHED = 'published';
@@ -325,6 +327,18 @@ export interface PushRevisionOptions {
    * `undefined`). See `migration/runner.ts` `rewritePageBody`.
    */
   preserveTimestamps?: boolean;
+  /**
+   * The handler's artifact pre-write success value. An artifact Revision is
+   * only accepted together with it (and a body equal to the stored one); the
+   * model never runs ingest itself.
+   */
+  artifactPreWrite?: ArtifactPreWriteAccepted;
+  /**
+   * External body write: on success also point `currentRevision` at the new
+   * Revision, drop the persisted Yjs checkpoint and advance the collab epoch
+   * in the same `pageData.save()`. Set by `updatePage`; a direct push omits it.
+   */
+  replaceCollabState?: boolean;
 }
 
 /** Options for `Page.updatePage` (4th arg). */
@@ -332,39 +346,27 @@ export interface UpdatePageOptions extends PushRevisionOptions {
   grant?: number;
   editVia?: string;
   /**
-   * RFC-0020 §1 — explicit body content discriminator for the new
-   * Revision. Omit to keep the current kind (pointer exists) or default
-   * to `'markdown'` (no pointer yet). See `Revision.prepareRevision`'s
-   * pointer-aware resolution and `Page.pushRevision`'s mismatch check.
+   * RFC-0020 §1 — declared body kind for the new Revision. Omit to keep the
+   * current Revision's kind (`'markdown'` for a pointerless Page). A
+   * Markdown-only writer declares `'markdown'` so an artifact Page is
+   * rejected instead of inherited.
    */
   contentType?: PageContentType;
 }
 
-/**
- * RFC-0020 §1 — thrown by `Page.pushRevision` when a pointer-bearing Page
- * (one whose kind is already settled) is asked to accept a new Revision of
- * a DIFFERENT kind. This is not a variant/conversion mechanism: the kind
- * mismatch is rejected outright, before the new Revision is persisted, so
- * a Page can never silently flip between Markdown and artifact in place.
- * Pointerless Pages have no settled kind and are never subject to this
- * check (see the pointer-aware resolution in `Revision.prepareRevision`).
- *
- * Mirrors `PageCleanupIncompleteError` (`service/page-history/deletion.ts`):
- * a fixed, closed message with no body/path/kind detail, so nothing about
- * the conflicting content ever reaches an operator log or HTTP response.
- */
-export class PageContentTypeConflictError extends Error {
-  readonly pageId: string;
-
-  constructor(pageId: Types.ObjectId, options?: { cause?: unknown }) {
-    super(`page content type conflict for page ${pageId}`);
-    this.name = 'PageContentTypeConflictError';
-    this.pageId = String(pageId);
-    if (options?.cause !== undefined) {
-      this.cause = options.cause;
-    }
-  }
+/** Options for `Page.createPage` (4th arg). */
+export interface CreatePageOptions {
+  format?: string;
+  grant?: number;
+  redirectTo?: string | null;
+  allowNonExistentUserPage?: boolean;
+  editVia?: string;
+  /** New pages default to `'markdown'`; Markdown-only writers declare it explicitly. */
+  contentType?: PageContentType;
+  artifactPreWrite?: ArtifactPreWriteAccepted;
 }
+
+export { PageContentTypeConflictError };
 
 export interface PageModel extends Model<PageDocument> {
   GRANT_PUBLIC: number;
@@ -465,7 +467,7 @@ export interface PageModel extends Model<PageDocument> {
   updateGrant(page, grant, userData, options?: { source?: string }): any;
   pushToGrantedUsers(page, userData): any;
   pushRevision(pageData, newRevision, user, options?: PushRevisionOptions): any;
-  createPage(path, body, user, options): any;
+  createPage(path, body, user, options: CreatePageOptions): any;
   updatePage(pageData: PageDocument, body, user, options: UpdatePageOptions): any;
   deletePage(pageData: PageDocument, user): any;
   revertDeletedPage(pageData: PageDocument, user): Promise<PageDocument>;
@@ -1224,13 +1226,13 @@ export default (crowi: Crowi) => {
       /^\/-\/.*/,
       /^\/_r\/.*/,
       /^\/user\/?$/, // `/user` and `/user/` are the member directory — no portal/page here
-      /^\/user\/[^/]+\/(bookmarks|comments|activities|pages|recent-create|recent-edit)/, // reserved
+      new RegExp(`^/user/[^/]+/(${USER_TAB_NAMES.join('|')})`), // reserved
       /^\/?https?:\/\/.+$/, // avoid miss in renaming
       /\/{2,}/, // avoid miss in renaming
       /\s+\/\s+/, // avoid miss in renaming
       /.+\/edit$/,
       /.+\.md$/,
-      /^\/(installer|register|login|logout|admin|me|files|trash|paste|comments|api)(\/.*|$)/, // `api` is the reverse-proxied backend namespace
+      new RegExp(`^/(${RESERVED_TOP_LEVEL_NAMES.join('|')})(/.*|$)`), // `api` is the reverse-proxied backend namespace
     ];
 
     let isCreatable = true;
@@ -2067,29 +2069,58 @@ export default (crowi: Crowi) => {
       debug('pushRevision on Create');
     }
 
-    // RFC-0020 §1 — the LAST chokepoint every content writer funnels
-    // through before a new Revision becomes durable, so no path (including a
-    // direct `pushRevision` call that bypasses `Page.updatePage`'s own
-    // earlier check below) can persist a mismatched Revision. A pointerless
-    // Page (`pageData.revision == null`) has no settled kind yet — its first
-    // Revision is accepted unconditionally (see `PageContentTypeConflictError`'s
-    // doc comment).
-    if (pageData.revision != null) {
-      const currentContentType: PageContentType = pageData.contentType ?? 'markdown';
-      const newContentType: PageContentType = newRevision.contentType ?? 'markdown';
-      if (newContentType !== currentContentType) {
-        throw new PageContentTypeConflictError(pageData._id);
-      }
+    // RFC-0020 §1 — the LAST chokepoint every content writer funnels through
+    // before a new Revision becomes durable, so no path (including a direct
+    // `pushRevision` call that bypasses `Page.updatePage`) can persist a
+    // mismatched or unproven Revision. The kind is the CURRENT Revision's
+    // (never the Page hint); a pointerless Page has no settled kind yet.
+    if (!newRevision.isNew || newRevision.page == null || !newRevision.page.equals(pageData._id)) {
+      throw new ArtifactInternalError('pushRevision: the Revision is not an unsaved Revision of this Page');
     }
+    const rawPointer = getRawRevisionPointer(pageData);
+    const current = await resolveCurrentPageBodyKind(crowi, pageData, rawPointer);
+    const declaredContentType: PageContentType | undefined = newRevision.contentType ?? undefined;
+    if (rawPointer != null && declaredContentType !== undefined && declaredContentType !== current.contentType) {
+      throw new PageContentTypeConflictError(pageData._id);
+    }
+    const resolvedContentType: PageContentType = declaredContentType ?? current.contentType;
+    if (resolvedContentType === 'artifact') {
+      if (options.artifactPreWrite?.ok !== true || options.artifactPreWrite.body !== newRevision.body) {
+        throw new ArtifactInternalError('pushRevision: an artifact body requires a matching pre-write success value');
+      }
+      if (newRevision.yjsUpdate != null) {
+        throw new ArtifactInternalError('pushRevision: an artifact Revision cannot carry a Yjs update');
+      }
+      newRevision.renderedAst = undefined;
+      newRevision.rendererVersion = undefined;
+      newRevision.meta = undefined;
+    }
+    newRevision.contentType = resolvedContentType;
 
     await newRevision.save();
 
-    debug('Successfully saved new revision', newRevision);
+    debug('Successfully saved new revision', String(newRevision._id));
 
     pageData.revision = newRevision;
+    if (options.replaceCollabState) {
+      // This is the external (REST / API) edit path — it bypasses the
+      // collaborative editor. Per RFC-0003 §"Server-side direct Markdown
+      // edits", a direct body write MUST drop the persisted Y.Doc snapshot so
+      // the next `onLoadDocument` rebuilds a fresh doc from this revision
+      // instead of restoring the pre-edit `yjsState`. Re-pointing
+      // `currentRevision` makes that rebuild (`currentRevision ?? revision`)
+      // seed from the new body. The epoch advance is folded into the SAME
+      // read-modify-write as the pointer (RFC-0017 Phase 1 §D1); the
+      // independent `{ _id, currentRevision }` CAS in `executeSave` backstops
+      // its theoretical lost-update window.
+      pageData.currentRevision = newRevision;
+      pageData.yjsState = null;
+      pageData.yjsCheckpointAt = null;
+      pageData.collabLifecycleVersion = (pageData.collabLifecycleVersion ?? 0) + 1;
+    }
     // RFC-0020 §1 — the list-view hint is co-written in the SAME
     // `pageData.save()` below as the pointer, never a separate write.
-    pageData.contentType = newRevision.contentType ?? 'markdown';
+    pageData.contentType = resolvedContentType;
     // preserveTimestamps (body-rewrite migrations): keep the page's existing
     // lastUpdateUser / updatedAt so an `apply` neither bumps the page to the
     // top of recently-updated lists nor rewrites "last updated by" to the
@@ -2162,13 +2193,19 @@ export default (crowi: Crowi) => {
       grantedUsers: user ? [user] : [],
     });
 
-    const newRevision = await Revision.prepareRevision(newPage, body, user, { format, editVia: options.editVia, contentType: options.contentType });
+    const newRevision = await Revision.prepareRevision(newPage, body, user, {
+      format,
+      editVia: options.editVia,
+      contentType: options.contentType,
+      artifactPreWrite: options.artifactPreWrite,
+    });
     try {
-      const revisionData = await Page.pushRevision(newPage, newRevision, user);
+      const revisionData = await Page.pushRevision(newPage, newRevision, user, { artifactPreWrite: options.artifactPreWrite });
       pageEvent.emit('create', revisionData, user);
       return revisionData;
     } catch (err) {
-      debug('Push Revision Error on create page', err);
+      // Fixed text + ids only: the caught error may carry the author's input.
+      debug('Push Revision Error on create page', { pageId: String(newPage._id), revisionId: String(newRevision._id) });
       throw err;
     }
   };
@@ -2186,50 +2223,22 @@ export default (crowi: Crowi) => {
     // explicit grant change working while making "no grant option" mean "keep".
     const grant = options.grant ?? pageData.grant;
     // update existing page
-    // RFC-0020 §1 — reject a pointer-bearing kind mismatch BEFORE
-    // `prepareRevision` runs, not just before `pushRevision` persists it.
-    // Otherwise a requested kind that differs from the current pointer's
-    // kind would still drive the caller's bytes through `prepareRevision`'s
-    // Markdown branch (full renderer / metadata / AST-budget pipeline) only
-    // to be rejected afterward — the artifact-never-reaches-the-renderer
-    // guarantee has to hold at the point of entry, not just at the point of
-    // write. A pointerless Page has no settled kind to compare against, so
-    // this is skipped and `prepareRevision` resolves the first kind itself.
-    // `pushRevision`'s own check (below, inside it) still re-confirms this
-    // right before the Revision document is saved — that's the backstop for
-    // callers that push a Revision directly, bypassing this method.
-    if (pageData.revision != null && options.contentType != null) {
-      const currentContentType: PageContentType = pageData.contentType ?? 'markdown';
-      if (options.contentType !== currentContentType) {
-        throw new PageContentTypeConflictError(pageData._id);
-      }
-    }
-    const newRevision = await Revision.prepareRevision(pageData, body, user, { editVia: options.editVia, contentType: options.contentType });
+    // RFC-0020 §1 — `prepareRevision` resolves the current Revision's kind and
+    // rejects a mismatched declaration before the renderer runs; `pushRevision`
+    // re-confirms it right before the Revision becomes durable. An external
+    // write moves `currentRevision`, clears the Yjs checkpoint and advances the
+    // collab epoch only once both checks passed (`replaceCollabState`).
+    const newRevision = await Revision.prepareRevision(pageData, body, user, {
+      editVia: options.editVia,
+      contentType: options.contentType,
+      artifactPreWrite: options.artifactPreWrite,
+    });
 
-    // This is the external (REST / API) edit path — it bypasses the
-    // collaborative editor. Per RFC-0003 §"Server-side direct Markdown
-    // edits", a direct body write MUST drop the persisted Y.Doc snapshot so
-    // the next `onLoadDocument` rebuilds a fresh doc from this revision
-    // instead of restoring the pre-edit `yjsState` (which would show stale
-    // content in the editor and, on its next autosave, silently revert this
-    // edit). Re-point `currentRevision` to the new revision so that rebuild
-    // (`currentRevision ?? revision`) seeds from the new body. The collab
-    // save flow manages these fields itself and never routes through
-    // `updatePage`, so this only affects external writes.
-    pageData.currentRevision = newRevision;
-    pageData.yjsState = null;
-    pageData.yjsCheckpointAt = null;
-    // RFC-0017 Phase 1 §D1 — `pushRevision` persists via `pageData.save()`
-    // (not an atomic `updateOne`), so the epoch advance is folded into the
-    // SAME read-modify-write instead of a separate `$inc`. This has a
-    // theoretical lost-update window (a concurrent save() on the same
-    // in-memory `pageData` could race), but the independent `{ _id,
-    // currentRevision }` CAS in `executeSave` backstops it — this write
-    // already moves `currentRevision`, so a stale collab doc is rejected by
-    // that CAS regardless of whether this particular epoch increment lands.
-    pageData.collabLifecycleVersion = (pageData.collabLifecycleVersion ?? 0) + 1;
-
-    await Page.pushRevision(pageData, newRevision, user, { preserveTimestamps: options.preserveTimestamps });
+    await Page.pushRevision(pageData, newRevision, user, {
+      preserveTimestamps: options.preserveTimestamps,
+      artifactPreWrite: options.artifactPreWrite,
+      replaceCollabState: true,
+    });
 
     // feature-editor-preview-reliability (High, G1) — an external body write
     // abandons the persisted collab lineage (yjsState nulled above). The
@@ -2541,6 +2550,7 @@ export default (crowi: Crowi) => {
       return Page.createPage(path, body, user, {
         redirectTo: newPagePath,
         allowNonExistentUserPage: true,
+        contentType: 'markdown',
       });
     }
     pageEvent.emit('update', pageData, user); // update as renamed page

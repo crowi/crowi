@@ -2,9 +2,9 @@ import { expect, type Page } from '@playwright/test';
 
 /**
  * Page object for the collaborative editor at `/_edit?page_id=<id>`. The
- * CodeMirror surface is `.cm-content`; readiness is gated on it becoming
- * contenteditable (the collab session reached `synced` and mounted the
- * editor) so typing isn't lost against a pre-sync doc.
+ * CodeMirror surface is `.cm-content`; readiness is gated on it no longer
+ * being read-only (the collab session reached `synced` and mounted the
+ * writable editor) so typing isn't lost against a pre-sync doc.
  */
 export class EditorPage {
   constructor(private readonly page: Page) {}
@@ -21,10 +21,23 @@ export class EditorPage {
     await this.waitUntilEditable();
   }
 
+  /**
+   * Resolves once the editor accepts input. `contenteditable` alone is not
+   * that signal: the editor mounts before the collab session's first sync
+   * with `EditorState.readOnly` on, and CodeMirror keeps `contenteditable`
+   * at `"true"` under `readOnly` (it only sets `aria-readonly="true"` and
+   * drops DOM edits). Waiting on `contenteditable` therefore returned on the
+   * empty pre-sync editor, and everything typed before SyncStep2 landed was
+   * silently discarded — which made every collab assertion downstream a race
+   * against the WebSocket handshake. `aria-readonly` is the attribute that
+   * actually tracks writability.
+   *
+   * A positive selector, not a negated assertion: the writable editor is a
+   * fresh mount that replaces the pre-sync one, and a negated attribute
+   * assertion would also pass in the gap where no `.cm-content` exists yet.
+   */
   async waitUntilEditable(): Promise<void> {
-    const content = this.content();
-    await content.waitFor({ state: 'visible', timeout: 30_000 });
-    await expect(content).toHaveAttribute('contenteditable', 'true', { timeout: 30_000 });
+    await this.page.locator('.cm-content[contenteditable="true"]:not([aria-readonly="true"])').first().waitFor({ state: 'visible', timeout: 30_000 });
   }
 
   async appendText(text: string): Promise<void> {
@@ -32,6 +45,9 @@ export class EditorPage {
     await content.click();
     await this.page.keyboard.press('End');
     await this.page.keyboard.type(text);
+    // Fail here, at the step that lost the text, rather than in whichever
+    // later assertion happens to depend on it.
+    await expect(content).toContainText(text.trim());
   }
 
   async waitForText(text: string): Promise<void> {

@@ -13,6 +13,7 @@ import { apiClient } from '@/lib/api-client';
 import { errorMessage } from '@/lib/error-message';
 import { useAppInfo } from '@/lib/use-app-info';
 import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
 
 export function RegisterForm() {
   // Public UX hint: when self-service registration is closed (invite-only)
@@ -54,6 +55,7 @@ export function RegisterForm() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
+          lang: getLocale(),
         },
       });
 

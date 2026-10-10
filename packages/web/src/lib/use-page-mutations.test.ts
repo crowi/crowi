@@ -1,16 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { overwriteGetLocale } from '@paraglide/runtime.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type PropsWithChildren } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock `apiClient` so every mutation call hits our fake instead of the
 // network. Each mutation owns its own dedicated fn so a test only needs to
 // configure the endpoint(s) it exercises.
-const { putPage, putGrant, deletePage, revertPage, renamePage, renameSubtree } = vi.hoisted(() => ({
+const { putPage, putGrant, deletePage, revertPage, revertToRevision, renamePage, renameSubtree } = vi.hoisted(() => ({
   putPage: vi.fn(),
   putGrant: vi.fn(),
   deletePage: vi.fn(),
   revertPage: vi.fn(),
+  revertToRevision: vi.fn(),
   renamePage: vi.fn(),
   renameSubtree: vi.fn(),
 }));
@@ -21,12 +23,15 @@ vi.mock('./api-client', () => ({
       $delete: deletePage,
       grant: { $put: putGrant },
       revert: { $post: revertPage },
+      'revert-to-revision': { $post: revertToRevision },
       rename: { $post: renamePage },
       'rename-subtree': { $post: renameSubtree },
     },
   },
 }));
 
+import { PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
+import { draftsKeys } from './use-drafts';
 import {
   invalidatePageContentQueries,
   PageRevisionConflictError,
@@ -34,17 +39,17 @@ import {
   useRenamePage,
   useRenameSubtree,
   useRevertDeletedPage,
+  useRevertToRevision,
   useSetPageGrant,
   useUpdatePage,
 } from './use-page-mutations';
-import { PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
-import { draftsKeys } from './use-drafts';
 
 beforeEach(() => {
   putPage.mockReset();
   putGrant.mockReset();
   deletePage.mockReset();
   revertPage.mockReset();
+  revertToRevision.mockReset();
   renamePage.mockReset();
   renameSubtree.mockReset();
 });
@@ -118,6 +123,31 @@ describe('useUpdatePage', () => {
     const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
     expect(keys).toContainEqual(pageKeys.all);
     expect(keys).toContainEqual(PAGE_LIST_FAMILY_ROOT);
+  });
+
+  it('AC-03: declares the Markdown body kind on every update, and the revert / grant mutations send no such header', async () => {
+    putPage.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/some-page/' } }) });
+    revertToRevision.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/some-page/' } }) });
+    putGrant.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/some-page/' } }) });
+    const { wrapper } = makeMutationContext();
+
+    const update = renderHook(() => useUpdatePage(), { wrapper });
+    await act(async () => {
+      await update.result.current.mutateAsync({ page_id: 'p1', body: '# updated' });
+    });
+    expect(putPage).toHaveBeenCalledWith({ json: { page_id: 'p1', body: '# updated' }, header: { 'x-crowi-page-content-type': 'markdown' } });
+
+    const revert = renderHook(() => useRevertToRevision(), { wrapper });
+    await act(async () => {
+      await revert.result.current.mutateAsync({ page_id: 'p1', revision_id: 'r1' });
+    });
+    expect(revertToRevision).toHaveBeenCalledWith({ json: { page_id: 'p1', revision_id: 'r1' } });
+
+    const grant = renderHook(() => useSetPageGrant(), { wrapper });
+    await act(async () => {
+      await grant.result.current.mutateAsync({ page_id: 'p1', grant: 1 });
+    });
+    expect(putGrant).toHaveBeenCalledWith({ json: { page_id: 'p1', grant: 1 } });
   });
 
   // feature-user-page-subpages-tab — `useUpdatePage` doubles as the `grant`
@@ -197,6 +227,76 @@ describe('useRevertDeletedPage — subpages invalidation (feature-user-page-subp
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
     expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
+  });
+});
+
+describe('useRevertToRevision — artifact rejection (AC-AAG-7, C-6)', () => {
+  const rejection = {
+    error: {
+      code: 'ARTIFACT_WRITE_REJECTED',
+      reason: 'EXTERNAL_REFERENCE',
+      ruleId: 'AI-R11',
+      diagnosticCode: 'PAGE_LINK_RESERVED_ROUTE',
+      message: 'fixed reserved-route guidance',
+      target: 'a[href]',
+    },
+  };
+
+  async function revertError(response: unknown): Promise<unknown> {
+    revertToRevision.mockResolvedValue(response);
+    const { wrapper } = makeMutationContext();
+    const { result } = renderHook(() => useRevertToRevision(), { wrapper });
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ page_id: 'p1', revision_id: 'r1' });
+      } catch (err) {
+        caught = err;
+      }
+    });
+    return caught;
+  }
+
+  it.each([
+    ['en', 'Use MCP or CLI to retrieve the revision body'],
+    ['ja', 'MCP または CLI でその版の本文を取得'],
+  ] as const)('keeps the fixed reason and the MCP / CLI recovery guidance (%s)', async (locale, recovery) => {
+    overwriteGetLocale(() => locale);
+    const caught = await revertError({ ok: false, status: 400, json: async () => rejection });
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect(message).toContain(recovery);
+    expect(message).toContain('fixed reserved-route guidance');
+    expect(message).not.toBe('Failed to restore the page.');
+  });
+
+  it('keeps the page-not-found message for a 404', async () => {
+    overwriteGetLocale(() => 'en');
+    const caught = await revertError({ ok: false, status: 404, json: async () => ({ error: { code: 'PAGE_NOT_FOUND', message: 'x' } }) });
+    expect((caught as Error).message).not.toContain('fixed');
+    expect((caught as Error).message).not.toContain('MCP');
+  });
+
+  it.each([
+    ['another 400 code', { ok: false, status: 400, json: async () => ({ error: { code: 'VALIDATION_ERROR', message: 'bad' } }) }],
+    ['an unreadable 400 body', { ok: false, status: 400, json: async () => Promise.reject(new Error('not json')) }],
+    ['a 500', { ok: false, status: 500, json: async () => rejection }],
+  ])('falls back to the generic revert failure for %s', async (_label, response) => {
+    overwriteGetLocale(() => 'en');
+    const caught = await revertError(response);
+    expect((caught as Error).message).toBe('Failed to restore the page.');
+  });
+
+  it('invalidates page, list and history caches on success', async () => {
+    revertToRevision.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/x' } }) });
+    const { invalidateSpy, wrapper } = makeMutationContext();
+    const { result } = renderHook(() => useRevertToRevision(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ page_id: 'p1', revision_id: 'r1' });
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageKeys.all)).toBe(true);
   });
 });
 

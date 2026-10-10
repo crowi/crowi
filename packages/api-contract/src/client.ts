@@ -591,7 +591,7 @@ const stubReencrypt: ReencryptResponse = { rewritten: 0, alreadyEncrypted: 0, mi
 const stubGetAppSettings: GetAppSettingsResponse = {
   app: { title: '', confidential: '' },
   isUploadable: false,
-  registrationMode: {},
+  registrationMode: 'Open',
   setupChecklistDismissed: false,
 };
 const stubUpdateAppSettings: UpdateAppSettingsResponse = { ok: true };

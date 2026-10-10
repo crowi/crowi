@@ -364,7 +364,16 @@ export interface UnsequencedRevisionScanResult {
 /** `migrationOwner` tag this repair path stamps on the outbox entries it claims — distinguishes its writes from a future Phase 2 migration worker's. */
 const REPAIR_MIGRATION_OWNER = 'repair:scanUnsequencedRevisions';
 
-/** Bounds the claim retry loop below — Phase 1 has no concurrent claimant, so this only guards against a pathological repeated CAS loss. */
+/**
+ * Bounds the claim retry loop below. Losing the CAS is the ordinary way this
+ * scan yields to a concurrent claimant of the same Page's slot — another
+ * repair scan, `allocateContentSequence`, or a page-event command — and
+ * draining a foreign occupant before retrying spends an attempt too. A lost
+ * attempt commits nothing, so giving up is always safe: the Revision is
+ * simply deferred (`null`) to a later scan. The bound exists so an operator-
+ * invoked scan finishes even on a Page under a steady stream of live writes
+ * instead of spinning against them.
+ */
 const MAX_CLAIM_ATTEMPTS = 3;
 
 /**
@@ -415,30 +424,24 @@ async function claimAndAssignSequence(crowi: Crowi, pageId: Types.ObjectId, revi
   const Revision = crowi.model('Revision');
 
   for (let attempt = 0; attempt < MAX_CLAIM_ATTEMPTS; attempt += 1) {
-    // Fresh re-check (codex review attempt 3, AC-6/7 parallel-scan race): a
-    // concurrent `scanUnsequencedRevisions` pass (another process, or an
-    // earlier iteration of THIS loop that helped drain someone else's
-    // occupied slot below) may have already assigned `revisionId` a
-    // sequence since it was enumerated in the caller's now-stale
-    // `missingRevisions` snapshot. Re-verify on EVERY attempt — not just
-    // the first — so this call never burns a `Page.historySequence`
-    // increment (or worse, leaves an unresolvable outbox collision that
-    // repair can't converge on) assigning to a Revision someone else
-    // already finished.
-    //
-    // `!= null` (codex review attempt 2, round 6, AC-7) — NOT `!==
-    // undefined` — because an explicit `historySequence: null` must be
-    // treated the SAME as the field being entirely absent (both mean
-    // "unsequenced"), matching `materialize.ts`'s `{ historySequence: null
-    // }` CAS filter (MongoDB's own equality rule for `null`). The prior
-    // `!== undefined` check treated an explicit `null` as "already
-    // assigned" and bailed out, silently leaving that Revision unsequenced
-    // forever.
-    const currentRevision = await Revision.findById(revisionId).select('historySequence').lean().exec();
-    if (currentRevision == null || currentRevision.historySequence != null) {
-      return null;
-    }
-
+    // The Page (allocator + outbox slot) is read BEFORE the Revision
+    // re-check below, and the order is load-bearing. The CAS further down
+    // only fences the Page: it proves no other claim committed between
+    // THIS read and the write, nothing about the Revision. Every writer
+    // that can ever sequence `revisionId` goes through that same slot —
+    // claim (bumping `historySequence`), materialize, drain — so a claim
+    // that finished sequencing it either committed before this read (then
+    // its drain also preceded this read, since the slot must be empty for
+    // us to proceed, and the re-check below sees the assigned value) or
+    // would have to commit after our CAS (impossible while our entry
+    // occupies the slot). Re-checking the Revision first and reading the
+    // Page second leaves a gap between the two reads in which a concurrent
+    // scan can run its whole cycle: the re-check still says "unsequenced",
+    // the Page read then sees the advanced counter and an empty slot, and
+    // the CAS succeeds against a Revision that is already sequenced. That
+    // entry can never materialize (`materializePendingEntry`'s
+    // `historySequence: null` filter never matches again), so the outbox
+    // stays jammed and one allocator increment is burned.
     const current = await Page.findById(pageId).select('historySequence pendingHistoryEntry').exec();
     if (current == null) {
       return null;
@@ -448,6 +451,23 @@ async function claimAndAssignSequence(crowi: Crowi, pageId: Types.ObjectId, revi
       // normal materializer, then retry the read on the next loop turn.
       await materializePendingEntry(crowi, pageId);
       continue;
+    }
+
+    // Fresh re-check on EVERY attempt — not just the first: a concurrent
+    // `scanUnsequencedRevisions` pass (another process, or an earlier
+    // iteration of THIS loop that helped drain someone else's occupied slot
+    // above) may have already assigned `revisionId` a sequence since it was
+    // enumerated in the caller's now-stale `missingRevisions` snapshot.
+    //
+    // `!= null` — NOT `!== undefined` — because an explicit
+    // `historySequence: null` must be treated the SAME as the field being
+    // entirely absent (both mean "unsequenced"), matching `materialize.ts`'s
+    // `{ historySequence: null }` CAS filter (MongoDB's own equality rule for
+    // `null`); treating an explicit `null` as "already assigned" would leave
+    // that Revision unsequenced forever.
+    const currentRevision = await Revision.findById(revisionId).select('historySequence').lean().exec();
+    if (currentRevision == null || currentRevision.historySequence != null) {
+      return null;
     }
 
     const expectedSequence = current.historySequence;

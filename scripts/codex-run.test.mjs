@@ -30,10 +30,13 @@ function runWithStub({ stubBody, existingOut }) {
   writeFileSync(schemaFile, '{"type":"object"}\n');
   if (existingOut !== undefined) writeFileSync(out, existingOut);
 
+  // The operator's Codex stop switch would short-circuit the wrapper before it
+  // ever reaches the stubbed codex, so these tests must not inherit it.
+  const { CODEX_RUN_FORCE_UNAVAILABLE: _stopSwitch, ...inheritedEnv } = process.env;
   let status = 0;
   try {
     execFileSync('bash', [WRAPPER, '--prompt-file', promptFile, '--schema-file', schemaFile, '--out', out, '--label', 'test'], {
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      env: { ...inheritedEnv, PATH: `${bin}:${process.env.PATH}` },
       stdio: 'pipe',
     });
   } catch (err) {

@@ -2503,6 +2503,11 @@
           },
           "revision_id": {
             "type": "string"
+          },
+          "path_prefix": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise)."
           }
         }
       },
@@ -3994,6 +3999,10 @@
           },
           "total": {
             "type": "number"
+          },
+          "appliedPathPrefix": {
+            "type": "string",
+            "description": "Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested."
           }
         },
         "required": [
@@ -6172,6 +6181,13 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "artifact"
+            ]
           }
         },
         "required": [
@@ -6200,6 +6216,13 @@
                 },
                 "updatedAt": {
                   "type": "string"
+                },
+                "contentType": {
+                  "type": "string",
+                  "enum": [
+                    "markdown",
+                    "artifact"
+                  ]
                 }
               },
               "required": [
@@ -6254,6 +6277,13 @@
                 "type": "string",
                 "minLength": 6,
                 "pattern": "^[\\x20-\\x7F]{6,}$"
+              },
+              "lang": {
+                "type": "string",
+                "enum": [
+                  "en",
+                  "ja"
+                ]
               }
             },
             "required": [
@@ -6899,10 +6929,12 @@
             "type": "boolean"
           },
           "registrationMode": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+            "type": "string",
+            "enum": [
+              "Open",
+              "Resricted",
+              "Closed"
+            ]
           },
           "setupChecklistDismissed": {
             "type": "boolean"
@@ -8292,6 +8324,13 @@
                         "type": "string",
                         "minLength": 6,
                         "pattern": "^[\\x20-\\x7F]{6,}$"
+                      },
+                      "lang": {
+                        "type": "string",
+                        "enum": [
+                          "en",
+                          "ja"
+                        ]
                       }
                     },
                     "required": [
@@ -8670,6 +8709,13 @@
                   "password": {
                     "type": "string",
                     "minLength": 6
+                  },
+                  "lang": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "ja"
+                    ]
                   }
                 },
                 "required": [
@@ -11149,6 +11195,13 @@
                     "minLength": 1,
                     "maxLength": 64,
                     "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "lang": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "ja"
+                    ]
                   }
                 },
                 "required": [
@@ -11557,6 +11610,13 @@
                   "password": {
                     "type": "string",
                     "minLength": 6
+                  },
+                  "lang": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "ja"
+                    ]
                   }
                 },
                 "required": [
@@ -24482,29 +24542,6 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
                               "type": "string",
                               "enum": [
                                 "ARTIFACT_WRITE_REJECTED"
@@ -24545,6 +24582,17 @@
                               "type": "string",
                               "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                             },
+                            "diagnosticCode": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_LINK_QUERY",
+                                "PAGE_LINK_PERCENT_ENCODING",
+                                "PAGE_LINK_RESERVED_ROUTE",
+                                "PAGE_LINK_INVALID",
+                                "PAGE_LINK_CONTEXT_FORBIDDEN",
+                                "RESOURCE_REFERENCE_FORBIDDEN"
+                              ]
+                            },
                             "message": {
                               "type": "string"
                             },
@@ -24556,6 +24604,29 @@
                             "code",
                             "reason",
                             "ruleId",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
                             "message"
                           ]
                         }
@@ -24659,6 +24730,17 @@
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                         },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
+                        },
                         "message": {
                           "type": "string"
                         },
@@ -24731,6 +24813,17 @@
                         "ruleId": {
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
+                        },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
                         },
                         "message": {
                           "type": "string"
@@ -25351,29 +25444,6 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
                               "type": "string",
                               "enum": [
                                 "ARTIFACT_WRITE_REJECTED"
@@ -25414,6 +25484,17 @@
                               "type": "string",
                               "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                             },
+                            "diagnosticCode": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_LINK_QUERY",
+                                "PAGE_LINK_PERCENT_ENCODING",
+                                "PAGE_LINK_RESERVED_ROUTE",
+                                "PAGE_LINK_INVALID",
+                                "PAGE_LINK_CONTEXT_FORBIDDEN",
+                                "RESOURCE_REFERENCE_FORBIDDEN"
+                              ]
+                            },
                             "message": {
                               "type": "string"
                             },
@@ -25425,6 +25506,29 @@
                             "code",
                             "reason",
                             "ruleId",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
                             "message"
                           ]
                         }
@@ -25597,6 +25701,17 @@
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                         },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
+                        },
                         "message": {
                           "type": "string"
                         },
@@ -25669,6 +25784,17 @@
                         "ruleId": {
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
+                        },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
                         },
                         "message": {
                           "type": "string"
@@ -26535,7 +26661,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "List pages by path or creator (paginated)",
+        "summary": "List pages by path, creator or literal path prefix (paginated)",
         "parameters": [
           {
             "schema": {
@@ -26623,11 +26749,22 @@
             "required": false,
             "name": "revision_id",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise)."
+            },
+            "required": false,
+            "description": "Literal, case-sensitive prefix match on the stored page path (no regex, no trailing-slash or portal handling): `/team` matches `/team`, `/team/x` and `/teamwork`; `/team/` matches `/team/` and its descendants only. Lists the viewer-visible set across the whole wiki, so it cannot be combined with `path`, `user` or `revision_id`, and `include_deleted=true` is rejected. With a prefix, `limit` must be 1-100 and `offset` 0-2147483647 (400 otherwise).",
+            "name": "path_prefix",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
+            "description": "Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). A successful `path_prefix` request lists the viewer-visible pages whose path literally starts with the prefix (portalPage/contentPage are null) and echoes it as `appliedPathPrefix`, even for an empty result.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28118,12 +28255,73 @@
                     },
                     "total": {
                       "type": "number"
+                    },
+                    "appliedPathPrefix": {
+                      "type": "string",
+                      "description": "Present only on a successful `path_prefix` request: the exact prefix the server filtered with. Absent when no prefix was requested."
                     }
                   },
                   "required": [
                     "pages",
                     "pager",
                     "total"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error. With `path_prefix`: combined with `path` / `user` / `revision_id`, `include_deleted=true`, `limit` outside 1-100, or `offset` outside 0-2147483647 (checked in that order, fixed messages).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "fieldErrors": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "formErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "fieldErrors",
+                            "formErrors"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
                   ]
                 }
               }
@@ -28153,6 +28351,86 @@
                         },
                         "redirectTo": {
                           "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token lacks the `pages:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INSUFFICIENT_SCOPE"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "requiredScope": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "requiredScope"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error while listing, for any request shape (never an empty list)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
                         }
                       },
                       "required": [
@@ -33037,29 +33315,6 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
                               "type": "string",
                               "enum": [
                                 "ARTIFACT_WRITE_REJECTED"
@@ -33100,6 +33355,17 @@
                               "type": "string",
                               "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                             },
+                            "diagnosticCode": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_LINK_QUERY",
+                                "PAGE_LINK_PERCENT_ENCODING",
+                                "PAGE_LINK_RESERVED_ROUTE",
+                                "PAGE_LINK_INVALID",
+                                "PAGE_LINK_CONTEXT_FORBIDDEN",
+                                "RESOURCE_REFERENCE_FORBIDDEN"
+                              ]
+                            },
                             "message": {
                               "type": "string"
                             },
@@ -33111,6 +33377,29 @@
                             "code",
                             "reason",
                             "ruleId",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
                             "message"
                           ]
                         }
@@ -33250,6 +33539,17 @@
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
                         },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
+                        },
                         "message": {
                           "type": "string"
                         },
@@ -33322,6 +33622,17 @@
                         "ruleId": {
                           "type": "string",
                           "pattern": "^AI-(R\\d{2}[a-c]?|D0[1-3])$"
+                        },
+                        "diagnosticCode": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_LINK_QUERY",
+                            "PAGE_LINK_PERCENT_ENCODING",
+                            "PAGE_LINK_RESERVED_ROUTE",
+                            "PAGE_LINK_INVALID",
+                            "PAGE_LINK_CONTEXT_FORBIDDEN",
+                            "RESOURCE_REFERENCE_FORBIDDEN"
+                          ]
                         },
                         "message": {
                           "type": "string"
@@ -35874,6 +36185,13 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [
@@ -40700,10 +41018,12 @@
                       "type": "boolean"
                     },
                     "registrationMode": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                      "type": "string",
+                      "enum": [
+                        "Open",
+                        "Resricted",
+                        "Closed"
+                      ]
                     },
                     "setupChecklistDismissed": {
                       "type": "boolean"

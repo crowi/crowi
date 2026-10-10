@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import { authHeaders } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
 
@@ -35,6 +36,7 @@ describe('Routes /api/admin/app (Hono, post-storage-extraction)', () => {
   let Config;
   let adminToken: string;
   let memberToken: string;
+  let configSnapshot: ConfigRow[];
 
   // Keys this suite touches. Used by the per-test cleanup so each test
   // starts from a clean slate even when one test seeds and the next
@@ -44,10 +46,20 @@ describe('Routes /api/admin/app (Hono, post-storage-extraction)', () => {
   beforeAll(async () => {
     Config = crowi.model('Config');
 
+    // registrationMode cases below write/delete `security:registrationMode`,
+    // which `APP_KEYS` cleanup doesn't cover — snapshot/restore so those
+    // mutations don't leak into whatever test file the worker runs next
+    // (same pattern as admin/security.test.ts).
+    configSnapshot = await snapshotCrowiConfig(crowi);
+
     const admin = await createUser({ name: 'AppSettings Admin', username: 'appSettingsAdmin', email: 'app-settings-admin@example.com' }, true);
     adminToken = admin.accessToken;
     const member = await createUser({ name: 'AppSettings Member', username: 'appSettingsMember', email: 'app-settings-member@example.com' }, false);
     memberToken = member.accessToken;
+  });
+
+  afterAll(async () => {
+    await restoreCrowiConfig(crowi, configSnapshot);
   });
 
   afterEach(async () => {
@@ -84,9 +96,46 @@ describe('Routes /api/admin/app (Hono, post-storage-extraction)', () => {
       // absence keeps the contract regression-proof.
       expect(res.body.upload).toBeUndefined();
       expect(typeof res.body.isUploadable).toBe('boolean');
-      expect(res.body.registrationMode).toEqual(expect.objectContaining({ Open: 'open' }));
       // Defaults to false on a fresh install (no row written).
       expect(res.body.setupChecklistDismissed).toBe(false);
+    });
+
+    it('reports the configured registration mode instead of a static catalogue', async () => {
+      await Config.updateConfig('crowi', 'security:registrationMode', 'Closed');
+      await reloadConfigCache();
+
+      const res = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.registrationMode).toBe('Closed');
+    });
+
+    it('preserves the legacy Resricted spelling on the wire', async () => {
+      await Config.updateConfig('crowi', 'security:registrationMode', 'Resricted');
+      await reloadConfigCache();
+
+      const res = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.registrationMode).toBe('Resricted');
+    });
+
+    it('falls back to Open when the config row is missing or out of enum', async () => {
+      await Config.deleteMany({ ns: 'crowi', key: 'security:registrationMode' });
+      await reloadConfigCache();
+
+      const missing = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
+      expect(missing.status).toBe(200);
+      expect(missing.body.registrationMode).toBe('Open');
+
+      // Correct spelling ('Restricted') is outside the enum — the stored
+      // value only ever validly holds 'Resricted' (sic).
+      await Config.updateConfig('crowi', 'security:registrationMode', 'Restricted');
+      await reloadConfigCache();
+
+      const outOfEnum = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
+      expect(outOfEnum.status).toBe(200);
+      expect(outOfEnum.body.registrationMode).toBe('Open');
     });
   });
 

@@ -57,8 +57,8 @@ main が保持するのは **brief サマリ + ゲート + 最終報告** だけ
 自動 fallback** する(spec: feature-codex-role-split)。
 
 各 Codex ステージは `codex-run.sh --tier` で **semantic なモデル tier**(sol=最難 /
-terra=一般 / luna=単純)を選ぶ。実 model id(`gpt-5.6-{sol,terra,luna}`)と tier 既定
-effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。
+terra=一般 / luna=単純)を選ぶ。実 model id と tier 既定
+effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。tier 名は難易度のラベルで model 名ではない(codex は世代ごとに model の名前と格付けを入れ替える)ので、次の世代へは名前の一致ではなく公式カタログの格付けで対応させる。
 
 | stage | 主担当 | tier | fallback(fail-open) |
 |---|---|---|---|

@@ -45,6 +45,7 @@ export function registerSearch(program: Command): void {
   program
     .command('search <query>')
     .description('Search pages by full-text query')
+    .addHelpText('after', '\nFor recently updated pages without a search query, use crowi recent.')
     .option('--tree <path>', 'restrict to a path prefix (e.g. /team/eng/)')
     .option('--type <type>', 'page type filter: portal | public | user')
     .option('--page <n>', 'result page number (1-based)')

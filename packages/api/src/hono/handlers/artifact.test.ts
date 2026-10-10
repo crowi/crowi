@@ -56,8 +56,9 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
 
   const createArtifactPage = async (path: string, body: string) => {
     const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
-    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact' });
-    return Page.pushRevision(page, newRevision, user);
+    const artifactPreWrite = { ok: true as const, body };
+    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact', artifactPreWrite });
+    return Page.pushRevision(page, newRevision, user, { artifactPreWrite });
   };
 
   /** Runs `run()` while capturing every `debug('crowi:hono:handlers:artifact', ...)` call as one joined string. */
@@ -246,8 +247,9 @@ describe('POST /api/pages/:id/artifact-url (Hono)', () => {
     await enableArtifactDelivery();
     const page = await createArtifactPage(`${PATH_PREFIX}revision-switch`, await ingestedBody(validArtifactHtml()));
     const v1RevisionId = page.revision._id.toString();
-    const v2Revision = await Revision.prepareRevision(page, await ingestedBody(validArtifactHtml({ body: '<p>v2</p>' })), user, { contentType: 'artifact' });
-    await Page.pushRevision(page, v2Revision, user);
+    const v2Body = await ingestedBody(validArtifactHtml({ body: '<p>v2</p>' }));
+    const v2Revision = await Revision.prepareRevision(page, v2Body, user, { contentType: 'artifact', artifactPreWrite: { ok: true, body: v2Body } });
+    await Page.pushRevision(page, v2Revision, user, { artifactPreWrite: { ok: true, body: v2Body } });
 
     const res = await request(app).post(`/api/pages/${page._id}/artifact-url`).set(authHeaders(accessToken)).send({ revisionId: v1RevisionId });
     expect(res.status).toBe(200);

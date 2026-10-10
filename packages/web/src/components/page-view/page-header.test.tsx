@@ -1,4 +1,5 @@
 import { PageGrantEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { PropsWithChildren, ReactElement } from 'react';
@@ -189,6 +190,19 @@ describe('PageHeader — expanded state', () => {
     expect(likeButton.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('puts an artifact kind chip above the title of an artifact revision', () => {
+    const base = makePage();
+    renderHeader(<PageHeader page={{ ...base, revision: { ...base.revision, contentType: 'artifact' } }} sticky showActions />);
+    const chip = screen.getByText(m['page.artifact.kind_label']());
+    const title = screen.getByRole('heading', { level: 1 });
+    expect(chip.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows no artifact kind chip for a Markdown revision', () => {
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.queryByText(m['page.artifact.kind_label']())).toBeNull();
+  });
+
   it('renders no placeholder and no compact bar when sticky is disabled', () => {
     renderHeader(<PageHeader page={makePage()} showActions />);
     // sticky-header-placeholder / page-header-compact are layout-state containers with no
@@ -197,6 +211,38 @@ describe('PageHeader — expanded state', () => {
     expect(screen.queryByTestId('page-header-compact')).toBeNull();
     // <header> has implicit role "banner"; query it semantically, then check the data-attribute.
     expect(screen.getByRole('banner').getAttribute('data-compact')).toBe('false');
+  });
+});
+
+describe('PageHeader — edit entry (artifact-edit-guard, AC-01)', () => {
+  const editName = () => m['page.action_edit']();
+
+  it('without onEdit, neither the wide nor the narrow layout renders an edit control, while metadata actions stay', () => {
+    for (const wide of [true, false]) {
+      cleanup();
+      if (wide) mockWideViewport();
+      else vi.restoreAllMocks();
+      renderHeader(<PageHeader page={makePage()} showActions />);
+      expect(screen.queryAllByRole('button', { name: editName() })).toHaveLength(0);
+      // The like action (a metadata operation) is untouched.
+      expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('with onEdit, the edit control is present and fires the callback', () => {
+    const onEdit = vi.fn();
+    mockWideViewport();
+    renderHeader(<PageHeader page={makePage()} showActions onEdit={onEdit} />);
+    const buttons = screen.getAllByRole('button', { name: editName() });
+    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(buttons[0]);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the compact bar free of an edit control without onEdit', () => {
+    mockCompact();
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.queryAllByRole('button', { name: editName() })).toHaveLength(0);
   });
 });
 

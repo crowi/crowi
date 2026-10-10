@@ -146,6 +146,11 @@ module.exports = {
       // automatically so no test depends on a leftover spy.
       restoreMocks: true,
       testEnvironment: './src/test/crowi-environment.js',
+      // Resolved before `setupFilesAfterEnv`, and before any application
+      // module import — the logger's severity floor is read lazily on first
+      // use, so this is the only hook early enough to fix it ahead of the
+      // 100+ boot-heavy suites in this project.
+      setupFiles: ['./src/test/logging-env.ts'],
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],
       // Redis smoke files run in the dedicated `redis-smoke` project below
@@ -153,8 +158,9 @@ module.exports = {
       // and the full per-file Crowi boot + scratch-Mongo create/drop cycle
       // is pure waste for them. `crowi/index.smoke.test.ts` is the one
       // exception (it exercises the real boot path via the singleton), so
-      // the lookbehind keeps it here.
-      testPathIgnorePatterns: ['(?<!crowi/index)\\.smoke\\.test\\.ts$'],
+      // the lookbehind keeps it here. `*.unit.test.ts` files run in the
+      // `unit` project below instead, which boots none of Crowi/Mongo/Hono.
+      testPathIgnorePatterns: ['(?<!crowi/index)\\.smoke\\.test\\.ts$', '\\.unit\\.test\\.ts$'],
       moduleNameMapper: {
         '^src/(.*)': '<rootDir>/src/$1',
         '^client/(.*)': '<rootDir>/client/$1',
@@ -178,8 +184,59 @@ module.exports = {
             useESM: false,
           },
         ],
+        // `@faker-js/faker` >= 10 is ESM-only (`"type": "module"`, no CJS
+        // build), and `setup.ts` pulls it into every file of this project.
+        // Jest 30's native `require(esm)` does NOT rescue it here: jest-runtime
+        // gates that path on `vm.SourceTextModule.prototype.hasAsyncGraph`,
+        // and `vm.SourceTextModule` only exists when node runs with
+        // `--experimental-vm-modules` — a flag that would also switch every
+        // suite (and the `.mjs` / `@scalar` files above) onto jest's
+        // experimental ESM loader, disable its require-outside-test guard,
+        // and print an ExperimentalWarning per worker. Down-compiling faker
+        // to CJS the same way as `@scalar` keeps the runtime unchanged and
+        // works from every entry point that reads this config.
+        '.+@faker-js/faker/.+\\.js$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+            useESM: false,
+          },
+        ],
       },
-      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+))'],
+      // The leading `.*` in the lookahead alternatives is load-bearing under
+      // pnpm: the real path is `node_modules/.pnpm/@faker-js+faker@<v>/
+      // node_modules/@faker-js/faker/...`, so the `@faker-js/` segment sits
+      // after the SECOND `node_modules/`, and a pattern anchored to the first
+      // would still ignore the file.
+      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+|.*@faker-js/.+))'],
+    },
+    {
+      displayName: 'unit',
+      preset: 'ts-jest',
+      // Kept identical to the sibling projects: the root-level declaration
+      // does not reach a project entry (see the module-doc comment at the
+      // top of this file), so each project sets its own.
+      restoreMocks: true,
+      // Plain node environment, no `setup.ts`: these files exercise pure
+      // library modules through injected dependencies — no Crowi boot, no
+      // Mongo, no Hono.
+      testEnvironment: 'node',
+      // Selects membership by PATTERN, not by an enumerated file list — a
+      // later phase adding a pure unit file needs no change here.
+      testMatch: ['<rootDir>/src/**/*.unit.test.ts'],
+      moduleNameMapper: {
+        '^src/(.*)': '<rootDir>/src/$1',
+        '^client/(.*)': '<rootDir>/client/$1',
+        '^common/(.*)': '<rootDir>/common/$1',
+      },
+      transform: {
+        '^.+\\.tsx?$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+          },
+        ],
+      },
     },
     {
       displayName: 'redis-smoke',
