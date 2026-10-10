@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker';
 import mongoose from 'mongoose';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 // pageEvent.on('create' | 'update') schedules Backlink.createBySavedPage
@@ -223,7 +224,8 @@ describe('Backlink', () => {
       await Page.createPage(targetPath, '# target', user, {});
 
       const artifactSourcePath = '/' + faker.lorem.slug() + '-artifact-source';
-      const artifactPage = await Page.createPage(artifactSourcePath, `<a href="${crowi.baseUrl}${targetPath}">link</a>`, user, { contentType: 'artifact' });
+      const seeded = await seedStoredArtifactPage({ path: artifactSourcePath, body: `<a href="${crowi.baseUrl}${targetPath}">link</a>`, userId: user._id });
+      const artifactPage = await Page.findById(seeded.pageId);
       expect(artifactPage.contentType).toBe('artifact');
 
       const markdownSourcePath = '/' + faker.lorem.slug() + '-markdown-source';

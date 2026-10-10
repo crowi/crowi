@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import request from 'supertest';
@@ -167,6 +168,61 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
     // care whether a revision exists). The `catch` block now compensates by
     // deleting that orphaned Page — best-effort, and the original 400
     // response must be unaffected either way.
+    describe('artifact-edit-guard (R-4)', () => {
+      const seedOwnArtifactDraft = async (suffix: string, pageContentType: 'artifact' | 'markdown' | null) => {
+        return seedStoredArtifactPage({ path: `${PATH_PREFIX}${suffix}`, body: '<html></html>', userId: aliceId, status: 'draft', pageContentType });
+      };
+
+      it('rejects reusing an own draft that holds an artifact body (even when the Page hint is wrong or missing) and never touches the body', async () => {
+        for (const hint of ['artifact', 'markdown', null] as const) {
+          const { pageId, revisionId } = await seedOwnArtifactDraft(`own-artifact-${hint ?? 'missing'}`, hint);
+          const res = await request(app)
+            .post('/api/pages/drafts')
+            .set(authHeaders(aliceToken))
+            .send({ path: `${PATH_PREFIX}own-artifact-${hint ?? 'missing'}`, initialBody: '# must not replace the artifact' });
+          expect(res.status).toBe(400);
+          expect(res.body).toEqual({ error: 'invalid_path', message: 'Artifact pages cannot be edited here. Use the CLI or MCP to edit the body.' });
+
+          const Revision = crowi.model('Revision');
+          expect(await Revision.countDocuments({ page: new Types.ObjectId(pageId) })).toBe(1);
+          const revision = await Revision.findById(revisionId).lean();
+          expect(revision?.body).toBe('<html></html>');
+        }
+      });
+
+      it("keeps the other user's draft as 409 and a published page as 400 path_taken", async () => {
+        await seedStoredArtifactPage({ path: `${PATH_PREFIX}bobs-artifact`, body: '<html></html>', userId: aliceId, status: 'draft' });
+        // Alice owns it, so Bob (a different user) sees the existing 409.
+        const res = await request(app)
+          .post('/api/pages/drafts')
+          .set(authHeaders(bobToken))
+          .send({ path: `${PATH_PREFIX}bobs-artifact` });
+        expect(res.status).toBe(409);
+        expect(res.body.error).toBe('path_taken_by_draft');
+
+        await createPublishedPage(aliceToken, 'published-still-400');
+        const published = await request(app)
+          .post('/api/pages/drafts')
+          .set(authHeaders(aliceToken))
+          .send({ path: `${PATH_PREFIX}published-still-400` });
+        expect(published.status).toBe(400);
+        expect(published.body.error).toBe('path_taken');
+      });
+
+      it('still reuses an own Markdown draft idempotently and seeds a new draft as explicit Markdown', async () => {
+        const path = `${PATH_PREFIX}markdown-seed`;
+        const first = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path, initialBody: '# seed' });
+        expect(first.status).toBe(201);
+        const second = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path, initialBody: '# ignored' });
+        expect(second.status).toBe(201);
+        expect(second.body.pageId).toBe(first.body.pageId);
+        const Revision = crowi.model('Revision');
+        const revision = await Revision.findOne({ page: new Types.ObjectId(first.body.pageId) }).lean();
+        expect(revision?.contentType).toBe('markdown');
+        expect(revision?.body).toBe('# seed');
+      });
+    });
+
     describe('draft orphan hardening (compensating delete on seed-revision failure)', () => {
       it('still returns 400 invalid_path when Revision.prepareRevision throws, and leaves no orphaned Page behind', async () => {
         const path = `${PATH_PREFIX}orphan-prepare-revision`;
@@ -379,6 +435,30 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
         expect(typeof d.pageId).toBe('string');
         expect(typeof d.createdAt).toBe('string');
       }
+    });
+  });
+
+  describe('GET /api/pages/drafts — contentType (artifact-edit-guard)', () => {
+    it('returns contentType for every row, normalizing a missing Page hint to markdown', async () => {
+      const md = await request(app)
+        .post('/api/pages/drafts')
+        .set(authHeaders(aliceToken))
+        .send({ path: `${PATH_PREFIX}list-md` });
+      const legacy = await request(app)
+        .post('/api/pages/drafts')
+        .set(authHeaders(aliceToken))
+        .send({ path: `${PATH_PREFIX}list-legacy` });
+      const Page = crowi.model('Page');
+      await Page.collection.updateOne({ _id: new Types.ObjectId(legacy.body.pageId) }, { $unset: { contentType: '' } });
+      const artifact = await seedStoredArtifactPage({ path: `${PATH_PREFIX}list-artifact`, body: '<html></html>', userId: aliceId, status: 'draft' });
+
+      const res = await request(app).get('/api/pages/drafts').set(authHeaders(aliceToken));
+      expect(res.status).toBe(200);
+      const byId = new Map<string, { contentType?: string }>(res.body.drafts.map((d: { pageId: string; contentType?: string }) => [d.pageId, d]));
+      expect(byId.get(md.body.pageId)?.contentType).toBe('markdown');
+      expect(byId.get(legacy.body.pageId)?.contentType).toBe('markdown');
+      expect(byId.get(artifact.pageId)?.contentType).toBe('artifact');
+      for (const d of res.body.drafts) expect(['markdown', 'artifact']).toContain(d.contentType);
     });
   });
 

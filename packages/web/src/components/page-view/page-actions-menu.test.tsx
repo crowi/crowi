@@ -326,6 +326,8 @@ describe('PageActionsMenu — "Download HTML" action for an artifact page (RFC-0
     expect(screen.queryByRole('menuitem', { name: m['page.action_copy_markdown']() })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: m['page.action_download_markdown']() })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: m['page.action_portalize']() })).toBeNull();
+    // There is no body-edit item in the menu at all (the header owns that entry); the metadata / history items stay.
+    expect(screen.queryByRole('menuitem', { name: m['page.action_edit']() })).toBeNull();
     expect(screen.getByRole('menuitem', { name: m['page.action_download_html']() })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: m['page.action_history']() })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: m['page.action_rename']() })).toBeTruthy();

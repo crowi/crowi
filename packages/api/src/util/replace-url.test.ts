@@ -1,6 +1,7 @@
 import { STATUS_DELETED } from 'src/models/page';
 import type { RevisionDocument } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
 import { crowi, Fixture } from 'src/test/setup';
 
 import { assessReplaceSafety, replaceUrlInBody, runReplaceUrl } from './replace-url';
@@ -249,7 +250,7 @@ describe('util/replace-url — runReplaceUrl (persistence)', () => {
 
   describe('RFC-0020 §1 — content type discriminator', () => {
     it('AC-SC-12: excludes an artifact Page from dry-run matching, and the Markdown rewrite writes the hint in the same save as the pointer', async () => {
-      await Page.createPage(`${PATH_PREFIX}/artifact-excluded`, `<a href="${FROM}/x">x</a>`, creator, { contentType: 'artifact' });
+      await seedStoredArtifactPage({ path: `${PATH_PREFIX}/artifact-excluded`, body: `<a href="${FROM}/x">x</a>`, userId: creator._id });
       const markdownCreated = await Page.createPage(`${PATH_PREFIX}/markdown-rewritten`, `x ${FROM}/y`, creator, {});
 
       const dryRun = await runReplaceUrl(crowi, { from: FROM, to: TO, dryRun: true });
@@ -292,6 +293,56 @@ describe('util/replace-url — runReplaceUrl (persistence)', () => {
 
       const page = await Page.findById(created._id).select('revision').lean();
       expect(String(page?.revision)).toBe(origRevId);
+    });
+
+    it('AC-07: the current Revision, not the Page hint, decides — an artifact Revision under a markdown/missing hint is excluded from scan and never rewritten', async () => {
+      await seedStoredArtifactPage({
+        path: `${PATH_PREFIX}/hint-markdown`,
+        body: `<a href="${FROM}/h">h</a>`,
+        userId: creator._id,
+        pageContentType: 'markdown',
+      });
+      await seedStoredArtifactPage({ path: `${PATH_PREFIX}/hint-missing`, body: `<a href="${FROM}/m">m</a>`, userId: creator._id, pageContentType: null });
+
+      const dryRun = await runReplaceUrl(crowi, { from: FROM, to: TO, dryRun: true });
+      expect(dryRun.pagesMatched).toBe(0);
+
+      const summary = await runReplaceUrl(crowi, { from: FROM, to: TO, userEmail: operator.email });
+      expect(summary.pagesRewritten).toBe(0);
+      for (const name of ['hint-markdown', 'hint-missing']) {
+        const page = await Page.findOne({ path: `${PATH_PREFIX}/${name}` }).populate('revision');
+        expect(page.revision.body).toContain(FROM);
+        expect(await Revision.countDocuments({ page: page._id })).toBe(1);
+      }
+    });
+
+    it('AC-07: a Page whose current Revision turns artifact after the scan (hint unchanged) is a no-op, and the Markdown write declares markdown', async () => {
+      const created = await Page.createPage(`${PATH_PREFIX}/revision-turned-artifact`, `x ${FROM}/y`, creator, {});
+      const original = await Page.findById(created._id).select('revision').lean();
+
+      const summary = await runReplaceUrl(crowi, {
+        from: FROM,
+        to: TO,
+        userEmail: operator.email,
+        confirm: async () => {
+          await Revision.collection.updateOne({ _id: original?.revision }, { $set: { contentType: 'artifact' } });
+          return true;
+        },
+      });
+      expect(summary.pagesRewritten).toBe(0);
+      expect(String((await Page.findById(created._id).select('revision').lean())?.revision)).toBe(String(original?.revision));
+
+      const prepareSpy = jest.spyOn(Revision, 'prepareRevision');
+      try {
+        await Page.createPage(`${PATH_PREFIX}/declares-markdown`, `x ${FROM}/z`, creator, {});
+        prepareSpy.mockClear();
+        await runReplaceUrl(crowi, { from: FROM, to: TO, userEmail: operator.email });
+        const calls = prepareSpy.mock.calls.filter((c) => (c[1] as string).includes(TO));
+        expect(calls.length).toBeGreaterThan(0);
+        for (const call of calls) expect(call[3]).toMatchObject({ contentType: 'markdown' });
+      } finally {
+        prepareSpy.mockRestore();
+      }
     });
   });
 });

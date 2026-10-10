@@ -147,7 +147,7 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
 
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page: models.Page },
+      models: { Page: models.Page, Revision: models.Revision },
       // Force the cap-reached path through the cheaper of the two
       // checks (cap peek). Phase 6 OR's the two readonly bits.
       checkEditorCap: async () => ({ readonly: true }),
@@ -170,7 +170,7 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
 
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page: models.Page },
+      models: { Page: models.Page, Revision: models.Revision },
       // peek-side OK (under cap) so we exercise the tryAcquire branch.
       checkEditorCap: async () => ({ readonly: false }),
       editorCapCounter: counter,
@@ -191,7 +191,7 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
 
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page: models.Page },
+      models: { Page: models.Page, Revision: models.Revision },
       checkEditorCap: async () => ({ readonly: false }),
       editorCapCounter: counter,
     });
@@ -252,7 +252,7 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
     const { pageId, userId, token } = await seedPageAndToken(false);
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
-      models: { Page: models.Page },
+      models: { Page: models.Page, Revision: models.Revision },
       checkEditorCap: async () => ({ readonly: false }),
       // editorCapCounter intentionally omitted
     });

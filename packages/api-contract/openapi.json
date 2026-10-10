@@ -6181,6 +6181,13 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "artifact"
+            ]
           }
         },
         "required": [
@@ -6209,6 +6216,13 @@
                 },
                 "updatedAt": {
                   "type": "string"
+                },
+                "contentType": {
+                  "type": "string",
+                  "enum": [
+                    "markdown",
+                    "artifact"
+                  ]
                 }
               },
               "required": [
@@ -36171,6 +36185,13 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "artifact"
+                            ]
                           }
                         },
                         "required": [

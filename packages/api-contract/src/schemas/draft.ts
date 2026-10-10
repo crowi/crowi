@@ -1,5 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
+import { PageContentTypeSchema } from './page';
+
 /**
  * RFC-0004 Phase 3 — schemas for the drafts endpoints
  * (`POST` / `GET` / `DELETE` under `/api/pages/drafts`).
@@ -93,12 +95,18 @@ export type DraftNotFoundError = z.infer<typeof DraftNotFoundErrorSchema>;
  * save). Surfacing a body summary correctly requires Y.Doc
  * reconstruction per draft, which is heavier than the listing should
  * absorb.
+ *
+ * `contentType` is the Page's list-view hint (`'markdown'` when the stored
+ * hint is missing) so the UI can avoid offering the Markdown editor for an
+ * artifact draft. It is optional on the wire only so a client still reads a
+ * response from an older server; a current server always returns it.
  */
 export const DraftSummarySchema = z.object({
   pageId: z.string(),
   path: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  contentType: PageContentTypeSchema.optional(),
 });
 export type DraftSummary = z.infer<typeof DraftSummarySchema>;
 

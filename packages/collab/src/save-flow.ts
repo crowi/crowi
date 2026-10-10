@@ -5,6 +5,7 @@ import type { ContributorsTracker } from './contributors';
 import type { DocBaseRevisionStore } from './doc-base-revision';
 import type { DocEpochStore } from './doc-epoch';
 import type { CollabContentSequenceAllocator, CollabDraftPublisher, CollabModels } from './models';
+import { readCollabBodyEligibility } from './page-body-kind';
 import { DELETED_STATUS, DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { persistYjsState } from './persist-yjs-state';
 import type { CollabPageEventPublisher } from './types';
@@ -204,6 +205,16 @@ async function tryCoalesce(args: {
 }): Promise<{ winnerRevisionId: string } | null> {
   const { Page, Revision, docBaseRevisions, pageId, loserBody, loserUserId } = args;
 
+  // RFC-0020 §1 — the winner may have been an artifact write by the time the
+  // loser gets here: re-read the kind before any contributor update (no
+  // coalesce for a Page that is no longer eligible; the caller keeps CONFLICT
+  // and the Web reloads, where the artifact notice takes over).
+  const eligibility = await readCollabBodyEligibility({ Page, Revision }, pageId);
+  if (!eligibility.ok) {
+    debug('coalesce: page %s is no longer eligible (%s) — keeping CONFLICT', pageId, eligibility.reason);
+    return null;
+  }
+
   // Re-read the page's live pointer (the winner just moved it).
   let freshPage: { currentRevision?: { toString(): string } | null } | null;
   try {
@@ -298,6 +309,17 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       }
       if (!user) {
         throw new CollabSaveError('USER_NOT_FOUND', `user ${userId} not found`);
+      }
+
+      // Step 2a: RFC-0020 §1 — Y.Text is Markdown source, so an artifact (or
+      // inconsistent) Page is refused BEFORE the contributors drain, the
+      // renderer and any Revision write: a rejected save leaves no Revision,
+      // no contributor loss and no publish side effect. A soft-deleted
+      // Markdown Page passes here and is rejected by the status CAS below.
+      const eligibility = await readCollabBodyEligibility({ Page, Revision }, pageId);
+      if (!eligibility.ok) {
+        debug('save rejected for page %s: not eligible (%s)', pageId, eligibility.reason);
+        throw new CollabSaveError('PAGE_NOT_FOUND', 'page not found');
       }
 
       // Step 2b: server-doc save lock (round 2, Decision 1). The lock is
@@ -437,8 +459,11 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // below instead of writing a Markdown pointer/hint over an artifact
       // Page. Matches a missing field too (legacy Markdown), same as the
       // other `$ne` predicates in this filter.
+      // `revision` is the pointer observed above: a concurrent writer that moved
+      // it (including to an artifact Revision) makes this CAS miss.
       const pointerFilter: Record<string, unknown> = {
         _id: pageId,
+        revision: page.revision ?? null,
         currentRevision: docBaseFilterValue,
         status: { $ne: DELETED_STATUS },
         contentType: { $ne: 'artifact' },
@@ -564,7 +589,7 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         // (only a lifecycle transition does), and that CAS having just
         // succeeded already proves the epoch was still `expectedEpoch` at
         // write time.
-        await persistYjsState(Page, { pageId, document, baselineBody: null, allowShrink: true, origin: 'save', expectedEpoch });
+        await persistYjsState({ Page, Revision }, { pageId, document, baselineBody: null, allowShrink: true, origin: 'save', expectedEpoch });
       } catch (err) {
         console.warn(`[crowi:collab] save: yjsState write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
       }

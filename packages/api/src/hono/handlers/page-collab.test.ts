@@ -254,6 +254,46 @@ describe('Routes /api/pages/:id/yjs-token (Hono getYjsToken)', () => {
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
+    it('AC-05: an artifact current Revision is refused with the same 404 even when the Page hint is missing or says markdown, without checking the editor cap', async () => {
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      for (const hint of [undefined, 'markdown'] as const) {
+        const pageId = await createPage(`artifact-wrong-hint-${hint ?? 'missing'}`);
+        const page = await Page.findById(pageId).lean();
+        await Revision.collection.updateOne({ _id: page?.revision }, { $set: { contentType: 'artifact' } });
+        if (hint) await Page.updateOne({ _id: pageId }, { $set: { contentType: hint } });
+        else await Page.updateOne({ _id: pageId }, { $unset: { contentType: '' } });
+
+        const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+        expect(res.body.wsToken).toBeUndefined();
+      }
+    });
+
+    it('AC-05: a caller who is not granted sees the same 404 as an artifact page, so the kind is never revealed', async () => {
+      const pageId = await createPage('artifact-not-granted', { grant: 4 });
+      const Page = crowi.model('Page');
+      await Page.updateOne({ _id: pageId }, { $set: { contentType: 'artifact' } });
+      const other = await createTestUser({ name: 'Collab Other', username: `collabOther${Date.now()}`, email: `collab-other-${Date.now()}@example.com` });
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(other.accessToken));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('AC-05: a dangling revision pointer is a fixed 500, not a token and not a 404', async () => {
+      const pageId = await createPage('dangling');
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const page = await Page.findById(pageId).lean();
+      await Revision.collection.deleteOne({ _id: page?.revision });
+
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_ERROR');
+      expect(res.body.wsToken).toBeUndefined();
+    });
+
     it('AC-SC-9: a missing contentType hint (legacy Markdown) still issues a token', async () => {
       const pageId = await createPage('missing-hint');
       const Page = crowi.model('Page');

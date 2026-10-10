@@ -48,7 +48,7 @@ export async function ensureUserPage(crowi: Crowi, user: UserDocument): Promise<
   if (existing) return;
 
   try {
-    await Page.createPage(userPagePath, `# ${user.username}\nThis is ${user.username}'s page`, user, {});
+    await Page.createPage(userPagePath, `# ${user.username}\nThis is ${user.username}'s page`, user, { contentType: 'markdown' });
   } catch (err) {
     // Duplicate/conflict race (another drain, or the legacy listener, won
     // first) — re-check for idempotent success instead of surfacing.

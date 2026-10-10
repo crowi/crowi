@@ -21,6 +21,7 @@
  *       `User.findById` throw surfaces as 500, not a masked 401.
  */
 
+import { Types } from 'mongoose';
 import type { UserDocument } from 'src/models/user';
 import { VALID_ARTIFACT_HTML, validArtifactHtml } from 'src/test/artifact-fixtures';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
@@ -739,6 +740,38 @@ describe('MCP server (/api/mcp)', () => {
         const updateResult = parseRpc(updateRes).result as { isError?: boolean; structuredContent?: { content_type?: string } };
         expect(updateResult.isError).toBeFalsy();
         expect(updateResult.structuredContent?.content_type).toBe('artifact');
+      });
+
+      it('AC-04: crowi_update_page without content_type keeps an artifact page artifact and validates the HTML; a markdown declaration or invalid HTML is refused with the page untouched', async () => {
+        const createRes = await callMcp(fullPatToken, {
+          jsonrpc: '2.0',
+          id: 130,
+          method: 'tools/call',
+          params: { name: 'crowi_create_page', arguments: { path: `${PATH_PREFIX}mcp-artifact-omit`, body: VALID_ARTIFACT_HTML, content_type: 'artifact' } },
+        });
+        const created = parseRpc(createRes).result as { structuredContent?: { page_id?: string; revision_id?: string } };
+        const pageId = created.structuredContent?.page_id;
+        const call = async (id: number, args: Record<string, unknown>) =>
+          parseRpc(
+            await callMcp(fullPatToken, {
+              jsonrpc: '2.0',
+              id,
+              method: 'tools/call',
+              params: { name: 'crowi_update_page', arguments: { page_id: pageId, ...args } },
+            }),
+          ).result as { isError?: boolean; structuredContent?: { content_type?: string; error?: Record<string, unknown> } };
+
+        const omitted = await call(131, { body: validArtifactHtml({ body: '<p>omitted</p>' }) });
+        expect(omitted.isError).toBeFalsy();
+        expect(omitted.structuredContent?.content_type).toBe('artifact');
+
+        const Page = crowi.model('Page');
+        const before = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+        const markdown = await call(132, { body: '# markdown', content_type: 'markdown' });
+        expect(markdown.isError).toBe(true);
+        const invalid = await call(133, { body: '<p>not a document</p>' });
+        expect(invalid.isError).toBe(true);
+        expect(await Page.collection.findOne({ _id: new Types.ObjectId(pageId) })).toEqual(before);
       });
 
       type ToolResult = {

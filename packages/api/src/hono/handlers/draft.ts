@@ -30,13 +30,14 @@
  *    draft", "not a draft", "not your draft", and malformed id into
  *    one response (existence leak guard).
  */
-import { cancelDraftRoute, createDraftRoute, listDraftsRoute } from '@crowi/api-contract';
+import { cancelDraftRoute, createDraftRoute, listDraftsRoute, type PageContentType } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import { GRANT_PUBLIC, type PageDocument, STATUS_DRAFT } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
+import { getRawRevisionPointer, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
 import { isValidObjectId, toISOStringOrNull } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -46,6 +47,8 @@ const debug = Debug('crowi:hono:handlers:draft');
 
 /** MongoDB duplicate-key error code, raised by the unique `Page.path` index. */
 const isDuplicateKeyError = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: number }).code === 11000;
+
+const ARTIFACT_DRAFT_REJECTED_MESSAGE = 'Artifact pages cannot be edited here. Use the CLI or MCP to edit the body.';
 
 const DRAFT_NOT_FOUND_BODY = {
   error: 'draft_not_found' as const,
@@ -117,6 +120,13 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             return c.json({ error: 'path_taken' as const, message: `A page already exists at ${path}.` }, 400);
           }
           if (existing.isCreator(user)) {
+            // An own draft that already holds an artifact body is never
+            // reused as a Markdown draft: the caller (the Markdown editor)
+            // would otherwise be handed an artifact page to edit.
+            const current = await resolveCurrentPageBodyKind(crowi, existing, getRawRevisionPointer(existing));
+            if (current.contentType === 'artifact' || existing.contentType === 'artifact') {
+              return c.json({ error: 'invalid_path' as const, message: ARTIFACT_DRAFT_REJECTED_MESSAGE }, 400);
+            }
             return c.json({ pageId: existing._id.toString() }, 201);
           }
           const owner = (await User.findById(existing.creator)) as UserDocument | null;
@@ -157,7 +167,7 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           // immediately. `pushRevision` wires `revision` + fires the
           // `Page.create` event so backlinks / search run — both already
           // exclude other users' drafts (RFC-0004 Phase 2).
-          const newRevision = await Revision.prepareRevision(newPage, initialBody, user, { format: 'markdown' });
+          const newRevision = await Revision.prepareRevision(newPage, initialBody, user, { format: 'markdown', contentType: 'markdown' });
           await Page.pushRevision(newPage, newRevision, user);
 
           debug('createDraft created draft page', { pageId: newPage._id.toString(), path });
@@ -212,15 +222,16 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
 
         const drafts = (await Page.find({ status: STATUS_DRAFT, creator: user._id })
           .sort({ createdAt: -1 })
-          .select('_id path createdAt updatedAt')
+          .select('_id path createdAt updatedAt contentType')
           .lean()
-          .exec()) as Array<{ _id: { toString(): string }; path: string; createdAt?: Date; updatedAt?: Date }>;
+          .exec()) as Array<{ _id: { toString(): string }; path: string; createdAt?: Date; updatedAt?: Date; contentType?: PageContentType }>;
 
         return c.json(
           {
             drafts: drafts.map((d) => ({
               pageId: d._id.toString(),
               path: d.path,
+              contentType: d.contentType ?? ('markdown' as const),
               createdAt: toISOStringOrNull(d.createdAt) ?? new Date().toISOString(),
               updatedAt: toISOStringOrNull(d.updatedAt) ?? toISOStringOrNull(d.createdAt) ?? new Date().toISOString(),
             })),

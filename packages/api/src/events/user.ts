@@ -52,7 +52,7 @@ export default class UserEvent extends EventEmitter {
     const body = `# ${user.username}\nThis is ${user.username}'s page`;
 
     try {
-      const page = await Page.createPage(userPagePath, body, user, {});
+      const page = await Page.createPage(userPagePath, body, user, { contentType: 'markdown' });
       debug('User page created', page);
     } catch (err) {
       debug('Failed to create user page', err);

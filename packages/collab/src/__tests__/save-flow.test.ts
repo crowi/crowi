@@ -1043,52 +1043,144 @@ describe('createSaveFlow.executeSave', () => {
   });
 
   describe('RFC-0020 §1 — content type discriminator', () => {
-    test('AC-SC-9: a Page that acquired artifact kind mid-session rejects the save via the pointer CAS, without writing pointer/hint (a genuine but tolerated orphan Revision may still exist)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const insertRevision = async (kind: string | undefined, pageId: string) => {
+      const result = await models.Revision.collection.insertOne({
+        path: `/artifact-kind-${pageId}`,
+        page: new Types.ObjectId(pageId),
+        body: '<html></html>',
+        format: 'markdown',
+        author: new Types.ObjectId(),
+        createdAt: new Date(),
+        ...(kind === undefined ? {} : { contentType: kind }),
+      });
+      return result.insertedId;
+    };
+
+    const setup = () => {
       const docBaseRevisions = createDocBaseRevisionStore();
       const docEpochRevisions = createDocEpochStore();
-      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const tracker = createContributorsTracker();
+      const publisher = makeMockPublisher();
+      const draftPublisher = jest.fn(async () => undefined);
+      const contentSequenceAllocator = jest.fn(async () => undefined);
       const flow = createSaveFlow({
         models,
-        contributorsTracker: createContributorsTracker(),
+        contributorsTracker: tracker,
         pageEventPublisher: publisher,
         docBaseRevisions,
         docEpochRevisions,
+        draftPublisher,
+        contentSequenceAllocator,
       });
+      return { docBaseRevisions, docEpochRevisions, tracker, publisher, draftPublisher, contentSequenceAllocator, flow };
+    };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = () => models.Revision as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page = () => models.Page as any;
+
+    test.each([
+      ['the Page hint says artifact', { hint: 'artifact', revisionKind: 'markdown' }],
+      ['the Page hint is wrong (markdown) but the current Revision is artifact', { hint: 'markdown', revisionKind: 'artifact' }],
+      ['the Page hint is missing but the current Revision is artifact', { hint: undefined, revisionKind: 'artifact' }],
+    ] as const)('AC-06: a direct save is refused with PAGE_NOT_FOUND when %s, leaving no Revision, drain, renderer, publish or event side effect', async (_label, {
+      hint,
+      revisionKind,
+    }) => {
+      const { docBaseRevisions, tracker, publisher, draftPublisher, contentSequenceAllocator, flow } = setup();
       const { pageId } = await fixtures.seedPage();
       const user = await seedUser(models);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Page = models.Page as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Revision = models.Revision as any;
+      const revisionId = await insertRevision(revisionKind, pageId);
+      await Page().collection.updateOne(
+        { _id: new Types.ObjectId(pageId) },
+        { $set: { revision: revisionId, currentRevision: revisionId, status: 'draft', creator: user._id, ...(hint ? { contentType: hint } : {}) } },
+      );
+      docBaseRevisions.set(pageId, String(revisionId));
+      tracker.record(pageId, String(user._id));
+      const prepare = jest.spyOn(Revision(), 'prepareRevision');
+      const countBefore = await Revision().countDocuments({}).exec();
+      const before = await Page().collection.findOne({ _id: new Types.ObjectId(pageId) });
 
+      try {
+        const doc = new Y.Doc();
+        doc.getText(CONTENT_FIELD).insert(0, 'markdown that must never become an artifact Page body');
+        await expect(flow.executeSave({ pageId, userId: String(user._id), document: doc })).rejects.toMatchObject({
+          code: 'PAGE_NOT_FOUND',
+          message: 'page not found',
+        });
+        expect(prepare).not.toHaveBeenCalled();
+      } finally {
+        prepare.mockRestore();
+      }
+
+      expect(await Revision().countDocuments({}).exec()).toBe(countBefore);
+      expect(tracker.drain(pageId)).toEqual([String(user._id)]); // not drained
+      expect(publisher.calls).toEqual([]);
+      expect(draftPublisher).not.toHaveBeenCalled();
+      expect(contentSequenceAllocator).not.toHaveBeenCalled();
+      expect(await Page().collection.findOne({ _id: new Types.ObjectId(pageId) })).toEqual(before);
+    });
+
+    test('AC-06: a dangling revision pointer fails closed (PAGE_NOT_FOUND) instead of saving', async () => {
+      const { flow } = setup();
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      await Page().collection.updateOne({ _id: new Types.ObjectId(pageId) }, { $set: { revision: new Types.ObjectId() } });
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'x');
+      await expect(flow.executeSave({ pageId, userId: String(user._id), document: doc })).rejects.toMatchObject({ code: 'PAGE_NOT_FOUND' });
+    });
+
+    test('AC-06: a Page that turns artifact mid-session is refused by the next save; the CAS also pins the observed revision pointer', async () => {
+      const { docBaseRevisions, docEpochRevisions, flow } = setup();
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
       const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
-
-      // Simulate the live doc's Page acquiring artifact kind AFTER this
-      // process materialised it (a writer outside this leaf's scope would
-      // do this; the storage spec's "collaboration の 3 gate" section
-      // explicitly does not close this window at connect time — only the
-      // write-path CAS does). `currentRevision`/epoch are left untouched
-      // so the CAS would otherwise pass on every OTHER predicate.
-      await Page.updateOne({ _id: pageId }, { $set: { contentType: 'artifact' } }).exec();
-
-      const revisionCountBefore = await Revision.countDocuments({}).exec();
+      const artifactRevisionId = await insertRevision('artifact', pageId);
+      await Page().collection.updateOne(
+        { _id: new Types.ObjectId(pageId) },
+        { $set: { revision: artifactRevisionId, currentRevision: artifactRevisionId, contentType: 'artifact' } },
+      );
+      const countBefore = await Revision().countDocuments({}).exec();
       doc.getText(CONTENT_FIELD).insert(0, 'markdown content that must never land on the artifact Page');
-      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
-
-      // The `prepareRevision` + `newRevision.save()` steps run BEFORE the
-      // CAS (see save-flow.ts's own doc comment on this ordering) — a
-      // Markdown Revision row is a tolerated orphan, never referenced by
-      // any Page pointer.
-      const revisionCountAfter = await Revision.countDocuments({}).exec();
-      expect(revisionCountAfter).toBe(revisionCountBefore + 1);
-
-      // Pointer/hint were never written: the Page still shows artifact
-      // kind and its ORIGINAL (pointerless) pointer state.
-      const after = await Page.findById(pageId).exec();
+      await expect(flow.executeSave({ pageId, userId: String(user._id), document: doc })).rejects.toMatchObject({ code: 'PAGE_NOT_FOUND' });
+      expect(await Revision().countDocuments({}).exec()).toBe(countBefore);
+      const after = await Page().findById(pageId).exec();
       expect(after.contentType).toBe('artifact');
-      expect(after.revision).toBeUndefined();
-      expect(after.currentRevision).toBeNull();
+      expect(String(after.revision)).toBe(String(artifactRevisionId));
+    });
+
+    test('AC-06: the pointer CAS misses when the revision pointer moved after the Page was read, even if currentRevision still matches', async () => {
+      const { docBaseRevisions, docEpochRevisions, flow } = setup();
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+      doc.getText(CONTENT_FIELD).insert(0, 'content');
+
+      const moved = await insertRevision('markdown', pageId);
+      const originalFindById = Page().findById.bind(Page());
+      let moveOnce = true;
+      const findById = jest.spyOn(Page(), 'findById').mockImplementation((...args: unknown[]) => {
+        const query = originalFindById(...args);
+        const originalExec = query.exec.bind(query);
+        query.exec = async () => {
+          const found = await originalExec();
+          if (moveOnce && found) {
+            moveOnce = false;
+            // Only `revision` moves (not `currentRevision`), after the save read the Page.
+            await Page().collection.updateOne({ _id: new Types.ObjectId(pageId) }, { $set: { revision: moved } });
+          }
+          return found;
+        };
+        return query;
+      });
+      try {
+        await expect(flow.executeSave({ pageId, userId: String(user._id), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+      } finally {
+        findById.mockRestore();
+      }
     });
   });
 });

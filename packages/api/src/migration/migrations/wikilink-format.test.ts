@@ -1,6 +1,7 @@
 import { KNOWN_HTML_ELEMENTS } from '@crowi/api-contract';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
 import type { UserDocument } from 'src/models/user';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
 import { crowi, Fixture } from 'src/test/setup';
 import { MigrationRunner } from '../runner';
 import { bodyHasRewritableWikilink, rewriteAndDetect, rewriteWikilinks, shouldRewriteWikilink, wikilinkFormat } from './wikilink-format';
@@ -414,7 +415,11 @@ describe('migration/wikilink-format — framework wiring', () => {
   });
 
   it('AC-SC-10 (RFC-0020 §1): an artifact Page containing a close-tag-shaped candidate is excluded from isPending / detect / apply, and Markdown pages are still processed', async () => {
-    await Page.createPage(`${PATH_PREFIX}/artifact-with-candidate`, 'see </docs/api> here, but this body is artifact HTML', admin, { contentType: 'artifact' });
+    await seedStoredArtifactPage({
+      path: `${PATH_PREFIX}/artifact-with-candidate`,
+      body: 'see </docs/api> here, but this body is artifact HTML',
+      userId: admin._id,
+    });
     const markdownPage = await Page.createPage(`${PATH_PREFIX}/markdown-with-candidate`, 'see </docs/api> here', admin, {});
     // A legacy row that predates the contentType field (missing-kind, not
     // explicit 'markdown') — the walker must still treat it as Markdown.

@@ -1,20 +1,21 @@
 'use client';
 
-import { use, useRef, useState } from 'react';
+import { m } from '@paraglide/messages.js';
+import { UserX } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { UserX } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { use, useRef, useState } from 'react';
+import { PageContent, PageHeader } from '@/components/page-view';
 import { Button } from '@/components/ui/button';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { NotFoundCard } from '@/components/ui/not-found-card';
-import { UserProfile, UserRecentPages, UserBookmarks, UserSubpages, type UserProfileTab } from '@/components/user-page';
-import { PageHeader, PageContent } from '@/components/page-view';
-import { useUserPage } from '@/lib/use-user-page';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { UserBookmarks, UserProfile, type UserProfileTab, UserRecentPages, UserSubpages } from '@/components/user-page';
+import { canEditPageBodyInWeb } from '@/lib/page-editability';
 import { usePage } from '@/lib/use-page';
 import { usePageTitle } from '@/lib/use-page-title';
-import { m } from '@paraglide/messages.js';
+import { useUserPage } from '@/lib/use-user-page';
 
 interface UserPageProps {
   params: Promise<{
@@ -82,7 +83,7 @@ export default function UserPage({ params }: UserPageProps) {
         <article className="space-y-12">
           <PageHeader
             page={userPageDoc}
-            onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`)}
+            onEdit={canEditPageBodyInWeb(userPageDoc) ? () => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`) : undefined}
             showActions
             showTitle={false}
             showMeta={false}

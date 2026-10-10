@@ -1,8 +1,8 @@
 import Debug from 'debug';
 import { DEFAULT_ARTIFACT_MAX_BYTES } from 'src/artifact/constants';
 import { buildArtifactContentSecurityPolicy, extractArtifactDigestMarkers } from 'src/artifact/csp';
-import { ARTIFACT_FRAME_BRIDGE_SCRIPT, ARTIFACT_NAVIGATION_GUARD_SCRIPT } from 'src/artifact/frame-bridge';
 import { ARTIFACT_TOKEN_TTL_SECONDS, deriveArtifactTokenKey, mintArtifactToken, prepareArtifactDelivery, resolveArtifactTokenKey } from 'src/artifact/delivery';
+import { ARTIFACT_FRAME_BRIDGE_SCRIPT, ARTIFACT_NAVIGATION_GUARD_SCRIPT } from 'src/artifact/frame-bridge';
 import { ingestHtmlArtifact } from 'src/artifact/ingest';
 import * as artifactPolicy from 'src/artifact/policy';
 import { STATUS_DRAFT, STATUS_RENAMING } from 'src/models/page';
@@ -59,8 +59,9 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
 
   const createArtifactPage = async (path: string, body: string) => {
     const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
-    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact' });
-    return Page.pushRevision(page, newRevision, user);
+    const artifactPreWrite = { ok: true as const, body };
+    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact', artifactPreWrite });
+    return Page.pushRevision(page, newRevision, user, { artifactPreWrite });
   };
 
   const insufficientScopeHeaders = async () => {
@@ -496,8 +497,8 @@ describe('artifact-stream (the token-authenticated serve route and the JWT-authe
       const page = await createArtifactPage(`${PATH_PREFIX}dl-revision-switch`, v1Body);
       const v1RevisionId = page.revision._id.toString();
       const v2Body = await ingestedBody(validArtifactHtml({ body: '<p>v2</p>' }));
-      const v2Revision = await Revision.prepareRevision(page, v2Body, user, { contentType: 'artifact' });
-      await Page.pushRevision(page, v2Revision, user);
+      const v2Revision = await Revision.prepareRevision(page, v2Body, user, { contentType: 'artifact', artifactPreWrite: { ok: true, body: v2Body } });
+      await Page.pushRevision(page, v2Revision, user, { artifactPreWrite: { ok: true, body: v2Body } });
 
       const res = await request(app)
         .get(`/api/pages/${page._id}/artifact-download?revision=${v1RevisionId}`)

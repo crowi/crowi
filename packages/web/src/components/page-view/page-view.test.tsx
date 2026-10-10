@@ -38,13 +38,14 @@ vi.mock('@/lib/use-route-focus', () => ({ skipRouteFocusFor }));
 
 // Content leaves are irrelevant to render ORDER of the two banners — stub
 // each with an identifiable marker (their own behaviour has its own tests).
-const { pageHeaderProps } = vi.hoisted(() => ({ pageHeaderProps: [] as Array<{ wide?: boolean }> }));
+const { pageHeaderProps } = vi.hoisted(() => ({ pageHeaderProps: [] as Array<{ wide?: boolean; onEdit?: () => void }> }));
 vi.mock('./page-header', () => ({
-  PageHeader: (props: { wide?: boolean }) => {
+  PageHeader: (props: { wide?: boolean; onEdit?: () => void }) => {
     pageHeaderProps.push(props);
     return createElement('div', { 'data-testid': 'page-header-stub' });
   },
 }));
+vi.mock('./stale-revision-banner', () => ({ StaleRevisionBanner: () => createElement('div', { 'data-testid': 'stale-revision-banner-stub' }) }));
 vi.mock('./page-content', () => ({ PageContent: () => createElement('div', { 'data-testid': 'page-content-stub' }) }));
 vi.mock('./artifact-view', () => ({ ArtifactView: () => createElement('div', { 'data-testid': 'artifact-view-stub' }) }));
 vi.mock('./backlink-list', () => ({ BacklinkList: () => createElement('div', { 'data-testid': 'backlink-list-stub' }) }));
@@ -394,5 +395,82 @@ describe('PageView — artifact chrome: layout + menu + portalize banner (RFC-00
     usePageChildren.mockReturnValue({ data: { children: [{ path: '/docs/guide/example/child', hasChildren: false }] } });
     renderPageView(makePage({ grant: PageGrantEnum.PUBLIC, status: PageStatusEnum.PUBLISHED }));
     expect(screen.getByRole('button', { name: m['page_list.portalize_banner_action']() })).toBeTruthy();
+  });
+});
+
+describe('PageView — body edit entry points (artifact-edit-guard, AC-01)', () => {
+  const draftWith = (revision: PageWithRevision['revision']) =>
+    makePage({ status: PageStatusEnum.DRAFT, grant: PageGrantEnum.PUBLIC, revision, latestRevision: revision._id });
+  const editLabel = () => m['page.action_edit']();
+
+  it('offers the header callback for a current Markdown page and withholds it for a current artifact page', () => {
+    renderPageView(makePage());
+    expect(typeof pageHeaderProps.at(-1)?.onEdit).toBe('function');
+
+    cleanup();
+    pageHeaderProps.length = 0;
+    renderPageView(makePage({ revision: makeArtifactRevision(), latestRevision: 'rev-artifact-1' }));
+    expect(pageHeaderProps.at(-1)?.onEdit).toBeUndefined();
+  });
+
+  it('treats a revision stored without contentType as Markdown', () => {
+    const legacy = { ...makePage().revision, contentType: undefined } as unknown as PageWithRevision['revision'];
+    renderPageView(makePage({ revision: legacy }));
+    expect(typeof pageHeaderProps.at(-1)?.onEdit).toBe('function');
+  });
+
+  it('draft notice: the edit button is shown for a Markdown draft and absent for an artifact draft, while the notice stays', () => {
+    renderPageView(draftWith(makePage().revision));
+    expect(screen.getByRole('button', { name: editLabel() })).toBeTruthy();
+
+    cleanup();
+    renderPageView(draftWith(makeArtifactRevision()));
+    expect(screen.queryByRole('button', { name: editLabel() })).toBeNull();
+    expect(screen.getByText(m['page.draft_notice_title']())).toBeTruthy();
+  });
+
+  describe('a past-revision view', () => {
+    // The viewed `revision` is a past version (rev-old); the page's CURRENT revision is fetched by id.
+    const past = (kind: 'markdown' | 'artifact') =>
+      makePage({ revision: { ...makePage().revision, _id: 'rev-old', contentType: kind }, latestRevision: 'rev-now' });
+    const currentWith = (revision: PageWithRevision['revision']) => makePage({ revision, latestRevision: revision._id });
+
+    const renderPast = (viewed: PageWithRevision, current: { page: PageWithRevision | null; isLoading: boolean }) => {
+      usePage.mockImplementation((params: { path?: string; page_id?: string }) => ({
+        page: params.page_id ? current.page : viewed,
+        isLoading: params.page_id ? current.isLoading : false,
+        isError: false,
+        error: null,
+        notFound: false,
+        notGranted: false,
+        redirectTo: null,
+        isDeleted: false,
+        refetch: vi.fn(),
+      }));
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+      const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+      return render(createElement(PageView, { path: viewed.path, revisionId: 'rev-old' }), { wrapper });
+    };
+
+    it('judges by the current revision, not the viewed one: an old Markdown version of a now-artifact page has no edit entry', () => {
+      renderPast(past('markdown'), { page: currentWith(makeArtifactRevision()), isLoading: false });
+      expect(pageHeaderProps.at(-1)?.onEdit).toBeUndefined();
+    });
+
+    it('offers it when the current revision is Markdown', () => {
+      renderPast(past('markdown'), { page: currentWith({ ...makePage().revision, _id: 'rev-now' }), isLoading: false });
+      expect(typeof pageHeaderProps.at(-1)?.onEdit).toBe('function');
+    });
+
+    it('offers nothing until the current revision has loaded', () => {
+      renderPast(past('markdown'), { page: null, isLoading: true });
+      expect(pageHeaderProps.at(-1)?.onEdit).toBeUndefined();
+      expect(usePage).toHaveBeenCalledWith({ page_id: 'page-1' });
+    });
+
+    it('does not fetch the current revision for a normal (non-stale) view', () => {
+      renderPageView(makePage());
+      expect(usePage).not.toHaveBeenCalledWith({ page_id: 'page-1' });
+    });
   });
 });

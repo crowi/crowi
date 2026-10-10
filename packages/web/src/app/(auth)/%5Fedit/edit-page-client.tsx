@@ -1,8 +1,10 @@
 'use client';
 
+import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -65,9 +67,37 @@ export function EditPageClient() {
   const searchParams = useSearchParams();
   const mode = resolveMode(searchParams.get('page_id'), searchParams.get('path'));
 
+  // Keyed by the resolved target so a query change (another page id or path)
+  // never reuses the previous page's editor state, presence or collab session.
   if (mode.kind === 'invalid') return <InvalidParamsView />;
-  if (mode.kind === 'update') return <UpdatePageEditor pageId={mode.pageId} />;
-  return <CreatePageEditor path={mode.path} />;
+  if (mode.kind === 'update') return <UpdatePageEditor key={`id:${mode.pageId}`} pageId={mode.pageId} />;
+  return <CreatePageResolver key={`path:${mode.path}`} path={mode.path} />;
+}
+
+/**
+ * Shown instead of the editor when the page's body is an artifact (HTML): the
+ * Web has no editor for it and the Markdown editor must never receive it. It
+ * mounts nothing of the editing stack, so no presence, collab, recovery or
+ * save machinery starts. The way back is derived from the fetched page's own
+ * path, never from a URL in the query string.
+ */
+function ArtifactEditBlocked({ path }: { path: string }) {
+  return (
+    <div className="flex flex-1 items-center justify-center p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader>
+          <CardTitle>{m['edit.artifact_blocked_title']()}</CardTitle>
+          <CardDescription className="font-mono">{path}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">{m['edit.artifact_blocked_body']()}</p>
+          <Button asChild variant="outline">
+            <Link href={pagePathToHref(path)}>{m['edit.back_to_page']()}</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 function InvalidParamsView() {
@@ -941,107 +971,18 @@ interface UpdatePageEditorProps {
   autoFocusOnReady?: boolean;
 }
 
+/**
+ * The route's fetch / gate layer for an existing page. It owns only the page
+ * query and decides what to mount: a spinner while loading, an error for any
+ * fetch failure (401 / 403 / 404 / network), the artifact notice for an
+ * artifact body, and otherwise `MarkdownPageEditor`, which alone holds the
+ * editing stack (presence, collab, recovery buffer, save mutation).
+ */
 function UpdatePageEditor({ pageId, autoFocusOnReady = false }: UpdatePageEditorProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
   const { page, isLoading, isError, error } = usePage({ page_id: pageId });
 
-  // RFC-0005 — register the editor on the page's presence channel. The
-  // editor connects to /collab for editing; this also connects it to
-  // /presence so the editor appears in the live presence row that page
-  // *viewers* see, carrying the ✏️ editing badge (which `listViewers`
-  // joins from the collab editing signal). Without this an editor is
-  // absent from the presence channel and vanishes from viewers' rows.
-  // The returned viewer list is intentionally unused here — the editor
-  // shows peers via `CollabPresenceAvatars`, not this row.
-  usePresence(pageId);
-
   usePageTitle(page ? m['doc_title.editing']({ path: pageDisplayName(page.path) }) : null);
-
-  // RFC-0003 Phase 7: in realtime mode the canonical body lives in
-  // Y.Text. We still keep a React-side `body` string for the preview
-  // pane + the attachment-insert markdown + the (transitional) HTTP
-  // save path. The string is rehydrated by `CollaborativeMarkdownEditor`'s
-  // `onYTextChange` once the Yjs session loads, but we seed it with
-  // the last-saved revision body so the preview isn't blank while the
-  // wsToken round-trip is in flight (~100 ms warm).
-  const [body, setBody] = useState<string | null>(null);
-  const [revisionId, setRevisionId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [readonly, setReadonly] = useState<boolean>(false);
-
-  const updateMutation = useUpdatePage();
-  const setGrantMutation = useSetPageGrant();
-  const handleReadonlyChange = useCallback((next: boolean) => {
-    setReadonly(next);
-  }, []);
-
-  // Re-init when the loaded page's revision changes (e.g., user navigates between edits).
-  // Following the React docs pattern for "Adjusting some state when a prop changes",
-  // this runs during render rather than in an effect — `set-state-in-effect` is the
-  // discouraged variant.
-  if (page && page.revision._id !== revisionId) {
-    setBody(page.revision.body ?? '');
-    setRevisionId(page.revision._id);
-  }
-
-  const handleCancel = () => {
-    if (page) {
-      router.push(pagePathToHref(page.path));
-      return;
-    }
-    router.back();
-  };
-
-  // Editor-QoL — after a successful realtime save, leave the editor for
-  // the page view. The realtime save path (`crowi:save`) does not touch
-  // react-query, so the destination view can still hold a stale entry: a
-  // prior 404 for a freshly-created page's path, or the pre-edit revision.
-  // Invalidate the full page-content query set so BOTH the normal page
-  // view (`['page']`) and the portal/list view (`['pages']`) refetch —
-  // returning to a just-edited portal otherwise kept its stale body.
-  const handleAfterSave = () => {
-    if (!page) return;
-    invalidatePageContentQueries(queryClient);
-    router.push(pagePathToHref(page.path));
-  };
-
-  // RFC-0005 Phase 2 — persist a visibility change immediately via the
-  // grant-only endpoint (no revision push). The page query is
-  // invalidated on success, so `page.grant` re-renders with the new
-  // value. A failure surfaces inline; the selector reverts because it
-  // is driven straight off the (unchanged) `page.grant`.
-  const handleChangeGrant = async (nextGrant: number) => {
-    if (!page || nextGrant === page.grant) return;
-    setFeedback(null);
-    try {
-      await setGrantMutation.mutateAsync({ page_id: page._id, grant: nextGrant });
-    } catch (err) {
-      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.grant_update_failed']() });
-    }
-  };
-
-  const handleSave = async () => {
-    if (!page || body === null) return;
-
-    setFeedback(null);
-
-    try {
-      const updated = await updateMutation.mutateAsync({
-        page_id: page._id,
-        body,
-        revision_id: revisionId ?? undefined,
-      });
-      router.push(pagePathToHref(updated.path));
-    } catch (err) {
-      if (err instanceof PageRevisionConflictError) {
-        setFeedback({ kind: 'conflict', message: err.message });
-        return;
-      }
-      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.failed_to_update']() });
-    }
-  };
 
   if (isLoading) {
     return (
@@ -1069,6 +1010,113 @@ function UpdatePageEditor({ pageId, autoFocusOnReady = false }: UpdatePageEditor
       </div>
     );
   }
+
+  if (page.revision?.contentType === 'artifact') {
+    return <ArtifactEditBlocked path={page.path} />;
+  }
+
+  return <MarkdownPageEditor page={page} autoFocusOnReady={autoFocusOnReady} />;
+}
+
+interface MarkdownPageEditorProps {
+  page: PageWithRevision;
+  autoFocusOnReady: boolean;
+}
+
+function MarkdownPageEditor({ page, autoFocusOnReady }: MarkdownPageEditorProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const pageId = page._id;
+
+  // RFC-0005 — register the editor on the page's presence channel. The
+  // editor connects to /collab for editing; this also connects it to
+  // /presence so the editor appears in the live presence row that page
+  // *viewers* see, carrying the ✏️ editing badge (which `listViewers`
+  // joins from the collab editing signal). Without this an editor is
+  // absent from the presence channel and vanishes from viewers' rows.
+  // The returned viewer list is intentionally unused here — the editor
+  // shows peers via `CollabPresenceAvatars`, not this row.
+  usePresence(pageId);
+
+  // RFC-0003 Phase 7: in realtime mode the canonical body lives in
+  // Y.Text. We still keep a React-side `body` string for the preview
+  // pane + the attachment-insert markdown + the (transitional) HTTP
+  // save path. The string is rehydrated by `CollaborativeMarkdownEditor`'s
+  // `onYTextChange` once the Yjs session loads, but we seed it with
+  // the last-saved revision body so the preview isn't blank while the
+  // wsToken round-trip is in flight (~100 ms warm).
+  const [body, setBody] = useState<string | null>(null);
+  const [revisionId, setRevisionId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [readonly, setReadonly] = useState<boolean>(false);
+
+  const updateMutation = useUpdatePage();
+  const setGrantMutation = useSetPageGrant();
+  const handleReadonlyChange = useCallback((next: boolean) => {
+    setReadonly(next);
+  }, []);
+
+  // Re-init when the loaded page's revision changes (e.g., user navigates between edits).
+  // Following the React docs pattern for "Adjusting some state when a prop changes",
+  // this runs during render rather than in an effect — `set-state-in-effect` is the
+  // discouraged variant.
+  if (page.revision._id !== revisionId) {
+    setBody(page.revision.body ?? '');
+    setRevisionId(page.revision._id);
+  }
+
+  const handleCancel = () => {
+    router.push(pagePathToHref(page.path));
+  };
+
+  // Editor-QoL — after a successful realtime save, leave the editor for
+  // the page view. The realtime save path (`crowi:save`) does not touch
+  // react-query, so the destination view can still hold a stale entry: a
+  // prior 404 for a freshly-created page's path, or the pre-edit revision.
+  // Invalidate the full page-content query set so BOTH the normal page
+  // view (`['page']`) and the portal/list view (`['pages']`) refetch —
+  // returning to a just-edited portal otherwise kept its stale body.
+  const handleAfterSave = () => {
+    invalidatePageContentQueries(queryClient);
+    router.push(pagePathToHref(page.path));
+  };
+
+  // RFC-0005 Phase 2 — persist a visibility change immediately via the
+  // grant-only endpoint (no revision push). The page query is
+  // invalidated on success, so `page.grant` re-renders with the new
+  // value. A failure surfaces inline; the selector reverts because it
+  // is driven straight off the (unchanged) `page.grant`.
+  const handleChangeGrant = async (nextGrant: number) => {
+    if (nextGrant === page.grant) return;
+    setFeedback(null);
+    try {
+      await setGrantMutation.mutateAsync({ page_id: page._id, grant: nextGrant });
+    } catch (err) {
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.grant_update_failed']() });
+    }
+  };
+
+  const handleSave = async () => {
+    if (body === null) return;
+
+    setFeedback(null);
+
+    try {
+      const updated = await updateMutation.mutateAsync({
+        page_id: page._id,
+        body,
+        revision_id: revisionId ?? undefined,
+      });
+      router.push(pagePathToHref(updated.path));
+    } catch (err) {
+      if (err instanceof PageRevisionConflictError) {
+        setFeedback({ kind: 'conflict', message: err.message });
+        return;
+      }
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.failed_to_update']() });
+    }
+  };
 
   // Wrap the realtime editor in the session-reauth provider so a JWT
   // expiry shows an inline modal instead of the `(auth)` redirect (which
@@ -1105,6 +1153,59 @@ function UpdatePageEditor({ pageId, autoFocusOnReady = false }: UpdatePageEditor
       />
       <SessionReauthModal />
     </SessionReauthProvider>
+  );
+}
+
+/**
+ * The `_edit?path=` entry. A path that already holds a page is NOT a create:
+ * an existing artifact page shows the notice, an existing Markdown page opens
+ * its editor, and only an explicit not-found goes on to the draft flow. A
+ * loading state or any other failure never POSTs a draft (it would be a guess
+ * about a page we could not read); the draft API's own path-occupancy check
+ * still covers a 404 that the server collapsed from a denied page.
+ */
+function CreatePageResolver({ path }: { path: string }) {
+  const router = useRouter();
+  const { page, isLoading, isError, error, notFound } = usePage({ path });
+  // Once the path is known to be free the draft flow owns the screen: later
+  // refetches (the draft POST invalidates page queries) must not swap it out.
+  const [createLocked, setCreateLocked] = useState(false);
+  if (!createLocked && !page && notFound) {
+    setCreateLocked(true);
+  }
+
+  if (createLocked) return <CreatePageEditor path={path} />;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <LoadingSpinner message={m['edit.loading_page']()} />
+      </div>
+    );
+  }
+
+  if (page) {
+    if (page.revision?.contentType === 'artifact') {
+      return <ArtifactEditBlocked path={page.path} />;
+    }
+    return <UpdatePageEditor pageId={page._id} />;
+  }
+
+  return (
+    <div className="flex flex-1 items-center justify-center p-4">
+      <Alert variant="destructive" className="w-full max-w-4xl">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>{m['common.error']()}</AlertTitle>
+        <AlertDescription>
+          {m['edit.failed_to_load_body']({ message: isError ? (error?.message ?? '') : '' })}
+          <div className="mt-3">
+            <Button variant="outline" size="sm" onClick={() => router.back()}>
+              {m['common.go_back']()}
+            </Button>
+          </div>
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 }
 

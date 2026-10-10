@@ -4011,8 +4011,9 @@ describe('RFC-0020 §1 — content type discriminator (Hono page routes)', () =>
   // gets (RFC-0020 §1: the artifact branch skips the renderer entirely).
   const createArtifactPage = async (path: string, body: string) => {
     const page = await Page.create({ path, creator: userId, lastUpdateUser: userId });
-    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact' });
-    return Page.pushRevision(page, newRevision, user);
+    const artifactPreWrite = { ok: true as const, body };
+    const newRevision = await Revision.prepareRevision(page, body, user, { contentType: 'artifact', artifactPreWrite });
+    return Page.pushRevision(page, newRevision, user, { artifactPreWrite });
   };
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
@@ -5047,6 +5048,162 @@ describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write i
     });
   });
 
+  describe('artifact-edit-guard — save boundary contract (AC-03 / AC-04 / AC-10 / AC-11)', () => {
+    const createArtifact = async (suffix: string) => {
+      const res = await request(app)
+        .post('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ path: `${PATH_PREFIX}${suffix}`, body: VALID_ARTIFACT_HTML });
+      expect(res.status).toBe(200);
+      return { pageId: res.body.page._id as string, path: res.body.page.path as string };
+    };
+
+    it('AC-04 / AC-10: create, update and revert hand the model the handler pre-write success value (normalized body) after exactly one snapshot and one ingest', async () => {
+      await enableArtifactDelivery();
+      const createSpy = jest.spyOn(Page, 'createPage');
+      const updateSpy = jest.spyOn(Page, 'updatePage');
+      const snapshotSpy = jest.spyOn(artifactPolicy, 'resolveArtifactPolicySnapshot');
+      const ingestSpy = jest.spyOn(artifactIngest, 'ingestHtmlArtifact');
+
+      const { pageId, path } = await createArtifact('boundary-proof');
+      expect(snapshotSpy).toHaveBeenCalledTimes(1);
+      expect(ingestSpy).toHaveBeenCalledTimes(1);
+      expect(ingestSpy.mock.calls[0][1]).toMatchObject({ source: 'author' });
+      const createdBody = createSpy.mock.calls[0][1] as string;
+      expect(createSpy.mock.calls[0][3]).toMatchObject({ contentType: 'artifact', artifactPreWrite: { ok: true, body: createdBody } });
+      expect(typeof createdBody).toBe('string');
+
+      snapshotSpy.mockClear();
+      ingestSpy.mockClear();
+      const nextSource = validArtifactHtml({ body: '<p>v2</p>' });
+      const updated = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body: nextSource });
+      expect(updated.status).toBe(200);
+      expect(snapshotSpy).toHaveBeenCalledTimes(1);
+      expect(ingestSpy).toHaveBeenCalledTimes(1);
+      const updateBody = updateSpy.mock.calls[0][1] as string;
+      expect(updateSpy.mock.calls[0][3]).toMatchObject({ contentType: 'artifact', artifactPreWrite: { ok: true, body: updateBody } });
+
+      const firstRevision = await Revision.findOne({ path }).sort({ createdAt: 1 }).lean();
+      snapshotSpy.mockClear();
+      ingestSpy.mockClear();
+      updateSpy.mockClear();
+      const reverted = await request(app)
+        .post('/api/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: String(firstRevision?._id) });
+      expect(reverted.status).toBe(200);
+      expect(snapshotSpy).toHaveBeenCalledTimes(1);
+      expect(ingestSpy).toHaveBeenCalledTimes(1);
+      expect(ingestSpy.mock.calls[0][1]).toMatchObject({ source: 'stored-revision' });
+      const revertBody = updateSpy.mock.calls[0][1] as string;
+      expect(updateSpy.mock.calls[0][3]).toMatchObject({ contentType: 'artifact', artifactPreWrite: { ok: true, body: revertBody } });
+    });
+
+    it('AC-03: a header-omitted PUT keeps the artifact kind and validates; a Markdown declaration is refused (AI-D02) leaving the Page and its Revisions untouched', async () => {
+      await enableArtifactDelivery();
+      const { pageId, path } = await createArtifact('markdown-declared');
+      const before = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+      const revisionsBefore = await Revision.countDocuments({ path });
+      const renderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+
+      const res = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'markdown')
+        .send({ page_id: pageId, body: '# markdown over an artifact' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({ code: 'ARTIFACT_WRITE_REJECTED', ruleId: 'AI-D02' });
+      expect(renderSpy).not.toHaveBeenCalled();
+      expect(await Page.collection.findOne({ _id: new Types.ObjectId(pageId) })).toEqual(before);
+      expect(await Revision.countDocuments({ path })).toBe(revisionsBefore);
+
+      const invalid = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body: '# also not html' });
+      expect(invalid.status).toBeGreaterThanOrEqual(400);
+      expect(await Page.collection.findOne({ _id: new Types.ObjectId(pageId) })).toEqual(before);
+    });
+
+    it('AC-11: a rejected artifact create (invalid HTML, oversize, delivery not configured) leaves no Page / Revision / history row and the same path can be created afterwards', async () => {
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      const cases: Array<{ suffix: string; body: string; configure: () => Promise<unknown> | void; status: number }> = [
+        {
+          suffix: 'reject-invalid',
+          body: '<p>not a full document</p><script src="https://evil.example/x.js"></script>',
+          configure: () => enableArtifactDelivery(),
+          status: 400,
+        },
+        {
+          suffix: 'reject-oversize',
+          body: validArtifactHtml({ body: `<p>${'x'.repeat(ARTIFACT_MIN_MAX_BYTES + 1024)}</p>` }),
+          configure: () => enableArtifactDelivery({ maxBytes: ARTIFACT_MIN_MAX_BYTES }),
+          status: 413,
+        },
+        { suffix: 'reject-delivery', body: VALID_ARTIFACT_HTML, configure: () => undefined, status: 422 },
+      ];
+      for (const { suffix, body, configure, status } of cases) {
+        jest.restoreAllMocks();
+        await restoreCrowiConfig(crowi, configSnapshot);
+        await configure();
+        const path = `${PATH_PREFIX}${suffix}`;
+        const pagesBefore = await Page.collection.countDocuments({});
+        const res = await request(app).post('/api/pages').set(authHeaders(accessToken)).set('X-Crowi-Page-Content-Type', 'artifact').send({ path, body });
+        expect(res.status).toBe(status);
+        expect(await Page.collection.countDocuments({ path })).toBe(0);
+        expect(await Page.collection.countDocuments({})).toBe(pagesBefore);
+        expect(await Revision.countDocuments({ path })).toBe(0);
+        expect(await PageHistoryEvent.countDocuments({ 'payload.path': path })).toBe(0);
+        expect(await PageHistoryOperation.countDocuments({ $or: [{ fromPath: path }, { toPath: path }] })).toBe(0);
+
+        // Fixing the input / configuration lets the same path be created.
+        await enableArtifactDelivery({ maxBytes: DEFAULT_ARTIFACT_MAX_BYTES });
+        const retry = await request(app)
+          .post('/api/pages')
+          .set(authHeaders(accessToken))
+          .set('X-Crowi-Page-Content-Type', 'artifact')
+          .send({ path, body: VALID_ARTIFACT_HTML });
+        expect(retry.status).toBe(200);
+      }
+    });
+
+    it('AC-04: the create handler logs the author-controlled path only after the page is durably saved', async () => {
+      const secretPath = `${PATH_PREFIX}logged-path-secret-marker`;
+      const { logged: rejectedLog } = await captureDebugLog(() =>
+        request(app)
+          .post('/api/pages')
+          .set(authHeaders(accessToken))
+          .set('X-Crowi-Page-Content-Type', 'artifact')
+          .send({ path: secretPath, body: VALID_ARTIFACT_HTML }),
+      );
+      expect(rejectedLog).not.toContain('logged-path-secret-marker');
+
+      await enableArtifactDelivery();
+      const { res, logged } = await captureDebugLog(() =>
+        request(app)
+          .post('/api/pages')
+          .set(authHeaders(accessToken))
+          .set('X-Crowi-Page-Content-Type', 'artifact')
+          .send({ path: secretPath, body: VALID_ARTIFACT_HTML }),
+      );
+      expect(res.status).toBe(200);
+      expect(logged).toContain('createPage called with');
+    });
+
+    it('AC-09: a legacy Revision without contentType is markdown and a header-omitted PUT succeeds', async () => {
+      const page = await Page.create({ path: `${PATH_PREFIX}legacy-markdown`, creator: userId, lastUpdateUser: userId });
+      const revision = await Revision.create({ path: page.path, page: page._id, body: '# legacy', author: userId });
+      await Revision.collection.updateOne({ _id: revision._id }, { $unset: { contentType: '' } });
+      await Page.collection.updateOne({ _id: page._id }, { $set: { revision: revision._id }, $unset: { contentType: '' } });
+
+      const res = await request(app)
+        .put('/api/pages')
+        .set(authHeaders(accessToken))
+        .send({ page_id: String(page._id), body: '# legacy v2' });
+      expect(res.status).toBe(200);
+      expect(res.body.page.revision.contentType).toBe('markdown');
+    });
+  });
+
   describe('AC-AI-13 — authorization boundary and internal-error classification', () => {
     it('a non-granted revert of an owner-only artifact Page never reveals artifact-specific diagnostics, only the existing 404', async () => {
       await enableArtifactDelivery();
@@ -5128,32 +5285,38 @@ describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write i
       expect(JSON.stringify(res.body)).not.toContain('parser detail');
     });
 
-    it('a non-null but unpopulated current Revision on update is classified as a fixed 500 (internal invariant broken), never a generic PAGE_UPDATE_FAILED', async () => {
-      await enableArtifactDelivery();
-      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unpopulated-revision`, '# v1');
-
-      const isPopulatedSpy = jest.spyOn(pageResponseModule, 'isPopulatedRevision').mockReturnValue(false);
-      let res;
-      try {
-        res = await request(app)
-          .put('/api/pages')
-          .set(authHeaders(accessToken))
-          .set('X-Crowi-Page-Content-Type', 'artifact')
-          .send({ page_id: page._id, body: VALID_ARTIFACT_HTML });
-      } finally {
-        isPopulatedSpy.mockRestore();
-      }
-      expect(res.status).toBe(500);
-      expect(res.body.error.code).toBe('INTERNAL_ERROR');
-    });
-
-    it('a non-null but unpopulated current Revision on revert is classified as a fixed 500 (internal invariant broken), never a generic PAGE_REVERT_TO_REVISION_FAILED', async () => {
+    it('AC-09: a dangling current-revision pointer on update is classified as a fixed 500, never treated as a pointerless Page, and nothing changes', async () => {
       await enableArtifactDelivery();
       const createRes = await request(app)
         .post('/api/pages')
         .set(authHeaders(accessToken))
         .set('X-Crowi-Page-Content-Type', 'artifact')
-        .send({ path: `${PATH_PREFIX}unpopulated-revision-revert`, body: VALID_ARTIFACT_HTML });
+        .send({ path: `${PATH_PREFIX}dangling-revision`, body: VALID_ARTIFACT_HTML });
+      const pageId = createRes.body.page._id;
+      const before = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+      await Revision.collection.deleteOne({ _id: before?.revision });
+      const revisionCountBefore = await Revision.countDocuments({ page: new Types.ObjectId(pageId) });
+
+      for (const headers of [{}, { 'X-Crowi-Page-Content-Type': 'artifact' }, { 'X-Crowi-Page-Content-Type': 'markdown' }]) {
+        const res = await request(app).put('/api/pages').set(authHeaders(accessToken)).set(headers).send({ page_id: pageId, body: VALID_ARTIFACT_HTML });
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe('INTERNAL_ERROR');
+        expect(JSON.stringify(res.body)).not.toContain(VALID_ARTIFACT_HTML);
+      }
+
+      const after = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+      expect(String(after?.revision)).toBe(String(before?.revision));
+      expect(after?.contentType).toBe(before?.contentType);
+      expect(await Revision.countDocuments({ page: new Types.ObjectId(pageId) })).toBe(revisionCountBefore);
+    });
+
+    it('AC-09: a dangling current-revision pointer on revert is classified as a fixed 500', async () => {
+      await enableArtifactDelivery();
+      const createRes = await request(app)
+        .post('/api/pages')
+        .set(authHeaders(accessToken))
+        .set('X-Crowi-Page-Content-Type', 'artifact')
+        .send({ path: `${PATH_PREFIX}dangling-revision-revert`, body: VALID_ARTIFACT_HTML });
       const pageId = createRes.body.page._id;
       const path = createRes.body.page.path;
       const targetRevision = await Revision.create({
@@ -5163,19 +5326,17 @@ describe('feature-html-artifact-write-path (RFC-0020 phase 2a-2 — Page write i
         author: userId,
         contentType: 'artifact',
       });
+      const before = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+      await Revision.collection.deleteOne({ _id: before?.revision });
 
-      const isPopulatedSpy = jest.spyOn(pageResponseModule, 'isPopulatedRevision').mockReturnValue(false);
-      let res;
-      try {
-        res = await request(app)
-          .post('/api/pages/revert-to-revision')
-          .set(authHeaders(accessToken))
-          .send({ page_id: pageId, revision_id: targetRevision._id.toString() });
-      } finally {
-        isPopulatedSpy.mockRestore();
-      }
+      const res = await request(app)
+        .post('/api/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: targetRevision._id.toString() });
       expect(res.status).toBe(500);
       expect(res.body.error.code).toBe('INTERNAL_ERROR');
+      const after = await Page.collection.findOne({ _id: new Types.ObjectId(pageId) });
+      expect(String(after?.revision)).toBe(String(before?.revision));
     });
 
     // A stored `contentType` outside `markdown | artifact` is internal-state

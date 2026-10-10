@@ -19,7 +19,8 @@ import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 
 interface PortalHeaderProps {
   page: PageWithRevision;
-  onEdit: () => void;
+  /** Omitted when the body cannot be edited in the Web (e.g. an artifact page). */
+  onEdit?: () => void;
 }
 
 /**
@@ -65,10 +66,12 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
             {isAuthenticated && <BookmarkButton pageId={page._id} />}
-            <Button variant="ghost" size="sm" onClick={onEdit} className="text-muted-foreground hover:text-foreground">
-              <Edit2 className="mr-1 h-4 w-4" />
-              {m['page.action_edit']()}
-            </Button>
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={onEdit} className="text-muted-foreground hover:text-foreground">
+                <Edit2 className="mr-1 h-4 w-4" />
+                {m['page.action_edit']()}
+              </Button>
+            )}
             <PageActionsMenu page={page} isAuthenticated={isAuthenticated} foldSocial isLiked={isLiked} />
           </div>
         </div>
