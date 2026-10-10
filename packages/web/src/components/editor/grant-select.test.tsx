@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { render, cleanup, screen, act } from '@testing-library/react';
 import { PageGrantEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { GrantSelect } from './grant-select';
 
 // jsdom does not implement these layout APIs that Radix Select calls
@@ -66,5 +67,44 @@ describe('GrantSelect', () => {
     });
     expect(onChange).toHaveBeenCalled();
     expect(typeof onChange.mock.calls[0][0]).toBe('number');
+  });
+
+  it('select appearance shows the labelled value, chip appearance wraps a muted GrantChip (public stays visible)', () => {
+    const { unmount } = render(<GrantSelect value={PageGrantEnum.PUBLIC} onChange={vi.fn()} appearance="select" />);
+    expect(document.querySelector('[data-page-grant]')).toBeNull();
+    unmount();
+
+    render(<GrantSelect value={PageGrantEnum.PUBLIC} onChange={vi.fn()} appearance="chip" />);
+    const trigger = screen.getByRole('combobox');
+    expect(trigger.querySelector('[data-page-grant="1"]')).not.toBeNull();
+    expect(trigger.getAttribute('aria-label')).toContain(m['page.grant_chip_public']());
+  });
+
+  it.each([
+    ['select' as const, PageGrantEnum.RESTRICTED],
+    ['chip' as const, PageGrantEnum.OWNER],
+  ])('%s offers the three sendable grants and an extra disabled item only for SPECIFIED', (appearance, value) => {
+    render(<GrantSelect value={value} onChange={vi.fn()} appearance={appearance} />);
+    act(() => {
+      screen.getByRole('combobox').click();
+    });
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+  });
+
+  it('does not coerce an unknown or missing value to PUBLIC; it disables the control and says so', () => {
+    for (const value of [77, null]) {
+      const { unmount } = render(<GrantSelect value={value} onChange={vi.fn()} appearance="chip" />);
+      const trigger = screen.getByRole('combobox');
+      expect(trigger).toHaveProperty('disabled', true);
+      expect(trigger.textContent).toContain(m['edit.grant_unknown']());
+      expect(trigger.querySelector('[data-page-grant]')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('supports a controlled open state in chip appearance', () => {
+    const onOpenChange = vi.fn();
+    render(<GrantSelect value={PageGrantEnum.PUBLIC} onChange={vi.fn()} appearance="chip" open onOpenChange={onOpenChange} />);
+    expect(screen.getAllByRole('option')).toHaveLength(3);
   });
 });

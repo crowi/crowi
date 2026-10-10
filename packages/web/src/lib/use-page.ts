@@ -90,6 +90,7 @@ export function usePage(params: GetPageRequest) {
 
   return {
     ...pageState,
+    isFetching: query.isFetching,
     refetch: query.refetch,
   };
 }

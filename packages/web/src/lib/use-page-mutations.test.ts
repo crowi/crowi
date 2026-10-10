@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
+import { m } from '@paraglide/messages.js';
 import { overwriteGetLocale } from '@paraglide/runtime.js';
 
 // Mock `apiClient` so every mutation call hits our fake instead of the
@@ -169,6 +170,157 @@ describe('useSetPageGrant — subpages invalidation (feature-user-page-subpages-
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
+  });
+});
+
+describe('useSetPageGrant — cache sync and invalidation', () => {
+  const detail = (params: Record<string, unknown>) => pageKeys.detail(params as never);
+  const seedPage = (extra: Record<string, unknown> = {}) => ({
+    page: { _id: 'p1', path: '/a', grant: 1, grantedUsers: ['x'], status: 'published', revision: { _id: 'r1', body: 'BODY' }, ...extra },
+    notFound: false,
+    notGranted: false,
+  });
+  const okGrant = (grant: number, grantedUsers: string[]) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ page: { _id: 'p1', path: '/a', grant, grantedUsers, revision: { _id: 'r-other', body: 'DIFFERENT' }, status: 'wip' } }),
+  });
+
+  it('writes only grant / grantedUsers from the response into current detail entries of the same page', async () => {
+    putGrant.mockResolvedValue(okGrant(4, ['u1']));
+    const { client, wrapper } = makeMutationContext();
+    const byPath = detail({ path: '/a' });
+    const byId = detail({ page_id: 'p1' });
+    const pinned = detail({ page_id: 'p1', revision_id: 'r0' });
+    const otherPage = detail({ path: '/b' });
+    const nullPage = detail({ path: '/missing' });
+    client.setQueryData(byPath, seedPage());
+    client.setQueryData(byId, seedPage());
+    client.setQueryData(pinned, seedPage({ revision: { _id: 'r0', body: 'OLD' } }));
+    client.setQueryData(otherPage, seedPage({ _id: 'p2' }));
+    client.setQueryData(nullPage, { page: null, notFound: true, notGranted: false });
+    const history = pageHistoryKeys.timeline('p1');
+    client.setQueryData(history, { events: [] });
+
+    const { result } = renderHook(() => useSetPageGrant(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ page_id: 'p1', grant: 4 });
+    });
+
+    for (const key of [byPath, byId]) {
+      const data = client.getQueryData<ReturnType<typeof seedPage>>(key)!;
+      expect(data.page.grant).toBe(4);
+      expect(data.page.grantedUsers).toEqual(['u1']);
+      expect(data.page.revision).toEqual({ _id: 'r1', body: 'BODY' });
+      expect(data.page.status).toBe('published');
+    }
+    expect(client.getQueryData<ReturnType<typeof seedPage>>(pinned)!.page.grant).toBe(1);
+    expect(client.getQueryData<ReturnType<typeof seedPage>>(otherPage)!.page.grant).toBe(1);
+    expect(client.getQueryData<{ page: null }>(nullPage)!.page).toBeNull();
+    expect(client.getQueryData(history)).toEqual({ events: [] });
+  });
+
+  it('invalidates page / list / history / subpages and every user pages & bookmarks family, but not the whole user root', async () => {
+    putGrant.mockResolvedValue(okGrant(2, ['u1']));
+    const { invalidateSpy, wrapper } = makeMutationContext();
+    const { result } = renderHook(() => useSetPageGrant(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ page_id: 'p1', grant: 2 });
+    });
+
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageKeys.all)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, PAGE_LIST_FAMILY_ROOT)).toBe(true);
+    expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
+    expect(wasSubpagesInvalidated(invalidateSpy)).toBe(true);
+
+    const predicates = invalidateSpy.mock.calls
+      .map((call) => (call[0] as { predicate?: (q: { queryKey: readonly unknown[] }) => boolean })?.predicate)
+      .filter((p): p is (q: { queryKey: readonly unknown[] }) => boolean => typeof p === 'function');
+    const matches = (queryKey: readonly unknown[]) => predicates.some((p) => p({ queryKey }));
+    expect(matches(userPageKeys.pagesAll('alice'))).toBe(true);
+    expect(matches(userPageKeys.pagesDetail('bob', { page: 1, limit: 5 } as never))).toBe(true);
+    expect(matches(userPageKeys.pagesInfinite('bob', 20))).toBe(true);
+    expect(matches(userPageKeys.bookmarksAll('alice'))).toBe(true);
+    expect(matches(userPageKeys.bookmarksInfinite('bob', 20))).toBe(true);
+    expect(matches(userPageKeys.profile('alice'))).toBe(false);
+    expect(wasQueryKeyInvalidated(invalidateSpy, ['user'])).toBe(false);
+  });
+
+  it('keeps the saved value in the cache when the follow-up GET fails (the failure is not the PUT failing)', async () => {
+    putGrant.mockResolvedValue(okGrant(4, ['u1']));
+    const { client, wrapper } = makeMutationContext();
+    const key = detail({ path: '/a' });
+    client.setQueryData(key, seedPage());
+    const refetch = vi.fn().mockRejectedValue(new Error('GET failed'));
+    client.setQueryDefaults(pageKeys.all, { queryFn: refetch });
+
+    const { result } = renderHook(() => useSetPageGrant(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ page_id: 'p1', grant: 4 });
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(client.getQueryData<ReturnType<typeof seedPage>>(key)!.page.grant).toBe(4);
+  });
+
+  it.each([400, 401, 403, 404, 500])('%i fails with a fixed message and touches no cache (no invalidate, no retry)', async (status) => {
+    putGrant.mockResolvedValue({ ok: false, status, json: async () => ({ error: { message: 'raw body' } }) });
+    const { client, invalidateSpy, wrapper } = makeMutationContext();
+    const key = detail({ path: '/a' });
+    client.setQueryData(key, seedPage());
+    const { result } = renderHook(() => useSetPageGrant(), { wrapper });
+
+    let caught: Error | undefined;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ page_id: 'p1', grant: 4 });
+      } catch (err) {
+        caught = err as Error;
+      }
+    });
+
+    expect(caught?.message).toBe(status === 404 ? m['errors.page_not_found']() : m['edit.grant_update_failed']());
+    expect(putGrant).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).not.toHaveBeenCalled();
+    expect(client.getQueryData<ReturnType<typeof seedPage>>(key)!.page.grant).toBe(1);
+  });
+
+  it('maps a network exception to the fixed message', async () => {
+    putGrant.mockRejectedValue(new TypeError('ECONNRESET 10.1.2.3'));
+    const { wrapper } = makeMutationContext();
+    const { result } = renderHook(() => useSetPageGrant(), { wrapper });
+    let caught: Error | undefined;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ page_id: 'p1', grant: 4 });
+      } catch (err) {
+        caught = err as Error;
+      }
+    });
+    expect(caught?.message).toBe(m['edit.grant_update_failed']());
+    expect(putGrant).toHaveBeenCalledTimes(1);
+  });
+
+  it('still syncs the cache after the sending component unmounted', async () => {
+    let finish: () => void = () => {};
+    putGrant.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(okGrant(4, ['u1']));
+        }),
+    );
+    const { client, invalidateSpy, wrapper } = makeMutationContext();
+    const key = detail({ path: '/a' });
+    client.setQueryData(key, seedPage());
+    const { result, unmount } = renderHook(() => useSetPageGrant(), { wrapper });
+    await act(async () => {
+      void result.current.mutateAsync({ page_id: 'p1', grant: 4 }).catch(() => {});
+    });
+    await waitFor(() => expect(putGrant).toHaveBeenCalledTimes(1));
+    unmount();
+    await act(async () => finish());
+
+    await waitFor(() => expect(client.getQueryData<ReturnType<typeof seedPage>>(key)!.page.grant).toBe(4));
     expect(wasQueryKeyInvalidated(invalidateSpy, pageHistoryKeys.all)).toBe(true);
   });
 });

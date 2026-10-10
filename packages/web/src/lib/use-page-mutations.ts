@@ -2,6 +2,7 @@
 
 import {
   ArtifactWriteRejectionSchema,
+  type GetPageRequest,
   type PageWithRevision,
   type RenamePageRequest,
   type RenameSubtreeRequest,
@@ -14,6 +15,7 @@ import { apiClient } from './api-client';
 import { errorMessage } from './error-message';
 import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
+import type { PageState } from './use-page';
 
 /**
  * Invalidate every query family that reflects a page's content after a
@@ -183,17 +185,64 @@ export function useUpdatePage() {
   });
 }
 
+/** Shared by the mutation and by controllers that watch for an in-flight grant write. */
+export const PAGE_GRANT_MUTATION_KEY = ['page-grant'] as const;
+
+type PageDetailData = Pick<PageState, 'page' | 'notFound' | 'notGranted'>;
+
 /**
- * Update only a page's grant (visibility). Unlike `useUpdatePage` this
- * does not push a new revision — it powers the editor's visibility
- * selector, where a grant change must not land in the page history.
+ * Reflect a successful grant write into the current detail entries of the
+ * same page (response-driven, not optimistic), then re-read everything that
+ * lists or summarizes the page. Revision-pinned entries are a different view
+ * of the page and keep their data; only the grant fields are replaced so the
+ * body / revision / status of the cached entry are never overwritten.
+ */
+async function syncPageGrantQueries(queryClient: QueryClient, pageId: string, updated: PageWithRevision): Promise<void> {
+  const targets = queryClient
+    .getQueriesData<PageDetailData>({ queryKey: pageKeys.all })
+    .filter(([key, data]) => {
+      const params = key[1] as GetPageRequest | undefined;
+      return params?.revision_id == null && data?.page?._id === pageId;
+    })
+    .map(([key]) => key);
+
+  for (const queryKey of targets) {
+    await queryClient.cancelQueries({ queryKey, exact: true });
+    queryClient.setQueryData<PageDetailData>(queryKey, (old) => {
+      if (old?.page == null || old.page._id !== pageId) return old;
+      return { ...old, page: { ...old.page, grant: updated.grant, grantedUsers: updated.grantedUsers } };
+    });
+  }
+
+  queryClient.invalidateQueries({ queryKey: pageKeys.all });
+  queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
+  queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
+  invalidateUserSubpagesQueries(queryClient);
+  queryClient.invalidateQueries({ predicate: (query) => userPageKeys.isPagesQuery(query.queryKey) || userPageKeys.isBookmarksQuery(query.queryKey) });
+}
+
+/**
+ * Update only a page's grant (visibility) through the dedicated endpoint.
+ * It never pushes a body revision; a real change on a history-tracked page is
+ * recorded server-side as a `visibility_changed` meta event.
+ *
+ * A failure only surfaces one of two fixed messages and triggers no
+ * invalidation / refetch / retry, so the caller's screen and unsent work stay
+ * as they are. Only success updates the caches (see `syncPageGrantQueries`).
  */
 export function useSetPageGrant() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: PAGE_GRANT_MUTATION_KEY,
+    retry: false,
     mutationFn: async (data: SetPageGrantRequest): Promise<PageWithRevision> => {
-      const response = await apiClient.pages.grant.$put({ json: data });
+      let response: Awaited<ReturnType<typeof apiClient.pages.grant.$put>>;
+      try {
+        response = await apiClient.pages.grant.$put({ json: data });
+      } catch {
+        throw new Error(m['edit.grant_update_failed']());
+      }
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -203,13 +252,7 @@ export function useSetPageGrant() {
       }
       throw new Error(m['edit.grant_update_failed']());
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: pageKeys.all });
-      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
-      // A grant change directly changes who can see the page in the
-      // /user/<username>/ subpages listing.
-      invalidateUserSubpagesQueries(queryClient);
-    },
+    onSuccess: (updated, variables) => syncPageGrantQueries(queryClient, variables.page_id, updated),
   });
 }
 
