@@ -1,11 +1,11 @@
 import { Types } from 'mongoose';
-import request from 'supertest';
-
-import { Fixture, app, crowi } from 'src/test/setup';
-import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import type { UserDocument } from 'src/models/user';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
+import { app, crowi, Fixture } from 'src/test/setup';
 import { createTestUser } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
+import request from 'supertest';
 
 /**
  * RFC-0006 Phase 4 Batch 2 — integration tests for the migrated `user`
@@ -154,7 +154,8 @@ describe('Routes /api/user (Hono)', () => {
     });
 
     it('AC-SC-6: recentPages / recentBookmarks[].page surface the artifact hint (RFC-0020 §1)', async () => {
-      const artifactPage = await Page().createPage(`/user/${TARGET_USERNAME}/artifact-hint`, '<html></html>', targetUser, { contentType: 'artifact' });
+      const seeded = await seedStoredArtifactPage({ path: `/user/${TARGET_USERNAME}/artifact-hint`, body: '<html></html>', userId: targetUser._id });
+      const artifactPage = await Page().findById(seeded.pageId);
       await Bookmark().add(artifactPage, targetUser);
       try {
         const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
@@ -420,9 +421,8 @@ describe('Routes /api/user (Hono)', () => {
     });
 
     it('AC-SC-6: the nested Page surfaces the artifact hint (RFC-0020 §1)', async () => {
-      const artifactPage = await Page().createPage(`/user/${TARGET_USERNAME}/bookmarks-artifact-hint`, '<html></html>', targetUser, {
-        contentType: 'artifact',
-      });
+      const seeded = await seedStoredArtifactPage({ path: `/user/${TARGET_USERNAME}/bookmarks-artifact-hint`, body: '<html></html>', userId: targetUser._id });
+      const artifactPage = await Page().findById(seeded.pageId);
       await Bookmark().add(artifactPage, targetUser);
       try {
         const res = await request(app)
@@ -456,7 +456,8 @@ describe('Routes /api/user (Hono)', () => {
     });
 
     it('AC-SC-6: surfaces the artifact hint (RFC-0020 §1)', async () => {
-      const artifactPage = await Page().createPage(`/user/${TARGET_USERNAME}/pages-artifact-hint`, '<html></html>', targetUser, { contentType: 'artifact' });
+      const seeded = await seedStoredArtifactPage({ path: `/user/${TARGET_USERNAME}/pages-artifact-hint`, body: '<html></html>', userId: targetUser._id });
+      const artifactPage = await Page().findById(seeded.pageId);
       try {
         const res = await request(app).get(`/api/user/${TARGET_USERNAME}/pages`).query({ limit: 50, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
         expect(res.status).toBe(200);

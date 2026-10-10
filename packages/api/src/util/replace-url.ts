@@ -210,7 +210,9 @@ async function scan(
     // bodies are excluded before the Revision body is even fetched, so
     // they never enter `pagesMatched` / `occurrences` / samples.
     if (pageDoc.contentType === 'artifact') continue;
-    const rev = (await Revision.findById(pageDoc.revision).select('body').lean()) as { body?: unknown } | null;
+    const rev = (await Revision.findById(pageDoc.revision).select('body contentType').lean()) as { body?: unknown; contentType?: string } | null;
+    // The Revision, not the Page hint, is the authority for the body's kind.
+    if (rev?.contentType === 'artifact') continue;
     const body = rev?.body;
     if (typeof body !== 'string' || !body.includes(from)) continue;
     const occ = body.split(from).length - 1;
@@ -244,11 +246,12 @@ async function quietRewrite(crowi: Crowi, pageId: string, from: string, to: stri
   if (page.contentType === 'artifact') return false;
   const currentRev = await Revision.findById(page.revision).exec();
   if (!currentRev || typeof currentRev.body !== 'string') return false;
+  if (currentRev.contentType === 'artifact') return false;
 
   const { body: newBody, occurrences } = replaceUrlInBody(currentRev.body, from, to);
   if (occurrences === 0) return false; // changed since the scan — nothing to do
 
-  const newRevision = await Revision.prepareRevision(page, newBody, actingUser, {});
+  const newRevision = await Revision.prepareRevision(page, newBody, actingUser, { contentType: 'markdown' });
   await newRevision.save();
 
   // Repoint both pointers (display + collab seed) and drop the Y.Doc snapshot

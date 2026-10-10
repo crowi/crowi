@@ -69,6 +69,7 @@ import {
 import { type ArtifactPolicySnapshot, isArtifactWriteEnabled, resolveArtifactPolicySnapshot } from 'src/artifact/policy';
 import type Crowi from 'src/crowi';
 import {
+  type CreatePageOptions,
   creatorPageListMatch,
   isTransitionalPageStatus,
   PageContentTypeConflictError,
@@ -84,6 +85,7 @@ import {
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 import type { SeenDocument } from 'src/models/seen';
 import type { UserDocument } from 'src/models/user';
+import { type ArtifactPreWriteAccepted, getRawRevisionPointer, resolveCurrentPageBodyKind } from 'src/service/page-body-write';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
 import { restorePageCommand } from 'src/service/page-history/commands/restore';
 import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-history/commands/subtree-rename';
@@ -251,20 +253,15 @@ function validatedStoredContentType(value: string | undefined, context: string):
 }
 
 /**
- * The current Revision's own content-type kind for a pointer-bearing Page.
- * Callers must already know `pageData.revision != null` — a pointerless
- * Page has no settled kind and is handled separately. A non-null,
- * unpopulated `revision` here means `Page.findPageByIdAndGrantedUser`'s
- * populate contract broke: an internal-state error, not something an
- * artifact author can trigger or correct, so it throws rather than
- * returning a fallback kind.
+ * The current Revision's own content-type kind, resolved from the raw
+ * revision pointer so a populate that came back empty for a pointer-bearing
+ * Page (a dangling reference) is internal-state corruption (a thrown
+ * `ArtifactInternalError` -> the fixed 500), never mistaken for a pointerless
+ * Page. `hasPointer: false` means the Page has no settled kind yet.
  */
-function selectedRevisionContentType(pageData: PageDocument): PageContentType {
-  const revision = pageData.revision;
-  if (!isPopulatedRevision(revision)) {
-    throw new ArtifactInternalError(`selectedRevisionContentType: Page ${pageData._id} has a non-null, unpopulated revision`);
-  }
-  return validatedStoredContentType(revision.contentType, `selectedRevisionContentType: Revision ${revision._id}`);
+async function selectedRevisionKind(crowi: Crowi, pageData: PageDocument): Promise<{ hasPointer: boolean; contentType: PageContentType }> {
+  const current = await resolveCurrentPageBodyKind(crowi, pageData, getRawRevisionPointer(pageData));
+  return { hasPointer: current.revisionId !== null, contentType: current.contentType };
 }
 
 /**
@@ -316,7 +313,7 @@ function logArtifactWriteRejection(failure: ArtifactWriteFailure, ids: Readonly<
 }
 
 type ArtifactPreWriteResult =
-  | { ok: true; body: string }
+  | ArtifactPreWriteAccepted
   | { ok: false; httpStatus: 400 | 413 | 422; body: ArtifactWriteRejection }
   | { ok: false; httpStatus: 500 };
 
@@ -934,7 +931,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           // RFC-0010 — record the edit channel (web / oauth / pat) so the
           // history view can flag API-token edits.
-          const createOptions: { grant?: number; editVia: 'web' | 'oauth' | 'pat'; contentType?: PageContentType } = { editVia: c.get('authContext').kind };
+          const createOptions: CreatePageOptions = { editVia: c.get('authContext').kind, contentType: declaredContentType };
           if (grant !== undefined) createOptions.grant = grant;
 
           // RFC-0020 — a new Page is always pointerless, so there is no
@@ -948,20 +945,18 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               return preWrite.httpStatus === 500 ? c.json(INTERNAL_ERROR_BODY, 500) : c.json(preWrite.body, preWrite.httpStatus);
             }
             acceptedBody = preWrite.body;
-            createOptions.contentType = 'artifact';
+            createOptions.artifactPreWrite = preWrite;
           }
-
-          // `path` (author-controlled) reaches the debug log only once the
-          // request has cleared every check that can still reject it — the
-          // path/twin checks above and, for kind=artifact, the AI-D03
-          // delivery gate and ingest validation inside `runArtifactPreWrite`
-          // — so a request rejected by any of those never logs it.
-          debug('createPage called with:', { path, grant, userId: user._id });
 
           const created = (await Page.createPage(path, acceptedBody, user, createOptions)) as PageDocument | null;
           if (!created) {
             throw new Error('Failed to create page.');
           }
+
+          // `path` (author-controlled) reaches the debug log only once the
+          // request has been durably saved, so a request rejected by the
+          // delivery gate, ingest or the save boundary never logs it.
+          debug('createPage called with:', { path, grant, userId: user._id });
 
           const populated = await populateAndEnrich(created, user);
           return c.json({ page: pageToResponse(populated) }, 200);
@@ -1022,13 +1017,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               logArtifactWriteRejection(declared, { pageId: String(pageData._id) });
               return c.json(artifactWriteRejectionBody(declared), declared.httpStatus);
             }
-            if (pageData.revision != null && declared !== selectedRevisionContentType(pageData)) {
+            const current = await selectedRevisionKind(crowi, pageData);
+            if (current.hasPointer && declared !== current.contentType) {
               logArtifactWriteRejection(AI_D02_CONTENT_TYPE_CONFLICT, { pageId: String(pageData._id) });
               return c.json(artifactWriteRejectionBody(AI_D02_CONTENT_TYPE_CONFLICT), 400);
             }
             resolvedContentType = declared;
           } else {
-            resolvedContentType = pageData.revision != null ? selectedRevisionContentType(pageData) : 'markdown';
+            resolvedContentType = (await selectedRevisionKind(crowi, pageData)).contentType;
           }
 
           // RFC-0010 — record the edit channel (web / oauth / pat) so the
@@ -1036,6 +1032,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const updateOptions: UpdatePageOptions = {
             grant: grant ?? pageData.grant,
             editVia: c.get('authContext').kind,
+            contentType: resolvedContentType,
           };
 
           let acceptedBody = body;
@@ -1045,7 +1042,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               return preWrite.httpStatus === 500 ? c.json(INTERNAL_ERROR_BODY, 500) : c.json(preWrite.body, preWrite.httpStatus);
             }
             acceptedBody = preWrite.body;
-            updateOptions.contentType = 'artifact';
+            updateOptions.artifactPreWrite = preWrite;
           }
 
           const updated = (await Page.updatePage(pageData, acceptedBody, user, updateOptions)) as PageDocument;
@@ -1769,13 +1766,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // の update / revert / quiet rewrite" section) would let artifact
           // HTML sneak into a Markdown Revision and reach the renderer.
           // Authority is the populated current Revision
-          // (`selectedRevisionContentType`), not the `Page.contentType`
+          // (`selectedRevisionKind`), not the `Page.contentType`
           // hint, so a mismatch here returns the structured AI-D02
           // rejection. A pointerless Page has no settled kind to compare
           // against, so the target Revision's kind is accepted (first save)
           // rather than compared.
           const targetContentType: PageContentType = validatedStoredContentType(oldRevision.contentType, `revertToRevision: Revision ${oldRevision._id}`);
-          if (pageData.revision != null && targetContentType !== selectedRevisionContentType(pageData)) {
+          const currentKind = await selectedRevisionKind(crowi, pageData);
+          if (currentKind.hasPointer && targetContentType !== currentKind.contentType) {
             logArtifactWriteRejection(AI_D02_CONTENT_TYPE_CONFLICT, { pageId: String(pageData._id), revisionId: String(oldRevision._id) });
             return c.json(artifactWriteRejectionBody(AI_D02_CONTENT_TYPE_CONFLICT), 400);
           }
@@ -1786,6 +1784,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // stored). A Markdown target's body is stacked unchanged, exactly
           // as before this leaf.
           let acceptedBody = oldRevision.body;
+          const updateOptions: UpdatePageOptions = { editVia: c.get('authContext').kind, contentType: targetContentType };
           if (targetContentType === 'artifact') {
             const preWrite = await runArtifactPreWrite(crowi, oldRevision.body, 'stored-revision', {
               pageId: String(pageData._id),
@@ -1795,6 +1794,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               return preWrite.httpStatus === 500 ? c.json(INTERNAL_ERROR_BODY, 500) : c.json(preWrite.body, preWrite.httpStatus);
             }
             acceptedBody = preWrite.body;
+            updateOptions.artifactPreWrite = preWrite;
           }
 
           // Stack the old body as a new revision on top of the latest. The
@@ -1806,7 +1806,6 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // pointerless) so the pointer-bearing case's resolution matches
           // the guard above verbatim rather than relying on a separate
           // "current kind" fallback path.
-          const updateOptions = { editVia: c.get('authContext').kind, contentType: targetContentType };
           const updated = (await Page.updatePage(pageData, acceptedBody, user, updateOptions)) as PageDocument;
           const populated = await populateAndEnrich(updated, user);
           return c.json({ page: pageToResponse(populated) }, 200);

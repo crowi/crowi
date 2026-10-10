@@ -55,9 +55,9 @@ jest.mock('@crowi/collab', () => ({
 
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
-import WebSocket from 'ws';
 import { crowi } from 'src/test/setup';
-import { attachCollabServer, type AttachedCollab } from './attach';
+import WebSocket from 'ws';
+import { type AttachedCollab, attachCollabServer } from './attach';
 
 interface TestServer {
   server: http.Server;
@@ -174,6 +174,16 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
     // which never imports the real `@hocuspocus/server` this file mocks.
     expect(lastCreateOpts).not.toBeNull();
     expect(typeof lastCreateOpts.draftPublisher).toBe('function');
+  });
+
+  it('AC-06: hands createCollabServer a models bag with Page AND Revision from the live models, with no optional guard injection', () => {
+    // The kind check lives inside `@crowi/collab` (authenticate / load / save /
+    // compaction / persist all read `models.Page` + `models.Revision`), so the
+    // only wiring the api has to get right is the real model bag — there is
+    // no `guard`/`skipKindCheck` style option a caller could leave out.
+    expect(lastCreateOpts.models.Page).toBe(crowi.model('Page'));
+    expect(lastCreateOpts.models.Revision).toBe(crowi.model('Revision'));
+    expect(Object.keys(lastCreateOpts).filter((key) => /guard|skip|bypass|artifact/i.test(key))).toEqual([]);
   });
 
   it('passes an empty extensions array to createCollabServer when crowi.redis is null', () => {

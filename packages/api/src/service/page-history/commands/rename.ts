@@ -6,7 +6,7 @@ import type { PageHistoryEventSource } from 'src/models/page-history-event';
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 
 import { allocateContentSequence } from '../content-sequence';
-import { type StrandedTransitionAction, hasOperationCompletionEvidence } from '../operation';
+import { hasOperationCompletionEvidence, type StrandedTransitionAction } from '../operation';
 import { type PageTransitionOutcome, runPageTransition } from '../transition';
 
 /**
@@ -71,7 +71,7 @@ async function createRedirectStub(crowi: Crowi, fromPath: string, toPath: string
     const occupant = await Page.findOne({ path: fromPath }).exec();
     if (occupant != null) return false;
 
-    await Page.createPage(fromPath, `redirect ${toPath}`, user, { redirectTo: toPath, allowNonExistentUserPage: true });
+    await Page.createPage(fromPath, `redirect ${toPath}`, user, { redirectTo: toPath, allowNonExistentUserPage: true, contentType: 'markdown' });
     return true;
   } catch {
     return false;

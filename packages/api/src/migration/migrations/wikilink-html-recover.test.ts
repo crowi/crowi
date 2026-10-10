@@ -1,8 +1,7 @@
-import { crowi } from 'src/test/setup';
-import type { UserDocument } from 'src/models/user';
-import { Fixture } from 'src/test/setup';
-
 import type { MigrationApplicationModel } from 'src/models/migration-application';
+import type { UserDocument } from 'src/models/user';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
+import { crowi, Fixture } from 'src/test/setup';
 
 import { MigrationRunner } from '../runner';
 import { rewriteWikilinks } from './wikilink-format';
@@ -389,7 +388,7 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
   });
 
   it('AC-SC-10 (RFC-0020 §1): an artifact Page with a [[/tag]] candidate is excluded from isPending / detect / apply, and a co-existing Markdown page is still recovered', async () => {
-    await Page.createPage(`${PATH_PREFIX}/artifact-with-candidate`, 'see [[/font]] here', admin, { contentType: 'artifact' });
+    await seedStoredArtifactPage({ path: `${PATH_PREFIX}/artifact-with-candidate`, body: 'see [[/font]] here', userId: admin._id });
     const markdownPage = await Page.createPage(`${PATH_PREFIX}/markdown-with-candidate`, 'see [[/font]] here', admin, {});
     // A legacy row that predates the contentType field (missing-kind, not
     // explicit 'markdown') — the walker must still treat it as Markdown.

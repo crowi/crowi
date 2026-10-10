@@ -1,9 +1,8 @@
-import { app, crowi } from 'src/test/setup';
-import type { UserDocument } from 'src/models/user';
-import { Fixture } from 'src/test/setup';
-import request from 'supertest';
-
 import type { MigrationApplicationModel } from 'src/models/migration-application';
+import type { UserDocument } from 'src/models/user';
+import { seedStoredArtifactPage } from 'src/test/artifact-fixtures';
+import { app, crowi, Fixture } from 'src/test/setup';
+import request from 'supertest';
 
 import { MigrationRunner } from '../runner';
 import { bodyHasRewritableFilesUrl, filesUrlToAttachments, rewriteFilesUrls } from './files-url-to-attachments';
@@ -309,7 +308,7 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
   });
 
   it('AC-SC-10 (RFC-0020 §1): an artifact Page with a /files/ candidate is excluded from isPending / detect / apply, and a co-existing Markdown page is still rewritten', async () => {
-    await Page.createPage(`${PATH_PREFIX}/artifact-with-files-url`, `![pic](/files/${ID_A})`, admin, { contentType: 'artifact' });
+    await seedStoredArtifactPage({ path: `${PATH_PREFIX}/artifact-with-files-url`, body: `![pic](/files/${ID_A})`, userId: admin._id });
     const markdownPage = await Page.createPage(`${PATH_PREFIX}/markdown-with-files-url`, `![pic](/files/${ID_A})`, admin, {});
     // A legacy row that predates the contentType field (missing-kind, not
     // explicit 'markdown') — the walker must still treat it as Markdown.

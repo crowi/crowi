@@ -1,12 +1,13 @@
 import { RESERVED_TOP_LEVEL_NAMES, USER_TAB_NAMES } from '@crowi/api-contract';
 import { Types } from 'mongoose';
+import { ArtifactInternalError } from 'src/artifact/ingest';
 import {
+  isTransitionalPageStatus,
   PageContentTypeConflictError,
   STATUS_DELETED,
   STATUS_PUBLISHED,
   STATUS_RENAMING,
   STATUSES,
-  isTransitionalPageStatus,
   visiblePageGrantOr,
 } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
@@ -1543,9 +1544,27 @@ describe('Page', () => {
         status: 'published',
         grantedUsers: [actor],
       });
-      const newRevision = await Revision.prepareRevision(page, '<html></html>', actor, { contentType: 'artifact' });
-      const saved = await Page.pushRevision(page, newRevision, actor);
+      const artifactPreWrite = { ok: true as const, body: '<html></html>' };
+      const newRevision = await Revision.prepareRevision(page, '<html></html>', actor, { contentType: 'artifact', artifactPreWrite });
+      const saved = await Page.pushRevision(page, newRevision, actor, { artifactPreWrite });
       expect(saved.contentType).toBe('artifact');
+
+      // The model never runs ingest: it only requires the handler's proof.
+      const unprovenPage = await Page.create({
+        path: '/artifact-storage-model/pointerless-artifact-unproven',
+        creator: actor,
+        lastUpdateUser: actor,
+        grant: Page.GRANT_PUBLIC,
+        status: 'published',
+        grantedUsers: [actor],
+      });
+      await expect(Page.createPage('/artifact-storage-model/artifact-no-proof', '<html></html>', actor, { contentType: 'artifact' })).rejects.toThrow(
+        ArtifactInternalError,
+      );
+      expect(await Page.countDocuments({ path: '/artifact-storage-model/artifact-no-proof' })).toBe(1); // Page.create precedes the boundary (createPage's order is unchanged)
+      const unprovenRevision = await Revision.prepareRevision(unprovenPage, '<html></html>', actor, { contentType: 'artifact', artifactPreWrite });
+      await expect(Page.pushRevision(unprovenPage, unprovenRevision, actor)).rejects.toThrow(ArtifactInternalError);
+      expect(unprovenRevision.isNew).toBe(true);
     });
 
     test('AC-SC-4: a pointer-bearing Page allows kind omission / same-value updates and rejects a differing kind before persisting a new Revision', async () => {
@@ -1560,25 +1579,10 @@ describe('Page', () => {
 
       const revisionCountBefore = await Revision.countDocuments({ page: created._id });
 
-      // A `rejects.toThrow` + unchanged-revision-count assertion alone
-      // can't tell this mismatch's rejection point apart from
-      // `pushRevision`'s own backstop check: in THIS direction (markdown
-      // page, artifact-kind request), `prepareRevision` would resolve
-      // 'artifact' — an explicit `options.contentType` always wins over
-      // the pointer fallback — and build an unsaved artifact Revision
-      // without ever touching the renderer, so a `runRender` spy can't
-      // discriminate here either (unlike the reverse-direction test
-      // below). Spying on `Revision.prepareRevision` itself is the only
-      // way to pin that `updatePage`'s own pre-check rejects BEFORE
-      // `prepareRevision` runs at all, not just before `pushRevision`
-      // persists whatever `prepareRevision` already built.
-      const prepareRevisionSpy = jest.spyOn(Revision, 'prepareRevision');
-      try {
-        await expect(Page.updatePage(updatedSame, '<html></html>', actor, { contentType: 'artifact' })).rejects.toThrow(PageContentTypeConflictError);
-        expect(prepareRevisionSpy).not.toHaveBeenCalled();
-      } finally {
-        prepareRevisionSpy.mockRestore();
-      }
+      // Rejected by `prepareRevision`'s kind check, before any Revision is built.
+      await expect(
+        Page.updatePage(updatedSame, '<html></html>', actor, { contentType: 'artifact', artifactPreWrite: { ok: true, body: '<html></html>' } }),
+      ).rejects.toThrow(PageContentTypeConflictError);
 
       const revisionCountAfter = await Revision.countDocuments({ page: created._id });
       expect(revisionCountAfter).toBe(revisionCountBefore);
@@ -1588,7 +1592,10 @@ describe('Page', () => {
     });
 
     test('AC-SC-4: Page.updatePage rejects an artifact Page’s markdown-kind update BEFORE Revision.prepareRevision runs the Markdown renderer', async () => {
-      const created = await Page.createPage('/artifact-storage-model/mismatch-artifact-to-markdown', '<html></html>', actor, { contentType: 'artifact' });
+      const created = await Page.createPage('/artifact-storage-model/mismatch-artifact-to-markdown', '<html></html>', actor, {
+        contentType: 'artifact',
+        artifactPreWrite: { ok: true, body: '<html></html>' },
+      });
       expect(created.contentType).toBe('artifact');
 
       const revisionCountBefore = await Revision.countDocuments({ page: created._id });
@@ -1612,13 +1619,14 @@ describe('Page', () => {
       // still be caught by this assertion; a `runRender`-only spy would not.
       const renderer = crowi.getRenderer();
       const renderSpy = jest.spyOn(renderer, 'runRender');
-      const prepareRevisionSpy = jest.spyOn(Revision, 'prepareRevision');
       try {
         await expect(Page.updatePage(created, '# markdown', actor, { contentType: 'markdown' })).rejects.toThrow(PageContentTypeConflictError);
-        expect(prepareRevisionSpy).not.toHaveBeenCalled();
+        expect(renderSpy).not.toHaveBeenCalled();
+        // A Markdown-only writer that omits the declaration inherits the artifact kind and then
+        // needs the handler's proof, so it is rejected too.
+        await expect(Page.updatePage(created, '# markdown', actor, {})).rejects.toThrow(ArtifactInternalError);
         expect(renderSpy).not.toHaveBeenCalled();
       } finally {
-        prepareRevisionSpy.mockRestore();
         renderSpy.mockRestore();
       }
 
@@ -1636,12 +1644,16 @@ describe('Page', () => {
       // Bypasses `Page.updatePage` entirely — this exercises `pushRevision`
       // as the last-resort chokepoint for a caller (e.g. a future writer)
       // that prepares a Revision itself and calls `pushRevision` directly.
-      const mismatchedRevision = await Revision.prepareRevision(created, '<html></html>', actor, { contentType: 'artifact' });
+      const mismatchedRevision = await Revision.prepareRevision(created, 'candidate', actor, {});
+      mismatchedRevision.contentType = 'artifact';
+      mismatchedRevision.body = '<html></html>';
       expect(mismatchedRevision.isNew).toBe(true);
 
       const revisionCountBefore = await Revision.countDocuments({ page: created._id });
 
-      await expect(Page.pushRevision(created, mismatchedRevision, actor)).rejects.toThrow(PageContentTypeConflictError);
+      await expect(Page.pushRevision(created, mismatchedRevision, actor, { artifactPreWrite: { ok: true, body: '<html></html>' } })).rejects.toThrow(
+        PageContentTypeConflictError,
+      );
 
       expect(mismatchedRevision.isNew).toBe(true);
       const revisionCountAfter = await Revision.countDocuments({ page: created._id });
@@ -1653,7 +1665,10 @@ describe('Page', () => {
     });
 
     test('AC-SC-5: rename preserves the artifact Page pointer/hint, and the redirect stub left behind is Markdown', async () => {
-      const created = await Page.createPage('/artifact-storage-model/rename-source', '<html></html>', actor, { contentType: 'artifact' });
+      const created = await Page.createPage('/artifact-storage-model/rename-source', '<html></html>', actor, {
+        contentType: 'artifact',
+        artifactPreWrite: { ok: true, body: '<html></html>' },
+      });
       expect(created.contentType).toBe('artifact');
 
       const redirectStub = await Page.rename(created, '/artifact-storage-model/rename-dest', actor, { createRedirectPage: true });
@@ -1667,7 +1682,10 @@ describe('Page', () => {
     });
 
     test('AC-SC-5: soft delete preserves the artifact Page pointer/hint, and the redirect stub left behind is Markdown', async () => {
-      const created = await Page.createPage('/artifact-storage-model/delete-source', '<html></html>', actor, { contentType: 'artifact' });
+      const created = await Page.createPage('/artifact-storage-model/delete-source', '<html></html>', actor, {
+        contentType: 'artifact',
+        artifactPreWrite: { ok: true, body: '<html></html>' },
+      });
       expect(created.contentType).toBe('artifact');
 
       const redirectStub = await Page.deletePage(created, actor);

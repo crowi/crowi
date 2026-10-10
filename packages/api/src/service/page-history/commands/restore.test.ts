@@ -212,8 +212,11 @@ describe('service/page-history/commands/restore (RFC-0021 Phase 2c-2a)', () => {
         status: STATUS_PUBLISHED,
         grantedUsers: [user._id],
       });
-      const revision = await Revision.prepareRevision(page, '<html></html>', user, { contentType: 'artifact' });
-      await Page.pushRevision(page, revision, user);
+      // A real save through the model (with the handler's pre-write proof) so the Page is
+      // history-tracked like any live artifact Page; only the path/status move is raw.
+      const artifactPreWrite = { ok: true as const, body: '<html></html>' };
+      const revision = await Revision.prepareRevision(page, '<html></html>', user, { contentType: 'artifact', artifactPreWrite });
+      await Page.pushRevision(page, revision, user, { artifactPreWrite });
       await Page.updateOne({ _id: page._id }, { $set: { path: Page.getDeletedPageName(originalPath), status: STATUS_DELETED } });
       return Page.findById(page._id);
     }

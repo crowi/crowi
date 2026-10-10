@@ -1,5 +1,7 @@
 import { faker } from '@faker-js/faker';
 import mongoose from 'mongoose';
+import { ArtifactInternalError } from 'src/artifact/ingest';
+import { PageContentTypeConflictError } from 'src/service/page-body-write';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 describe('Revision (RFC-0003 collab fields)', () => {
@@ -290,7 +292,8 @@ describe('Revision (RFC-0003 collab fields)', () => {
       const renderer = crowi.getRenderer();
       const spy = jest.spyOn(renderer, 'runRender');
       try {
-        const rev = await Revision.prepareRevision(page, '<html><body>hi</body></html>', user, { contentType: 'artifact' });
+        const body = '<html><body>hi</body></html>';
+        const rev = await Revision.prepareRevision(page, body, user, { contentType: 'artifact', artifactPreWrite: { ok: true, body } });
         expect(spy).not.toHaveBeenCalled();
         expect(rev.contentType).toBe('artifact');
         expect(rev.body).toBe('<html><body>hi</body></html>');
@@ -308,6 +311,7 @@ describe('Revision (RFC-0003 collab fields)', () => {
       const parentRevisionId = new mongoose.Types.ObjectId();
       const rev = await Revision.prepareRevision(page, '<html></html>', user, {
         contentType: 'artifact',
+        artifactPreWrite: { ok: true, body: '<html></html>' },
         savedBy: user._id,
         contributors: contributorIds,
         message: 'artifact checkpoint',
@@ -332,12 +336,62 @@ describe('Revision (RFC-0003 collab fields)', () => {
 
     test('pointer-aware resolution: omitting options.contentType on a pointer-bearing artifact Page inherits the current kind', async () => {
       const page = await seedPage('pointer-inherit');
-      const first = await Revision.prepareRevision(page, '<html></html>', user, { contentType: 'artifact' });
+      const first = await Revision.prepareRevision(page, '<html></html>', user, {
+        contentType: 'artifact',
+        artifactPreWrite: { ok: true, body: '<html></html>' },
+      });
       await first.save();
       page.revision = first._id;
       page.contentType = 'artifact';
-      const rev = await Revision.prepareRevision(page, '<html>v2</html>', user);
+      const rev = await Revision.prepareRevision(page, '<html>v2</html>', user, { artifactPreWrite: { ok: true, body: '<html>v2</html>' } });
       expect(rev.contentType).toBe('artifact');
+    });
+
+    test('AC-03: an artifact body without a pre-write success value, or with a different body, is rejected before the renderer', async () => {
+      const page = await seedPage('artifact-no-mark');
+      const spy = jest.spyOn(crowi.getRenderer(), 'runRender');
+      try {
+        await expect(Revision.prepareRevision(page, '<html></html>', user, { contentType: 'artifact' })).rejects.toThrow(ArtifactInternalError);
+        await expect(
+          Revision.prepareRevision(page, '<html>x</html>', user, { contentType: 'artifact', artifactPreWrite: { ok: true, body: '<html>y</html>' } }),
+        ).rejects.toThrow(ArtifactInternalError);
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('AC-03: a declared kind that differs from the current Revision is rejected before the renderer, ignoring a wrong Page hint', async () => {
+      const page = await seedPage('kind-mismatch');
+      const first = await Revision.prepareRevision(page, '<html></html>', user, {
+        contentType: 'artifact',
+        artifactPreWrite: { ok: true, body: '<html></html>' },
+      });
+      await first.save();
+      page.revision = first._id;
+      // The Page hint is wrong (markdown) but the current Revision is artifact.
+      page.contentType = 'markdown';
+      const spy = jest.spyOn(crowi.getRenderer(), 'runRender');
+      try {
+        await expect(Revision.prepareRevision(page, '# md', user, { contentType: 'markdown' })).rejects.toThrow(PageContentTypeConflictError);
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('AC-03: a legacy Revision without contentType resolves to markdown; a dangling pointer is an internal error, not markdown', async () => {
+      const legacyPage = await seedPage('legacy-kind');
+      const legacy = await Revision.prepareRevision(legacyPage, 'legacy', user, { contentType: 'markdown' });
+      await legacy.save();
+      await Revision.collection.updateOne({ _id: legacy._id }, { $unset: { contentType: '' } });
+      legacyPage.revision = legacy._id;
+      const next = await Revision.prepareRevision(legacyPage, 'next', user);
+      expect(next.contentType).toBe('markdown');
+
+      const danglingPage = await seedPage('dangling-kind');
+      danglingPage.revision = new mongoose.Types.ObjectId();
+      await expect(Revision.prepareRevision(danglingPage, 'x', user)).rejects.toThrow(ArtifactInternalError);
     });
 
     test("pointer-aware resolution: a pointerless Page's own stray hint is not trusted as authority", async () => {
