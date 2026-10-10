@@ -65,7 +65,7 @@ description: Subcommands, options and exit codes of crowi-admin
 | `replace url` | `--force` | off | Proceed even when `--from` carries no scheme |
 | `watcher backfill` | `--dry-run` | off | Report how many watch rows would be created without writing |
 | `page-history repair` | `--outbox` | on (the default scan) | Drain history entries left behind |
-| `page-history repair` | `--scan` | off | Assign sequence numbers to revisions that have none |
+| `page-history repair` | `--scan` | off | Assign sequence numbers to revisions that have none, and put pages that fell back to untracked back to tracked |
 | `page-history repair` | `--transitions` | off | Settle or report move operations that never finished |
 | `page-history repair` | `--batch-size <n>` | `200` | Cap on how many pages are loaded per round-trip |
 | `page-history repair` | `--resume-after <pageId>` | — | Per-page resume point |
