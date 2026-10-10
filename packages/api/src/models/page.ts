@@ -1,3 +1,4 @@
+import { RESERVED_TOP_LEVEL_NAMES, USER_TAB_NAMES } from '@crowi/api-contract';
 import type { PageContentType, PageUser } from '@crowi/api-contract';
 import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
@@ -1224,13 +1225,13 @@ export default (crowi: Crowi) => {
       /^\/-\/.*/,
       /^\/_r\/.*/,
       /^\/user\/?$/, // `/user` and `/user/` are the member directory — no portal/page here
-      /^\/user\/[^/]+\/(bookmarks|comments|activities|pages|recent-create|recent-edit)/, // reserved
+      new RegExp(`^/user/[^/]+/(${USER_TAB_NAMES.join('|')})`), // reserved
       /^\/?https?:\/\/.+$/, // avoid miss in renaming
       /\/{2,}/, // avoid miss in renaming
       /\s+\/\s+/, // avoid miss in renaming
       /.+\/edit$/,
       /.+\.md$/,
-      /^\/(installer|register|login|logout|admin|me|files|trash|paste|comments|api)(\/.*|$)/, // `api` is the reverse-proxied backend namespace
+      new RegExp(`^/(${RESERVED_TOP_LEVEL_NAMES.join('|')})(/.*|$)`), // `api` is the reverse-proxied backend namespace
     ];
 
     let isCreatable = true;

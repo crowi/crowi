@@ -11,7 +11,11 @@
  * pages are normal, creatable pages — so the catch-all handles those itself
  * rather than 404-ing them here.
  */
-const RESERVED_TOP_LEVEL_PATH = /^\/(installer|register|login|logout|admin|me|files|trash|paste|comments|api)(\/.*|$)/;
+export const RESERVED_TOP_LEVEL_NAMES = ['installer', 'register', 'login', 'logout', 'admin', 'me', 'files', 'trash', 'paste', 'comments', 'api'] as const;
+
+// Case-sensitive on purpose, like the server's `Page.isCreatableName`, which builds its own pattern from
+// `RESERVED_TOP_LEVEL_NAMES`; `classifyArtifactPagePath` lowercases before calling this, the model does not.
+const RESERVED_TOP_LEVEL_PATH = new RegExp(`^/(${RESERVED_TOP_LEVEL_NAMES.join('|')})(/.*|$)`);
 
 /**
  * Whether `path` is a reserved system / backend route that the wiki must

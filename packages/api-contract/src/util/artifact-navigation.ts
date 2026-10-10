@@ -31,7 +31,8 @@ const asciiLowercase = (value: string): string => value.replace(/[A-Z]/g, (char)
 const APP_ROUTE_FIRST_SEGMENTS = new Set(['activate', 'confirm-email', 'forgot-password', 'reset-password', 'invite', 'oauth']);
 const BACKEND_OR_STATIC_FIRST_SEGMENTS = new Set(['collab', 'presence', 'notifications', 'socket.io', 'logo', 'images', 'favicon.ico']);
 // Dedicated tabs under `/user/<username>/`; the model reserves the same names (`Page.isCreatableName`).
-const USER_TAB_PREFIXES = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit'];
+// Matched as a prefix here, after lowercasing; the model builds a case-sensitive pattern from the same list.
+export const USER_TAB_NAMES = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit'] as const;
 
 /**
  * Classifies a canonical page path: `invalid-path` when its structure is not
@@ -54,7 +55,7 @@ export function classifyArtifactPagePath(pagePath: string): ArtifactPagePathClas
 
   if (first === 'user') {
     if (segments.length === 1) return 'reserved-route';
-    if (segments.length >= 3 && USER_TAB_PREFIXES.some((tab) => segments[2].startsWith(tab))) return 'reserved-route';
+    if (segments.length >= 3 && USER_TAB_NAMES.some((tab) => segments[2].startsWith(tab))) return 'reserved-route';
   }
 
   // The ObjectId redirector grants access, so a bare id is never a link an artifact may carry.
