@@ -400,6 +400,191 @@ describe('Routes /api/pages/grant (Hono setPageGrant)', () => {
       expect(pageDoc.grant).toBe(1);
     });
   });
+
+  // feature-page-grant-chip-menu — the header chip drives this exact route, so
+  // who may call it and what it leaves untouched are pinned here.
+  describe('PUT /api/pages/grant — header chip contract', () => {
+    let adminToken: string;
+    let thirdToken: string;
+    let ownerId: string;
+    let otherId: string;
+    let thirdId: string;
+    let adminId: string;
+    let Revision;
+    let PageHistoryEvent;
+
+    beforeAll(async () => {
+      Revision = crowi.model('Revision');
+      PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const [owner, other, third, admin] = await Promise.all([
+        createTestUser({ name: 'Chip Owner', username: 'chipOwner', email: 'chip-owner@example.com' }),
+        createTestUser({ name: 'Chip Other', username: 'chipOther', email: 'chip-other@example.com' }),
+        createTestUser({ name: 'Chip Third', username: 'chipThird', email: 'chip-third@example.com' }),
+        createTestUser({ name: 'Chip Admin', username: 'chipAdmin', email: 'chip-admin@example.com', admin: true }),
+      ]);
+      accessToken = owner.accessToken;
+      otherAccessToken = other.accessToken;
+      thirdToken = third.accessToken;
+      adminToken = admin.accessToken;
+      ownerId = String(owner.user._id);
+      otherId = String(other.user._id);
+      thirdId = String(third.user._id);
+      adminId = String(admin.user._id);
+    });
+
+    const snapshot = async (pageId: string) => {
+      const page = await Page.findById(pageId).lean();
+      const revisions = await Revision.find({ page: pageId }).sort({ _id: 1 }).lean();
+      const events = await PageHistoryEvent.find({ page: pageId }).lean();
+      return { page, revisions, events };
+    };
+    const put = (token: string, pageId: string, grant: number) => request(app).put('/api/pages/grant').set(authHeaders(token)).send({ page_id: pageId, grant });
+    const oauth = (userId: string, scopes: string[]) =>
+      createJwtUtil(crowi).signOauthAccessToken({ user: { _id: userId } as never, scopes, clientId: 'grant-chip-test-client' });
+
+    it('lets a non-creator and an admin who can view a public page change its grant (creator is not required)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}non-creator`, '# body');
+
+      const byOther = await put(otherAccessToken, page._id, 2);
+      expect(byOther.status).toBe(200);
+      expect(byOther.body.page.grant).toBe(2);
+
+      const second = await createPageViaApi(accessToken, `${PATH_PREFIX}admin-viewer`, '# body');
+      const byAdmin = await put(adminToken, second._id, 4);
+      expect(byAdmin.status).toBe(200);
+      expect(byAdmin.body.page.grant).toBe(4);
+    });
+
+    it('rejects an unauthenticated call (401) and a token with only pages:read (403) without touching the page, and accepts pages:write', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}scopes`, '# body');
+      const before = await snapshot(page._id);
+
+      const anonymous = await request(app).put('/api/pages/grant').send({ page_id: page._id, grant: 4 });
+      expect(anonymous.status).toBe(401);
+
+      const readOnly = await put(oauth(ownerId, ['pages:read']), page._id, 4);
+      expect(readOnly.status).toBe(403);
+      expect(readOnly.body.error.code).toBe('INSUFFICIENT_SCOPE');
+      expect(await snapshot(page._id)).toEqual(before);
+
+      const writable = await put(oauth(ownerId, ['pages:read', 'pages:write']), page._id, 4);
+      expect(writable.status).toBe(200);
+      expect(writable.body.page.grant).toBe(4);
+    });
+
+    it('answers 404 to someone who cannot view the page and changes neither the page nor its history', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}hidden`, '# body', 4);
+      const before = await snapshot(page._id);
+
+      const res = await put(thirdToken, page._id, 1);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+      expect(await snapshot(page._id)).toEqual(before);
+    });
+
+    describe('grantedUsers rebuild', () => {
+      const makeSpecified = async (name: string, grantees: string[]) => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}${name}`, '# body');
+        await Page.updateOne({ _id: page._id }, { $set: { grant: 3, grantedUsers: grantees } });
+        return page;
+      };
+      const grantedUsersOf = async (pageId: string) => ((await Page.findById(pageId).lean()).grantedUsers as unknown[]).map(String).sort();
+
+      it('clears grantedUsers when a specified page becomes public', async () => {
+        const page = await makeSpecified('spec-to-public', [ownerId, otherId, thirdId]);
+        const res = await put(otherAccessToken, page._id, 1);
+        expect(res.status).toBe(200);
+        expect(await grantedUsersOf(page._id)).toEqual([]);
+      });
+
+      it('keeps only the actor and the creator when a specified page becomes non-public, dropping other former grantees', async () => {
+        const page = await makeSpecified('spec-to-owner', [ownerId, otherId, thirdId]);
+        const res = await put(otherAccessToken, page._id, 4);
+        expect(res.status).toBe(200);
+        expect(await grantedUsersOf(page._id)).toEqual([ownerId, otherId].sort());
+      });
+
+      it('lists the creator once when the creator is the actor', async () => {
+        const page = await makeSpecified('spec-dedupe', [ownerId, otherId]);
+        const res = await put(accessToken, page._id, 2);
+        expect(res.status).toBe(200);
+        expect(await grantedUsersOf(page._id)).toEqual([ownerId]);
+        expect(adminId).not.toBe(ownerId);
+      });
+    });
+
+    describe('revisions and artifact payload', () => {
+      it('leaves the Revision set, current revision pointer, body and content type unchanged for a normal page', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}norev`, '# body');
+        const before = await snapshot(page._id);
+
+        const res = await put(accessToken, page._id, 4);
+        expect(res.status).toBe(200);
+
+        const after = await snapshot(page._id);
+        expect(after.revisions).toEqual(before.revisions);
+        expect(String(after.page.revision)).toBe(String(before.page.revision));
+        expect(after.page.contentType).toBe(before.page.contentType);
+      });
+
+      it('leaves an artifact page body and kind untouched', async () => {
+        const user = await crowi.model('User').findById(ownerId);
+        const created = await Page.create({ path: `${PATH_PREFIX}artifact`, creator: ownerId, lastUpdateUser: ownerId, grant: 1, grantedUsers: [] });
+        const html = validArtifactHtml();
+        const revision = await Revision.prepareRevision(created, html, user, { contentType: 'artifact' });
+        const page = await Page.pushRevision(created, revision, user);
+        const before = await snapshot(String(page._id));
+        expect(before.page.contentType).toBe('artifact');
+
+        const res = await put(accessToken, String(page._id), 2);
+        expect(res.status).toBe(200);
+        expect(res.body.page.contentType).toBe('artifact');
+
+        const after = await snapshot(String(page._id));
+        expect(after.page.grant).toBe(2);
+        expect(after.revisions).toEqual(before.revisions);
+        expect(String(after.page.revision)).toBe(String(before.page.revision));
+        expect(after.revisions[0].body).toBe(html);
+      });
+    });
+
+    describe('history', () => {
+      it('records exactly one visibility_changed event with from / to / actor / source for a ready page, and no new revision', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}ready-event`, '# body');
+        const before = await snapshot(page._id);
+        expect(before.page.historyTracking?.state).toBe('ready');
+
+        const res = await put(otherAccessToken, page._id, 4);
+        expect(res.status).toBe(200);
+
+        const events = await PageHistoryEvent.find({ page: page._id, kind: 'visibility_changed' }).lean();
+        expect(events).toHaveLength(1);
+        expect(events[0].payload).toEqual({ fromGrant: 1, toGrant: 4 });
+        expect(String(events[0].actor)).toBe(otherId);
+        expect(events[0].source).toBe('web');
+        expect((await snapshot(page._id)).revisions).toEqual(before.revisions);
+
+        const timeline = await request(app).get(`/api/pages/${page._id}/history`).set(authHeaders(accessToken));
+        expect(timeline.status).toBe(200);
+        expect(timeline.body.entries.filter((e: { type: string }) => e.type !== 'content_revision')).toHaveLength(1);
+      });
+
+      it('writes no event for a same-grant call', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}same-event`, '# body');
+        const res = await put(accessToken, page._id, 1);
+        expect(res.status).toBe(200);
+        expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
+      });
+
+      it('applies the grant to an untracked page without writing an event', async () => {
+        const untracked = await Page.create({ path: `${PATH_PREFIX}untracked`, creator: ownerId, lastUpdateUser: ownerId, grant: 1, grantedUsers: [] });
+        const res = await put(accessToken, String(untracked._id), 4);
+        expect(res.status).toBe(200);
+        expect((await Page.findById(untracked._id).lean()).grant).toBe(4);
+        expect(await PageHistoryEvent.countDocuments({ page: untracked._id })).toBe(0);
+      });
+    });
+  });
 });
 
 describe('Routes /api/pages/rename (Hono renamePage)', () => {
