@@ -152,6 +152,8 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             password: string;
+                            /** @enum {string} */
+                            lang?: "en" | "ja";
                         };
                     };
                 };
@@ -355,6 +357,8 @@ export interface paths {
                         /** Format: email */
                         email: string;
                         password: string;
+                        /** @enum {string} */
+                        lang?: "en" | "ja";
                     };
                 };
             };
@@ -1715,6 +1719,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         username: string;
+                        /** @enum {string} */
+                        lang?: "en" | "ja";
                     };
                 };
             };
@@ -1951,6 +1957,8 @@ export interface paths {
                         username: string;
                         name: string;
                         password: string;
+                        /** @enum {string} */
+                        lang?: "en" | "ja";
                     };
                 };
             };
@@ -18493,6 +18501,8 @@ export interface components {
                 /** Format: email */
                 email: string;
                 password: string;
+                /** @enum {string} */
+                lang?: "en" | "ja";
             };
         };
         CreateAdminResponse: {

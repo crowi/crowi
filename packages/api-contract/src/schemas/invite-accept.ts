@@ -15,6 +15,7 @@ export const InviteAcceptRequestSchema = z.object({
   username: UsernameSchema,
   name: z.string().min(1),
   password: z.string().min(6),
+  lang: z.enum(['en', 'ja']).optional(),
 });
 export type InviteAcceptRequest = z.infer<typeof InviteAcceptRequestSchema>;
 

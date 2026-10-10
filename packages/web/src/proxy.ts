@@ -1,4 +1,4 @@
-import { baseLocale, cookieName, isLocale } from '@paraglide/runtime.js';
+import { baseLocale, cookieMaxAge, cookieName, isLocale, locales, type Locale } from '@paraglide/runtime.js';
 import { paraglideMiddleware } from '@paraglide/server.js';
 import { type NextRequest, NextResponse } from 'next/server';
 
@@ -13,6 +13,9 @@ export const PARAGLIDE_LOCALE_HEADER = 'x-paraglide-locale';
  * see the same locale as the Client side — without this they would all fall
  * back to baseLocale (ja), producing a hydration mismatch the moment the user
  * switches languages.
+ *
+ * Without a cookie the locale is negotiated from Accept-Language (falling
+ * back to baseLocale) and stored as the PARAGLIDE_LOCALE cookie.
  *
  * The locale strategy is pinned to `["cookie", "baseLocale"]` (see the
  * `paraglide:compile --strategy` flag in package.json). The compiler's default
@@ -38,11 +41,26 @@ export const PARAGLIDE_LOCALE_HEADER = 'x-paraglide-locale';
 export function proxy(request: NextRequest) {
   return paraglideMiddleware(request, () => {
     const cookieLocale = request.cookies.get(cookieName)?.value;
-    const locale = cookieLocale && isLocale(cookieLocale) ? cookieLocale : baseLocale;
+    const hasCookie = cookieLocale !== undefined && isLocale(cookieLocale);
+    const locale = hasCookie ? cookieLocale : localeFromAcceptLanguage(request.headers.get('accept-language'));
     const headers = new Headers(request.headers);
     headers.set(PARAGLIDE_LOCALE_HEADER, locale);
-    return NextResponse.next({ request: { headers } });
+    const response = NextResponse.next({ request: { headers } });
+    // Persist the negotiated locale so the browser carries it from the first
+    // response on; LocaleSync then sees a cookie that already matches the
+    // account's `lang` instead of forcing a reload to reconcile them.
+    if (!hasCookie) response.cookies.set(cookieName, locale, { path: '/', maxAge: cookieMaxAge });
+    return response;
   });
+}
+
+/** First Accept-Language tag whose base language we ship messages for; `baseLocale` when none. */
+function localeFromAcceptLanguage(header: string | null): Locale {
+  for (const entry of (header ?? '').split(',')) {
+    const base = entry.split(';')[0]?.trim().toLowerCase().split('-')[0];
+    if (base && (locales as readonly string[]).includes(base)) return base as Locale;
+  }
+  return baseLocale;
 }
 
 export const config = {

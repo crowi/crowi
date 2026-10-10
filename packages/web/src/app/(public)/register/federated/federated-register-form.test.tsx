@@ -252,7 +252,7 @@ describe('FederatedRegisterForm', () => {
       await waitFor(() =>
         expect(apiPost).toHaveBeenCalledWith({
           param: { token: 'grant-abc' },
-          json: { username: 'brand-new-user' },
+          json: { username: 'brand-new-user', lang: 'ja' },
         }),
       );
       await waitFor(() => expect(useRouterMock.push).toHaveBeenCalledWith('/login/complete?code=one-time-handoff-code'));

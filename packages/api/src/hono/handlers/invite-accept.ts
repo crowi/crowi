@@ -53,7 +53,7 @@ export const registerInviteAcceptRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       return c.json({ email: payload.email }, 200);
     })
     .openapi(inviteAcceptRoutes.acceptInviteRoute, async (c) => {
-      const { token, username, name, password } = c.req.valid('json');
+      const { token, username, name, password, lang } = c.req.valid('json');
 
       try {
         const payload = mailTokenUtil.verifyMailToken(token, 'invite');
@@ -74,6 +74,9 @@ export const registerInviteAcceptRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         if (clash && clash._id.toString() !== user._id.toString()) {
           return c.json({ error: { code: 'USERNAME_TAKEN' as const, message: 'Username already taken' } }, 409);
         }
+
+        // Mail-only invitations stay `en`; a form that knows the visitor's locale overrides it.
+        if (lang) user.lang = lang;
 
         const activated = await new Promise<UserDocument>((resolve, reject) => {
           user.activateInvitedUser(username, name, password, (err: Error | null, userData: UserDocument) => {

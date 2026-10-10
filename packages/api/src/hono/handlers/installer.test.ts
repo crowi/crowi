@@ -129,6 +129,29 @@ describe('GET /api/installer (Hono)', () => {
       await User.deleteMany({ email: 'installer-happy@example.com' });
     });
 
+    it('stores the lang the installer form sends on the admin user', async () => {
+      await Config.deleteMany({ ns: 'crowi' });
+      await User.deleteMany({ email: 'installer-lang@example.com' });
+
+      const res = await request(app)
+        .post('/api/installer/createAdmin')
+        .send({
+          registerForm: {
+            name: 'Installer Lang',
+            username: 'installer-lang',
+            email: 'installer-lang@example.com',
+            password: 'Password!1',
+            lang: 'ja',
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const adminUser = await User.findOne({ email: 'installer-lang@example.com' });
+      expect(adminUser?.lang).toBe('ja');
+
+      await User.deleteMany({ email: 'installer-lang@example.com' });
+    });
+
     // feature-config-reconciliation-safety — the admin user this request
     // created is real (createAdmin doesn't roll it back), and the
     // partially-seeded config rows are no longer deleted either: the

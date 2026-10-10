@@ -56,6 +56,7 @@ export const FederatedRegistrationSnapshotSchema = z.object({
 
 export const FederatedRegistrationSubmitRequestSchema = z.object({
   username: UsernameSchema,
+  lang: z.enum(['en', 'ja']).optional(),
 });
 
 /** Open mode: the account is fully ACTIVE — a Phase 1 handoff `code`, redeemed via `POST /auth/handoff` (never a raw token pair — AC-4/AC-8). */

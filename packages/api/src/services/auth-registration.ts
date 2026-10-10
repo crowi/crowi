@@ -282,7 +282,12 @@ export type ProvisionPendingRegistrationOutcome =
  * downstream document's own unique index — never creates a second `User` or
  * `UserIdentity` for the same journal row.
  */
-export async function provisionPendingRegistration(crowi: Crowi, grant: string, username: string): Promise<ProvisionPendingRegistrationOutcome> {
+export async function provisionPendingRegistration(
+  crowi: Crowi,
+  grant: string,
+  username: string,
+  lang: 'en' | 'ja' = 'en',
+): Promise<ProvisionPendingRegistrationOutcome> {
   const PendingAuthRegistration = crowi.model('PendingAuthRegistration');
 
   const grantHash = PendingAuthRegistration.hashGrant(grant);
@@ -324,7 +329,7 @@ export async function provisionPendingRegistration(crowi: Crowi, grant: string, 
   }
 
   try {
-    return await provisionClaimedRow(crowi, row, username, leaseToken);
+    return await provisionClaimedRow(crowi, row, username, leaseToken, lang);
   } finally {
     await PendingAuthRegistration.releaseProvisioningLease(row._id, leaseToken);
   }
@@ -335,6 +340,7 @@ async function provisionClaimedRow(
   row: PendingAuthRegistrationDocument,
   username: string,
   leaseToken: string,
+  lang: 'en' | 'ja',
 ): Promise<ProvisionPendingRegistrationOutcome> {
   const PendingAuthRegistration = crowi.model('PendingAuthRegistration');
   const User = crowi.model('User');
@@ -409,7 +415,7 @@ async function provisionClaimedRow(
   // came from a prior attempt (reserved-but-not-created, or fully created
   // already) — `createUserForRegistration` always resolves to "the User
   // for this id exists" before returning.
-  const createResult = await createUserForRegistration(User, userId, row, parsedUsername.data);
+  const createResult = await createUserForRegistration(User, userId, row, parsedUsername.data, lang);
   if (createResult.kind !== 'ok') return createResult;
 
   const identityOutcome = await ensureIdentityLink(UserIdentity, row, userId);
@@ -630,6 +636,7 @@ async function createUserForRegistration(
   userId: Types.ObjectId,
   row: PendingAuthRegistrationDocument,
   username: string,
+  lang: 'en' | 'ja',
 ): Promise<{ kind: 'ok' } | { kind: 'conflict'; field: 'username' | 'email' }> {
   const existingById = await User.findById(userId);
   if (existingById) {
@@ -674,7 +681,7 @@ async function createUserForRegistration(
   newUser.name = row.profile.name || username;
   newUser.username = username;
   newUser.email = row.profile.email;
-  newUser.lang = 'en';
+  newUser.lang = lang;
   newUser.status = User.STATUS_REGISTERED;
   // The federated driver already required `email_verified: true` before
   // Phase 1 ever handed this profile to the terminal (umbrella spec) — no
