@@ -237,7 +237,9 @@ afterAll(() => {
   for (const child of children) child.close();
 });
 
-describe('ESLint config compatibility', () => {
+// Each case loads real ESLint configs for every workspace file; a 4-CPU CI runner
+// takes about 5s for the cross-cwd case, right at Vitest's default timeout.
+describe('ESLint config compatibility', { timeout: 30_000 }, () => {
   describe.each(['web', 'site'] as const)('%s', (key) => {
     const ws = WORKSPACES[key];
 
