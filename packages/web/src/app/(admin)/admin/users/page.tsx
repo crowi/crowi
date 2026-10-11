@@ -96,6 +96,7 @@ export default function AdminUsersPage() {
   const deleteUser = useDeleteAdminUser();
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncs the input from the URL search term one-way.
     setInputValue(urlQuery);
   }, [urlQuery]);
 

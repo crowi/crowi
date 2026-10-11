@@ -62,6 +62,7 @@ export function PageComments({ page }: PageCommentsProps) {
     seenIdsRef.current = null;
     for (const timer of highlightTimersRef.current.values()) clearTimeout(timer);
     highlightTimersRef.current.clear();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clears the new-comment highlight when the page changes.
     setHighlightedIds(new Set());
   }, [pageId]);
 

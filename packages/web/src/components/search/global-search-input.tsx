@@ -36,6 +36,7 @@ export function GlobalSearchInput() {
 
   // Mirror URL → input across navigations (initial useState only fires once).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncs the input from the URL search term one-way.
     setValue(urlQ);
   }, [urlQ]);
 
