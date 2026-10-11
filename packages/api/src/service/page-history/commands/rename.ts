@@ -5,7 +5,7 @@ import type { PageDocument } from 'src/models/page';
 import type { PageHistoryEventSource } from 'src/models/page-history-event';
 import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 
-import { allocateContentSequence } from '../content-sequence';
+import { allocateContentSequence, readHistoryTrackingState } from '../content-sequence';
 import { hasOperationCompletionEvidence, type StrandedTransitionAction } from '../operation';
 import { type PageTransitionOutcome, runPageTransition } from '../transition';
 
@@ -93,7 +93,7 @@ export async function renamePageCommand(crowi: Crowi, input: RenamePageCommandIn
   // back to `untracked`, so a stale-but-not-`untracked` snapshot is never a
   // wrong direction to skip this on, and skipping it is what keeps a
   // `ready`-page rename at zero extra queries.
-  if ((input.page.historyTracking?.state ?? 'untracked') === 'untracked') {
+  if (readHistoryTrackingState(input.page) === 'untracked') {
     try {
       // Never `input.page` from here on: the first delivery of a single-page
       // rename hands this command a `Page.populatePageData`-processed page,
@@ -115,7 +115,7 @@ export async function renamePageCommand(crowi: Crowi, input: RenamePageCommandIn
 
       const freshRevision = fresh.revision;
       const isFirstEntry = fresh.path === input.fromPath;
-      const stillUntracked = (fresh.historyTracking?.state ?? 'untracked') === 'untracked';
+      const stillUntracked = readHistoryTrackingState(fresh) === 'untracked';
 
       if (stillUntracked && isFirstEntry && freshRevision != null) {
         // Ownership, not mere existence: an orphan (missing `page`) or

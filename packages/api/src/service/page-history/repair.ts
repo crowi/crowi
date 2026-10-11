@@ -484,8 +484,8 @@ async function claimAndAssignSequence(crowi: Crowi, pageId: Types.ObjectId, revi
       return null;
     }
 
-    const expectedSequence = current.historySequence;
-    if (typeof expectedSequence !== 'number' || !Number.isFinite(expectedSequence)) {
+    const expectedSequence = safeSequenceValue(current.historySequence);
+    if (expectedSequence === undefined) {
       throw new Error('page historySequence counter is not a number — corrupted; skipping this page (value redacted)');
     }
     const nextSequence = expectedSequence + 1;
@@ -710,12 +710,13 @@ async function restoreDemotedPage(
   const { blocked, failed, restored } = into;
 
   const readPage = () => Page.findById(pageId).select('historySequence historyTracking pendingHistoryEntry').lean().exec();
+  // Most untracked Pages have no sequenced history, so that cheaper check goes first.
+  if (!(await hasSequencedHistory(crowi, pageId))) {
+    return;
+  }
   let page = await readPage();
   // A Page that moved to `ready` after the batch read is handled by the next scan.
   if (page == null || readHistoryTrackingState(page) !== 'untracked') {
-    return;
-  }
-  if (!(await hasSequencedHistory(crowi, pageId))) {
     return;
   }
 
