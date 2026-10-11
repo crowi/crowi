@@ -30,6 +30,7 @@ export function AcceptInviteForm() {
   // Preview the invite to show who it is for / detect a dead link early.
   useEffect(() => {
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Switches to the invalid-link view when the token is missing.
       setTokenInvalid(true);
       return;
     }

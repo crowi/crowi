@@ -124,6 +124,7 @@ export function SharePanelContent({ page }: SharePanelContentProps) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Copies the ID URL once when the panel opens.
     copy('idUrl', idUrl);
     // Intentionally mount-only — fires once per panel open (see the
     // container comments above), mirroring `idUrl` at that instant.

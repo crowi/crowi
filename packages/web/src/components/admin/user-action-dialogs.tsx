@@ -46,6 +46,7 @@ export function InviteUsersDialog({ open, onOpenChange }: InviteUsersDialogProps
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resets the inputs when the dialog opens or the target user changes.
       setText('');
       setSendEmail(false);
       setLocalError(null);
@@ -222,6 +223,7 @@ export function EditUserDialog({ user, onOpenChange }: EditUserDialogProps) {
 
   useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resets the inputs when the dialog opens or the target user changes.
       setName(user.name ?? '');
       edit.reset();
     }
@@ -289,6 +291,7 @@ export function UpdateEmailDialog({ user, onOpenChange }: UpdateEmailDialogProps
 
   useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resets the inputs when the dialog opens or the target user changes.
       setEmail(user.email ?? '');
       setEmailFieldError(null);
       update.reset();

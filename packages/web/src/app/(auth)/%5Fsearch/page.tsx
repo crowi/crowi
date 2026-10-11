@@ -72,6 +72,7 @@ function SearchPageInner() {
 
   // URL → input one-way sync on navigation (back / forward / external link).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncs the input from the URL search term one-way.
     setInputValue(urlQ);
   }, [urlQ]);
 

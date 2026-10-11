@@ -29,6 +29,7 @@ export function ResetPasswordForm() {
   // Preflight: detect a dead/expired link before the user types.
   useEffect(() => {
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Switches to the invalid-link view when the token is missing.
       setTokenInvalid(true);
       return;
     }

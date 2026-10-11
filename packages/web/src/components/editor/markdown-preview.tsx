@@ -76,6 +76,7 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     // Empty body short-circuits: no need to hit the server for the
     // empty AST, and the "Preview" placeholder below covers it.
     if (source === '') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clears the preview when the body is empty.
       setRenderedAst(null);
       setErrored(false);
       return;
