@@ -57,6 +57,10 @@ export default defineConfig([
       'no-constant-binary-expression': 'off',
       'no-empty-static-block': 'off',
       'no-unused-private-class-members': 'off',
+      // New in ESLint 10's recommended set; not adopted by this upgrade.
+      'no-unassigned-vars': 'off',
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
     },
   },
   ...tsPlugin.configs['flat/recommended'],
