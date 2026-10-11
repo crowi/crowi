@@ -1,9 +1,25 @@
+// `LOG_LEVEL` must be raised before `util/logger.ts` resolves its floor on
+// first use (the `server` project fixes it to `error`), or the warn record
+// asserted below is dropped before it reaches the sink.
+const ORIGINAL_LOG_LEVEL = process.env.LOG_LEVEL;
+process.env.LOG_LEVEL = 'warn';
+
 import { Types } from 'mongoose';
 import { STATUS_PUBLISHED } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
+import type { LogRecord } from 'src/util/logger';
+import * as sink from 'src/util/logger-sink';
 import { runReplaceUrl } from 'src/util/replace-url';
-import { allocateContentSequence } from './content-sequence';
+import { allocateContentSequence, isPromotableTrackingShape, PROMOTABLE_TRACKING_FILTER, readHistoryTrackingState } from './content-sequence';
 import * as materializeModule from './materialize';
+
+afterAll(() => {
+  if (ORIGINAL_LOG_LEVEL === undefined) {
+    delete process.env.LOG_LEVEL;
+  } else {
+    process.env.LOG_LEVEL = ORIGINAL_LOG_LEVEL;
+  }
+});
 
 /**
  * RFC-0021 §D-2/§D-4 (Phase 2a) — `allocateContentSequence` unit/integration
@@ -124,8 +140,8 @@ describe('service/page-history/content-sequence — allocateContentSequence (RFC
 
       expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
       const page = await Page.findById(pageId);
-      expect(page.historyTracking.state).toBe('untracked');
-      expect(page.historySequence).toBe(0);
+      expect(readHistoryTrackingState(page)).toBe('untracked');
+      expect(page.historySequence ?? 0).toBe(0);
     });
 
     test('promotes a Page whose raw document predates the historySequence/historyTracking schema fields entirely', async () => {
@@ -522,7 +538,7 @@ describe('service/page-history/content-sequence — allocateContentSequence (RFC
       expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
       const page = await Page.findById(pageId);
       expect(page.historyTracking.state).toBe('migrating');
-      expect(page.historySequence).toBe(0);
+      expect(page.historySequence ?? 0).toBe(0);
     });
 
     test('an untracked Page whose pointer matches is still promoted when promotionOnly is set', async () => {
@@ -639,6 +655,177 @@ describe('service/page-history/content-sequence — allocateContentSequence (RFC
 
       expect(await PageHistoryEvent.countDocuments({})).toBe(0);
       expect(await PageHistoryOperation.countDocuments({})).toBe(0);
+    });
+  });
+
+  describe('schema defaults removed: promotion eligibility and demotion guard', () => {
+    let records: LogRecord[];
+    let counter = 0;
+
+    beforeEach(() => {
+      records = [];
+      jest.spyOn(sink, 'write').mockImplementation((record) => {
+        records.push(record);
+      });
+    });
+
+    const warnsFor = (pageId: unknown) =>
+      records.filter((r) => r.level === 'warn' && r.namespace === 'crowi:page-history:content-sequence' && JSON.stringify(r.data).includes(String(pageId)));
+
+    /** A raw page whose two history fields are written exactly as given (omitted keys stay absent). */
+    const insertRawPage = async (fields: Record<string, unknown>) => {
+      counter += 1;
+      const path = `/content-sequence/raw-${counter}-${new Types.ObjectId()}`;
+      const { insertedId } = await Page.collection.insertOne({
+        path,
+        status: STATUS_PUBLISHED,
+        grant: Page.GRANT_PUBLIC,
+        creator: user._id,
+        lastUpdateUser: user._id,
+        grantedUsers: [user._id],
+        createdAt: new Date(),
+        ...fields,
+      });
+      const revision = await Revision.create({ page: insertedId, path, body: 'raw', format: 'markdown', author: user._id });
+      await Page.updateOne({ _id: insertedId }, { $set: { revision: revision._id } });
+      return { pageId: insertedId, revisionId: revision._id };
+    };
+
+    /** A demoted page: untracked / counter absent, pointer at an unsequenced Revision, plus an older sequenced Revision. */
+    const createDemotedPage = async (kind: 'revision' | 'event' = 'revision') => {
+      const { pageId, revisionId } = await insertRawPage({});
+      if (kind === 'revision') {
+        await Revision.create({ page: pageId, path: '/content-sequence/demoted-old', body: 'old', format: 'markdown', author: user._id, historySequence: 1 });
+      } else {
+        await PageHistoryEvent.collection.insertOne({
+          page: pageId,
+          sequence: 1,
+          kind: 'visibility_changed',
+          operationId: `op-${new Types.ObjectId()}`,
+          occurredAt: new Date(),
+          actor: user._id,
+        });
+      }
+      return { pageId, revisionId };
+    };
+
+    test('AC-4: an untracked page with an explicit null historySequence is promoted', async () => {
+      const { pageId, revisionId } = await insertRawPage({ historySequence: null });
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId);
+
+      expect(outcome).toEqual({ allocated: true, sequence: 1, materialized: true, alreadySequenced: false });
+      const raw = await Page.collection.findOne({ _id: pageId });
+      expect(raw?.historyTracking?.state).toBe('ready');
+      expect(raw?.historySequence).toBe(1);
+    });
+
+    describe('AC-6: the JS eligibility check and the CAS filter describe the same set', () => {
+      const states: Record<string, Record<string, unknown>> = {
+        untracked: { historyTracking: { state: 'untracked', trackingStartedAt: null } },
+        'state null': { historyTracking: { state: null } },
+        'state absent': { historyTracking: { trackingStartedAt: new Date() } },
+        'subdocument absent': {},
+        ready: { historyTracking: { state: 'ready', trackingStartedAt: new Date() } },
+        migrating: { historyTracking: { state: 'migrating' } },
+      };
+      const counters: Record<string, Record<string, unknown>> = {
+        '0': { historySequence: 0 },
+        null: { historySequence: null },
+        absent: {},
+        '1': { historySequence: 1 },
+      };
+      const promotableStates = ['untracked', 'state null', 'state absent', 'subdocument absent'];
+      const promotableCounters = ['0', 'null', 'absent'];
+
+      for (const [stateName, stateFields] of Object.entries(states)) {
+        for (const [counterName, counterFields] of Object.entries(counters)) {
+          const expected = promotableStates.includes(stateName) && promotableCounters.includes(counterName);
+          test(`state ${stateName} / counter ${counterName} -> ${expected}`, async () => {
+            const { pageId } = await insertRawPage({ ...stateFields, ...counterFields });
+
+            const hydrated = await Page.findById(pageId);
+            const matches = await Page.countDocuments({ _id: pageId, ...PROMOTABLE_TRACKING_FILTER });
+
+            expect(isPromotableTrackingShape(hydrated)).toBe(expected);
+            expect(matches === 1).toBe(expected);
+          });
+        }
+      }
+    });
+
+    describe('AC-9: a ready page without a numeric counter fails closed', () => {
+      const cases: [string, Record<string, unknown>][] = [
+        ['absent', {}],
+        ['null', { historySequence: null }],
+        ['non-numeric', { historySequence: 'corrupt' }],
+      ];
+      for (const [name, counterFields] of cases) {
+        test(`counter ${name}`, async () => {
+          const { pageId, revisionId } = await insertRawPage({ historyTracking: { state: 'ready', trackingStartedAt: new Date() }, ...counterFields });
+          const before = await Page.collection.findOne({ _id: pageId });
+
+          const outcome = await allocateContentSequence(crowi, pageId, revisionId);
+
+          expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
+          const after = await Page.collection.findOne({ _id: pageId });
+          expect(after?.historySequence).toEqual(before?.historySequence);
+          expect(after?.pendingHistoryEntry).toBeUndefined();
+          expect((await Revision.findById(revisionId).lean())?.historySequence ?? null).toBeNull();
+        });
+      }
+    });
+
+    test('AC-10: a demoted page is not promoted, gets no new sequence, and logs one warn', async () => {
+      const { pageId, revisionId } = await createDemotedPage();
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId);
+
+      expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
+      const raw = await Page.collection.findOne({ _id: pageId });
+      expect(raw?.historyTracking).toBeUndefined();
+      expect(raw?.historySequence).toBeUndefined();
+      expect((await Revision.findById(revisionId).lean())?.historySequence ?? null).toBeNull();
+      expect(warnsFor(pageId)).toHaveLength(1);
+    });
+
+    test('AC-10: sequenced history held only by a PageHistoryEvent is also a demotion', async () => {
+      const { pageId, revisionId } = await createDemotedPage('event');
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId);
+
+      expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
+      expect(warnsFor(pageId)).toHaveLength(1);
+    });
+
+    test('AC-11: a legitimate concurrent promotion between the read and the guard is not refused', async () => {
+      const { pageId, revisionId } = await insertRawPage({});
+      const original = Revision.exists.bind(Revision);
+      let intercepted = false;
+      jest.spyOn(Revision, 'exists').mockImplementation((async (...args: unknown[]) => {
+        if (!intercepted) {
+          intercepted = true;
+          const winner = await Revision.create({ page: pageId, path: '/content-sequence/winner', body: 'winner', format: 'markdown', author: user._id });
+          await Page.updateOne({ _id: pageId }, { $set: { revision: winner._id } });
+          await allocateContentSequence(crowi, pageId, winner._id);
+        }
+        return original(...(args as Parameters<typeof original>));
+      }) as unknown as typeof Revision.exists);
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId);
+
+      expect(outcome).toEqual({ allocated: true, sequence: 2, materialized: true, alreadySequenced: false });
+      expect(warnsFor(pageId)).toHaveLength(0);
+    });
+
+    test('AC-12: promotionOnly does not promote a demoted page either', async () => {
+      const { pageId, revisionId } = await createDemotedPage();
+
+      const outcome = await allocateContentSequence(crowi, pageId, revisionId, { promotionOnly: true });
+
+      expect(outcome).toEqual({ allocated: false, reason: 'not-eligible' });
+      const raw = await Page.collection.findOne({ _id: pageId });
+      expect(raw?.historyTracking).toBeUndefined();
     });
   });
 });

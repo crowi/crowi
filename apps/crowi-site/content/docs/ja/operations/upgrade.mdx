@@ -38,6 +38,14 @@ import { Callout } from 'fumadocs-ui/components/callout';
 crowi-admin page-history repair --transitions
 ```
 
+### ページ履歴の追跡状態が保存で戻らなくなったリリース
+
+以前の版では、古い状態のまま保存されたページが履歴の記録を失い、同じ連番のリビジョンが重複することがありました。全レプリカを止めて揃えて入れ替え、起動したあとに、次のコマンドを 1 回実行してください。戻ったページは記録中に復旧され、連番が重複したページは `blocked` として報告されます。
+
+```bash
+crowi-admin page-history repair --outbox --scan
+```
+
 ### API のパスから `v2` が外れたリリース
 
 api の公開 HTTP prefix は `/api/v2` ではなく `/api` になりました。これは公開パスの名前を変えただけで、新旧のパスを並行して使える移行期間はありません。旧 prefix へのリダイレクトや alias は用意されていないため、新旧のレプリカが混在した fleet では、どちらの prefix を使ってもおよそ半分のリクエストが 404 になります。

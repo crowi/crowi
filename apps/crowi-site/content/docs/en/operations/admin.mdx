@@ -391,6 +391,8 @@ Assignment runs as a **separate, resumable step after the pointer write has comm
 
 `--scan` **skips revisions younger than ten minutes**, so it cannot mistake an assignment still in flight for one that failed and run it twice. It also skips revisions older than the page's tracking start, which would otherwise be given sequences out of order. Run it after that window if you want it to pick up recent writes.
 
+`--scan` also finds pages that hold sequenced history but are marked as not tracked (a stale save could leave a page in that state). When their sequence numbers contain no duplicates it puts them back to tracked and lists them as `restored`; the unsequenced revisions that page still holds are numbered right away, without the ten-minute wait. A page whose sequence numbers are duplicated is reported as `blocked` and left unchanged.
+
 ### Settling a stopped move (`--transitions`)
 
 Renaming a page, moving it to the trash and restoring it all take **two writes**: one to move the path, another to record the history. If the process dies in between, the page is left at the destination path in a "moving" state, which the normal read, list and search paths skip. To a reader the page has simply vanished.

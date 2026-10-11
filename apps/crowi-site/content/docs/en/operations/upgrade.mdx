@@ -38,6 +38,14 @@ If you did mix the generations, you can recover once every replica runs the new 
 crowi-admin page-history repair --transitions
 ```
 
+### The release that stopped saves from undoing page history tracking
+
+Earlier versions could let a save made from a stale copy of a page switch its history tracking off and give two revisions the same sequence number. After stopping every replica, replacing them together and starting the new version, run this once. Pages that fell back are put back to tracked, and pages with duplicated sequence numbers are reported as `blocked`.
+
+```bash
+crowi-admin page-history repair --outbox --scan
+```
+
 ### The release that dropped `v2` from the API path
 
 The api's public HTTP prefix became `/api` instead of `/api/v2`. That is a rename of the boundary, not a staged version rollout: there is no redirect or alias for the old prefix, so in a mixed fleet roughly half of the requests 404 whichever prefix they use.

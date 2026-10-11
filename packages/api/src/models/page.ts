@@ -269,13 +269,14 @@ export interface PageDocument extends Document {
 
   /**
    * RFC-0021 §5.4 (Phase 1) — monotonic, page-local ordering counter for
-   * `PageHistoryEvent`/`Revision.historySequence`. Phase 1 initializes it to
-   * 0 on every new Page; the (Phase 2) history-producing Page CAS is the
-   * sole allocator that ever increments it.
+   * `PageHistoryEvent`/`Revision.historySequence`. Absent (or null) reads as
+   * 0: the schema deliberately has no default, because a stale hydrated Page
+   * would write the default back on a later `save()` and undo a promotion.
+   * The history-producing Page CAS is the sole allocator that increments it.
    */
-  historySequence: number;
-  /** RFC-0021 §5.5a (Phase 1) — see `HistoryTracking`'s doc comment above. */
-  historyTracking: HistoryTracking;
+  historySequence?: number | null;
+  /** RFC-0021 §5.5a (Phase 1) — see `HistoryTracking`'s doc comment above. Absent reads as `untracked`. */
+  historyTracking?: HistoryTracking | null;
   /** RFC-0021 §5.5 (Phase 1) — see `PendingHistoryEntry`'s doc comment above. */
   pendingHistoryEntry?: PendingHistoryEntry | null;
   /** RFC-0021 Phase 2c-2 — see `PageHistoryTransition`'s doc comment above. */
@@ -563,7 +564,7 @@ export interface RenameTreeResult {
 export type HistoryTrackingState = 'untracked' | 'migrating' | 'ready';
 
 export interface HistoryTracking {
-  state: HistoryTrackingState;
+  state?: HistoryTrackingState | null;
   trackingStartedAt?: Date | null;
   migrationOwner?: string | null;
   migrationLeaseUntil?: Date | null;
@@ -649,21 +650,19 @@ export type PendingHistoryEntry =
     };
 
 /**
- * RFC-0021 §5.5a — nested `historyTracking` schema. Legacy Pages that
- * predate this field hydrate `state: 'untracked'` from this default (a
- * single-nested-subdocument default DOES apply on hydration even when the
- * whole `historyTracking` path is absent on the raw document — verified
- * against this project's mongoose version). Every Page starts here; Phase
- * 2a's `allocateContentSequence` is what moves a Page to `state: 'ready'`,
- * via a plain conditional `updateOne`/`findOneAndUpdate` — not a `pre('save')`
- * hook on this schema.
+ * RFC-0021 §5.5a — nested `historyTracking` schema. No field has a default
+ * and `state` is not required: a default hydrated onto a stale Page document
+ * is written back by that document's next `save()`, which would demote a
+ * Page another request already promoted. Absent `state` (or the whole
+ * subdocument) reads as `untracked`; `allocateContentSequence` moves a Page
+ * to `ready` via a conditional `findOneAndUpdate`.
  */
 const historyTrackingSchema = new Schema<HistoryTracking>(
   {
-    state: { type: String, enum: ['untracked', 'migrating', 'ready'], required: true, default: 'untracked' },
-    trackingStartedAt: { type: Date, default: null },
-    migrationOwner: { type: String, default: null },
-    migrationLeaseUntil: { type: Date, default: null },
+    state: { type: String, enum: ['untracked', 'migrating', 'ready'] },
+    trackingStartedAt: { type: Date },
+    migrationOwner: { type: String },
+    migrationLeaseUntil: { type: Date },
   },
   { _id: false },
 );
@@ -902,13 +901,13 @@ export default (crowi: Crowi) => {
       // value (only compared against a per-request expected value), so an
       // index would only add write overhead.
       collabLifecycleVersion: { type: Number, default: 0, required: false },
-      // RFC-0021 §5.4 (Phase 1) — page-local history ordering counter. See
-      // the `PageDocument` interface field doc above. No index — Phase 1
-      // never queries by value, only ever compares/increments in a Page CAS
-      // (Phase 2).
-      historySequence: { type: Number, default: 0, required: false },
-      // RFC-0021 §5.5a (Phase 1). See `historyTrackingSchema`'s doc comment.
-      historyTracking: { type: historyTrackingSchema, default: () => ({ state: 'untracked' }) },
+      // RFC-0021 §5.4 — page-local history ordering counter. No default and
+      // no index: absent reads as 0, and a default would be written back by
+      // a stale hydrated Page's later `save()`, undoing a promotion.
+      historySequence: { type: Number, required: false },
+      // RFC-0021 §5.5a. No default for the same reason; absent reads as
+      // `untracked`. See `historyTrackingSchema`'s doc comment.
+      historyTracking: { type: historyTrackingSchema },
       // RFC-0021 §5.5 (Phase 1) — no default: absent means "empty outbox",
       // and Mongo's `{ pendingHistoryEntry: null }` filter matches both
       // "absent" and "explicitly null" for the CAS-based claim/drain queries.

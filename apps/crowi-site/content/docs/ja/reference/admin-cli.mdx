@@ -65,7 +65,7 @@ description: crowi-admin のサブコマンド・オプション・終了コー�
 | `replace url` | `--force` | オフ | `--from` にスキームが無い場合でも実行する |
 | `watcher backfill` | `--dry-run` | オフ | 書き込まずに作成されるウォッチ行の件数を報告する |
 | `page-history repair` | `--outbox` | オン (既定の走査) | 取り残された履歴エントリを流し切る |
-| `page-history repair` | `--scan` | オフ | 連番が未付与のリビジョンに採番する |
+| `page-history repair` | `--scan` | オフ | 連番が未付与のリビジョンに採番し、未記録に戻ったページを記録中へ戻す |
 | `page-history repair` | `--transitions` | オフ | 途中で止まった移動操作を着地させるか報告する |
 | `page-history repair` | `--batch-size <n>` | `200` | 1 往復で読み込むページ数の上限 |
 | `page-history repair` | `--resume-after <pageId>` | — | ページ単位の再開位置 |

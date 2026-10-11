@@ -1149,8 +1149,11 @@ additive Revision `historySequence` field. Build event indexes before enabling
 writers, plus Revision `{ page: 1, historySequence: -1, _id: -1 }` for merged
 reads and a plain non-sparse `historySequence: 1` index so the RFC-0008
 `{ historySequence: null }` pending probe is index-backed (as `Revision.type`
-already is). Page defaults remain readable during expansion, but
-history-producing writes stay behind the migration gate.
+already is). `historySequence` and `historyTracking` carry no schema default:
+an absent field reads as `untracked` / counter 0. A default would be hydrated
+onto an old in-memory Page and written back by that document's next `save()`,
+undoing a promotion another request already made. History-producing writes
+stay behind the migration gate.
 
 ### §13.2 Promotion instead of a sequence backfill
 
@@ -1160,6 +1163,12 @@ the same conditional Page update that allocates that write's sequence also sets
 `historyTracking.state`, `historySequence`, and empty outbox slot, so exactly
 one writer promotes a Page and the promotion cannot be interleaved with another
 allocation.
+
+Promotion is one-way: no writer moves a Page from `ready` back to
+`untracked`. A Page that has sequenced Revisions or `PageHistoryEvent` rows yet
+reads `untracked` is corrupt. A content save does not promote it again, and the
+operator repair scan puts it back to `ready` when its sequences are free of
+duplicates.
 
 Existing Revisions keep no sequence. They are below the boundary, where the
 timeline has content rows only, so `createdAt, _id` order already totally orders

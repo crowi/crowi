@@ -38,7 +38,7 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
     otherUser = testOtherUser;
   });
 
-  /** A Phase-1-era shape: no `pushRevision` ever ran, so `historyTracking.state` reads back `untracked` (schema default on a raw `.create()`). */
+  /** A Phase-1-era shape: no `pushRevision` ever ran, so `historyTracking.state` reads back `untracked` (the two fields are absent on a raw `.create()`, which reads as untracked). */
   async function createUntrackedPage(path: string, grant = Page.GRANT_PUBLIC, status = STATUS_PUBLISHED) {
     return Page.create({
       path,
@@ -217,7 +217,7 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
 
   test('AC-3: an untracked Page grant change succeeds today-identically — no event, historySequence/pendingHistoryEntry untouched', async () => {
     const page = await createUntrackedPage('/pec/ac3');
-    expect(page.historyTracking.state).toBe('untracked');
+    expect(page.historyTracking?.state ?? 'untracked').toBe('untracked');
 
     const outcome = await changePageVisibility(crowi, { pageId: page._id, toGrant: Page.GRANT_RESTRICTED, actor: user._id });
 
@@ -228,8 +228,8 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
 
     const reloaded = await Page.findById(page._id).lean();
     expect(reloaded?.grant).toBe(Page.GRANT_RESTRICTED);
-    expect(reloaded?.historyTracking?.state).toBe('untracked');
-    expect(reloaded?.historySequence).toBe(0);
+    expect(reloaded?.historyTracking).toBeUndefined();
+    expect(reloaded?.historySequence).toBeUndefined();
     expect(reloaded?.pendingHistoryEntry).toBeUndefined();
     expect(await PageHistoryEvent.countDocuments({ page: page._id })).toBe(0);
   });
@@ -552,7 +552,7 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
 
     test('AC-25: an untracked draft still publishes today-identically — status flips, no event, historySequence/pendingHistoryEntry untouched', async () => {
       const draft = await createUntrackedDraftPage('/pec/ac25');
-      expect(draft.historyTracking.state).toBe('untracked');
+      expect(draft.historyTracking?.state ?? 'untracked').toBe('untracked');
 
       const outcome = await publishDraftPage(crowi, { pageId: draft._id, actor: user._id });
 
@@ -563,8 +563,8 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
 
       const page = await Page.findById(draft._id).lean();
       expect(page?.status).toBe(STATUS_PUBLISHED);
-      expect(page?.historyTracking?.state).toBe('untracked');
-      expect(page?.historySequence).toBe(0);
+      expect(page?.historyTracking).toBeUndefined();
+      expect(page?.historySequence).toBeUndefined();
       expect(page?.pendingHistoryEntry).toBeUndefined();
       expect(await PageHistoryEvent.countDocuments({ page: draft._id })).toBe(0);
     });

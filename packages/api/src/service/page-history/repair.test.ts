@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { type PendingHistoryEntry, STATUS_PUBLISHED } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 import { drainPendingHistoryEntry, materializePendingEntry } from './materialize';
+import { readPageHistory } from './read';
 import { repairPendingEntries, scanUnsequencedRevisions } from './repair';
 
 /**
@@ -66,7 +67,10 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
   const createReadyPage = async (path, body = 'v0') => {
     const page = await createRawPage(path);
     const revision = await Revision.create({ page: page._id, path, body, format: 'markdown', author: user._id });
-    await Page.updateOne({ _id: page._id }, { $set: { revision: revision._id, historyTracking: { state: 'ready', trackingStartedAt: revision.createdAt } } });
+    await Page.updateOne(
+      { _id: page._id },
+      { $set: { revision: revision._id, historySequence: 0, historyTracking: { state: 'ready', trackingStartedAt: revision.createdAt } } },
+    );
     return Page.findById(page._id);
   };
 
@@ -1165,12 +1169,22 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       expect(second.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
     });
 
-    test('an untracked Page (no historyTracking.state: ready) is never visited', async () => {
-      const page = await createReadyPage('/repair/untracked-not-visited', 'v0');
-      await Page.updateOne({ _id: page._id }, { $unset: { historyTracking: '' } });
+    test('an untracked Page with no sequenced rows is left untouched and never reported (AC-16)', async () => {
+      const absent = await createReadyPage('/repair/untracked-absent', 'v0');
+      await Page.updateOne({ _id: absent._id }, { $unset: { historyTracking: '', historySequence: '' } });
+      const explicit = await createReadyPage('/repair/untracked-explicit', 'v0');
+      await Page.updateOne({ _id: explicit._id }, { $set: { historySequence: 0, historyTracking: { state: 'untracked', trackingStartedAt: null } } });
+      const rawBefore = [await Page.collection.findOne({ _id: absent._id }), await Page.collection.findOne({ _id: explicit._id })];
 
       const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
-      expect(result.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
+
+      for (const [i, page] of [absent, explicit].entries()) {
+        expect(result.restored.some((r) => r.pageId.equals(page._id))).toBe(false);
+        expect(result.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
+        expect(result.blocked.some((b) => b.pageId.equals(page._id))).toBe(false);
+        expect(result.failed.some((f) => f.pageId === String(page._id))).toBe(false);
+        expect(await Page.collection.findOne({ _id: page._id })).toEqual(rawBefore[i]);
+      }
     });
 
     test('a Revision with an explicit historySequence: null (not merely absent) is still treated as unsequenced and assigned a sequence (codex review attempt 2, round 6, AC-7)', async () => {
@@ -1434,7 +1448,10 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
         createdAt: new Date(Date.now() - 800_000), // old enough to clear minAgeMs
       });
       const trackingStartedAt = new Date(); // promoted AFTER the old Revision was written
-      await Page.updateOne({ _id: page._id }, { $set: { revision: belowBoundary._id, historyTracking: { state: 'ready', trackingStartedAt } } });
+      await Page.updateOne(
+        { _id: page._id },
+        { $set: { revision: belowBoundary._id, historySequence: 0, historyTracking: { state: 'ready', trackingStartedAt } } },
+      );
 
       const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 600_000 });
 
@@ -1586,7 +1603,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
       // A controlled (deterministic) reproduction of the race a live two-scan
       // repro exposed: intercept the batch query
-      // (`Page.find({ 'historyTracking.state': 'ready' })`) and, the instant
+      // (the first `Page.find` whose filter has a `historyTracking.state` key) and, the instant
       // it resolves — i.e. exactly the moment a batch-time snapshot of this
       // Page's `historySequence` would have been captured — commit a
       // CONCURRENT claim (advance both the allocator and the target
@@ -1603,7 +1620,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       const originalFind = Page.find.bind(Page);
       const spy = jest.spyOn(Page, 'find').mockImplementation((filter, ...rest) => {
         const query = originalFind(filter, ...rest);
-        if (injected || filter?.['historyTracking.state'] !== 'ready') {
+        if (injected || filter == null || !('historyTracking.state' in filter)) {
           return query;
         }
         const originalExec = query.exec.bind(query);
@@ -1732,6 +1749,147 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       await expect(scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: 0 })).rejects.toThrow(/batchSize must be a positive integer/);
       await expect(scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: -1 })).rejects.toThrow(/batchSize must be a positive integer/);
       await expect(scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: 1.5 })).rejects.toThrow(/batchSize must be a positive integer/);
+    });
+  });
+
+  describe('scanUnsequencedRevisions — restoring demoted pages (sequenced history, marked untracked)', () => {
+    let counter = 0;
+
+    /** A raw page whose two history fields are written exactly as given. */
+    const insertDemotedBase = async (fields: Record<string, unknown> = {}) => {
+      counter += 1;
+      const path = `/repair/demoted-${counter}-${new Types.ObjectId()}`;
+      const { insertedId } = await Page.collection.insertOne({
+        path,
+        status: STATUS_PUBLISHED,
+        grant: Page.GRANT_PUBLIC,
+        creator: user._id,
+        lastUpdateUser: user._id,
+        grantedUsers: [user._id],
+        createdAt: new Date(),
+        ...fields,
+      });
+      return { pageId: insertedId, path };
+    };
+
+    const addRevision = (pageId, path, createdAt: Date, historySequence?: number | null) =>
+      Revision.create({
+        page: pageId,
+        path,
+        body: `b-${createdAt.getTime()}`,
+        format: 'markdown',
+        author: user._id,
+        createdAt,
+        ...(historySequence !== undefined ? { historySequence } : {}),
+      });
+
+    /** Full-shape demotion: both fields absent, sequence 1 held by an old Revision, a newer unsequenced Revision is the pointer. */
+    const createFullyDemoted = async () => {
+      const { pageId, path } = await insertDemotedBase();
+      const first = await addRevision(pageId, path, new Date(Date.now() - 2 * 3_600_000), 1);
+      const unsequenced = await addRevision(pageId, path, new Date());
+      await Page.updateOne({ _id: pageId }, { $set: { revision: unsequenced._id } });
+      return { pageId, first, unsequenced };
+    };
+
+    test('AC-13: a demoted page is put back to ready and its later unsequenced Revision is sequenced', async () => {
+      const { pageId, first, unsequenced } = await createFullyDemoted();
+      const eventsBefore = await PageHistoryEvent.countDocuments({});
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+
+      const restored = result.restored.filter((r) => r.pageId.equals(pageId));
+      expect(restored).toHaveLength(1);
+      expect(restored[0].restoredSequence).toBe(1);
+      expect(restored[0].trackingStartedAt.getTime()).toBe(first.createdAt.getTime());
+      const repaired = result.repaired.filter((r) => r.pageId.equals(pageId));
+      expect(repaired.map((r) => [String(r.revisionId), r.assignedSequence])).toEqual([[String(unsequenced._id), 2]]);
+      const raw = await Page.collection.findOne({ _id: pageId });
+      expect(raw.historyTracking.state).toBe('ready');
+      expect(raw.historyTracking.trackingStartedAt.getTime()).toBe(first.createdAt.getTime());
+      expect(raw.historySequence).toBe(2);
+      expect(await PageHistoryEvent.countDocuments({})).toBe(eventsBefore);
+
+      const again = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+      expect(again.restored.some((r) => r.pageId.equals(pageId))).toBe(false);
+      expect(again.repaired.some((r) => r.pageId.equals(pageId))).toBe(false);
+    });
+
+    test('AC-14: a partially demoted page keeps its counter and trackingStartedAt; a lagging counter is raised to the highest sequence', async () => {
+      for (const counterValue of [3, 1]) {
+        const startedAt = new Date(Date.now() - 5 * 3_600_000);
+        const { pageId, path } = await insertDemotedBase({
+          historySequence: counterValue,
+          historyTracking: { state: 'untracked', trackingStartedAt: startedAt },
+        });
+        for (const seq of [1, 2, 3]) {
+          await addRevision(pageId, path, new Date(startedAt.getTime() + seq * 1000), seq);
+        }
+
+        const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+
+        expect(result.restored.filter((r) => r.pageId.equals(pageId)).map((r) => r.restoredSequence)).toEqual([3]);
+        const raw = await Page.collection.findOne({ _id: pageId });
+        expect(raw.historyTracking.state).toBe('ready');
+        expect(raw.historyTracking.trackingStartedAt.getTime()).toBe(startedAt.getTime());
+        expect(raw.historySequence).toBe(3);
+      }
+    });
+
+    test('AC-15: a demoted page with a duplicated sequence is reported blocked and not rewritten', async () => {
+      const { pageId, path } = await insertDemotedBase();
+      await addRevision(pageId, path, new Date(Date.now() - 3_600_000), 1);
+      await addRevision(pageId, path, new Date(Date.now() - 1_800_000), 1);
+      const rawBefore = await Page.collection.findOne({ _id: pageId });
+      const revisionsBefore = await Revision.find({ page: pageId }).sort({ _id: 1 }).lean();
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+
+      expect(result.blocked.filter((b) => b.pageId.equals(pageId))).toHaveLength(1);
+      expect(result.restored.some((r) => r.pageId.equals(pageId))).toBe(false);
+      expect(await Page.collection.findOne({ _id: pageId })).toEqual(rawBefore);
+      expect(await Revision.find({ page: pageId }).sort({ _id: 1 }).lean()).toEqual(revisionsBefore);
+    });
+
+    test('AC-17: a demoted page with a non-numeric counter is reported failed with a fixed reason and not rewritten', async () => {
+      const { pageId, path } = await insertDemotedBase({ historySequence: 'corrupt-secret-value' });
+      await addRevision(pageId, path, new Date(Date.now() - 3_600_000), 1);
+      const rawBefore = await Page.collection.findOne({ _id: pageId });
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+
+      const failures = result.failed.filter((f) => f.pageId === String(pageId));
+      expect(failures).toHaveLength(1);
+      expect(failures[0].reason).not.toContain('corrupt-secret-value');
+      expect(result.restored.some((r) => r.pageId.equals(pageId))).toBe(false);
+      expect(await Page.collection.findOne({ _id: pageId })).toEqual(rawBefore);
+    });
+
+    test('AC-18: a ready page without a counter fails with a fixed reason and gets no counter written', async () => {
+      const page = await createReadyPage('/repair/ready-no-counter', 'v0');
+      await Page.updateOne({ _id: page._id }, { $unset: { historySequence: '' } });
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
+
+      const failures = result.failed.filter((f) => f.pageId === String(page._id));
+      expect(failures).toHaveLength(1);
+      expect(failures[0].reason).toBe('page historySequence counter is not a number — corrupted; skipping this page (value redacted)');
+      const raw = await Page.collection.findOne({ _id: page._id });
+      expect(raw.historySequence).toBeUndefined();
+    });
+
+    test('AC-26: with the default grace window, a just-created unsequenced Revision is still sequenced and the whole history stays listed', async () => {
+      const { pageId, first, unsequenced } = await createFullyDemoted();
+
+      const result = await scanUnsequencedRevisions(crowi);
+
+      expect(result.restored.filter((r) => r.pageId.equals(pageId))).toHaveLength(1);
+      const repaired = result.repaired.filter((r) => r.pageId.equals(pageId));
+      expect(repaired.map((r) => [String(r.revisionId), r.assignedSequence])).toEqual([[String(unsequenced._id), 2]]);
+
+      const history = await readPageHistory(crowi, { pageId, limit: 50, cursor: null });
+      const listed = history.entries.map((e) => String((e as { revisionId?: unknown }).revisionId)).sort();
+      expect(listed).toEqual([String(first._id), String(unsequenced._id)].sort());
     });
   });
 });

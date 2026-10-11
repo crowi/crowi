@@ -3,6 +3,7 @@ import mongoose, { Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import type { PendingHistoryEntry } from 'src/models/page';
 import { isDuplicateKeyError } from 'src/util/map-duplicate-key-error';
+import { UNTRACKED_STATE_FILTER, hasSequencedHistory, readHistoryTrackingState } from './content-sequence';
 import { materializePendingEntry } from './materialize';
 
 /**
@@ -180,7 +181,10 @@ export interface RepairScanOptions {
    * scan leaves it alone rather than risk racing a live claim. Defaults to
    * `600_000` (10 minutes) — the spec's own bound on how long that window
    * can plausibly stay open. `0` disables the grace window entirely (tests
-   * exercising immediate repair pass this explicitly).
+   * exercising immediate repair pass this explicitly). A Page this scan has
+   * just restored from a demotion is always scanned with `0` regardless of
+   * this value, so its unsequenced Revisions do not vanish from the history
+   * list until the next scan.
    */
   minAgeMs?: number;
 }
@@ -341,9 +345,19 @@ function firstRevisionOwner(owners: SequenceOwner[]): Types.ObjectId | undefined
   return owners.find((o) => o.kind === 'revision')?.id;
 }
 
+/** A demoted Page (sequenced history but `untracked`) the scan put back to `ready`. */
+export interface RestoredDemotedPage {
+  pageId: Types.ObjectId;
+  restoredSequence: number;
+  trackingStartedAt: Date;
+  reason: string;
+}
+
 export interface UnsequencedRevisionScanResult {
-  /** `ready` Pages visited. */
+  /** Pages the cursor visited (`ready` and `untracked`). */
   scannedPages: number;
+  /** Demoted Pages whose tracking state the scan restored to `ready`. */
+  restored: RestoredDemotedPage[];
   /** Revisions the scan found without a `historySequence` and successfully assigned one to, oldest (`createdAt, _id`) first. */
   repaired: RepairedRevisionSequence[];
   /** Pages the scan found a duplicate `historySequence` on (across `Revision` and `PageHistoryEvent`) — reported, NOT auto-repaired. */
@@ -471,6 +485,9 @@ async function claimAndAssignSequence(crowi: Crowi, pageId: Types.ObjectId, revi
     }
 
     const expectedSequence = current.historySequence;
+    if (typeof expectedSequence !== 'number' || !Number.isFinite(expectedSequence)) {
+      throw new Error('page historySequence counter is not a number — corrupted; skipping this page (value redacted)');
+    }
     const nextSequence = expectedSequence + 1;
     // `entryId` (RFC §5.5, revised) is generated HERE — before the CAS that
     // writes it — per the same "the id must exist before the write it
@@ -521,8 +538,9 @@ async function claimAndAssignSequence(crowi: Crowi, pageId: Types.ObjectId, revi
 }
 
 /**
- * Repair paths (b) and (c): walks every `ready` Page (RFC §13.2a — Phase 1
- * populates this set from new-Page creation only) and, per Page:
+ * Repair paths (b) and (c): walks every `ready` Page (RFC §13.2a) and every
+ * `untracked` Page that holds sequenced history (a demotion, see
+ * {@link restoreDemotedPage}) and, per Page:
  *
  * 1. Verifies `Revision.historySequence` and `PageHistoryEvent.sequence`
  *    values for the Page share no duplicate (the normative cross-collection
@@ -547,14 +565,15 @@ export async function scanUnsequencedRevisions(crowi: Crowi, options: RepairScan
   const repaired: RepairedRevisionSequence[] = [];
   const blocked: BlockedPageForDuplicateSequence[] = [];
   const failed: OutboxRepairFailure[] = [];
+  const restored: RestoredDemotedPage[] = [];
   let scannedPages = 0;
   let cursor = resolveCursor(options.resumeAfterId);
   let lastPageId: string | null = null;
 
   for (;;) {
-    const match: Record<string, unknown> = { 'historyTracking.state': 'ready' };
+    const match: Record<string, unknown> = { 'historyTracking.state': { $in: ['ready', 'untracked', null] } };
     if (cursor != null) match._id = { $gt: cursor };
-    const batch = await Page.find(match).sort({ _id: 1 }).limit(batchSize).select('_id').lean().exec();
+    const batch = await Page.find(match).sort({ _id: 1 }).limit(batchSize).select('_id historyTracking.state').lean().exec();
     if (batch.length === 0) break;
 
     for (const row of batch) {
@@ -563,7 +582,11 @@ export async function scanUnsequencedRevisions(crowi: Crowi, options: RepairScan
       cursor = pageId;
       lastPageId = String(pageId);
       try {
-        await scanOneReadyPage(crowi, pageId, minAgeMs, { repaired, blocked, failed });
+        if (readHistoryTrackingState(row) === 'ready') {
+          await scanOneReadyPage(crowi, pageId, minAgeMs, { repaired, blocked, failed });
+        } else {
+          await restoreDemotedPage(crowi, pageId, { repaired, blocked, failed, restored });
+        }
       } catch (err) {
         // A failure NOT tied to any one Revision claim (e.g. the initial
         // Revision/PageHistoryEvent lookup itself) — the per-revision catch
@@ -578,20 +601,22 @@ export async function scanUnsequencedRevisions(crowi: Crowi, options: RepairScan
     if (batch.length < batchSize) break;
   }
 
-  return { scannedPages, repaired, blocked, failed, lastPageId };
+  return { scannedPages, restored, repaired, blocked, failed, lastPageId };
 }
 
-/** One ready Page's worth of work for {@link scanUnsequencedRevisions} — split out so the per-Page try/catch above has a single call to wrap. */
-async function scanOneReadyPage(
+/**
+ * Collects who holds each assigned sequence on a Page. Returns `null` after
+ * recording a `failed` (non-numeric value) or `blocked` (duplicate) entry, in
+ * which case the caller must not touch the Page.
+ */
+async function collectSequenceOwners(
   crowi: Crowi,
   pageId: Types.ObjectId,
-  minAgeMs: number,
-  into: { repaired: RepairedRevisionSequence[]; blocked: BlockedPageForDuplicateSequence[]; failed: OutboxRepairFailure[] },
-): Promise<void> {
-  const Page = crowi.model('Page');
+  into: { blocked: BlockedPageForDuplicateSequence[]; failed: OutboxRepairFailure[] },
+): Promise<Map<number, SequenceOwner[]> | null> {
   const Revision = crowi.model('Revision');
   const PageHistoryEvent = crowi.model('PageHistoryEvent');
-  const { repaired, blocked, failed } = into;
+  const { blocked, failed } = into;
 
   // `historySequence: { $exists: true, $ne: null }` (codex review attempt 2,
   // round 6, AC-7) — the field must be BOTH present AND not `null` to count
@@ -627,7 +652,7 @@ async function scanOneReadyPage(
         revisionId: String(r._id),
         reason: 'revision has a non-numeric historySequence value — corrupted; skipping this page (value redacted)',
       });
-      return;
+      return null;
     }
     const owners = sequenceOwners.get(seq) ?? [];
     owners.push({ kind: 'revision', id: r._id as Types.ObjectId });
@@ -640,7 +665,7 @@ async function scanOneReadyPage(
         pageId: String(pageId),
         reason: 'a PageHistoryEvent has a non-numeric sequence value — corrupted; skipping this page (value redacted)',
       });
-      return;
+      return null;
     }
     const owners = sequenceOwners.get(seq) ?? [];
     owners.push({ kind: 'page_event', id: e._id as Types.ObjectId });
@@ -655,6 +680,125 @@ async function scanOneReadyPage(
       duplicateSequence,
       reason: `duplicate historySequence across Revision/PageHistoryEvent (${describeSequenceOwners(owners)}) — blocked for manual repair, not auto-fixed`,
     });
+    return null;
+  }
+
+  return sequenceOwners;
+}
+
+const DEMOTED_COUNTER_CORRUPT_REASON = 'demoted page has a non-numeric historySequence counter — corrupted; skipping this page (value redacted)';
+
+/**
+ * A Page that holds sequenced Revisions / events but is marked `untracked` was
+ * demoted by a stale document save (promotion is otherwise one-way). Puts it
+ * back to `ready` when its sequences are free of duplicates; reports `blocked`
+ * (and writes nothing) when they are not. A plain untracked Page (no sequenced
+ * rows) is not visited by anything and is not reported.
+ */
+async function restoreDemotedPage(
+  crowi: Crowi,
+  pageId: Types.ObjectId,
+  into: {
+    repaired: RepairedRevisionSequence[];
+    blocked: BlockedPageForDuplicateSequence[];
+    failed: OutboxRepairFailure[];
+    restored: RestoredDemotedPage[];
+  },
+): Promise<void> {
+  const Page = crowi.model('Page');
+  const Revision = crowi.model('Revision');
+  const { blocked, failed, restored } = into;
+
+  const readPage = () => Page.findById(pageId).select('historySequence historyTracking pendingHistoryEntry').lean().exec();
+  let page = await readPage();
+  // A Page that moved to `ready` after the batch read is handled by the next scan.
+  if (page == null || readHistoryTrackingState(page) !== 'untracked') {
+    return;
+  }
+  if (!(await hasSequencedHistory(crowi, pageId))) {
+    return;
+  }
+
+  if (page.pendingHistoryEntry != null) {
+    try {
+      await materializePendingEntry(crowi, pageId);
+    } catch (err) {
+      failed.push({ pageId: String(pageId), reason: redactErrorReason(err) });
+      return;
+    }
+    page = await readPage();
+    if (page == null || readHistoryTrackingState(page) !== 'untracked' || page.pendingHistoryEntry != null) {
+      return;
+    }
+  }
+
+  const owners = await collectSequenceOwners(crowi, pageId, { blocked, failed });
+  if (owners == null) {
+    return;
+  }
+
+  const observed: unknown = page.historySequence;
+  if (observed != null && safeSequenceValue(observed) === undefined) {
+    failed.push({ pageId: String(pageId), reason: DEMOTED_COUNTER_CORRUPT_REASON });
+    return;
+  }
+  const observedCounter = (observed as number | null | undefined) ?? null;
+  const maxAssigned = owners.size > 0 ? Math.max(...owners.keys()) : 0;
+  const restoredSequence = Math.max(observedCounter ?? 0, maxAssigned);
+
+  let trackingStartedAt: Date | null = (page.historyTracking?.trackingStartedAt as Date | null | undefined) ?? null;
+  if (trackingStartedAt == null) {
+    const lowest = Math.min(...owners.keys());
+    const lowestOwners = owners.get(lowest) ?? [];
+    if (lowestOwners.length === 1 && lowestOwners[0].kind === 'revision') {
+      const lowestRevision = await Revision.findById(lowestOwners[0].id).select('createdAt').lean().exec();
+      trackingStartedAt = (lowestRevision?.createdAt as Date | undefined) ?? null;
+    }
+    if (trackingStartedAt == null) {
+      blocked.push({
+        pageId,
+        revisionId: undefined,
+        duplicateSequence: lowest,
+        reason: 'demoted page whose lowest sequence is not held by a Revision — cannot determine the tracking start; blocked for manual repair, not auto-fixed',
+      });
+      return;
+    }
+  }
+
+  const result = await Page.updateOne(
+    { _id: pageId, ...UNTRACKED_STATE_FILTER, historySequence: observedCounter, pendingHistoryEntry: null },
+    { $set: { historySequence: restoredSequence, historyTracking: { state: 'ready', trackingStartedAt } } },
+  ).exec();
+  if (result.matchedCount !== 1) {
+    return;
+  }
+  restored.push({
+    pageId,
+    restoredSequence,
+    trackingStartedAt,
+    reason: 'page held sequenced history but was marked untracked; tracking put back to ready by the repair scan',
+  });
+
+  // The grace window exists to avoid racing an allocator claim that has not
+  // materialized yet; the outbox slot CAS and the allocator's Revision recheck
+  // already prevent a double assignment. Keeping it here would leave Revisions
+  // created after the tracking boundary out of the history list until the next scan.
+  await scanOneReadyPage(crowi, pageId, 0, into);
+}
+
+/** One ready Page's worth of work for {@link scanUnsequencedRevisions} — split out so the per-Page try/catch above has a single call to wrap. */
+async function scanOneReadyPage(
+  crowi: Crowi,
+  pageId: Types.ObjectId,
+  minAgeMs: number,
+  into: { repaired: RepairedRevisionSequence[]; blocked: BlockedPageForDuplicateSequence[]; failed: OutboxRepairFailure[] },
+): Promise<void> {
+  const Page = crowi.model('Page');
+  const Revision = crowi.model('Revision');
+  const { repaired, blocked, failed } = into;
+
+  const sequenceOwners = await collectSequenceOwners(crowi, pageId, into);
+  if (sequenceOwners == null) {
     return;
   }
 
