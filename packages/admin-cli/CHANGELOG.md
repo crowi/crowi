@@ -1,5 +1,22 @@
 # @crowi/admin-cli
 
+## 0.1.0-alpha.8
+
+### Patch Changes
+
+- b5ab1b1: Fix page history tracking being undone by a content save, which could give two revisions of the same page the same sequence number, and fix pages with an explicit null history counter never starting to record history.
+
+  A save made from a stale copy of a page that another request had just promoted wrote the default tracking state back, so the page fell back to untracked and the next save sequenced a second revision as number 1. The two history fields no longer have schema defaults, so a stale save leaves them alone, and a content save no longer promotes a page that already holds sequenced history. `crowi-admin page-history repair --scan` now finds pages that fell back this way, puts them back to tracked when their sequence numbers are free of duplicates (reported as restored), and reports the rest as blocked without changing them. After upgrading, run `crowi-admin page-history repair --outbox --scan` once.
+
+- Updated dependencies [1636111]
+- Updated dependencies [24e3fcf]
+- Updated dependencies [8e845a1]
+- Updated dependencies [885d09f]
+- Updated dependencies [0978619]
+- Updated dependencies [b5ab1b1]
+- Updated dependencies [9b81e1d]
+  - @crowi/api@2.0.0-alpha.24
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes

@@ -1,5 +1,21 @@
 # @crowi/cli
 
+## 1.0.0-alpha.8
+
+### Minor Changes
+
+- 24e3fcf: Artifact authors now get the link rules before they write and a fixed correction message when a save is refused. The MCP write tools describe the allowed link forms, the query and reserved-route bans, and the `%25` spelling for a literal percent sign, and a rejection carries an optional `diagnosticCode` that REST, MCP and the CLI show the same way. An absolute link to a reserved route is now refused at save time, which also applies when restoring an older revision that contains one; the web "restore this revision" action now shows the rejection reason together with how to fix the body through MCP or the CLI and save it with the current revision ID.
+- 885d09f: Add `crowi recent` to list the pages you can read in order of last update, newest first, without a search query or a search plugin. `--prefix <path>` narrows the list to pages whose path literally starts with the given text (case-sensitive, no regular expressions), and `--limit` / `--offset` page through it. The list endpoint `GET /api/pages/list` gains the matching `path_prefix` query and an `appliedPathPrefix` response field; the CLI refuses to print a prefix result the server did not confirm, so an older server fails clearly instead of returning an unfiltered list.
+
+### Patch Changes
+
+- Updated dependencies [24e3fcf]
+- Updated dependencies [8e845a1]
+- Updated dependencies [885d09f]
+- Updated dependencies [0978619]
+- Updated dependencies [9b81e1d]
+  - @crowi/api-contract@2.0.0-alpha.24
+
 ## 1.0.0-alpha.7
 
 ### Minor Changes

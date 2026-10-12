@@ -1,5 +1,21 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.24
+
+### Major Changes
+
+- 24e3fcf: Artifact authors now get the link rules before they write and a fixed correction message when a save is refused. The MCP write tools describe the allowed link forms, the query and reserved-route bans, and the `%25` spelling for a literal percent sign, and a rejection carries an optional `diagnosticCode` that REST, MCP and the CLI show the same way. An absolute link to a reserved route is now refused at save time, which also applies when restoring an older revision that contains one; the web "restore this revision" action now shows the rejection reason together with how to fix the body through MCP or the CLI and save it with the current revision ID.
+
+### Minor Changes
+
+- 885d09f: Add `crowi recent` to list the pages you can read in order of last update, newest first, without a search query or a search plugin. `--prefix <path>` narrows the list to pages whose path literally starts with the given text (case-sensitive, no regular expressions), and `--limit` / `--offset` page through it. The list endpoint `GET /api/pages/list` gains the matching `path_prefix` query and an `appliedPathPrefix` response field; the CLI refuses to print a prefix result the server did not confirm, so an older server fails clearly instead of returning an unfiltered list.
+
+### Patch Changes
+
+- 8e845a1: Artifact pages can no longer be edited by mistake as Markdown: the Web hides every body-edit entry for an artifact page and shows a notice that points to the CLI or MCP when its edit URL is opened directly, and the server now checks the current revision's type on every body save (including internal writers and the realtime collaboration save path) so an artifact body is only stored together with a validated HTML write, while CLI / MCP updates that omit the type, version restore, history, download, rename and permission changes keep working.
+- 0978619: A fresh install no longer flips from Japanese to English with a page reload right after setup. Without a language cookie the web app now picks the language from the browser's Accept-Language header, and accounts created through the installer, self-registration, invitations and external sign-in start with that language instead of always English.
+- 9b81e1d: GET /pages/list now returns a 500 internal error for every request shape when listing fails, instead of an empty list for requests without `path_prefix`. The rename dialog shows an error with a retry button, and blocks the move, when its subpage list cannot be loaded.
+
 ## 2.0.0-alpha.23
 
 ### Minor Changes
