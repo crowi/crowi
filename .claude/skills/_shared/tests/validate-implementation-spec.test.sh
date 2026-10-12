@@ -1023,10 +1023,16 @@ grep -q 'phase feature-fast-export-bad-phase: INPUT:' "$OUTPUT" \
 # phase did not validate.
 SILENT_CHILD_SHIM_DIR="$TMP_ROOT/silent-child-shim"
 mkdir -p "$SILENT_CHILD_SHIM_DIR"
+export SILENT_CHILD_MARKER="$TMP_ROOT/silent-child-fired"
+# This shim is itself named `bash` and sits first in PATH, so its interpreter
+# must be absolute: `#!/usr/bin/env bash` would resolve back to the shim and
+# re-exec it until the kernel rejects the growing argv (E2BIG), which passed
+# this test by accident and cost ~15 minutes per CI run.
 cat >"$SILENT_CHILD_SHIM_DIR/bash" <<'SHIM'
-#!/usr/bin/env bash
+#!/bin/bash
 for arg in "$@"; do
   if [[ "$arg" == *validate-implementation-spec.sh ]]; then
+    : >"$SILENT_CHILD_MARKER"
     exit 1
   fi
 done
@@ -1038,6 +1044,8 @@ set +e
 status=$?
 set -e
 assert_status 1 "$status" "a phase whose validator dies silently must fail the umbrella"
+[[ -f "$SILENT_CHILD_MARKER" ]] || fail "the silent-child shim never ran"
+grep -q 'Argument list too long' "$OUTPUT" && fail "the silent-child shim must exit silently, not fail to exec"
 grep -q 'without an ERROR diagnostic' "$OUTPUT" || fail "a silent child failure must be named"
 grep -q '^READY:' "$OUTPUT" && fail "a silent child failure must not emit READY"
 
