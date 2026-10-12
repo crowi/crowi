@@ -1,5 +1,33 @@
 # @crowi/api
 
+## 2.0.0-alpha.24
+
+### Major Changes
+
+- 24e3fcf: Artifact authors now get the link rules before they write and a fixed correction message when a save is refused. The MCP write tools describe the allowed link forms, the query and reserved-route bans, and the `%25` spelling for a literal percent sign, and a rejection carries an optional `diagnosticCode` that REST, MCP and the CLI show the same way. An absolute link to a reserved route is now refused at save time, which also applies when restoring an older revision that contains one; the web "restore this revision" action now shows the rejection reason together with how to fix the body through MCP or the CLI and save it with the current revision ID.
+
+### Minor Changes
+
+- 885d09f: Add `crowi recent` to list the pages you can read in order of last update, newest first, without a search query or a search plugin. `--prefix <path>` narrows the list to pages whose path literally starts with the given text (case-sensitive, no regular expressions), and `--limit` / `--offset` page through it. The list endpoint `GET /api/pages/list` gains the matching `path_prefix` query and an `appliedPathPrefix` response field; the CLI refuses to print a prefix result the server did not confirm, so an older server fails clearly instead of returning an unfiltered list.
+
+### Patch Changes
+
+- 1636111: Update the dependencies sharp to 0.35.5, which ships a librsvg with a fixed vulnerability, and the MCP TypeScript SDK to 1.32.1, which fixes an advisory in its OAuth client. Crowi uses the SDK only as an MCP server, so it did not reach that client code.
+- 8e845a1: Artifact pages can no longer be edited by mistake as Markdown: the Web hides every body-edit entry for an artifact page and shows a notice that points to the CLI or MCP when its edit URL is opened directly, and the server now checks the current revision's type on every body save (including internal writers and the realtime collaboration save path) so an artifact body is only stored together with a validated HTML write, while CLI / MCP updates that omit the type, version restore, history, download, rename and permission changes keep working.
+- 0978619: A fresh install no longer flips from Japanese to English with a page reload right after setup. Without a language cookie the web app now picks the language from the browser's Accept-Language header, and accounts created through the installer, self-registration, invitations and external sign-in start with that language instead of always English.
+- b5ab1b1: Fix page history tracking being undone by a content save, which could give two revisions of the same page the same sequence number, and fix pages with an explicit null history counter never starting to record history.
+
+  A save made from a stale copy of a page that another request had just promoted wrote the default tracking state back, so the page fell back to untracked and the next save sequenced a second revision as number 1. The two history fields no longer have schema defaults, so a stale save leaves them alone, and a content save no longer promotes a page that already holds sequenced history. `crowi-admin page-history repair --scan` now finds pages that fell back this way, puts them back to tracked when their sequence numbers are free of duplicates (reported as restored), and reports the rest as blocked without changing them. After upgrading, run `crowi-admin page-history repair --outbox --scan` once.
+
+- 9b81e1d: GET /pages/list now returns a 500 internal error for every request shape when listing fails, instead of an empty list for requests without `path_prefix`. The rename dialog shows an error with a retry button, and blocks the move, when its subpage list cannot be loaded.
+- Updated dependencies [24e3fcf]
+- Updated dependencies [8e845a1]
+- Updated dependencies [885d09f]
+- Updated dependencies [0978619]
+- Updated dependencies [9b81e1d]
+  - @crowi/api-contract@2.0.0-alpha.24
+  - @crowi/collab@0.1.0-alpha.7
+
 ## 2.0.0-alpha.23
 
 ### Minor Changes
