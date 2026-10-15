@@ -33,6 +33,14 @@ Policy and access changes are the exception: a URL newly blocked by the SSRF gua
 
 A plugin with admission control (currently Mermaid) does not route through the failure cache when a child process times out or crashes, or when concurrency is exceeded. It stores an "unrendered" marker instead and retries automatically the next time the page is viewed — infrastructure trouble must not harden into a verdict about the input.
 
+## Generated HTML and HTML in the page body
+
+When the web app shows a page, it passes HTML that the page's author wrote through an allow-list and drops `style`, custom `class` values, `script`, event handlers and the like. HTML that a renderer generates is exempt and is shown as is. The two are told apart by an origin mark (`data.g`) that the pipeline puts on the `html` nodes it generates.
+
+- HTML returned by a code-block renderer, an embed tag or a URL inline expander is marked by the pipeline automatically. A node renderer's output is marked only when the call turns a non-`html` node into an `html` node in place. In both cases the plugin does not have to do anything.
+- HTML produced any other way (rewriting an existing `html` node, or adding `html` nodes as children, for example) carries no mark, so it is treated as the author's HTML and goes through the allow-list, which can break how it looks.
+- Because the mark changes what is displayed, a change to how it is applied comes with a renderer version bump.
+
 ## Sanitising SVG
 
 A renderer that produces or relays SVG uses `sanitizeSvg` (and `extractSvgDimensions` for reading its size) from the SDK — the same implementation the first-party PlantUML and Mermaid renderers use, stripping `script`, event handlers, `javascript:` URLs and the like. Do not write your own sanitiser; the SDK package is the only dependency you need to add.

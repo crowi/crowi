@@ -49,6 +49,16 @@ cheat sheet in [Markdown syntax](../reference/markdown).
   This applies to both GFM `|...|` tables and raw HTML `<table>` written
   directly in the page body.
 
+### HTML in the page body
+
+You can write HTML directly inside Markdown. When a page is shown, only a fixed set of elements and attributes is kept and everything else is removed. The stored page body itself is never changed.
+
+- The elements you can use describe document structure: paragraphs, headings, lists, tables, quotes, emphasis, `code` / `pre`, ruby, `details` / `summary`, links and images.
+- `script`, event handlers (`onclick` and the like), the `style` attribute, your own `class` values, `iframe` and form controls have no effect.
+- A link whose URL starts with `javascript:`, `vbscript:` or `data:` loses its link and only its text remains. Ordinary links such as `tel:` and `slack://` keep working.
+- For a `data:` image URL, only base64-encoded PNG, JPEG, GIF and WebP are shown. An image with any other `data:` URL (an SVG, for example) or a kind of URL that is not allowed is replaced by its alt text, and is not shown at all when it has none.
+- Output that Crowi generates, such as code highlighting, math, diagrams, link cards and expanded URLs, is not affected and looks the same as before.
+
 ## Crowi core extensions
 
 The following syntax is enabled by default, with no plugin required.
