@@ -6,6 +6,7 @@ import { createMongoCacheStorage } from './cache';
 import { createPipelineEsmDepsLoader, runPipeline } from './pipeline';
 import { RendererRegistryImpl, createAuthContextStub, makeRendererScope } from './registry';
 import { serializeMdast } from './serialize';
+import { fakeMathRenderer, fakeMathUnifiedPlugin, FAKE_MATH_NODE_TYPE } from './__fixtures__/fake-math-embed';
 
 const silentLogger: PluginLogger = {
   debug: () => undefined,
@@ -1135,5 +1136,59 @@ describe('break-normalization (feature-renderer-break-normalization)', () => {
     const heading = tree.children[0] as unknown as { children: MdNode[]; data?: { hProperties?: { id?: string } } };
     expect(heading.data?.hProperties?.id).toBeTruthy();
     expect(heading.children.map((c) => c.type)).toEqual(['break']);
+  });
+
+  describe('generated html origin mark (node-renderer-origin)', () => {
+    const runWith = (body: string, setup: (scope: ReturnType<typeof makeRendererScope>) => void) => {
+      const reg = new RendererRegistryImpl();
+      setup(makeRendererScope(reg, '@crowi/plugin-origin-test', silentLogger));
+      return runPipeline(body, reg, { mode: 'save', log: silentLogger, actor: { kind: 'system' } }, loadDeps);
+    };
+    const htmlNodes = (tree: Root) => {
+      const out: Array<{ value: string; data?: Record<string, unknown> }> = [];
+      const walk = (n: unknown) => {
+        const node = n as { type?: string; value?: string; data?: Record<string, unknown>; children?: unknown[] };
+        if (node.type === 'html') out.push({ value: node.value ?? '', data: node.data });
+        node.children?.forEach(walk);
+      };
+      walk(tree);
+      return out;
+    };
+
+    it('marks a node a NodeRenderer turned from a non-html type into html', async () => {
+      const { tree } = await runWith('Look at {{fm:x^2}}.', (scope) => {
+        scope.addUnifiedPlugin(fakeMathUnifiedPlugin, { phase: 'transform' });
+        scope.addNodeRenderer(FAKE_MATH_NODE_TYPE, fakeMathRenderer);
+      });
+      const [node] = htmlNodes(tree);
+      expect(node.value).toBe('<span class="fake-math">x^2</span>');
+      expect(node.data).toEqual({ g: 1 });
+    });
+
+    it('does not promote an author html node a NodeRenderer rewrites or leaves alone', async () => {
+      const { tree } = await runWith('<b>one</b> <i>two</i>\n', (scope) => {
+        scope.addNodeRenderer('html', (node) => {
+          const html = node as unknown as { value: string };
+          if (html.value === '<b>') html.value = '<img src=x onerror=alert(1)>';
+        });
+      });
+      const nodes = htmlNodes(tree);
+      expect(nodes.map((n) => n.value)).toContain('<img src=x onerror=alert(1)>');
+      for (const node of nodes) expect(node.data?.g).toBeUndefined();
+    });
+
+    it('leaves html introduced by a plain unified plugin unmarked', async () => {
+      const { tree } = await runWith('hello', (scope) => {
+        scope.addUnifiedPlugin(
+          () => (root: Root) => {
+            root.children.push({ type: 'html', value: '<u>x</u>' });
+          },
+          { phase: 'transform' },
+        );
+      });
+      const nodes = htmlNodes(tree);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].data).toBeUndefined();
+    });
   });
 });

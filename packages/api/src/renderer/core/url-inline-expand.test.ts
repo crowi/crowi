@@ -54,6 +54,26 @@ describe('core/url-inline-expand', () => {
     expect(html).toMatchObject({ type: 'html', value: expect.stringContaining('<div class="card">card</div>') });
   });
 
+  it('marks the replacement html node as generated, and leaves an unchanged link unmarked', async () => {
+    const replaced: UrlInlineExpansionRule = {
+      cacheVersion: 1,
+      match: /^https:\/\/example\.com\//,
+      expand: async () => ({ kind: 'replaced', html: '<div>card</div>' }),
+    };
+    const first = await runWithExpanders('See https://example.com/foo here.', [replaced]);
+    const para = first.tree.children[0] as { children: Array<{ type: string; data?: { g?: unknown } }> };
+    expect(para.children.find((c) => c.type === 'html')?.data).toEqual({ g: 1 });
+    // Second run is served from the render cache: the mark must survive a cache hit.
+    const second = await runWithExpanders('See https://example.com/foo here.', [replaced]);
+    const para2 = second.tree.children[0] as { children: Array<{ type: string; data?: { g?: unknown } }> };
+    expect(para2.children.find((c) => c.type === 'html')?.data).toEqual({ g: 1 });
+
+    const unchanged: UrlInlineExpansionRule = { cacheVersion: 1, match: () => true, expand: async () => ({ kind: 'unchanged' }) };
+    const third = await runWithExpanders('https://example.com/foo', [unchanged]);
+    const para3 = third.tree.children[0] as { children: Array<{ type: string; data?: unknown }> };
+    expect(para3.children.find((c) => c.type === 'link')?.data).toBeUndefined();
+  });
+
   it('falls through to the next expander when the first returns unchanged', async () => {
     const callOrder: string[] = [];
     const first: UrlInlineExpansionRule = {
