@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
@@ -241,15 +241,9 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
       type: 'root',
       children: [
         {
-          type: 'paragraph',
-          children: [
-            {
-              type: 'image',
-              url: '/diagram/render/x.png',
-              alt: 'diagram',
-              data: { hProperties: { className: 'diagram-embed fake-diagram-embed', 'data-crowi-image-width': '60%' } },
-            },
-          ],
+          type: 'html',
+          data: { g: 1 },
+          value: '<img class="diagram-embed fake-diagram-embed" alt="diagram" src="/diagram/render/x.png" data-crowi-image-width="60%">',
         },
       ],
     };
@@ -281,7 +275,7 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
     expect(img.getAttribute('data-crowi-image-width')).toBeNull();
   });
 
-  it('merges an unrelated raw <img> class/style with the base classes/display style instead of replacing them (AC-B3)', () => {
+  it('drops an author <img> class/style but still applies the base classes and the validated display width (AC-B3)', () => {
     const renderedAst = {
       type: 'root',
       children: [
@@ -293,15 +287,14 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
     };
     renderPage(pageWithAst(renderedAst));
     const img = screen.getByRole('img', { name: 'raw img' }) as HTMLImageElement;
-    // Base renderer classes + the raw `class` survive together, not one replacing the other.
-    expect(img.className.split(' ')).toEqual(expect.arrayContaining(['max-w-full', 'h-auto', 'rounded-lg', 'my-6', 'user-class']));
-    // The raw inline style and the re-validated display style both apply.
-    expect(img.style.border).toBe('1px solid red');
+    expect(img.className.split(' ')).toEqual(expect.arrayContaining(['max-w-full', 'h-auto', 'rounded-lg', 'my-6']));
+    expect(img.className.split(' ')).not.toContain('user-class');
+    expect(img.style.border).toBe('');
     expect(img.style.width).toBe('60%');
     expect(img.getAttribute('data-crowi-image-width')).toBeNull();
   });
 
-  it('applies the same class/style merge on the preview path (parity with the page-view fix above, AC-B3/AC-B6)', () => {
+  it('applies the same class/style handling on the preview path (parity with the page-view case above, AC-B3/AC-B6)', () => {
     const renderedAst = {
       type: 'root',
       children: [
@@ -317,8 +310,9 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
     });
     render(<>{previewNode}</>);
     const img = screen.getByRole('img', { name: 'raw img' }) as HTMLImageElement;
-    expect(img.className.split(' ')).toEqual(expect.arrayContaining(['max-w-full', 'h-auto', 'rounded-lg', 'my-6', 'user-class']));
-    expect(img.style.border).toBe('1px solid red');
+    expect(img.className.split(' ')).toEqual(expect.arrayContaining(['max-w-full', 'h-auto', 'rounded-lg', 'my-6']));
+    expect(img.className.split(' ')).not.toContain('user-class');
+    expect(img.style.border).toBe('');
     expect(img.style.width).toBe('60%');
   });
 });
@@ -402,7 +396,7 @@ describe('PageContent — page-view / preview parity for the same data-crowi-ima
 });
 
 describe('PageContent — forged-marker-safe figure gating (AC-B4)', () => {
-  it('applies only the fixed, re-validated layout class to a raw-HTML-forged marker figure, dropping the raw style/extra class/injection payload', () => {
+  it('drops the marker class, extra class, style and a malformed align from an author figure (nothing of it reaches the DOM)', () => {
     const renderedAst = {
       type: 'root',
       children: [
@@ -416,42 +410,41 @@ describe('PageContent — forged-marker-safe figure gating (AC-B4)', () => {
     renderPage(pageWithAst(renderedAst));
 
     const figure = screen.getByRole('figure');
-    // Only the marker + (no valid align, since the value is malformed)
-    // — no `evil-class`, no forged inline style.
-    expect(figure.className).toBe('crowi-figure');
+    expect(figure.className).toBe('');
     expect(figure.getAttribute('style')).toBeNull();
+    expect(figure.getAttribute('data-crowi-image-align')).toBeNull();
     expect(screen.getByRole('img', { name: 'forged' })).toBeTruthy();
   });
 
-  it('applies the fixed layout class for a well-formed forged align value (no more powerful than an author-written one)', () => {
+  it('a figure whose only child is an image with a validated align gets the fixed marker and layout class', () => {
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: '<figure class="crowi-figure" data-crowi-image-align="center"><img src="/x.png" alt="pic"></figure>' }],
+      children: [{ type: 'html', value: '<figure class="evil"><img src="/x.png" alt="pic" data-crowi-image-align="center"></figure>' }],
     };
     renderPage(pageWithAst(renderedAst));
     const figure = screen.getByRole('figure');
     expect(figure.className).toBe('crowi-figure crowi-image-align-center');
   });
 
-  it('passes a marker-less raw <figure> through untouched', () => {
+  it('an author figure class never reaches the DOM', () => {
     const renderedAst = {
       type: 'root',
       children: [{ type: 'html', value: '<figure class="user-class"><img src="/x.png" alt="pic"><figcaption>Caption</figcaption></figure>' }],
     };
     renderPage(pageWithAst(renderedAst));
     const figure = screen.getByRole('figure');
-    expect(figure.className).toBe('user-class');
+    expect(figure.className).toBe('');
     expect(screen.getByText('Caption')).toBeTruthy();
   });
 
-  it('preserves an inline style on a marker-less raw <figure> (ordinary passthrough — style is only ever dropped on a marker-bearing figure)', () => {
+  it('drops an inline style on an author figure', () => {
     const renderedAst = {
       type: 'root',
       children: [{ type: 'html', value: '<figure class="user-class" style="border: 1px solid red"><img src="/x.png" alt="pic"></figure>' }],
     };
     renderPage(pageWithAst(renderedAst));
     const figure = screen.getByRole('figure');
-    expect(figure.getAttribute('style')).toBe('border: 1px solid red;');
+    expect(figure.getAttribute('style')).toBeNull();
   });
 });
 
@@ -600,11 +593,10 @@ describe('PageContent — GFM table DOM parity: page view vs. editor preview (mo
   });
 });
 
-describe('PageContent — raw HTML <table> keeps its tag structure + .crowi-prose scope under conflicting class attributes', () => {
-  it('preserves table/th/td tags and .crowi-prose scope for a raw HTML table carrying conflicting whitespace/wrap utility classes', () => {
-    // `known-tags.ts` allow-lists table/thead/tbody/tr/th/td, so this raw
-    // HTML block survives `escapeUnknownRawHtml` + `raw()` as real elements
-    // instead of being demoted to text or stripped (see `render-mdast.ts`).
+describe('PageContent — raw HTML <table> keeps its tag structure + .crowi-prose scope and drops conflicting class attributes', () => {
+  it('preserves table/th/td tags and .crowi-prose scope for a raw HTML table carrying conflicting whitespace/wrap utility classes, without those classes', () => {
+    // table/thead/tbody/tr/th/td are on the strict allow-list, so this raw
+    // HTML block survives as real elements (its `class` attributes do not).
     const renderedAst = {
       type: 'root',
       children: [
@@ -624,24 +616,17 @@ describe('PageContent — raw HTML <table> keeps its tag structure + .crowi-pros
 
     const th = screen.getByRole('columnheader');
     expect(th.tagName).toBe('TH');
-    // The raw `class` still lands on the DOM node (JSX spreads `...props`,
-    // including the raw `class`, after the component's base `className`) —
-    // deciding which wins at the *computed-style* level is the unlayered
-    // `.crowi-prose th, .crowi-prose td` CSS rule in `globals.css`, which
-    // jsdom does not load (see `vitest.config.ts`) and is therefore out of
-    // scope for this assertion; only the tag/structure survival is checked
-    // here.
-    expect(th.className).toContain('whitespace-normal');
+    // The author's `class` is removed by the sanitizer, so the component's
+    // own classes decide the look.
+    expect(th.className).not.toContain('whitespace-normal');
 
     const td = screen.getByRole('cell');
     expect(td.tagName).toBe('TD');
-    expect(td.className).toContain('whitespace-normal');
-    expect(td.className).toContain('break-all');
+    expect(td.className).not.toContain('break-all');
     expect(td.textContent).toBe(LONG_TOKEN);
 
     // Fullscreen affordance is transparent to GFM vs. raw HTML — a raw
-    // table with a colliding `class` attribute gets the same expand
-    // button + Dialog behaviour.
+    // table gets the same expand button + Dialog behaviour.
     const expandButton = screen.getByRole('button', { name: expandTableLabel });
     fireEvent.click(expandButton);
 
@@ -676,7 +661,7 @@ describe('PageContent — editor preview has no fullscreen affordance (page-view
   });
 });
 
-describe('PageContent — own-attribute affordance suppression for an author-hidden / contenteditable raw <table>', () => {
+describe('PageContent — author hidden / aria-hidden / contenteditable on a raw <table> never reach the component', () => {
   const cases: Array<[string, string]> = [
     ['hidden', '<table hidden><tbody><tr><td>x</td></tr></tbody></table>'],
     ['hidden="until-found"', '<table hidden="until-found"><tbody><tr><td>x</td></tr></tbody></table>'],
@@ -687,14 +672,13 @@ describe('PageContent — own-attribute affordance suppression for an author-hid
     ['contenteditable="PLAINTEXT-ONLY"', '<table contenteditable="PLAINTEXT-ONLY"><tbody><tr><td>x</td></tr></tbody></table>'],
   ];
 
-  it.each(cases)('renders no expand button at all for <table %s> (own-attribute read only, no propagation to the wrapper)', (_label, html) => {
+  it.each(cases)('drops the attribute of <table %s>, leaving an ordinary visible table with the expand affordance', (_label, html) => {
     const { container } = renderPage(pageWithAst({ type: 'root', children: [{ type: 'html', value: html }] }));
-    // `queryByRole('button')` alone would false-pass a broken implementation
-    // that propagates `aria-hidden` onto the wrapper instead of skipping
-    // the toolbar render (the button would still be in the DOM, just
-    // excluded from the accessibility tree) — use a role-independent DOM
-    // query instead.
-    expect(container.querySelector('button')).toBeNull();
+    const table = container.querySelector('table') as HTMLTableElement;
+    expect(table.hasAttribute('hidden')).toBe(false);
+    expect(table.hasAttribute('aria-hidden')).toBe(false);
+    expect(table.hasAttribute('contenteditable')).toBe(false);
+    expect(container.querySelector('button')).not.toBeNull();
   });
 });
 
@@ -769,7 +753,8 @@ describe('PageContent — inline SVG url(#id) references survive the fullscreen 
       '<rect fill="url(#g)" width="10" height="10"></rect></svg>';
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: `<table><tbody><tr><td>${svg}</td></tr></tbody></table>` }],
+      // A producer-generated table (author SVG is not on the allow-list).
+      children: [{ type: 'html', data: { g: 1 }, value: `<table><tbody><tr><td>${svg}</td></tr></tbody></table>` }],
     };
     renderPage(pageWithAst(renderedAst));
     expect(document.querySelector('rect')?.getAttribute('fill')).toBe('url(#g)');
@@ -828,7 +813,13 @@ describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (
   it('wraps a diagram success <img> (class="diagram-embed fake-diagram-embed") with the click-to-enlarge affordance', () => {
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: '<img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+">' }],
+      children: [
+        {
+          type: 'html',
+          data: { g: 1 },
+          value: '<img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+">',
+        },
+      ],
     };
     renderPage(pageWithAst(renderedAst));
 
@@ -854,6 +845,7 @@ describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (
       children: [
         {
           type: 'html',
+          data: { g: 1 },
           value: '<img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" width="141" height="245">',
         },
       ],
@@ -868,7 +860,13 @@ describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (
   it('does NOT wrap a diagram error placeholder (class="fake-diagram-embed fake-diagram-error", no diagram-embed marker) — no zoom button, no dialog', () => {
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>' }],
+      children: [
+        {
+          type: 'html',
+          data: { g: 1 },
+          value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>',
+        },
+      ],
     };
     renderPage(pageWithAst(renderedAst));
 
@@ -879,11 +877,236 @@ describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (
   it('wraps a different diagram producer\'s SVG success <div> (class="diagram-embed other-fake-diagram-embed") with the same wrapper', () => {
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="diagram-embed other-fake-diagram-embed"><svg><rect width="10" height="10"/></svg></div>' }],
+      children: [
+        { type: 'html', data: { g: 1 }, value: '<div class="diagram-embed other-fake-diagram-embed"><svg><rect width="10" height="10"/></svg></div>' },
+      ],
     };
     renderPage(pageWithAst(renderedAst));
 
     expect(screen.getByRole('button', { name: zoomLabel })).toBeTruthy();
     expect(document.querySelector('svg rect')).not.toBeNull();
+  });
+});
+
+/**
+ * Strict HTML boundary × the real PageContent component map
+ * (feature-html-sanitizer-web): the sanitizer's output must still wake the
+ * page's own affordances for what the renderer produced, and only for that.
+ */
+const txt = (value: string) => ({ type: 'text', value });
+const para = (...children: unknown[]) => ({ type: 'paragraph', children });
+const heading = (depth: number, id: string, value: string) => ({ type: 'heading', depth, data: { hProperties: { id } }, children: [txt(value)] });
+const authorHtml = (value: string) => ({ type: 'html', value });
+const footnoteAst = () => [
+  para(txt('claim'), { type: 'footnoteReference', identifier: '1', label: '1' }),
+  { type: 'footnoteDefinition', identifier: '1', children: [para(txt('The note.'))] },
+];
+
+describe('PageContent — owned-affordances-page', () => {
+  it('keeps footnote ref/backref/section/label attributes and gives the ref no tabIndex', () => {
+    const { container } = renderPage(pageWithAst({ type: 'root', children: footnoteAst() }));
+    const ref = container.querySelector('a[data-footnote-ref]') as HTMLAnchorElement;
+    expect(ref.getAttribute('href')).toBe('#user-content-fn-1');
+    expect(ref.id).toBe('user-content-fnref-1');
+    expect(ref.getAttribute('aria-describedby')).toBe('footnote-label');
+    expect(ref.hasAttribute('tabindex')).toBe(false);
+    const back = container.querySelector('a[data-footnote-backref]') as HTMLAnchorElement;
+    expect(back.getAttribute('href')).toBe('#user-content-fnref-1');
+    expect(back.getAttribute('aria-label')).toBe('Back to reference 1');
+    expect(container.querySelector('#footnote-label')?.className).toContain('sr-only');
+    expect(container.querySelector('section[data-footnotes]')).not.toBeNull();
+  });
+
+  it('renders emoji with their role/aria-label, task lists, source lines, alerts and frontmatter from the pipeline', () => {
+    const ast = {
+      type: 'root',
+      children: [
+        { type: 'crowiFrontmatter', entries: [{ key: 'id', value: 'foo' }] },
+        {
+          type: 'paragraph',
+          data: { hProperties: { 'data-source-line': 3 } },
+          children: [{ type: 'text', value: '😄', data: { hName: 'span', hProperties: { role: 'img', ariaLabel: 'smile emoji' }, hChildren: [txt('😄')] } }],
+        },
+        { type: 'list', ordered: false, spread: false, children: [{ type: 'listItem', spread: false, checked: true, children: [para(txt('done'))] }] },
+        {
+          type: 'crowiAlert',
+          variant: 'tip',
+          data: { hProperties: { 'data-source-line': '8' } },
+          children: [para(txt('[!TIP]'), { type: 'break' }, txt('body'))],
+        },
+      ],
+    };
+    const { container } = renderPage(pageWithAst(ast));
+    expect(screen.getByRole('img', { name: 'smile emoji' })).toBeTruthy();
+    expect(container.querySelector('p[data-source-line="3"]')).not.toBeNull();
+    expect(container.querySelector('ul.contains-task-list li.task-list-item input[type="checkbox"]')).not.toBeNull();
+    expect(container.querySelector('aside.crowi-alert-tip[data-source-line="8"]') ?? container.querySelector('aside.crowi-alert')).not.toBeNull();
+    expect(container.querySelector('dl.crowi-frontmatter')).not.toBeNull();
+  });
+
+  it('lets an author-written span/figure/mention/wikilink class or role wake nothing', () => {
+    const { container } = renderPage(
+      pageWithAst({
+        type: 'root',
+        children: [
+          authorHtml('<span role="img" aria-label="forged">e</span>'),
+          authorHtml('<a class="mention" href="/user/forged">@forged</a>'),
+          authorHtml('<a class="wikilink-broken" href="#">broken</a>'),
+          authorHtml('<figure class="crowi-figure"><img src="/p.png" alt="plain"></figure>'),
+        ],
+      }),
+    );
+    expect(screen.queryByRole('img', { name: 'forged' })).toBeNull();
+    const mention = screen.getByRole('link', { name: '@forged' });
+    expect(mention.className).not.toContain('font-medium');
+    const wiki = screen.getByText('broken');
+    expect(wiki.className).not.toContain('cursor-help');
+    expect(container.querySelector('figure')?.className).toBe('');
+  });
+
+  it('keeps ordinary links, raster data images and shows alt text for a rejected image', () => {
+    const { container } = renderPage(
+      pageWithAst({
+        type: 'root',
+        children: [
+          authorHtml('<a href="tel:+81312345678">call</a> <a href="slack://open">slack</a> <a href="javascript:alert(1)">bad</a>'),
+          authorHtml('<img src="data:image/png;base64,iVBORw0KGgo=" alt="pixel"> <img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=" alt="svg alt">'),
+        ],
+      }),
+    );
+    expect(screen.getByText('call').closest('a')?.getAttribute('href')).toBe('tel:+81312345678');
+    expect(screen.getByText('slack').closest('a')?.getAttribute('href')).toBe('slack://open');
+    expect(screen.getByText('bad').closest('a')?.hasAttribute('href')).toBe(false);
+    expect(screen.getByRole('img', { name: 'pixel' })).toBeTruthy();
+    expect(container.textContent).toContain('svg alt');
+    expect(container.querySelectorAll('img')).toHaveLength(1);
+  });
+});
+
+describe('PageContent — incoming-hash and malformed-hash-snapshot', () => {
+  let scrolled: string[] = [];
+
+  beforeEach(() => {
+    scrolled = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    };
+    window.history.replaceState(null, '', '/');
+  });
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  const setHash = (hash: string) => window.history.replaceState(null, '', `/${hash}`);
+  const fireHashChange = () => act(() => void window.dispatchEvent(new HashChangeEvent('hashchange')));
+
+  it('scrolls to a retained author id and to a generated heading id, and highlights only the generated section', () => {
+    setHash('#faq');
+    const { container, unmount } = renderPage(
+      pageWithAst({ type: 'root', children: [authorHtml('<span id="faq">answer</span>'), heading(2, 'setup', 'Setup')] }),
+    );
+    expect(scrolled).toContain('faq');
+    expect(container.querySelector('section.is-target')).toBeNull();
+    unmount();
+
+    setHash('#setup');
+    const second = renderPage(pageWithAst({ type: 'root', children: [authorHtml('<span id="faq">answer</span>'), heading(2, 'setup', 'Setup')] }));
+    expect(scrolled).toContain('setup');
+    expect(second.container.querySelector('section.is-target')?.getAttribute('data-section-id')).toBe('setup');
+  });
+
+  it('a colliding author id is dropped so the generated heading is the target', () => {
+    setHash('#setup');
+    const { container } = renderPage(pageWithAst({ type: 'root', children: [authorHtml('<span id="setup">imposter</span>'), heading(2, 'setup', 'Setup')] }));
+    expect(container.querySelectorAll('#setup')).toHaveLength(1);
+    expect(container.querySelector('#setup')?.tagName).toBe('H2');
+  });
+
+  it('a raw author heading scrolls by its id but is not a section', () => {
+    setHash('#raw-h');
+    const { container } = renderPage(pageWithAst({ type: 'root', children: [authorHtml('<h2 id="raw-h">raw</h2>')] }));
+    expect(scrolled).toContain('raw-h');
+    expect(container.querySelector('section[data-section-id]')).toBeNull();
+    expect(container.querySelector('section.is-target')).toBeNull();
+  });
+
+  it.each(['#%', '#%E0%A4%A'])('does not crash on the malformed hash %s at first render or on hashchange', (hash) => {
+    setHash(hash);
+    const { container } = renderPage(pageWithAst({ type: 'root', children: [para(txt('body text')), heading(2, 'setup', 'Setup')] }));
+    expect(container.textContent).toContain('body text');
+    expect(scrolled).toHaveLength(0);
+
+    setHash('#setup');
+    fireHashChange();
+    expect(scrolled).toContain('setup');
+    setHash(hash);
+    fireHashChange();
+    expect(container.textContent).toContain('body text');
+    expect(container.querySelector('section')).not.toBeNull();
+  });
+
+  it.each([
+    ['text after the card', [{ type: 'html', data: { g: 1 }, value: '<div class="crowi-link-card">CARD</div>' }, txt(' Setup')]],
+    ['the card alone', [{ type: 'html', data: { g: 1 }, value: '<div class="crowi-link-card">CARD</div>' }]],
+  ])('keeps an id-bearing heading, its section target and source line when a card is in the heading (%s)', (_label, children) => {
+    setHash('#setup');
+    const { container } = renderPage(
+      pageWithAst({
+        type: 'root',
+        children: [{ type: 'heading', depth: 2, data: { hProperties: { id: 'setup', 'data-source-line': 4 } }, children }, para(txt('after'))],
+      }),
+    );
+    const target = container.querySelector('h2#setup') as HTMLElement;
+    expect(target).not.toBeNull();
+    expect(target.getAttribute('data-source-line')).toBe('4');
+    expect(container.querySelector('.crowi-link-card')?.textContent).toBe('CARD');
+    expect(scrolled).toContain('setup');
+    expect(container.querySelector('section.is-target')?.getAttribute('data-section-id')).toBe('setup');
+  });
+
+  it('scrolls to a literal-% author id for the matching malformed hash and keeps an encoded id working', () => {
+    setHash('#%');
+    renderPage(pageWithAst({ type: 'root', children: [authorHtml('<span id="%">pct</span>')] }));
+    expect(scrolled).toContain('%');
+    cleanup();
+    scrolled = [];
+    setHash('#%E3%81%82');
+    renderPage(pageWithAst({ type: 'root', children: [heading(2, 'あ', 'A')] }));
+    expect(scrolled).toContain('あ');
+  });
+});
+
+describe('PageContent — render failure UI', () => {
+  const cyclicPage = () => {
+    const cyclic: { type: string; children: unknown[] } = { type: 'root', children: [] };
+    cyclic.children.push(cyclic);
+    return pageWithAst(cyclic);
+  };
+
+  it('shows a failure notice with a reload action instead of "Rendering…" or raw HTML', () => {
+    renderPage(cyclicPage());
+    expect(screen.getByRole('alert').textContent).toContain(m['page.render_failed_title']());
+    expect(screen.getByRole('button', { name: m['page.render_failed_reload']() })).toBeTruthy();
+    expect(screen.queryByText('Rendering…')).toBeNull();
+    expect(screen.queryByRole('button', { name: m['page.action_edit']() })).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain(m['page.render_failed_body_readonly']());
+  });
+
+  it('offers the editor only when the caller passes an edit action', () => {
+    const onEdit = vi.fn();
+    const client = new QueryClient();
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    render(<PageContent page={cyclicPage()} onEdit={onEdit} />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: m['page.action_edit']() }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alert').textContent).toContain(m['page.render_failed_body_editable']());
+  });
+
+  it('keeps the loading placeholder when the AST has simply not arrived', () => {
+    renderPage(pageWithAst(null));
+    expect(screen.getByText('Rendering…')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

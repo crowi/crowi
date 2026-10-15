@@ -100,4 +100,16 @@ describe('applyRevisionAstBudget', () => {
     }
     expect(String(warn.mock.calls[0][0])).toContain('fail-safe');
   });
+
+  it('marks-survive-sidecar-stripping: the generated-html mark and html value stay when a sidecar is stripped', () => {
+    const value = `<div>${'m'.repeat(9 * 1024 * 1024)}</div>`;
+    const node = { type: 'html', value, data: { g: 1, crowiMath: { tex: 'x', display: true } } };
+    const ast = { type: 'root', children: [node] };
+    const warn = jest.fn();
+    const out = applyRevisionAstBudget({ renderedAst: ast, body: '' }, warn);
+    expect(out.strippedCount).toBe(1);
+    expect(node.data).toEqual({ g: 1 });
+    expect(node.value).toBe(value);
+    expect(out.renderedAst).toBe(ast);
+  });
 });

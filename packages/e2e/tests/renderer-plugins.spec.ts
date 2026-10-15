@@ -91,7 +91,21 @@ test('KaTeX / Mermaid: real activation → save render → cache → serialized 
 
   const token = `e2erenderer${Date.now()}`;
   const pagePath = `/e2e/renderer-plugins/${token}`;
-  const body = ['# Renderer plugins', '', `Inline math: $x^2 + y^2 = z^2$ (${token})`, '', '```mermaid', 'flowchart TD', '  A --> B', '```', ''].join('\n');
+  const body = [
+    '# Renderer plugins',
+    '',
+    `Inline math: $x^2 + y^2 = z^2$ (${token})`,
+    '',
+    '```mermaid',
+    'flowchart TD',
+    '  A --> B',
+    '```',
+    '',
+    '```js',
+    `const ${token}Shiki = 1;`,
+    '```',
+    '',
+  ].join('\n');
 
   const pageId = await test.step('save a page mixing both renderer sources', () => createPageViaApi(userAPage.context(), { path: pagePath, body }));
 
@@ -191,6 +205,12 @@ test('KaTeX / Mermaid: real activation → save render → cache → serialized 
     const mathLocator = userAPage.locator('.katex').first();
     await expect(mathLocator).toBeVisible();
     await expect.poll(() => mathLocator.evaluate((el) => getComputedStyle(el).fontFamily), { timeout: 15_000 }).toContain('KaTeX_Main');
+  });
+
+  await test.step('browser: strict sanitizing keeps the generated Shiki colors and characters', async () => {
+    const codeBlock = userAPage.locator('pre', { hasText: `${token}Shiki` }).first();
+    await expect(codeBlock).toBeVisible();
+    await expect(codeBlock.locator('span[style*="--shiki-light"]').first()).toBeAttached();
   });
 
   await test.step('browser: the Mermaid diagram renders ready and opens the click-to-enlarge dialog', async () => {

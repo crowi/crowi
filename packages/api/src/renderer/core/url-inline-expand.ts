@@ -1,3 +1,4 @@
+import { markGeneratedHtml } from '@crowi/api-contract';
 import type { Html, Link, PhrasingContent, Root } from 'mdast';
 import type { EmbedInput, EmbedRenderer, InlineExpansion, RenderContext, UrlInlineExpansionRule } from '@crowi/plugin-api';
 import { cachedRender, type MongoCacheStorage, scopeForPlugin } from '../cache';
@@ -166,7 +167,7 @@ function spliceLinks(children: PhrasingContent[], matches: AutolinkCandidate[]):
       out.push(children[i]);
       continue;
     }
-    const html: Html = { type: 'html', value: match.replacementHtml ?? '' };
+    const html = markGeneratedHtml<Html>({ type: 'html', value: match.replacementHtml ?? '' });
     out.push(html as unknown as PhrasingContent);
   }
   return out;

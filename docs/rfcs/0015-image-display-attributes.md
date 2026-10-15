@@ -138,15 +138,11 @@ therefore belongs in the API renderer, not as a client-only preview rewrite.
   HTML attributes.
 - WYSIWYG drag handles or client-side image manipulation.
 - Server-side thumbnail generation or image byte transformation.
-- Replacing raw HTML as an escape hatch for non-v1 layouts. Raw HTML remains the
-  documented, unchanged escape hatch for layouts v1 does not cover.
-- **Broader raw-HTML `<img>` hardening.** This RFC does not change how existing
-  raw-HTML `<img>` elements forward `style` / `class` / event handlers / unknown
-  attributes. Tightening raw-HTML image rendering to an allow-list is a separate
-  concern (a raw-HTML hardening RFC), entangling a breaking change with this
-  feature. The only raw-HTML `<img>` change here is that the shared render helper
-  re-validates the four Crowi display props (§9); everything else about raw
-  `<img>` prop-spread stays as it is today.
+- Replacing raw HTML as an escape hatch for non-v1 layouts. Raw HTML remains
+  available for layouts v1 does not cover, but the Web renderer always passes it
+  through the strict HTML allow-list (see §4.5): arbitrary `style` / `class`,
+  event handlers, and unknown attributes on a raw `<img>` are dropped, so it is
+  no longer a free-form passthrough.
 - Renderer-version *persistence* infrastructure. The `0.8.0` bump itself is in
   scope and required (§6.1). What is out of scope is new machinery to *persist*
   the read-time recompute — a persist-on-read write path, locking, or throttling.
@@ -194,16 +190,32 @@ another notation for the rest of the feature.
 
 ### §4.5 Raw HTML
 
-Raw HTML remains an escape hatch for layouts outside this v1 syntax, but it
-should not be the primary authoring model for wiki images. It is less
-discoverable, harder for CodeMirror tooling to rewrite safely, and not aligned
-with persisted mdast semantics. v1 keeps raw-HTML `<img>` prop-spread behaviour
-unchanged (§3): the shared render helper re-validates the four Crowi display
-props whether they arrive from the mdast transform or from a hand-authored
-`data-crowi-image-*` attribute, but it does not otherwise restrict raw `<img>`.
-Because that re-validation ignores everything but well-formed Crowi display
-values, raw-HTML `data-crowi-image-*` attributes are not a supported way to
-smuggle other layout — they are simply re-checked like any other source.
+Raw HTML remains available for layouts outside this v1 syntax, but it should not
+be the primary authoring model for wiki images. It is less discoverable, harder
+for CodeMirror tooling to rewrite safely, and not aligned with persisted mdast
+semantics. The Web renderer sanitizes every raw `<img>` with a strict allow-list
+before display: `style`, `class`, event handlers, `srcset` and unknown attributes
+are removed, and the stored page body is never rewritten.
+
+- **Display values.** A raw `<img>` keeps only the four Crowi display values
+  (`width`, `height`, `align`, `float`, whether written as `data-crowi-image-*`
+  or as their canonical names), re-validated by the same shared validator the
+  Markdown transform uses; out-of-range or malformed values are dropped, not
+  clamped. `width` / `height` apply to inline images too.
+- **Standalone figure.** `align` / `float` apply only to a standalone image: an
+  `<img>` directly under the root or a flow container, the only non-whitespace
+  child of a `<p>`, or the only non-whitespace child of an existing `<figure>`.
+  The renderer then emits the same `figure.crowi-figure` as for Markdown images.
+  An image inside a link, one of several images, or one with surrounding text is
+  inline and its `align` / `float` are discarded. `float` wins over `align`.
+- **`src`.** Markdown and HTML images share one rule. A relative URL, `http:` /
+  `https:`, or `data:image/(png|jpeg|gif|webp);base64,` with a non-empty base64
+  payload is displayed. Anything else (SVG and other `data:` URLs, `file:`,
+  `blob:`, `ftp:`, a disallowed scheme) is replaced by the image's `alt` text
+  rendered as plain text; an empty or missing `alt` shows nothing, and no
+  request is made.
+- **Forged transport.** A hand-authored `data-crowi-image-*` attribute is simply
+  re-checked like any other source, so it cannot smuggle other layout.
 
 ## §5 Syntax
 
@@ -703,11 +715,11 @@ registration can follow without changing the Markdown syntax.
 
 Security is the most important constraint in this RFC.
 
-Crowi's web renderer accepts dangerous HTML in the mdast-to-hast step
-(`packages/web/src/components/editor/render-mdast.ts:158-166`) and parses raw
-HTML with `hast-util-raw` (`packages/web/src/components/editor/render-mdast.ts:180`).
-There is no `rehype-sanitize` step in that path. Therefore image attributes must
-not become a general path for user-controlled DOM attributes or CSS.
+Crowi's web renderer parses raw HTML with `hast-util-raw` and then always passes
+the result through the shared strict HTML sanitizer (`@crowi/api-contract/html-sanitizer`)
+before it reaches React, for page, history and preview alike. Image attributes
+must still not become a general path for user-controlled DOM attributes or CSS,
+and the image helper stays a second, independent check.
 
 The central invariant: **the transport `data-crowi-image-*` properties are
 untrusted by name.** Because `hast-util-raw` parses author-written
@@ -740,11 +752,10 @@ The renderer must enforce these invariants:
   values authored in raw HTML, so a forged `data-crowi-image-*` cannot inject
   anything the enum / numeric grammar would not already allow a Markdown author to
   write. The helper never forwards the four transport `data-crowi-image-*` keys to
-  the final `<img>`. **It does not touch any other raw `<img>` prop** — `style`,
-  `class`, `width`, `height`, and unknown `data-*` on a raw `<img>` pass through
-  unchanged (byte-identical for unrelated raw imgs, §10). Stripping unknown
-  `data-*` or forbidding raw `style`/`class`/`width`/`height` passthrough is
-  out of scope (a separate raw-HTML hardening RFC, §3).
+  the final `<img>`. The sanitizer, not the helper, removes every
+  other raw `<img>` prop: `style`, `class`, event handlers, `srcset` and unknown
+  `data-*` never reach the helper (§4.5). The helper keeps its narrow
+  responsibility of validating and stripping the four transport keys.
 - Layout classes are chosen from fixed renderer-owned values, not from user
   input.
 - Width/height React `style` is generated from fixed keys after re-validation,
@@ -1010,10 +1021,10 @@ grammar for more node types behind a sanitizer.
 
 ### §12.6 Raw HTML as the Main Solution
 
-Rejected as the primary user-facing path. Raw HTML remains available and
-unchanged for non-v1 layouts (§3): raw `<img>` prop-spread is not restricted by
-this RFC beyond re-validating the four Crowi display props regardless of origin
-(§9). Raw HTML is not discoverable, not editor-affordance friendly, and not a
+Rejected as the primary user-facing path. Raw HTML remains available for
+non-v1 layouts (§3), within the strict allow-list of §4.5: only the four Crowi
+display props (re-validated regardless of origin, §9) and a safe `src` / `alt`
+survive on a raw `<img>`. Raw HTML is not discoverable, not editor-affordance friendly, and not a
 structured Crowi Markdown extension, so it is a fallback, not the model.
 
 ### §12.7 Grid / Gallery in This RFC

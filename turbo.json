@@ -72,6 +72,12 @@
         "^build"
       ]
     },
+    "@crowi/api-contract#test": {
+      "dependsOn": [
+        "build",
+        "^build"
+      ]
+    },
     "@crowi/runner-app#build": {
       "dependsOn": [
         "^build"

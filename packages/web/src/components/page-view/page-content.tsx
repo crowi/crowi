@@ -1,8 +1,9 @@
 'use client';
 
 import { type PageWithRevision, unwrapRenderedAst } from '@crowi/api-contract';
+import { safeDecodeFragment } from '@crowi/api-contract/html-sanitizer';
 import { m } from '@paraglide/messages.js';
-import { AlertCircle, Check, Copy, Link2, X } from 'lucide-react';
+import { AlertCircle, Check, Copy, Edit2, Link2, RefreshCw, X } from 'lucide-react';
 import Link from 'next/link';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
@@ -14,7 +15,8 @@ import {
   stripImageDisplayTransportProps,
 } from '@/components/editor/image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
-import { renderMdastToReactNode } from '@/components/editor/render-mdast';
+import { type RenderMdastResult, renderMdastToReactResult } from '@/components/editor/render-mdast';
+import { Button } from '@/components/ui/button';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
 import { MarkdownTableFullscreen } from '@/components/page-view/markdown-table-fullscreen';
 import { MentionLink } from '@/components/page-view/mention-link';
@@ -24,6 +26,8 @@ import { copyFailureMessage, useCopyFeedback } from '@/lib/use-copy-feedback';
 
 interface PageContentProps {
   page: PageWithRevision;
+  /** Opens the editor; passed only where the viewer may edit the body. */
+  onEdit?: () => void;
 }
 
 // `section` wrap + `<section>` highlight live in render-mdast.ts +
@@ -173,7 +177,7 @@ const subscribeHash = (cb: () => void) => {
 // SSR snapshot is empty string; client snapshot reads the live hash.
 // Both must be stable string values (not new objects) so React's
 // shallow compare doesn't loop.
-const getHashSnapshot = () => (typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1)));
+const getHashSnapshot = () => (typeof window === 'undefined' ? '' : safeDecodeFragment(window.location.hash.slice(1)));
 const getHashServerSnapshot = () => '';
 
 // Marks the subtree as being inside a fenced code block's <pre>. The
@@ -471,14 +475,11 @@ const components = {
   },
   // RFC-0015 image display attributes — synthesized standalone-image
   // wrapper. `crowi-figure` is a STYLING marker, not a trust boundary
-  // (`hasFigureMarker`'s doc comment): a marker-less raw `<figure>`
-  // passes through ORDINARILY (every prop, including `style`,
-  // untouched — same passthrough spirit as `div`'s override below),
-  // while a marker-bearing one (genuine or raw-HTML-forged —
-  // indistinguishable, `passNode: false` gives no node context) only
-  // ever receives ONE fixed, re-derived safe layout class. The
-  // incoming `style` is dropped ONLY on the marker-bearing branch
-  // (forged-marker-safe, RFC §D6/AC-B4).
+  // (`hasFigureMarker`'s doc comment). The sanitizer already removes an
+  // author figure's `class` and `style`, so a marker-less figure is an
+  // ordinary one; a marker-bearing figure only ever receives ONE fixed,
+  // re-derived safe layout class and has any incoming `style` dropped
+  // (RFC §D6/AC-B4).
   figure: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
     if (!hasFigureMarker(className)) {
       return (
@@ -537,7 +538,34 @@ const components = {
   ),
 };
 
-export function PageContent({ page }: PageContentProps) {
+/**
+ * Shown when the body cannot be displayed (the sanitizer failed closed). The
+ * raw HTML is never rendered as a fallback; reloading fetches a fresh AST and,
+ * for someone who may edit, the editor is the way to inspect and fix the text.
+ */
+function RenderFailure({ onEdit }: { onEdit?: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-8 text-center">
+      <AlertCircle className="h-5 w-5 text-destructive" aria-hidden="true" />
+      <p className="font-medium">{m['page.render_failed_title']()}</p>
+      <p className="max-w-prose text-sm text-muted-foreground">{onEdit ? m['page.render_failed_body_editable']() : m['page.render_failed_body_readonly']()}</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()}>
+          <RefreshCw className="mr-1 h-4 w-4" />
+          {m['page.render_failed_reload']()}
+        </Button>
+        {onEdit && (
+          <Button type="button" size="sm" onClick={onEdit}>
+            <Edit2 className="mr-1 h-4 w-4" />
+            {m['page.action_edit']()}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function PageContent({ page, onEdit }: PageContentProps) {
   const body = page.revision?.body || '';
   // RFC-0023 §14 — every `renderedAst` read goes through the defensive
   // `unwrapRenderedAst` normaliser (the web never receives the v1
@@ -564,9 +592,10 @@ export function PageContent({ page }: PageContentProps) {
   const targetHashContextValue = useMemo<TargetHashContextValue>(() => ({ hash: targetHash, clear: clearTarget }), [targetHash, clearTarget]);
 
   // Build the rendered React tree from the server-side AST. The
-  // mdast → hast → raw → jsxRuntime pipeline now lives in the shared
-  // `renderMdastToReactNode` helper so the editor preview pane and
-  // this show path stay byte-identical for the same input.
+  // mdast → hast → strict sanitizer → jsxRuntime pipeline lives in the
+  // shared `renderMdastToReactResult` helper so the editor preview pane
+  // and this show path stay byte-identical for the same input, and so
+  // author HTML is restricted in exactly one place.
   //
   // Memoized on `[revisionId, renderedAstArtifactKey]` (RFC-0023 §14),
   // not on `renderedAst` identity: react-query refetches (window
@@ -579,13 +608,13 @@ export function PageContent({ page }: PageContentProps) {
   // `renderedAstArtifactKey` (stable for verbatim stored ASTs, a fresh
   // nonce whenever the served tree may differ), so the memo re-runs
   // exactly when the content can have changed.
-  const renderedNode = useMemo(() => {
-    return renderMdastToReactNode(renderedAst, {
+  const renderResult = useMemo<RenderMdastResult>(() => {
+    return renderMdastToReactResult(renderedAst, {
       sectionWrap: true,
       // The library's component map is typed against its bundled
       // hast types; our component prop signatures are React-typed,
       // so we cast at the boundary.
-      components: components as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
+      components: components as unknown as Parameters<typeof renderMdastToReactResult>[1]['components'],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionId, renderedAstArtifactKey]);
@@ -667,12 +696,18 @@ export function PageContent({ page }: PageContentProps) {
     return <div className="text-muted-foreground text-center py-8">This page has no content.</div>;
   }
 
-  // Body present but AST missing — only happens transiently if the on-
-  // the-fly fallback failed. Render nothing rather than crashing; the
-  // surrounding page chrome (path, author, edit button) keeps working.
-  if (!renderedNode) {
+  // Body present but the AST has not arrived yet (only transient: the
+  // on-the-fly fallback is still resolving). Render a calm placeholder
+  // rather than crashing; the surrounding page chrome keeps working.
+  if (renderResult.status === 'missing') {
     return <div className="text-muted-foreground text-center py-8">Rendering…</div>;
   }
+
+  if (renderResult.status === 'failed') {
+    return <RenderFailure onEdit={onEdit} />;
+  }
+
+  const renderedNode = renderResult.node;
 
   return (
     <TargetHashContext.Provider value={targetHashContextValue}>

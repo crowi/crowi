@@ -605,8 +605,9 @@
  * emits `figure.crowi-link-card > a.crowi-link-card-link >
  * (div.crowi-link-card-body[> div.title, div.description?,
  * div.meta[> span.site-name?, span.domain]] + img.crowi-link-card-image?)`
- * using only known-tags-allow-listed elements, so `stripUnknownElements`
- * never touches this structure — see `render-card.ts`'s `renderCard()`.
+ * as producer-generated (marked) HTML the sanitizer composes as-is, so
+ * the author allow-list never touches this structure — see
+ * `render-card.ts`'s `renderCard()`.
  * The UNIFIED FALLBACK CARD (toggle off / fetch failure — spec §6.1/§6.2,
  * `render-card.ts`'s `renderFallbackCard()`) reuses this SAME rule set —
  * `figure.crowi-link-card > a > div.crowi-link-card-body > div.title`,

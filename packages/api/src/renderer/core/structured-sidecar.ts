@@ -1,4 +1,4 @@
-import { CrowiDiagramSidecarSchema, CrowiLinkCardSidecarSchema, CrowiPlaceholderSidecarSchema } from '@crowi/api-contract';
+import { CrowiDiagramSidecarSchema, CrowiLinkCardSidecarSchema, CrowiPlaceholderSidecarSchema, markGeneratedHtml } from '@crowi/api-contract';
 import type { StructuredRenderPayload } from '@crowi/plugin-api';
 import type { Html } from 'mdast';
 
@@ -39,7 +39,7 @@ const SIDECAR_SCHEMA_BY_NODE_TYPE: Record<string, SidecarSchema> = {
 export type HtmlWithSidecar = Html & { data?: Record<string, unknown> };
 
 export function buildDispatchHtmlNode(html: string, structured: StructuredRenderPayload | undefined): HtmlWithSidecar {
-  const node: HtmlWithSidecar = { type: 'html', value: html };
+  const node = markGeneratedHtml<HtmlWithSidecar>({ type: 'html', value: html });
   if (!structured || typeof structured !== 'object') return node;
   const payloadNode = structured.node;
   if (typeof payloadNode !== 'object' || payloadNode === null) return node;
@@ -50,6 +50,6 @@ export function buildDispatchHtmlNode(html: string, structured: StructuredRender
   const { type: _type, ...rest } = payloadNode as Record<string, unknown>;
   const parsed = schema.safeParse(rest);
   if (!parsed.success) return node;
-  node.data = { [nodeType]: parsed.data };
+  node.data = { ...node.data, [nodeType]: parsed.data };
   return node;
 }

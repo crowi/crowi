@@ -1,3 +1,4 @@
+import { markGeneratedHtml } from '@crowi/api-contract';
 import type { Code, Html, Root, RootContent } from 'mdast';
 import type { PipelineEsmDeps, PipelineMetadata, ShikiHighlighter } from '../pipeline';
 import type { UnifiedTransformPlugin } from './headings';
@@ -73,10 +74,10 @@ function renderCode(code: Code, highlighter: ShikiHighlighter): Html | null {
   // Fallback fences (the three `return null`s above) keep their plain
   // `code` node: no html node, no sidecar, and under v1 they surface as
   // a `code` node without `data.tokens` (clients render them plain).
-  const node: Html & { data?: Record<string, unknown> } = { type: 'html', value: html };
+  const node = markGeneratedHtml<Html & { data?: Record<string, unknown> }>({ type: 'html', value: html });
   try {
     const tokens = highlighter.codeToTokens(value, lang);
-    node.data = { crowiCode: { lang, value, tokens } };
+    node.data = { ...node.data, crowiCode: { lang, value, tokens } };
   } catch {
     // html-only — see above.
   }

@@ -1,3 +1,4 @@
+import { validateImageDisplayProps } from '@crowi/api-contract/html-sanitizer';
 import type { CSSProperties } from 'react';
 
 /**
@@ -10,20 +11,18 @@ import type { CSSProperties } from 'react';
  *
  * **Security model (RFC §D4/§D5/§D6 — read before touching this
  * file)**: `data-crowi-image-*` is NOT a trust boundary by itself. The
- * web renderer allows raw HTML (`render-mdast.ts`'s `allowDangerousHtml`
- * + `hast-util-raw`), so an author can write
- * `<img data-crowi-image-align="center">` directly and it reaches the
- * SAME `img` component override as a transform-emitted one (both are
- * just `properties` on a hast element by the time `passNode: false`
- * hands us the rest-props bag — there is no way to tell them apart).
- * The only trust boundary is this module's per-render VALUE
- * re-validation: the exact same DROP rules as the API transform
- * (`packages/api/src/renderer/core/image-attrs.ts` — kept in lockstep
- * intentionally) are applied regardless of whether the value came from
- * the transform or was forged via raw HTML. A well-formed forged value
- * is indistinguishable from (and no more powerful than) a value the
- * author could have written as legitimate Markdown attrs — it is never
- * a way to inject arbitrary `style`/`class`/script.
+ * HTML sanitizer (`@crowi/api-contract/html-sanitizer`) lets an author
+ * write these four values on a raw `<img>` and runs the same value
+ * validation as this module, but the transport names are still plain
+ * attributes by the time they reach the `img` / `figure` component
+ * overrides (`passNode: false` — no node context). The trust boundary is
+ * therefore this module's per-render VALUE re-validation, delegated to
+ * `validateImageDisplayProps` (the single implementation shared with the
+ * sanitizer and kept in lockstep with the API transform in
+ * `packages/api/src/renderer/core/image-attrs.ts`): a forged-but-well-formed
+ * value is no more powerful than one the author could have written as
+ * legitimate Markdown attrs — it is never a way to inject arbitrary
+ * `style`/`class`/script.
  *
  * **Layer split (RFC §D5b)**: width/height apply ONLY to the `<img>` /
  * `InlineAttachmentLink` layer (`getImageDisplayStyle`); align/float
@@ -33,15 +32,12 @@ import type { CSSProperties } from 'react';
  * standalone figure, so it must never apply block-level align/float —
  * only the figure (which only exists for a standalone image) does.
  *
- * **Raw-HTML scope is narrow (AC-X1/AC-B3)**: the only thing this
- * module does to a raw, unrelated `<img>`/`<figure>` is strip the 4
- * `data-crowi-image-*` keys so they never leak onto the DOM. Every
- * other prop (`style`, `class`, `width`, `height`, unrelated `data-*`)
- * passes through untouched — `mergeImageClassName`/`mergeImageStyle`
- * below are the MERGE half of that contract (folding a renderer-owned
- * base `className`/re-validated display `style` into whatever the
- * caller already had, never replacing it), so callers don't each
- * reinvent the same merge and risk dropping the incoming value.
+ * **Scope**: the sanitizer already removes author `style`/`class`, so this
+ * module only strips the 4 `data-crowi-image-*` keys so they never leak onto
+ * the DOM; `mergeImageClassName`/`mergeImageStyle` below are the MERGE half
+ * (folding a renderer-owned base `className`/re-validated display `style`
+ * into whatever the caller already has, never replacing it), so callers
+ * don't each reinvent the same merge and risk dropping the incoming value.
  */
 
 const WIDTH_KEBAB = 'data-crowi-image-width';
@@ -64,46 +60,8 @@ const FLOAT_CAMEL = 'dataCrowiImageFloat';
  */
 const TRANSPORT_KEYS = [WIDTH_KEBAB, WIDTH_CAMEL, HEIGHT_KEBAB, HEIGHT_CAMEL, ALIGN_KEBAB, ALIGN_CAMEL, FLOAT_KEBAB, FLOAT_CAMEL] as const;
 
-function readTransportString(props: Record<string, unknown>, kebabKey: string, camelKey: string): string | undefined {
-  const value = props[kebabKey] ?? props[camelKey];
-  return typeof value === 'string' ? value : undefined;
-}
-
-// `<number>(%|px)`. Kept in lockstep with the API transform's
-// `SIZE_RE` (`packages/api/src/renderer/core/image-attrs.ts`).
-const SIZE_RE = /^(\d+(?:\.\d+)?)(%|px)$/;
-
-/**
- * Re-validate a width/height value. MUST stay identical to the API
- * transform's `validateSize` (RFC §D3/§D5 — the "same DROP rule on
- * both sides" invariant): `%` in `1..100`, `px` in `1..4096`, both
- * closed intervals; anything else (non-numeric, unit-less, out of
- * range) is DROPPED, never clamped.
- */
-function validateSize(value: string | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  const match = SIZE_RE.exec(value);
-  if (!match) return undefined;
-  const num = Number(match[1]);
-  if (!Number.isFinite(num)) return undefined;
-  const max = match[2] === '%' ? 100 : 4096;
-  if (num < 1 || num > max) return undefined;
-  return value;
-}
-
-const ALIGN_VALUES = new Set(['left', 'center', 'right']);
-const FLOAT_VALUES = new Set(['left', 'right']);
-
 type Align = 'left' | 'center' | 'right';
 type Float = 'left' | 'right';
-
-function validateAlign(value: string | undefined): Align | undefined {
-  return value !== undefined && ALIGN_VALUES.has(value) ? (value as Align) : undefined;
-}
-
-function validateFloat(value: string | undefined): Float | undefined {
-  return value !== undefined && FLOAT_VALUES.has(value) ? (value as Float) : undefined;
-}
 
 /**
  * img-layer (RFC §D5b): re-validated width/height as an inline React
@@ -117,8 +75,7 @@ function validateFloat(value: string | undefined): Float | undefined {
  * `getFigureLayoutClassName`).
  */
 export function getImageDisplayStyle(props: Record<string, unknown>): CSSProperties {
-  const width = validateSize(readTransportString(props, WIDTH_KEBAB, WIDTH_CAMEL));
-  const height = validateSize(readTransportString(props, HEIGHT_KEBAB, HEIGHT_CAMEL));
+  const { width, height } = validateImageDisplayProps(props);
   const style: CSSProperties = {};
   if (width) style.width = width;
   if (height) style.height = height;
@@ -146,9 +103,8 @@ const FLOAT_CLASS: Record<Float, string> = {
  * Never reads width/height — those are img-layer only.
  */
 export function getFigureLayoutClassName(props: Record<string, unknown>): string {
-  const float = validateFloat(readTransportString(props, FLOAT_KEBAB, FLOAT_CAMEL));
+  const { float, align } = validateImageDisplayProps(props);
   if (float) return FLOAT_CLASS[float];
-  const align = validateAlign(readTransportString(props, ALIGN_KEBAB, ALIGN_CAMEL));
   if (align) return ALIGN_CLASS[align];
   return '';
 }
@@ -157,19 +113,15 @@ export function getFigureLayoutClassName(props: Record<string, unknown>): string
  * True when `className` (string or array — `hast-util-to-jsx-runtime`
  * may deliver either) carries the `crowi-figure` marker.
  *
- * **The marker is forgeable and is NOT a trust/origin proof (RFC
- * §D6)**: raw HTML can write `<figure class="crowi-figure ...">` and
- * `hast-util-raw` parses it into a hast element with the same
- * `className`, indistinguishable from a transform-synthesized figure
- * by the time the `figure` component override sees it (`passNode:
- * false` — no node context). The marker only GATES whether the figure
- * override applies ITS OWN re-derived safe layout class
+ * The marker is a STYLING marker, not an origin proof: the `figure`
+ * component override has no node context (`passNode: false`). The HTML
+ * sanitizer only lets it through on a figure the Markdown pipeline made
+ * or one it synthesized for a standalone raw image, and an author's own
+ * `class`/`style` never reach this point. The marker only GATES whether
+ * the override applies ITS OWN re-derived safe layout class
  * (`getFigureLayoutClassName`, built from re-validated
- * `data-crowi-image-align`/`-float` values only) — it never causes the
- * incoming raw `style`/`class` to be honoured. A forged marker with a
- * forged `data-crowi-image-align` therefore receives, at most, one of
- * the fixed CSS classes above: cosmetic layout the author could
- * already achieve by writing raw HTML, never script/style injection.
+ * `data-crowi-image-align`/`-float` values only) — incoming `style` is
+ * still dropped here as a second line of defence.
  */
 export function hasFigureMarker(className: unknown): boolean {
   if (typeof className === 'string') return className.split(/\s+/).includes('crowi-figure');
@@ -212,7 +164,7 @@ export function mergeImageClassName(base: string, incoming: unknown): string {
 }
 
 /**
- * Merge an incoming raw `style` (by the time an `img`/`figure`
+ * Merge an incoming `style` (by the time an `img`/`figure`
  * override sees it, `hast-util-to-jsx-runtime` has already parsed a
  * raw-HTML `style="..."` string into a `CSSProperties`-shaped object)
  * with the re-validated display style. The display style wins ONLY on
