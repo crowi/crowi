@@ -391,15 +391,21 @@ async function runReview(doc, attempt) {
   // Escalation (crowi-design decision 2026-07-13): reviewers run on the
   // general tier (terra) for early rounds, but the DECISIVE final round
   // (attempt === MAX — the one that flips APPROVED vs NEEDS_WORK) runs on the
-  // frontier tier (sol). So a doc that terra keeps bouncing gets one strongest
-  // judgment before we give up, without paying sol on every round.
+  // hardest default tier (sol). So a doc that terra keeps bouncing gets one
+  // stronger judgment before we give up, without paying sol on every round.
   const reviewTier = attempt === MAX ? 'sol' : 'terra'
+  // The frontier model (astra) is the most expensive one, so it gets exactly
+  // one read: the critical lens (lenses[1] — red-team for a spec, completeness
+  // for an RFC) of a correctness-critical document, in the
+  // round that decides the verdict (the last one, or a review-only pass).
+  const decisive = REVIEW_ONLY || attempt === MAX
+  const tierFor = (l) => (CRITICAL && decisive && l.key === claudeCriticalLens.key ? 'astra' : reviewTier)
   const jobs = lenses.map((l) => () =>
     codexStage({
       label: `review_${l.key}_${attempt}`,
       phase: 'Review',
       sandbox: 'read-only',
-      tier: reviewTier,
+      tier: tierFor(l),
       schema: REVIEW,
       prompt: lensPrompt(l, doc) + `\nReturn your final answer as JSON matching the output schema.`,
       fallback: () =>

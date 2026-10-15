@@ -21,9 +21,13 @@
 #                                         # (127.0.0.1:27018) and jest cannot even
 #                                         # start its workers. Pass it whenever
 #                                         # codex must run the suite itself.
-#                [--tier sol|terra|luna]                 # semantic model tier:
-#                                         # sol=hardest (gpt-6-astra, effort high)
-#                                         # terra=general (gpt-6-sol, medium)
+#                [--tier astra|sol|terra|luna]           # semantic model tier:
+#                                         # astra=frontier (gpt-6-astra, high) —
+#                                         #   the most expensive model; only for a
+#                                         #   small, explicitly critical part of a
+#                                         #   run, never as a stage default
+#                                         # sol=hardest (gpt-6.1-sol, effort high)
+#                                         # terra=general (gpt-6.1-sol, medium)
 #                                         # luna=simple (gpt-6-luna, low).
 #                                         # Model ids live only here; callers pass
 #                                         # the tier. Omit → codex config default.
@@ -76,23 +80,27 @@ while [ $# -gt 0 ]; do
 done
 
 # ---- tier → (model, effort) --------------------------------------------
-# Callers pass a SEMANTIC tier (sol=hardest / terra=general / luna=simple)
+# Callers pass a SEMANTIC tier (astra=frontier / sol=hardest default /
+# terra=general / luna=simple)
 # instead of hard-coding a model id, so the actual model names live in ONE
 # place — swap them here when a new codex generation ships. Each tier also
-# carries a default reasoning effort (sol runs hard, luna runs cheap).
+# carries a default reasoning effort (astra and sol run hard, luna runs cheap).
 # Explicit --model / --effort still win over the tier defaults (escape hatch),
 # and passing no --tier keeps the legacy behavior (codex config default).
 # The tier names are difficulty labels, not model names: codex renames and
-# re-ranks its models between generations (in gpt-6, "sol" is the mid model and
-# "astra" the top one, and there is no gpt-6-terra). Map a new generation by
-# rank — `priority` in ~/.codex/models_cache.json, lower is stronger — never by
-# matching names, or terra fails with a 400 and sol silently drops a rank.
+# re-ranks its models between generations (there is no gpt-6-terra, and the
+# gpt-6.1 workhorse is named sol). Map a new generation by what each model is
+# for and what it costs, as `description` in ~/.codex/models_cache.json states
+# it — not by matching names, and not by `priority`, which orders the picker
+# (the gpt-6.1 workhorse is 1, the frontier gpt-6-astra is 2). Matching names
+# makes terra fail with a 400 or sol silently drop a rank.
 if [ -n "$TIER" ]; then
   case "$TIER" in
-    sol)   TIER_MODEL="gpt-6-astra"; TIER_EFFORT="high" ;;
-    terra) TIER_MODEL="gpt-6-sol";   TIER_EFFORT="medium" ;;
+    astra) TIER_MODEL="gpt-6-astra"; TIER_EFFORT="high" ;;
+    sol)   TIER_MODEL="gpt-6.1-sol"; TIER_EFFORT="high" ;;
+    terra) TIER_MODEL="gpt-6.1-sol"; TIER_EFFORT="medium" ;;
     luna)  TIER_MODEL="gpt-6-luna";  TIER_EFFORT="low" ;;
-    *) echo "[$LABEL] invalid --tier: $TIER (want sol|terra|luna)" >&2; exit 3 ;;
+    *) echo "[$LABEL] invalid --tier: $TIER (want astra|sol|terra|luna)" >&2; exit 3 ;;
   esac
   [ -z "$MODEL" ] && MODEL="$TIER_MODEL"
   [ -z "$EFFORT" ] && EFFORT="$TIER_EFFORT"

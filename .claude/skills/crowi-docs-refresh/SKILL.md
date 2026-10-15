@@ -60,7 +60,7 @@ git log --merges --format="%h %s%n%b" <range>
 
 制御・glue・ゲート・commit は Claude(本 session)、分析・批評・長文は Codex。
 Codex は必ず `.claude/scripts/codex-run.sh` 経由(exec + strict schema。
-`--tier sol|terra|luna` — sol=最難関/terra=標準/luna=軽作業)。再実行前に
+`--tier astra|sol|terra|luna` — astra=最上位 (ステージの既定にしない)/sol=最難関/terra=標準/luna=軽作業)。再実行前に
 stale 成果物を掃除する(codex-runs の invocation 跨ぎ再利用に注意)。
 
 | 仕事 | 担当 |

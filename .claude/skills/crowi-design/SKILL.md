@@ -56,9 +56,9 @@ main が保持するのは **brief サマリ + ゲート + 最終報告** だけ
 ので、Claude 消費はほぼゼロ。Codex 不可時は **fail-open で従来の Claude 実装に
 自動 fallback** する(spec: feature-codex-role-split)。
 
-各 Codex ステージは `codex-run.sh --tier` で **semantic なモデル tier**(sol=最難 /
+各 Codex ステージは `codex-run.sh --tier` で **semantic なモデル tier**(astra=最上位 / sol=最難 /
 terra=一般 / luna=単純)を選ぶ。実 model id と tier 既定
-effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。tier 名は難易度のラベルで model 名ではない(codex は世代ごとに model の名前と格付けを入れ替える)ので、次の世代へは名前の一致ではなく公式カタログの格付けで対応させる。
+effort(astra=high / sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。astra は最も高いモデルなので、ステージの既定にはしない。correctness-critical な文書のレビューで、判定を決める round (最後の round か、レビューだけの 1 回) の critical レンズ 1 本 (spec は red-team、RFC は completeness) だけに使う。tier 名は難易度のラベルで model 名ではない(codex は世代ごとに model の名前と格付けを入れ替える)ので、次の世代へは名前の一致ではなく、各 model の用途と費用 (codex のモデル一覧の説明) で対応させる。一覧の `priority` は表示順で、強さの順ではない。
 
 | stage | 主担当 | tier | fallback(fail-open) |
 |---|---|---|---|
@@ -68,14 +68,14 @@ effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ�
 | **収束(ゲート)** | **main**(session) | — | — |
 | 執筆 RFC | **Codex**(workspace-write) | **sol** | general-purpose(session) |
 | 執筆 spec(選択案のコードレベル詳細化) | **Codex**(workspace-write) | **sol** | general-purpose(session / high) |
-| 設計レビュー(spec ×4 / RFC ×3、並列) | **Codex**(read-only) | terra →(最終 attempt)**sol** | general-purpose(session / high) |
+| 設計レビュー(spec ×4 / RFC ×3、並列) | **Codex**(read-only) | terra →(最終 attempt)**sol**。critical なら判定 round の critical レンズ 1 本だけ **astra** | general-purpose(session / high) |
 | Claude lens(critical 時のみ +1) | general-purpose(session / high) | — | — |
 | 是正(revise) | **Codex** | terra | general-purpose |
 | spec ready 確定 | haiku/low(機械的 validator 実行) | — | — |
 
 **レビューのエスカレーション**: 設計レビューは早期ラウンドは terra、APPROVED/NEEDS_WORK を
 分ける**最終 attempt(`attempt === maxReviewAttempts`)だけ sol** に上げる — terra が弾き
-続ける doc に一度だけ最強判定を当てる(毎ラウンド sol を焚かない)。
+続ける doc に一度だけ強い判定を当てる(毎ラウンド sol を焚かない)。
 
 ### critical フラグ(Claude lens の追加基準)
 
