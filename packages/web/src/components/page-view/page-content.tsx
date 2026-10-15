@@ -5,6 +5,7 @@ import { safeDecodeFragment } from '@crowi/api-contract/html-sanitizer';
 import { m } from '@paraglide/messages.js';
 import { AlertCircle, Check, Copy, Edit2, Link2, RefreshCw, X } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   getFigureLayoutClassName,
@@ -14,7 +15,7 @@ import {
   mergeImageStyle,
   stripImageDisplayTransportProps,
 } from '@/components/editor/image-display';
-import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
+import { authorFigureClassTokens, LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
 import { type RenderMdastResult, renderMdastToReactResult } from '@/components/editor/render-mdast';
 import { Button } from '@/components/ui/button';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
@@ -23,6 +24,7 @@ import { MentionLink } from '@/components/page-view/mention-link';
 import { isDiagramPresentationReady, pickRendererPresentationAttrs, RendererPresentation } from '@/components/page-view/renderer-presentation';
 import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import { copyFailureMessage, useCopyFeedback } from '@/lib/use-copy-feedback';
+import { useHtmlSanitizationPolicy } from '@/lib/use-html-sanitization-policy';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -54,13 +56,13 @@ interface TargetedSectionProps extends React.HTMLAttributes<HTMLElement> {
   dataSectionId?: string;
 }
 
-function TargetedSection({ children, ...rest }: TargetedSectionProps) {
+function TargetedSection({ children, className, ...rest }: TargetedSectionProps) {
   const { hash: targetHash, clear } = useContext(TargetHashContext);
   const restRecord = rest as unknown as Record<string, string | undefined>;
   const sectionId: string | undefined = restRecord['data-section-id'] ?? restRecord.dataSectionId;
   const isTarget = !!sectionId && !!targetHash && sectionId === targetHash;
   return (
-    <section {...rest} className={isTarget ? 'is-target relative group/section' : undefined}>
+    <section {...rest} className={isTarget ? mergeListClassName('is-target relative group/section', className) : className}>
       {isTarget && (
         // `z-10` lifts the dismiss button above the heading, which
         // otherwise (as a positioned sibling later in DOM order)
@@ -121,7 +123,7 @@ function HeadingAnchor({ id }: { id?: string }) {
  * `<pre>`'s `textContent`, which is correct for both shiki span trees and
  * plain (un-highlighted) code.
  */
-function CodeBlock({ children, ...props }: ChildrenProps) {
+function CodeBlock({ children, ...props }: { children?: React.ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null);
   const { copied, failed, copy } = useCopyFeedback();
 
@@ -193,7 +195,7 @@ const InsidePreContext = createContext(false);
 // changed. Note `code` distinguishes inline from block via
 // `InsidePreContext` set by the `pre` override; shiki-highlighted
 // blocks come through as raw `<pre>` HTML and skip this map entirely.
-type ChildrenProps = { children?: React.ReactNode };
+type ChildrenProps = { children?: React.ReactNode; className?: unknown };
 
 const HEADING_BASE = {
   h1: 'group/heading relative text-3xl font-bold tracking-tight mt-12 mb-4 first:mt-0 leading-tight scroll-mt-24',
@@ -207,8 +209,8 @@ const HEADING_BASE = {
 type HeadingTag = keyof typeof HEADING_BASE;
 
 function makeHeading(Tag: HeadingTag) {
-  const Heading = ({ children, id, ...props }: ChildrenProps & { id?: string }) => (
-    <Tag id={id} className={HEADING_BASE[Tag]} {...props}>
+  const Heading = ({ children, id, className, ...props }: ChildrenProps & { id?: string; className?: unknown }) => (
+    <Tag id={id} className={mergeListClassName(HEADING_BASE[Tag], className)} {...props}>
       <HeadingAnchor id={id} />
       {children}
     </Tag>
@@ -248,7 +250,18 @@ const components = {
   h4: makeHeading('h4'),
   h5: makeHeading('h5'),
   h6: makeHeading('h6'),
-  a: ({ href: rawHref, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: string }) => {
+  a: ({
+    href: rawHref,
+    children,
+    className,
+    style,
+    ...props
+  }: {
+    href?: string;
+    children?: React.ReactNode;
+    className?: string;
+    style?: React.CSSProperties;
+  }) => {
     // Canonicalize a persisted legacy `/api/v2/attachments/...` href BEFORE
     // any detection/use below (spec §5.3) — every subsequent branch
     // (attachment link, internal router link, plain external `<a>`) reads
@@ -267,18 +280,21 @@ const components = {
     if (isMention && href?.startsWith('/user/')) {
       return <MentionLink username={href.slice('/user/'.length)} />;
     }
-    const composedClassName = isBrokenWikiLink
+    const baseClassName = isBrokenWikiLink
       ? 'text-muted-foreground/80 decoration-dotted decoration-muted-foreground/40 underline underline-offset-[3px] cursor-help'
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
+    // Generated links carry their marker class alone; only an ordinary link
+    // can have an author class, which follows the fixed styling.
+    const composedClassName = isBrokenWikiLink || isMention ? baseClassName : mergeListClassName(baseClassName, className);
     // Attachment references (`/api/attachments/<id>` or legacy
     // `/files/<id>`) open the detail modal on left-click instead of
     // full-page-navigating to the raw file — see `InlineAttachmentLink`.
     const attachmentId = extractAttachmentId(href);
     if (attachmentId && href) {
       return (
-        <InlineAttachmentLink attachmentId={attachmentId} variant="link" href={href} className={composedClassName}>
+        <InlineAttachmentLink attachmentId={attachmentId} variant="link" href={href} className={composedClassName} style={style}>
           {children}
         </InlineAttachmentLink>
       );
@@ -292,13 +308,20 @@ const components = {
     const internalHref = toInternalHref(href);
     if (internalHref) {
       return (
-        <Link href={internalHref} className={composedClassName} {...props}>
+        <Link href={internalHref} className={composedClassName} style={style} {...props}>
           {children}
         </Link>
       );
     }
     return (
-      <a href={href} className={composedClassName} target={isExternal ? '_blank' : undefined} rel={isExternal ? 'noopener noreferrer' : undefined} {...props}>
+      <a
+        href={href}
+        className={composedClassName}
+        style={style}
+        target={isExternal ? '_blank' : undefined}
+        rel={isExternal ? 'noopener noreferrer' : undefined}
+        {...props}
+      >
         {children}
       </a>
     );
@@ -329,14 +352,20 @@ const components = {
     // strips the default `&grave;…&grave;` decorators some prose
     // themes inject around the pill.
     return (
-      <code className="bg-muted text-foreground font-mono text-[0.85em] rounded-md px-1.5 py-0.5 before:content-none after:content-none" {...props}>
+      <code
+        className={mergeListClassName(
+          'bg-muted text-foreground font-mono text-[0.85em] rounded-md px-1.5 py-0.5 before:content-none after:content-none',
+          className,
+        )}
+        {...props}
+      >
         {children}
       </code>
     );
   },
   pre: CodeBlock,
-  blockquote: ({ children, ...props }: ChildrenProps) => (
-    <blockquote className="border-l-2 border-foreground/25 pl-4 my-6 text-foreground/75 [&>p]:my-2" {...props}>
+  blockquote: ({ children, className, ...props }: ChildrenProps) => (
+    <blockquote className={mergeListClassName('border-l-2 border-foreground/25 pl-4 my-6 text-foreground/75 [&>p]:my-2', className)} {...props}>
       {children}
     </blockquote>
   ),
@@ -345,23 +374,23 @@ const components = {
   // plain `overflow-x-auto` wrapper this used to be; only the reading
   // surface gets the expand-to-Dialog chrome.
   table: MarkdownTableFullscreen,
-  thead: ({ children, ...props }: ChildrenProps) => (
-    <thead className="border-b border-foreground/15" {...props}>
+  thead: ({ children, className, ...props }: ChildrenProps) => (
+    <thead className={mergeListClassName('border-b border-foreground/15', className)} {...props}>
       {children}
     </thead>
   ),
-  tbody: ({ children, ...props }: ChildrenProps) => (
-    <tbody className="[&>tr]:border-b [&>tr]:border-foreground/10 [&>tr:last-child]:border-0" {...props}>
+  tbody: ({ children, className, ...props }: ChildrenProps) => (
+    <tbody className={mergeListClassName('[&>tr]:border-b [&>tr]:border-foreground/10 [&>tr:last-child]:border-0', className)} {...props}>
       {children}
     </tbody>
   ),
-  th: ({ children, ...props }: ChildrenProps) => (
-    <th className="px-3 py-2 text-left font-semibold text-foreground/80 align-top" {...props}>
+  th: ({ children, className, ...props }: ChildrenProps) => (
+    <th className={mergeListClassName('px-3 py-2 text-left font-semibold text-foreground/80 align-top', className)} {...props}>
       {children}
     </th>
   ),
-  td: ({ children, ...props }: ChildrenProps) => (
-    <td className="px-3 py-2 align-top" {...props}>
+  td: ({ children, className, ...props }: ChildrenProps) => (
+    <td className={mergeListClassName('px-3 py-2 align-top', className)} {...props}>
       {children}
     </td>
   ),
@@ -466,7 +495,7 @@ const components = {
     // meaning on this wrapper and are intentionally out of scope.
     const attachmentId = extractAttachmentId(srcString);
     if (attachmentId && srcString) {
-      return <InlineAttachmentLink attachmentId={attachmentId} variant="image" href={srcString} className={imgClassName} alt={alt} style={displayStyle} />;
+      return <InlineAttachmentLink attachmentId={attachmentId} variant="image" href={srcString} className={imgClassName} alt={alt} style={mergedStyle} />;
     }
     return (
       // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
@@ -488,17 +517,15 @@ const components = {
         </figure>
       );
     }
-    // Marker-bearing branch only: drop any incoming `style` (raw or
-    // forged) before deriving the safe, re-validated layout class —
-    // `props`'s declared type has no `style` field (same convention as
-    // the `img` override above), so strip it via a cast instead of
-    // destructuring a field TypeScript doesn't know about.
+    // Marker-bearing branch: the layout class is re-derived from the
+    // re-validated display props, and the sanitizer-approved class tokens
+    // and style are kept (the sanitizer already removed anything forged).
     const restRaw = { ...(props as Record<string, unknown>) };
-    delete restRaw.style;
     const layoutClass = getFigureLayoutClassName(restRaw);
     const restProps = stripImageDisplayTransportProps(restRaw);
+    const extraTokens = authorFigureClassTokens(className);
     return (
-      <figure className={layoutClass ? `crowi-figure ${layoutClass}` : 'crowi-figure'} {...restProps}>
+      <figure className={mergeListClassName(layoutClass ? `crowi-figure ${layoutClass}` : 'crowi-figure', extraTokens)} {...restProps}>
         {children}
       </figure>
     );
@@ -525,14 +552,14 @@ const components = {
       </div>
     );
   },
-  hr: ({ ...props }) => <hr className="my-10 border-foreground/10" {...props} />,
-  p: ({ children, ...props }: ChildrenProps) => (
-    <p className="my-4 leading-[1.7] text-foreground/90" {...props}>
+  hr: ({ className, ...props }: { className?: unknown }) => <hr className={mergeListClassName('my-10 border-foreground/10', className)} {...props} />,
+  p: ({ children, className, ...props }: ChildrenProps) => (
+    <p className={mergeListClassName('my-4 leading-[1.7] text-foreground/90', className)} {...props}>
       {children}
     </p>
   ),
-  strong: ({ children, ...props }: ChildrenProps) => (
-    <strong className="font-semibold text-foreground" {...props}>
+  strong: ({ children, className, ...props }: ChildrenProps) => (
+    <strong className={mergeListClassName('font-semibold text-foreground', className)} {...props}>
       {children}
     </strong>
   ),
@@ -575,6 +602,13 @@ export function PageContent({ page, onEdit }: PageContentProps) {
   const revisionId = page.revision?._id;
   const renderedAstArtifactKey = page.revision?.renderedAstArtifactKey;
 
+  // One policy fetch per displayed view: a path / page / explicit-revision
+  // change opens a new view, while a refetched body or a new current revision
+  // of the same page does not.
+  const pathname = usePathname();
+  const explicitRevisionId = useSearchParams()?.get('revision_id') ?? '';
+  const sanitization = useHtmlSanitizationPolicy(JSON.stringify([pathname, page._id, explicitRevisionId]));
+
   // URL hash is the single source of truth; `useSyncExternalStore`
   // re-renders on every `hashchange` (TOC click, anchor copy, browser
   // back/forward, or our synthetic dispatch from `clearTarget`).
@@ -607,17 +641,21 @@ export function PageContent({ page, onEdit }: PageContentProps) {
   // alone kept showing the stale render. The server stamps
   // `renderedAstArtifactKey` (stable for verbatim stored ASTs, a fresh
   // nonce whenever the served tree may differ), so the memo re-runs
-  // exactly when the content can have changed.
+  // exactly when the content can have changed. The sanitization snapshot is
+  // part of the key too: the same AST renders differently once the fresh
+  // policy response relaxes it.
   const renderResult = useMemo<RenderMdastResult>(() => {
     return renderMdastToReactResult(renderedAst, {
       sectionWrap: true,
+      policy: sanitization.policy,
+      iframeOrigins: sanitization.iframeOrigins,
       // The library's component map is typed against its bundled
       // hast types; our component prop signatures are React-typed,
       // so we cast at the boundary.
       components: components as unknown as Parameters<typeof renderMdastToReactResult>[1]['components'],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revisionId, renderedAstArtifactKey]);
+  }, [revisionId, renderedAstArtifactKey, sanitization]);
 
   // Initial scroll. The browser's native anchor jump fires before
   // React commits, so the heading isn't there yet. Watch the document

@@ -24,6 +24,19 @@ vi.mock('@/lib/api-client', () => ({
   apiOrigin: () => '',
 }));
 
+const { policyRef } = vi.hoisted(() => ({
+  policyRef: {
+    keys: [] as string[],
+    value: { policy: 'strict' } as { policy: 'strict' | 'relaxed'; iframeOrigins?: { webOrigin: string; apiOrigin: string; artifactOrigin: string | null } },
+  },
+}));
+vi.mock('@/lib/use-html-sanitization-policy', () => ({
+  useHtmlSanitizationPolicy: (...args: unknown[]) => {
+    policyRef.keys.push(args[0] as string);
+    return policyRef.value;
+  },
+}));
+
 const HEX = 'b'.repeat(24);
 
 /** Build a mdast root whose single paragraph holds one link node. */
@@ -67,6 +80,8 @@ function renderPage(page: PageWithRevision) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  policyRef.value = { policy: 'strict' };
+  policyRef.keys.length = 0;
 });
 
 describe('PageContent — attachment render interception', () => {
@@ -1108,5 +1123,114 @@ describe('PageContent — render failure UI', () => {
     renderPage(pageWithAst(null));
     expect(screen.getByText('Rendering…')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('PageContent — page-policy-memo', () => {
+  const origins = { webOrigin: 'https://wiki.example', apiOrigin: 'https://wiki.example', artifactOrigin: null };
+  const html = (value: string) => pageWithAst({ type: 'root', children: [{ type: 'html', value }] });
+  const mount = (page: PageWithRevision) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    return render(<PageContent page={page} />, { wrapper });
+  };
+
+  it('re-renders the same revision/artifact key when only the policy snapshot changes', () => {
+    const page = html('<div class="deco" style="color:red">x</div><iframe src="https://www.youtube.com/embed/a"></iframe>');
+    const { container, rerender } = mount(page);
+    expect(container.querySelector('.deco')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+
+    policyRef.value = { policy: 'relaxed', iframeOrigins: origins };
+    rerender(<PageContent page={page} />);
+    const div = container.querySelector('.deco') as HTMLElement;
+    expect(div.style.color).toBe('red');
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe('https://www.youtube.com/embed/a');
+
+    policyRef.value = { policy: 'strict' };
+    rerender(<PageContent page={page} />);
+    expect(container.querySelector('.deco')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('relaxed without origin information shows no iframe and an iframe on the web origin is rejected', () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container, unmount } = mount(html('<iframe src="https://www.youtube.com/embed/a"></iframe>'));
+    expect(container.querySelector('iframe')).toBeNull();
+    unmount();
+    policyRef.value = { policy: 'relaxed', iframeOrigins: origins };
+    const second = mount(html('<iframe src="https://wiki.example/admin/security"></iframe>'));
+    expect(second.container.querySelector('iframe')).toBeNull();
+  });
+
+  it('keys the view by path, page id and explicit revision only (not the current revision id)', () => {
+    mount({ _id: 'page-1', revision: { _id: 'rev-a', body: 'x', renderedAst: { type: 'root', children: [] } } } as unknown as PageWithRevision);
+    const first = policyRef.keys.at(-1);
+    cleanup();
+    mount({ _id: 'page-1', revision: { _id: 'rev-b', body: 'x', renderedAst: { type: 'root', children: [] } } } as unknown as PageWithRevision);
+    expect(policyRef.keys.at(-1)).toBe(first);
+    cleanup();
+    mount({ _id: 'page-2', revision: { _id: 'rev-a', body: 'x', renderedAst: { type: 'root', children: [] } } } as unknown as PageWithRevision);
+    expect(policyRef.keys.at(-1)).not.toBe(first);
+  });
+
+  it('keeps the fixed table classes and the author class together', () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = mount(html('<table class="author-table"><tbody><tr><td class="author-cell">a</td></tr></tbody></table>'));
+    const table = container.querySelector('table') as HTMLElement;
+    expect(table.className).toBe('w-full border-collapse text-sm author-table');
+    expect((container.querySelector('td') as HTMLElement).className).toBe('px-3 py-2 align-top author-cell');
+  });
+
+  it('keeps heading fixed classes beside an author class, with the anchor affordance', () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = mount(html('<h2 id="t" class="author-h" style="color:red">Title</h2>'));
+    const h2 = container.querySelector('h2') as HTMLElement;
+    for (const token of ['group/heading', 'relative', 'scroll-mt-24', 'author-h']) expect(h2.classList.contains(token)).toBe(true);
+    expect(h2.style.color).toBe('red');
+    expect(container.querySelector('h2 button')).not.toBeNull();
+  });
+
+  it('keeps class/style on p, inline code, blockquote, strong and a plain link', () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = mount(
+      html(
+        '<p class="p1" style="color:red">t</p><blockquote class="q1">q</blockquote><p><code class="c1">c</code> <strong class="s1">s</strong> <a href="https://example.com/" class="a1" style="color:blue">l</a></p>',
+      ),
+    );
+    expect((container.querySelector('p') as HTMLElement).classList.contains('p1')).toBe(true);
+    expect((container.querySelector('p') as HTMLElement).style.color).toBe('red');
+    expect(container.querySelector('blockquote')?.classList.contains('q1')).toBe(true);
+    const code = container.querySelector('code') as HTMLElement;
+    expect(code.classList.contains('c1')).toBe(true);
+    expect(code.classList.contains('bg-muted')).toBe(true);
+    expect(container.querySelector('strong')?.classList.contains('s1')).toBe(true);
+    const a = container.querySelector('a[href="https://example.com/"]') as HTMLElement;
+    expect(a.classList.contains('a1')).toBe(true);
+    expect(a.classList.contains('text-primary')).toBe(true);
+    expect(a.style.color).toBe('blue');
+  });
+
+  it('forwards an author style to an attachment link and merges it into an attachment image, display style winning', () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = mount(
+      html(
+        `<a href="/api/attachments/${HEX}" class="al" style="color:green">file</a><img src="/api/attachments/${HEX}" alt="att" style="border:1px solid red;width:5px" data-crowi-image-width="40px">`,
+      ),
+    );
+    const link = container.querySelector(`a[href="/api/attachments/${HEX}"]`) as HTMLElement;
+    expect(link.style.color).toBe('green');
+    expect(link.classList.contains('al')).toBe(true);
+    const img = screen.getByRole('img', { name: 'att' }) as HTMLElement;
+    expect(img.style.border).toBe('1px solid red');
+    expect(img.style.width).toBe('40px');
+    expect(img.style.cursor).toBe('zoom-in');
+  });
+
+  it('does not let an author class replace the fixed list classes', () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = mount(html('<ul class="my-list"><li class="my-item">i</li></ul>'));
+    expect((container.querySelector('ul') as HTMLElement).className).toContain('list-disc');
+    expect((container.querySelector('ul') as HTMLElement).className).toContain('my-list');
   });
 });
