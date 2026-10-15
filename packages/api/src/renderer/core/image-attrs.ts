@@ -1,3 +1,4 @@
+import { IMAGE_ALIGN_VALUES, IMAGE_FLOAT_VALUES, validateImageSize } from '@crowi/api-contract';
 import type { Image, Paragraph, PhrasingContent, Text } from 'mdast';
 import type { Position } from 'unist';
 import type { UnifiedTransformPlugin } from './headings';
@@ -125,30 +126,6 @@ const PREFIX_RE = /^(?:[ \t]*|\n[ \t]*)\{/;
 // candidate instead of O(document length).
 const MAX_ATTR_BODY_LEN = 1024;
 
-const ALIGN_VALUES = new Set(['left', 'center', 'right']);
-const FLOAT_VALUES = new Set(['left', 'right']);
-
-// `<number>(%|px)`. Decimal widths (`12.5%`) are accepted; the DROP
-// range check below is what actually enforces the RFC §5/§9 bounds.
-const SIZE_RE = /^(\d+(?:\.\d+)?)(%|px)$/;
-
-/**
- * Validate a `width=`/`height=` value against the canonical DROP rule
- * (RFC §5/§9 — duplicated intentionally in the web helper, kept in
- * lockstep): `%` must be in `1..100`, `px` must be in `1..4096`, both
- * closed intervals. Out-of-range, non-numeric, or unit-less values are
- * DROPPED (return `undefined`) — never clamped/capped.
- */
-function validateSize(value: string): string | undefined {
-  const match = SIZE_RE.exec(value);
-  if (!match) return undefined;
-  const num = Number(match[1]);
-  if (!Number.isFinite(num)) return undefined;
-  const max = match[2] === '%' ? 100 : 4096;
-  if (num < 1 || num > max) return undefined;
-  return value;
-}
-
 /**
  * Parse the (already shape-validated — no newline, no leading/trailing
  * whitespace) attribute-block body into allow-listed attrs. Unknown
@@ -170,21 +147,21 @@ function parseAttrBody(body: string): ScannedAttrs {
     if (value === '') continue;
     switch (key) {
       case 'width': {
-        const validated = validateSize(value);
+        const validated = validateImageSize(value);
         if (validated) attrs.width = validated;
         break;
       }
       case 'height': {
-        const validated = validateSize(value);
+        const validated = validateImageSize(value);
         if (validated) attrs.height = validated;
         break;
       }
       case 'align': {
-        if (ALIGN_VALUES.has(value)) attrs.align = value as 'left' | 'center' | 'right';
+        if (IMAGE_ALIGN_VALUES.has(value)) attrs.align = value as 'left' | 'center' | 'right';
         break;
       }
       case 'float': {
-        if (FLOAT_VALUES.has(value)) attrs.float = value as 'left' | 'right';
+        if (IMAGE_FLOAT_VALUES.has(value)) attrs.float = value as 'left' | 'right';
         break;
       }
       default:

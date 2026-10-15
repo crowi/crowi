@@ -51,6 +51,7 @@ export * from './util/artifact-link';
 export * from './util/artifact-navigation';
 export * from './util/generated-html';
 export * from './util/html-elements';
+export * from './util/image-display';
 export * from './util/known-tags';
 export * from './util/object-id';
 export * from './util/page-path';

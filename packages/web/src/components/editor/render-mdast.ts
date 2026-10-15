@@ -1,6 +1,6 @@
 'use client';
 
-import { isGeneratedHtmlOrigin } from '@crowi/api-contract';
+import { isGeneratedHtmlOrigin, markGeneratedHtml } from '@crowi/api-contract';
 import { type HtmlSanitizationPolicy, type SanitizeWebHastResult, sanitizeWebHast, validateWebRenderInput } from '@crowi/api-contract/html-sanitizer';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { toHast } from 'mdast-util-to-hast';
@@ -279,8 +279,8 @@ function crowiLinkCardPreviewHandler(_state: State, node: CrowiLinkCardPreviewMd
 function createHtmlHandler(produced: WeakSet<object>) {
   return (state: State, node: { type: 'html'; value?: unknown; data?: { g?: unknown } }): unknown => {
     if (typeof node.value !== 'string') return undefined;
-    const result: { type: 'raw'; value: string; data?: { g: 1 } } = { type: 'raw', value: node.value };
-    if (isGeneratedHtmlOrigin(node.data?.g)) result.data = { g: 1 };
+    const result: { type: 'raw'; value: string; data?: object } = { type: 'raw', value: node.value };
+    if (isGeneratedHtmlOrigin(node.data?.g)) markGeneratedHtml(result);
     produced.add(result);
     state.patch(node as never, result as never);
     return result;

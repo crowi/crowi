@@ -17,9 +17,8 @@ import type { CSSProperties } from 'react';
  * attributes by the time they reach the `img` / `figure` component
  * overrides (`passNode: false` — no node context). The trust boundary is
  * therefore this module's per-render VALUE re-validation, delegated to
- * `validateImageDisplayProps` (the single implementation shared with the
- * sanitizer and kept in lockstep with the API transform in
- * `packages/api/src/renderer/core/image-attrs.ts`): a forged-but-well-formed
+ * `validateImageDisplayProps`, whose size/align/float rules are the ones the
+ * API transform also uses (`@crowi/api-contract`'s `image-display`): a forged-but-well-formed
  * value is no more powerful than one the author could have written as
  * legitimate Markdown attrs — it is never a way to inject arbitrary
  * `style`/`class`/script.

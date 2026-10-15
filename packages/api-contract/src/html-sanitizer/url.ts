@@ -1,3 +1,4 @@
+import { IMAGE_ALIGN_VALUES, IMAGE_FLOAT_VALUES, validateImageSize } from '../util/image-display';
 const ASCII_WS_EDGE_RE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g;
 // eslint-disable-next-line no-control-regex
 const SCHEME_NOISE_RE = /[\u0000- \u007f]/g;
@@ -54,21 +55,6 @@ export function safeDecodeFragment(value: string): string {
   }
 }
 
-const SIZE_RE = /^(\d+(?:\.\d+)?)(%|px)$/;
-const ALIGN_VALUES: ReadonlySet<string> = new Set(['left', 'center', 'right']);
-const FLOAT_VALUES: ReadonlySet<string> = new Set(['left', 'right']);
-
-function validateSize(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const match = SIZE_RE.exec(value);
-  if (!match) return undefined;
-  const num = Number(match[1]);
-  if (!Number.isFinite(num)) return undefined;
-  const max = match[2] === '%' ? 100 : 4096;
-  if (num < 1 || num > max) return undefined;
-  return value;
-}
-
 export interface ImageDisplayProps {
   width?: string;
   height?: string;
@@ -86,13 +72,13 @@ function pick(props: Readonly<Record<string, unknown>>, kebab: string, camel: st
  */
 export function validateImageDisplayProps(props: Readonly<Record<string, unknown>>): ImageDisplayProps {
   const out: ImageDisplayProps = {};
-  const width = validateSize(pick(props, 'data-crowi-image-width', 'dataCrowiImageWidth'));
+  const width = validateImageSize(pick(props, 'data-crowi-image-width', 'dataCrowiImageWidth'));
   if (width) out.width = width;
-  const height = validateSize(pick(props, 'data-crowi-image-height', 'dataCrowiImageHeight'));
+  const height = validateImageSize(pick(props, 'data-crowi-image-height', 'dataCrowiImageHeight'));
   if (height) out.height = height;
   const align = pick(props, 'data-crowi-image-align', 'dataCrowiImageAlign');
-  if (typeof align === 'string' && ALIGN_VALUES.has(align)) out.align = align as ImageDisplayProps['align'];
+  if (typeof align === 'string' && IMAGE_ALIGN_VALUES.has(align)) out.align = align as ImageDisplayProps['align'];
   const float = pick(props, 'data-crowi-image-float', 'dataCrowiImageFloat');
-  if (typeof float === 'string' && FLOAT_VALUES.has(float)) out.float = float as ImageDisplayProps['float'];
+  if (typeof float === 'string' && IMAGE_FLOAT_VALUES.has(float)) out.float = float as ImageDisplayProps['float'];
   return out;
 }

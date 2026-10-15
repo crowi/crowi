@@ -26,7 +26,7 @@
  * rewritten to `[[/font]]` by `wikilink-format`.
  *
  * The set is kept a SUPERSET of the web body renderer's inline-kept HTML tag
- * allow-list (`packages/web/src/components/editor/known-tags.ts`'s
+ * allow-list (`packages/api-contract/src/util/known-tags.ts`'s
  * `HTML_TAGS`): a tag the body renders inline (e.g. `<strike>` / `<tt>` /
  * `<big>` / `<acronym>` / `<nobr>` / `<search>` …) must also be stripped from a
  * TOC label so the displayed label matches the rendered body text. The
