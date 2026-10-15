@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePreview } from '@/lib/use-preview';
 import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import {
@@ -12,7 +12,8 @@ import {
   stripImageDisplayTransportProps,
 } from './image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
-import { renderMdastToReactNode } from './render-mdast';
+import { type RenderMdastResult, renderMdastToReactResult } from './render-mdast';
+import { Button } from '@/components/ui/button';
 import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
 import { m } from '@paraglide/messages.js';
 import { replaceLinkCardPreviewPlaceholders } from './link-card-preview-placeholder';
@@ -49,7 +50,7 @@ function isExternalHref(href: string | undefined): boolean {
 /**
  * Live preview pane fed by the same renderer pipeline as the show
  * page — `POST /api/pages/preview` returns mdast that we run
- * through `renderMdastToReactNode` with `sectionWrap: false` (no URL
+ * through `renderMdastToReactResult` with `sectionWrap: false` (no URL
  * hash / no copy-link affordance for preview).
  *
  * Debounce: 250ms via `useEffect` + `setTimeout`. We trigger the
@@ -67,6 +68,7 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
   const previewMutation = usePreview();
   const [renderedAst, setRenderedAst] = useState<unknown>(null);
   const [errored, setErrored] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     // Inactive tab: skip the fetch entirely. Hidden panes still keep
@@ -109,9 +111,9 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     // would defeat the debounce. We intentionally only watch `source`
     // and `active`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, active]);
+  }, [source, active, retryNonce]);
 
-  const renderedNode: ReactNode = useMemo(() => {
+  const renderResult: RenderMdastResult = useMemo(() => {
     // feature-renderer-plugin-boundary Phase 3 — when the link-card
     // capability is off, skip the placeholder substitution entirely so
     // a disabled toggle also suppresses the editor-side `@[card](url)`
@@ -119,9 +121,11 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     // `@[card](url)` markdown source renders through unchanged, same as
     // any other unrecognised embed tag.
     const astForRender = linkCardEnabled ? replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()) : renderedAst;
-    return renderMdastToReactNode(astForRender, {
+    // Author HTML is restricted by the shared strict sanitizer; the preview
+    // has no policy of its own to select.
+    return renderMdastToReactResult(astForRender, {
       sectionWrap: false,
-      components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
+      components: previewComponents as unknown as Parameters<typeof renderMdastToReactResult>[1]['components'],
     });
   }, [renderedAst, linkCardEnabled]);
 
@@ -133,13 +137,27 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     return <div className={className ?? 'text-destructive text-sm'}>{m['edit.preview_failed']()}</div>;
   }
 
-  if (!renderedNode) {
+  if (renderResult.status === 'failed') {
+    // The body could not be turned into a safe tree. Say so (an empty pane
+    // would look like "nothing to preview") and let the author re-run the
+    // preview after editing.
+    return (
+      <div role="alert" className={className ?? 'text-destructive text-sm space-y-2'}>
+        <p>{m['edit.preview_render_failed']()}</p>
+        <Button type="button" variant="outline" size="sm" onClick={() => setRetryNonce((n) => n + 1)}>
+          {m['edit.preview_retry']()}
+        </Button>
+      </div>
+    );
+  }
+
+  if (renderResult.status === 'missing') {
     // First render after a non-empty source change — keep the pane
     // calm rather than flashing a loading spinner mid-typing.
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;
   }
 
-  return <div className={className ?? 'crowi-prose min-w-0'}>{renderedNode}</div>;
+  return <div className={className ?? 'crowi-prose min-w-0'}>{renderResult.node}</div>;
 }
 
 // Preview-specific component overrides. We intentionally omit the show

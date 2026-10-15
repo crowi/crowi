@@ -1,11 +1,9 @@
 /**
  * The intermediate document that lets a wiki page embed an HTML artifact
  * without giving the wiki page's own document a
- * `Content-Security-Policy`. `renderMdast`'s known-tags list intentionally
- * allows raw `<iframe>` in page bodies (see
- * `packages/web/src/components/editor/known-tags.ts` and the CSP note in
- * `packages/api/src/hono/middleware/security-headers.ts`), so a CSP on the
- * wiki page's own document would blank out every existing embed, not just
+ * `Content-Security-Policy`. A CSP on the wiki page's own document would
+ * also apply to everything else the page embeds (see the CSP note in
+ * `packages/api/src/hono/middleware/security-headers.ts`), not just
  * the artifact's. Instead, `ArtifactView` points its (unsandboxed, same-
  * origin) outer iframe at THIS route, and only this route's response
  * carries `frame-src` — which is evaluated against the requesting frame's

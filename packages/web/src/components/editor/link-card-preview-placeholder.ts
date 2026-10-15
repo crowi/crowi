@@ -1,5 +1,12 @@
 import { unwrapRenderedAst } from '@crowi/api-contract';
-import { escapeHtml } from '@/lib/sanitise-snippet';
+
+/** Local mdast node `render-mdast.ts` turns into the fixed card `span` structure. */
+export interface CrowiLinkCardPreviewNode {
+  type: 'crowiLinkCardPreview';
+  url: string;
+  message: string;
+  sourceLine?: number;
+}
 
 interface MdastText {
   type: 'text';
@@ -52,35 +59,15 @@ function isCardTagLink(node: unknown): node is MdastLink {
   return isRecord(label) && label.type === 'text' && label.value === 'card';
 }
 
-function sourceLineAttribute(node: MdastParagraph): string {
+/** The preview stamps `data-source-line` on top-level nodes; only a positive integer is carried over. */
+function sourceLineOf(node: MdastParagraph): number | undefined {
   const line = node.data?.hProperties?.['data-source-line'];
-  if (typeof line !== 'number' && typeof line !== 'string') return '';
-  const value = String(line);
-  return /^\d+$/.test(value) ? ' data-source-line="' + value + '"' : '';
+  const value = typeof line === 'number' ? line : typeof line === 'string' && /^\d+$/.test(line) ? Number(line) : undefined;
+  return value !== undefined && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-/**
- * `<span>` (not `<figure>`/`<div>`) is deliberately used as the outer tag:
- * `.crowi-link-card { display: block }` (globals.css) already renders it
- * as a block regardless of tag name, and `hast-util-raw`'s real HTML5
- * tree-construction reparse (render-mdast.ts) implicitly closes an open
- * `<p>` — without reopening one afterward — on a block-level start tag
- * like `<figure>`/`<div>`, corrupting the surrounding sentence's structure
- * whenever the placeholder isn't the paragraph's sole content. `<span>` is
- * phrasing content, so it nests validly inside a `<p>` (or `<em>`/`<strong>`
- * — see `replaceCardTagsInChildren`'s recursion) at any position.
- */
-function renderPlaceholder(url: string, message: string, sourceLine: string): string {
-  return [
-    '<span class="crowi-link-card"' + sourceLine + '>',
-    '<span class="crowi-link-card-preview-surface">',
-    '<span class="crowi-link-card-body">',
-    '<span class="crowi-link-card-title">' + escapeHtml(url) + '</span>',
-    '<span class="crowi-link-card-preview-message">' + escapeHtml(message) + '</span>',
-    '</span>',
-    '</span>',
-    '</span>',
-  ].join('');
+function createPreviewNode(url: string, message: string, sourceLine: number | undefined): CrowiLinkCardPreviewNode {
+  return sourceLine === undefined ? { type: 'crowiLinkCardPreview', url, message } : { type: 'crowiLinkCardPreview', url, message, sourceLine };
 }
 
 /**
@@ -95,7 +82,7 @@ function renderPlaceholder(url: string, message: string, sourceLine: string): st
  * Markdown syntax a user can hand-type anywhere, not only via the
  * affordance's own conversion action.
  */
-function replaceCardTagsInChildren(children: unknown[], message: string, sourceLine: string): { changed: boolean; children: unknown[] } {
+function replaceCardTagsInChildren(children: unknown[], message: string, sourceLine: number | undefined): { changed: boolean; children: unknown[] } {
   let changed = false;
   const out: unknown[] = [];
   let i = 0;
@@ -106,7 +93,7 @@ function replaceCardTagsInChildren(children: unknown[], message: string, sourceL
       changed = true;
       const prefix = node.value.slice(0, -1);
       if (prefix.length > 0) out.push({ ...node, value: prefix });
-      out.push({ type: 'html', value: renderPlaceholder(next.url, message, sourceLine) });
+      out.push(createPreviewNode(next.url, message, sourceLine));
       i += 2;
       continue;
     }
@@ -141,11 +128,11 @@ export function replaceLinkCardPreviewPlaceholders(renderedAstValue: unknown, me
   let changed = false;
   const children = renderedAst.children.map((node) => {
     if (!isMdastParagraph(node)) return node;
-    const { changed: paragraphChanged, children: newChildren } = replaceCardTagsInChildren(node.children ?? [], message, sourceLineAttribute(node));
+    const { changed: paragraphChanged, children: newChildren } = replaceCardTagsInChildren(node.children ?? [], message, sourceLineOf(node));
     if (!paragraphChanged) return node;
     changed = true;
     // A paragraph whose entire content was one triple degenerates to a
-    // single `html` child — return that child directly (unwrapped) rather
+    // single preview-node child — return that child directly (unwrapped) rather
     // than a `<p>` wrapping the CSS-block-styled placeholder, matching the
     // saved card's own top-level (non-`<p>`-wrapped) placement.
     return newChildren.length === 1 ? newChildren[0] : { ...node, children: newChildren };

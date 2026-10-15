@@ -1,14 +1,16 @@
 'use client';
 
+import { isGeneratedHtmlOrigin } from '@crowi/api-contract';
+import { type HtmlSanitizationPolicy, type SanitizeWebHastResult, sanitizeWebHast, validateWebRenderInput } from '@crowi/api-contract/html-sanitizer';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { toHast } from 'mdast-util-to-hast';
 import type { State } from 'mdast-util-to-hast';
-import { raw } from 'hast-util-raw';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import type { Element as HastElement, Nodes as HastNodes, Properties as HastProperties } from 'hast';
+import type { Element as HastElement, Properties as HastProperties, Root as HastRoot } from 'hast';
 import type { ReactNode } from 'react';
 import { CrowiAlert, type CrowiAlertVariant, isCrowiAlertVariant } from './crowi-alert';
-import { isKnownTag } from './known-tags';
+
+export { escapeUnknownRawHtml } from '@crowi/api-contract/html-sanitizer';
 
 /**
  * feature-renderer-frontmatter §D-5 — wire shape of the `crowiFrontmatter`
@@ -165,72 +167,6 @@ export type HastLike = {
 
 const HEADING_RE = /^h[1-6]$/;
 
-// Leading tag-name of a raw-HTML chunk: `<thing …>` / `</thing>` /
-// `<thing/>`. Allows `:` so namespaced paste junk (`<o:p>`) is caught.
-// `<!-- … -->` / `<!doctype>` start with `<!`, never match, and pass
-// through to `raw()` unchanged.
-const RAW_LEADING_TAG_RE = /^\s*<\/?\s*([a-zA-Z][a-zA-Z0-9:_-]*)/;
-
-/**
- * Escape raw-HTML chunks whose tag is one no browser recognises so they
- * render as the *literal text the user typed* instead of vanishing.
- *
- * A page body can contain inline HTML the markdown parser hands through
- * verbatim — a documentation placeholder like `<thing>` (`shows "No
- * <thing> yet" tooltip`), or namespaced junk pasted from Word (`<o:p>`).
- * Without this, `mdast-util-to-hast` + `raw()` turn `<thing>` into an
- * empty unknown DOM element: it both disappears from the output *and*
- * makes React log "The tag <thing> is unrecognized in this browser…".
- *
- * We mirror what a documentation author expects (and what the source
- * editor shows): the text stays visible. Converting the `raw` node to a
- * `text` node makes the later `raw()` serialise it with `<`/`>` escaped,
- * so `<thing>` survives as the four-plus characters rather than a tag.
- *
- * Must run BEFORE `raw()` — that's when these are still flat `raw` nodes
- * carrying their original source string. Known HTML/SVG tags and custom
- * elements (`foo-bar`) are left as `raw` so `raw()` parses them as real
- * markup — including shiki's `<pre class="shiki">` highlight blocks.
- */
-export function escapeUnknownRawHtml(tree: HastLike): void {
-  if (!tree.children) return;
-  for (const child of tree.children) {
-    if (child.children) escapeUnknownRawHtml(child);
-    if (child.type === 'raw' && typeof child.value === 'string') {
-      const tag = RAW_LEADING_TAG_RE.exec(child.value)?.[1];
-      if (tag && !isKnownTag(tag)) {
-        // Demote to text — `raw()` will HTML-escape it, so the tag shows
-        // verbatim instead of being parsed into an unknown element.
-        child.type = 'text';
-      }
-    }
-  }
-}
-
-/**
- * Safety net for unknown elements that slipped past
- * {@link escapeUnknownRawHtml} — e.g. an unknown tag *nested inside* a
- * block of recognised raw HTML, which `raw()` parses as one unit. Drops
- * the element but keeps its children so no React unknown-tag warning is
- * left behind. Runs AFTER `raw()`, when such chunks have become real
- * hast elements with a `tagName`. Custom elements (`foo-bar`) pass
- * through untouched.
- */
-export function stripUnknownElements(tree: HastLike): void {
-  if (!tree.children) return;
-  const out: HastLike[] = [];
-  for (const child of tree.children) {
-    if (child.children) stripUnknownElements(child);
-    if (child.type === 'element' && typeof child.tagName === 'string' && !isKnownTag(child.tagName)) {
-      // Unwrap: keep the (already-cleaned) children in place of the node.
-      if (child.children) out.push(...child.children);
-      continue;
-    }
-    out.push(child);
-  }
-  tree.children = out;
-}
-
 /**
  * Group each heading + its following sibling content into a
  * `<section data-section-id="…">` so the URL-fragment highlight on the
@@ -283,65 +219,160 @@ export interface RenderMdastOptions {
    * `section` override (URL-hash highlight); the preview omits it.
    */
   components: Parameters<typeof toJsxRuntime>[1]['components'];
+  /** HTML policy. Omitted means strict, which is also what any other value selects. */
+  policy?: HtmlSanitizationPolicy;
+}
+
+export type RenderMdastResult =
+  | { status: 'ok'; node: ReactNode }
+  | { status: 'missing' }
+  | { status: 'failed'; reason: NonNullable<SanitizeWebHastResult['failure']> };
+
+/**
+ * Wire shape of the local node `replaceLinkCardPreviewPlaceholders` inserts
+ * into the editor preview's AST: a static card for `@[card](url)` that never
+ * fetches anything.
+ */
+interface CrowiLinkCardPreviewMdastNode {
+  type: 'crowiLinkCardPreview';
+  url?: unknown;
+  message?: unknown;
+  sourceLine?: unknown;
+}
+
+function cardSpan(className: string, children: HastElement['children'], properties: HastProperties = {}): HastElement {
+  return { type: 'element', tagName: 'span', properties: { ...properties, className: [className] }, children };
 }
 
 /**
- * Convert a server-emitted mdast tree to a React node, running the
- * same `toHast → raw → toJsxRuntime` pipeline the show page uses.
- *
- * Why share this with the preview: the show page's renderer is the
- * single source of truth for "what this body looks like". Duplicating
- * the conversion on the preview side risks drift (e.g. different
- * shiki escape behaviour for HTML fences). Going through one helper
- * means edit preview and page show are byte-identical for the same
- * input.
- *
- * `allowDangerousHtml: true` is required because shiki-highlighted
- * fences arrive as `html` mdast nodes carrying `<pre class="shiki">…`
- * markup; `mdast-util-to-hast` turns them into `raw` hast nodes which
- * `hast-util-to-jsx-runtime` ignores unless we let `hast-util-raw`
- * parse them into real elements first.
+ * Fixed `span` structure (a span, not a figure/div: the placeholder may sit
+ * inside a paragraph, and `.crowi-link-card` styles it as a block). Text
+ * nodes only, so the URL and the message can never become markup.
  */
-export function renderMdastToReactNode(renderedAst: unknown, options: RenderMdastOptions): ReactNode {
-  if (!renderedAst) return null;
-  const hast = toHast(renderedAst as Parameters<typeof toHast>[0], {
-    allowDangerousHtml: true,
-    // `mdast-util-to-hast`'s `Handlers` type is keyed by the STANDARD
-    // mdast type union, so a Crowi-owned type needs a cast here — same
-    // shape-escape as the `components` cast at both `renderMdastToReactNode`
-    // call sites.
-    handlers: { crowiFrontmatter: crowiFrontmatterHandler, crowiAlert: crowiAlertHandler } as unknown as NonNullable<Parameters<typeof toHast>[1]>['handlers'],
-  });
-  if (!hast) return null;
+function crowiLinkCardPreviewHandler(_state: State, node: CrowiLinkCardPreviewMdastNode): HastElement {
+  const properties: HastProperties = {};
+  if (typeof node.sourceLine === 'number' && Number.isInteger(node.sourceLine) && node.sourceLine > 0) properties['data-source-line'] = node.sourceLine;
+  const url = typeof node.url === 'string' ? node.url : '';
+  const message = typeof node.message === 'string' ? node.message : '';
+  return cardSpan(
+    'crowi-link-card',
+    [
+      cardSpan('crowi-link-card-preview-surface', [
+        cardSpan('crowi-link-card-body', [
+          cardSpan('crowi-link-card-title', [{ type: 'text', value: url }]),
+          cardSpan('crowi-link-card-preview-message', [{ type: 'text', value: message }]),
+        ]),
+      ]),
+    ],
+    properties,
+  );
+}
+
+/**
+ * `html` nodes become `raw` hast nodes. Only an html node carrying the
+ * generated-HTML mark (`data.g === 1`) keeps a mark on the raw node; the
+ * sanitizer composes those as-is and puts everything else through the strict
+ * author allow-list, so no attribute or class can claim generated status.
+ * Every raw this handler returns is recorded in `produced` so that a raw
+ * smuggled in some other way (e.g. `data.hChildren`) can be told apart.
+ */
+function createHtmlHandler(produced: WeakSet<object>) {
+  return (state: State, node: { type: 'html'; value?: unknown; data?: { g?: unknown } }): unknown => {
+    if (typeof node.value !== 'string') return undefined;
+    const result: { type: 'raw'; value: string; data?: { g: 1 } } = { type: 'raw', value: node.value };
+    if (isGeneratedHtmlOrigin(node.data?.g)) result.data = { g: 1 };
+    produced.add(result);
+    state.patch(node as never, result as never);
+    return result;
+  };
+}
+
+/** Drops the generated mark from any raw node the html handler did not produce. */
+function dropForeignGeneratedMarks(root: unknown, produced: WeakSet<object>): void {
+  const stack: unknown[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop() as { type?: string; data?: unknown; children?: unknown[] } | null;
+    if (typeof node !== 'object' || node === null) continue;
+    if (node.type === 'raw' && !produced.has(node)) delete node.data;
+    if (Array.isArray(node.children)) for (const child of node.children) stack.push(child);
+  }
+}
+
+function createSlotNonce(): string | undefined {
+  const webCrypto = (globalThis as { crypto?: { getRandomValues?: (array: Uint8Array) => Uint8Array } }).crypto;
+  if (!webCrypto?.getRandomValues) return undefined;
+  const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function createHandlers(produced: WeakSet<object>) {
+  return {
+    crowiFrontmatter: crowiFrontmatterHandler,
+    crowiAlert: crowiAlertHandler,
+    crowiLinkCardPreview: crowiLinkCardPreviewHandler,
+    html: createHtmlHandler(produced),
+  } as unknown as NonNullable<Parameters<typeof toHast>[1]>['handlers'];
+}
+
+/**
+ * Convert a server-emitted mdast tree to a React node: `toHast`, then the
+ * shared strict sanitizer (the single enforcement point for author HTML, used
+ * by the show page, history view and editor preview alike), then
+ * `toJsxRuntime`. A failure is reported, never papered over with the
+ * unsanitized tree.
+ *
+ * `allowDangerousHtml: true` is required because generated fragments (Shiki,
+ * KaTeX, diagrams, cards) arrive as `html` nodes; the sanitizer separates
+ * those (marked at render time) from author HTML.
+ */
+export function renderMdastToReactResult(renderedAst: unknown, options: RenderMdastOptions): RenderMdastResult {
+  if (!renderedAst) return { status: 'missing' };
+  const invalid = validateWebRenderInput(renderedAst);
+  if (invalid) return { status: 'failed', reason: invalid };
+
+  const produced = new WeakSet<object>();
+  let hast: ReturnType<typeof toHast>;
+  try {
+    hast = toHast(renderedAst as Parameters<typeof toHast>[0], { allowDangerousHtml: true, handlers: createHandlers(produced) });
+  } catch {
+    return { status: 'failed', reason: 'parse-failed' };
+  }
+  if (!hast) return { status: 'missing' };
+  dropForeignGeneratedMarks(hast, produced);
   if (options.sectionWrap) {
-    // Section wrap MUST run before `raw()` so the walker only sees the
-    // shallow mdast-derived top-level tree — `raw` expands shiki output
-    // into hundreds of nodes per highlighted block and walking those
-    // is wasted work.
+    // Section wrap runs on the shallow mdast-derived tree, before the
+    // sanitizer expands generated fragments into hundreds of nodes.
     wrapSections(hast as HastLike);
   }
-  // Demote unrecognised raw-HTML tags (e.g. a literal `<thing>` typed in
-  // prose) to text BEFORE `raw()` parses them, so they render as the
-  // verbatim text the author typed instead of vanishing into an empty
-  // unknown DOM element (which also makes React warn).
-  escapeUnknownRawHtml(hast as HastLike);
-  const parsed = raw(hast as HastNodes);
-  // Safety net: drop any unknown element that survived (unknown tag
-  // nested inside an otherwise-recognised raw-HTML block), keeping its
-  // children so no React unknown-tag warning is left behind.
-  stripUnknownElements(parsed as HastLike);
-  return toJsxRuntime(parsed, {
-    Fragment,
-    jsx,
-    jsxs,
-    // The GitHub Alerts adapter is composed AFTER the caller's map on
-    // purpose: the callout DOM is this module's own contract (the page
-    // view and the editor preview must not be able to drift apart on
-    // it), and no caller overrides `aside` today.
-    components: { ...options.components, aside: CrowiAlert },
-    // `passNode: false` — otherwise every component receives a `node`
-    // prop that React stringifies onto the DOM. data-* attrs still
-    // flow through via the rest props bag.
-    passNode: false,
-  });
+
+  const slotNonce = createSlotNonce();
+  if (!slotNonce) return { status: 'failed', reason: 'invalid-input' };
+  const sanitized = sanitizeWebHast(hast as HastRoot, { policy: options.policy ?? 'strict', slotNonce });
+  if (sanitized.failure) return { status: 'failed', reason: sanitized.failure };
+
+  try {
+    const node = toJsxRuntime(sanitized.tree, {
+      Fragment,
+      jsx,
+      jsxs,
+      // The GitHub Alerts adapter is composed AFTER the caller's map on
+      // purpose: the callout DOM is this module's own contract (the page
+      // view and the editor preview must not be able to drift apart on
+      // it), and no caller overrides `aside` today.
+      components: { ...options.components, aside: CrowiAlert },
+      // `passNode: false` — otherwise every component receives a `node`
+      // prop that React stringifies onto the DOM. data-* attrs still
+      // flow through via the rest props bag.
+      passNode: false,
+    });
+    return { status: 'ok', node };
+  } catch {
+    return { status: 'failed', reason: 'parse-failed' };
+  }
+}
+
+/** Compatibility wrapper: the node on success, `null` for a missing or failed render. */
+export function renderMdastToReactNode(renderedAst: unknown, options: RenderMdastOptions): ReactNode {
+  const result = renderMdastToReactResult(renderedAst, options);
+  return result.status === 'ok' ? result.node : null;
 }

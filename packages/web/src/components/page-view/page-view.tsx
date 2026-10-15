@@ -811,7 +811,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}
-          {isArtifact ? <ArtifactView page={renderedPage} /> : <PageContent page={renderedPage} />}
+          {isArtifact ? <ArtifactView page={renderedPage} /> : <PageContent page={renderedPage} onEdit={canEditBody ? handleEdit : undefined} />}
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />
