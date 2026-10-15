@@ -42,6 +42,7 @@ export interface paths {
                                 enabled: boolean;
                                 origin: string | null;
                             };
+                            htmlSanitizationEnabled: boolean;
                         };
                     };
                 };
@@ -13167,6 +13168,7 @@ export interface paths {
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
                             linkCardEnabled: boolean;
+                            htmlSanitizationEnabled: boolean;
                         };
                     };
                 };
@@ -13222,7 +13224,10 @@ export interface paths {
                 };
             };
         };
-        /** Update security:* settings (registrationMode / registrationWhiteList) */
+        /**
+         * Partially update security:* settings
+         * @description Writes only the fields present in the body; an omitted field keeps its stored value. `{}` is a no-op 200. The saves run in order (linkCardEnabled, registrationMode / registrationWhiteList, htmlSanitizationEnabled) and are not transactional: a 500 may leave earlier fields saved.
+         */
         put: {
             parameters: {
                 query?: never;
@@ -13234,9 +13239,10 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        registrationMode: "Open" | "Resricted" | "Closed";
-                        registrationWhiteList: string[];
-                        linkCardEnabled: boolean;
+                        registrationMode?: "Open" | "Resricted" | "Closed";
+                        registrationWhiteList?: string[];
+                        linkCardEnabled?: boolean;
+                        htmlSanitizationEnabled?: boolean;
                     };
                 };
             };
@@ -13252,6 +13258,7 @@ export interface paths {
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
                             linkCardEnabled: boolean;
+                            htmlSanitizationEnabled: boolean;
                         };
                     };
                 };

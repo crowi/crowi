@@ -1,26 +1,18 @@
 /**
- * RFC-0006 Phase 4 Batch 9 — `admin.security` resource Hono port.
+ * `admin.security` resource: two admin-only endpoints.
  *
- * Replaces `packages/api/src/routes/ts-rest/admin/security.ts`. Two
- * admin-only endpoints:
+ *   GET /admin/security   — read the security:* settings
+ *   PUT /admin/security   — persist the fields present in the body
  *
- *   GET /admin/security   — read the security:* keys
- *   PUT /admin/security   — persist them
+ * Auth: admin-only via broad `createJwtAdminRequired(crowi)` apply on
+ * `/admin/security/*` + the bare `/admin/security` path.
  *
- * Auth:
- *   - Admin-only via broad `createJwtAdminRequired(crowi)` apply on
- *     `/admin/security/*` + the bare `/admin/security` path.
- *
- * feature-renderer-plugin-boundary Phase 3 adds `linkCardEnabled`
- * (`security:linkCardEnabled`). Its PUT write runs as its own
- * `saveConfigValue` call, deliberately BEFORE the batched
- * `saveConfig('crowi', {...})` call that persists `registrationMode` /
- * `registrationWhiteList`: if the `linkCardEnabled` write fails, the
- * handler 500s immediately and the batch never runs, so neither
- * `linkCardEnabled` nor the registration fields are persisted. If the
- * batch fails, only the registration fields remain unpersisted (since
- * `linkCardEnabled` succeeded). This ordering ensures failed
- * `linkCardEnabled` prevents the registration batch from running.
+ * PUT is a partial update: only fields the body carries (`false` and `[]`
+ * included) are written, in a fixed order — `linkCardEnabled`, the batched
+ * registration keys, then `htmlSanitizationEnabled`. The saves are not one
+ * transaction: a failure returns 500 but earlier saves stay persisted, and a
+ * failure at one stage prevents the later stages from running. `{}` writes
+ * nothing and notifies nobody.
  */
 import type { SecuritySettings } from '@crowi/api-contract';
 import { adminSecurityRoutes } from '@crowi/api-contract';
@@ -28,7 +20,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceStringArray, getCrowiConfigNamespace, isLinkCardEnabled, readRegistrationMode } from 'src/util/admin-config';
+import { coerceStringArray, getCrowiConfigNamespace, isHtmlSanitizationEnabled, isLinkCardEnabled, readRegistrationMode } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -47,6 +39,7 @@ const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
     // default-on-missing/non-boolean fallback — shared with `app.ts`'s
     // capability probe and `renderer/index.ts`'s live per-dispatch read.
     linkCardEnabled: isLinkCardEnabled(crowi),
+    htmlSanitizationEnabled: isHtmlSanitizationEnabled(crowi),
   };
 };
 
@@ -68,18 +61,20 @@ export const registerAdminSecurityRoutes = <E extends OpenAPIHono<CrowiHonoBindi
       const configService = crowi.getConfigService();
 
       try {
-        await configService.saveConfigValue('crowi', 'security:linkCardEnabled', body.linkCardEnabled);
-      } catch (err) {
-        debug('Error saving security:linkCardEnabled:', (err as Error).message);
-        return c.json(INTERNAL_ERROR_BODY, 500);
-      }
+        if (body.linkCardEnabled !== undefined) {
+          await configService.saveConfigValue('crowi', 'security:linkCardEnabled', body.linkCardEnabled);
+        }
 
-      const sanitizedWhiteList = sanitizeWhiteList(body.registrationWhiteList);
-      try {
-        await configService.saveConfig('crowi', {
-          'security:registrationMode': body.registrationMode,
-          'security:registrationWhiteList': sanitizedWhiteList,
-        });
+        const registration: Record<string, unknown> = {};
+        if (body.registrationMode !== undefined) registration['security:registrationMode'] = body.registrationMode;
+        if (body.registrationWhiteList !== undefined) registration['security:registrationWhiteList'] = sanitizeWhiteList(body.registrationWhiteList);
+        if (Object.keys(registration).length > 0) {
+          await configService.saveConfig('crowi', registration);
+        }
+
+        if (body.htmlSanitizationEnabled !== undefined) {
+          await configService.saveConfigValue('crowi', 'security:htmlSanitizationEnabled', body.htmlSanitizationEnabled);
+        }
       } catch (err) {
         debug('Error saving security settings:', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);

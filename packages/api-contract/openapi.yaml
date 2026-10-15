@@ -5572,6 +5572,8 @@ paths:
                     required:
                       - enabled
                       - origin
+                  htmlSanitizationEnabled:
+                    type: boolean
                 required:
                   - title
                   - confidential
@@ -5581,6 +5583,7 @@ paths:
                   - canSelfRegister
                   - rendererStylesheets
                   - artifactDelivery
+                  - htmlSanitizationEnabled
         '500':
           description: Internal server error
           content:
@@ -27750,10 +27753,13 @@ paths:
                       type: string
                   linkCardEnabled:
                     type: boolean
+                  htmlSanitizationEnabled:
+                    type: boolean
                 required:
                   - registrationMode
                   - registrationWhiteList
                   - linkCardEnabled
+                  - htmlSanitizationEnabled
         '401':
           description: Authentication required
           content:
@@ -27832,7 +27838,13 @@ paths:
         - admin.security
       security:
         - bearerAuth: []
-      summary: Update security:* settings (registrationMode / registrationWhiteList)
+      summary: Partially update security:* settings
+      description: >-
+        Writes only the fields present in the body; an omitted field keeps its
+        stored value. `{}` is a no-op 200. The saves run in order
+        (linkCardEnabled, registrationMode / registrationWhiteList,
+        htmlSanitizationEnabled) and are not transactional: a 500 may leave
+        earlier fields saved.
       requestBody:
         content:
           application/json:
@@ -27851,10 +27863,8 @@ paths:
                     type: string
                 linkCardEnabled:
                   type: boolean
-              required:
-                - registrationMode
-                - registrationWhiteList
-                - linkCardEnabled
+                htmlSanitizationEnabled:
+                  type: boolean
       responses:
         '200':
           description: Updated settings (re-read from in-memory cache)
@@ -27875,10 +27885,13 @@ paths:
                       type: string
                   linkCardEnabled:
                     type: boolean
+                  htmlSanitizationEnabled:
+                    type: boolean
                 required:
                   - registrationMode
                   - registrationWhiteList
                   - linkCardEnabled
+                  - htmlSanitizationEnabled
         '401':
           description: Authentication required
           content:

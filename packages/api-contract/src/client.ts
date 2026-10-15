@@ -600,6 +600,7 @@ const stubSecuritySettings: GetSecuritySettingsResponse = {
   registrationMode: 'Open',
   registrationWhiteList: [],
   linkCardEnabled: true,
+  htmlSanitizationEnabled: true,
 };
 const stubArtifactSettings: GetArtifactSettingsResponse = {
   deliveryMode: 'disabled',
@@ -658,6 +659,7 @@ const appAuthMeUserChain = new OpenAPIHono()
         canSelfRegister: true,
         rendererStylesheets: [],
         artifactDelivery: { enabled: false, origin: null },
+        htmlSanitizationEnabled: true,
       } satisfies AppInfoResponse,
       200,
     ),

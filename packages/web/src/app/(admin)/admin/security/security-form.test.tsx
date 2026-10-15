@@ -31,6 +31,7 @@ const BASE_SETTINGS: SecuritySettings = {
   registrationMode: 'Open',
   registrationWhiteList: [],
   linkCardEnabled: true,
+  htmlSanitizationEnabled: true,
 };
 
 afterEach(() => {
