@@ -1,7 +1,13 @@
 'use client';
 
 import { isGeneratedHtmlOrigin, markGeneratedHtml } from '@crowi/api-contract';
-import { type HtmlSanitizationPolicy, type SanitizeWebHastResult, sanitizeWebHast, validateWebRenderInput } from '@crowi/api-contract/html-sanitizer';
+import {
+  type HtmlIframeOrigins,
+  type HtmlSanitizationPolicy,
+  type SanitizeWebHastResult,
+  sanitizeWebHast,
+  validateWebRenderInput,
+} from '@crowi/api-contract/html-sanitizer';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { toHast } from 'mdast-util-to-hast';
 import type { State } from 'mdast-util-to-hast';
@@ -221,6 +227,8 @@ export interface RenderMdastOptions {
   components: Parameters<typeof toJsxRuntime>[1]['components'];
   /** HTML policy. Omitted means strict, which is also what any other value selects. */
   policy?: HtmlSanitizationPolicy;
+  /** Origins an iframe may not target; without it the relaxed policy rejects every iframe. */
+  iframeOrigins?: HtmlIframeOrigins;
 }
 
 export type RenderMdastResult =
@@ -347,7 +355,7 @@ export function renderMdastToReactResult(renderedAst: unknown, options: RenderMd
 
   const slotNonce = createSlotNonce();
   if (!slotNonce) return { status: 'failed', reason: 'invalid-input' };
-  const sanitized = sanitizeWebHast(hast as HastRoot, { policy: options.policy ?? 'strict', slotNonce });
+  const sanitized = sanitizeWebHast(hast as HastRoot, { policy: options.policy ?? 'strict', slotNonce, iframeOrigins: options.iframeOrigins });
   if (sanitized.failure) return { status: 'failed', reason: sanitized.failure };
 
   try {

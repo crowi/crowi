@@ -138,6 +138,32 @@ export const ALLOWED_TAGS: ReadonlySet<string> = new Set([
   'input',
 ]);
 
+export type HtmlSanitizationPolicy = 'strict' | 'relaxed';
+
+/** Origins an embedded iframe must not point at (the app itself and artifact delivery). */
+export type HtmlIframeOrigins = Readonly<{ webOrigin: string; apiOrigin: string; artifactOrigin: string | null }>;
+
+/** Passive layout tags the relaxed policy adds; a closed set, no custom elements. */
+export const RELAXED_EXTRA_TAGS: ReadonlySet<string> = new Set([
+  'address',
+  'hgroup',
+  'search',
+  'menu',
+  'center',
+  'font',
+  'big',
+  'tt',
+  'strike',
+  'acronym',
+  'nobr',
+  'rb',
+  'rtc',
+  'data',
+  'listing',
+]);
+
+export const RELAXED_ALLOWED_TAGS: ReadonlySet<string> = new Set([...ALLOWED_TAGS, ...RELAXED_EXTRA_TAGS]);
+
 /** Allowed tags that may contain flow content (valid targets for a hoisted block). */
 export const FLOW_CONTAINERS: ReadonlySet<string> = new Set([
   'div',

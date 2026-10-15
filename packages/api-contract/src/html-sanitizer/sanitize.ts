@@ -4,9 +4,10 @@ import { sanitize } from 'hast-util-sanitize';
 import type { Schema } from 'hast-util-sanitize';
 import { VFile } from 'vfile';
 import { isGeneratedHtmlOrigin } from '../util/generated-html';
+import { sanitizeRelaxedStyle } from '../relaxed-html-style';
 import type { AnchorProvenance } from './anchors';
 import { collectGeneratedAnchorValues, filterAuthorAnchorAttributes } from './anchors';
-import type { LNode, SanitizeFailure } from './model';
+import type { HtmlIframeOrigins, HtmlSanitizationPolicy, LNode, SanitizeFailure } from './model';
 import {
   ALLOWED_TAGS,
   ANCHOR_CARRIER_TAGS,
@@ -15,6 +16,7 @@ import {
   HEADING_TAGS,
   NONCE_RE,
   PHRASING_TAGS,
+  RELAXED_ALLOWED_TAGS,
   SLOT_PROPERTY,
   SanitizeFailureError,
   emptyRoot,
@@ -24,10 +26,10 @@ import {
 import type { OwnerEntry } from './owners';
 import { buildOwnerEntry } from './owners';
 import { classifyAuthoredRaw, escapeUnknownRawHtml } from './raw-classify';
-import { sanitizeDisplayUrl, validateImageDisplayProps } from './url';
+import { sanitizeDisplayUrl, sanitizeIframeSrc, validateImageDisplayProps } from './url';
 import { validateWebRenderInput } from './validate';
 
-export type HtmlSanitizationPolicy = 'strict';
+export type { HtmlIframeOrigins, HtmlSanitizationPolicy };
 
 export interface SanitizeWebHastResult {
   tree: Root;
@@ -68,6 +70,51 @@ export const STRICT_HTML_SCHEMA: Schema = {
   allowDoctypes: false,
 };
 
+const RELAXED_CODE_CONTENT_TAGS: readonly string[] = [...CODE_CONTENT_TAGS].filter((tag) => tag !== 'iframe');
+
+/** Relaxed schema: strict plus the passive layout tags, style/class, and the iframe shell (validated separately). */
+export const RELAXED_HTML_SCHEMA: Schema = {
+  ...STRICT_HTML_SCHEMA,
+  tagNames: [...RELAXED_ALLOWED_TAGS, 'iframe'],
+  attributes: {
+    ...STRICT_HTML_SCHEMA.attributes,
+    '*': ['title', 'lang', 'dir', 'id', 'style', 'className'],
+    iframe: ['width', 'height'],
+  },
+  strip: [...RELAXED_CODE_CONTENT_TAGS],
+};
+
+const RESERVED_CLASS_PREFIXES: readonly string[] = ['crowi-', 'language-', 'katex-'];
+const RESERVED_CLASS_TOKENS: ReadonlySet<string> = new Set([
+  'contains-task-list',
+  'task-list-item',
+  'mention',
+  'wikilink-broken',
+  'data-footnote-backref',
+  'footnotes',
+  'sr-only',
+  'diagram-embed',
+  'shiki',
+  'katex',
+]);
+
+/** Author class tokens for the relaxed policy: ASCII-whitespace split, deduplicated, reserved tokens removed. */
+export function sanitizeRelaxedClassName(value: unknown): string[] | undefined {
+  let source: string;
+  if (typeof value === 'string') source = value;
+  else if (Array.isArray(value) && value.every((v) => typeof v === 'string')) source = value.join(' ');
+  else return undefined;
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+  for (const token of source.split(/[\t\n\f\r ]+/)) {
+    if (token === '' || seen.has(token)) continue;
+    seen.add(token);
+    if (RESERVED_CLASS_TOKENS.has(token) || RESERVED_CLASS_PREFIXES.some((prefix) => token.startsWith(prefix))) continue;
+    tokens.push(token);
+  }
+  return tokens.length > 0 ? tokens : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // call-local state
 
@@ -88,10 +135,14 @@ export interface SanitizeContext {
   /** Parts of the parse input by virtual offset (to strip synthetic newlines). */
   parts: Array<{ offset: number; length: number; kind: 'text' | 'raw' | 'synthetic' }>;
   provenance: AnchorProvenance;
+  policy: HtmlSanitizationPolicy;
+  iframeOrigins?: HtmlIframeOrigins;
 }
 
-function newContext(nonce: string): SanitizeContext {
+function newContext(nonce: string, policy: HtmlSanitizationPolicy, iframeOrigins?: HtmlIframeOrigins): SanitizeContext {
   return {
+    policy,
+    iframeOrigins,
     nonce,
     slots: new Map(),
     usedSlots: new Set(),
@@ -207,13 +258,19 @@ function isDocumentMode(root: LNode): boolean {
 }
 
 /** Clone + slot extraction + classification + reset newlines + virtual positions. */
-export function prepareAuthoredTree(input: Root, nonce: string): PreparedParse {
+export function prepareAuthoredTree(
+  input: Root,
+  nonce: string,
+  options: { policy?: HtmlSanitizationPolicy; iframeOrigins?: HtmlIframeOrigins } = {},
+): PreparedParse {
   const tree = cloneTree(input as unknown as LNode);
   if (isDocumentMode(tree)) throw new SanitizeFailureError('invalid-input');
-  const ctx = newContext(nonce);
+  // Any policy value other than the literal 'relaxed' is strict.
+  const policy: HtmlSanitizationPolicy = options.policy === 'relaxed' ? 'relaxed' : 'strict';
+  const ctx = newContext(nonce, policy, policy === 'relaxed' ? options.iframeOrigins : undefined);
   extractSlots(tree, ctx);
   escapeUnknownRawHtml(tree);
-  classifyAuthoredRaw(tree);
+  classifyAuthoredRaw(tree, policy);
   insertResetNewlines(tree, ctx);
   assignPositions(tree, ctx);
   return { tree, ctx };
@@ -316,7 +373,7 @@ function str(value: unknown): string | undefined {
 }
 
 /** Validated values of the attributes an author may write, by HAST property name. */
-function authoredAttributes(tag: string, props: Record<string, unknown>): Record<string, unknown> {
+function authoredAttributes(tag: string, props: Record<string, unknown>, relaxed: boolean): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const set = (key: string, value: unknown): void => {
     if (value !== undefined) out[key] = value;
@@ -392,7 +449,33 @@ function authoredAttributes(tag: string, props: Record<string, unknown>): Record
     default:
       break;
   }
+  if (relaxed) {
+    const style = sanitizeRelaxedStyle(props.style);
+    if (style !== undefined) out.style = style;
+    const className = sanitizeRelaxedClassName(props.className ?? props.class);
+    if (className !== undefined) out.className = className;
+  }
   return out;
+}
+
+// eslint-disable-next-line no-control-regex
+const IFRAME_TITLE_BAD_RE = /[\u0000-\u001f\u007f]/;
+
+const IFRAME_SANDBOX = ['allow-scripts', 'allow-same-origin', 'allow-popups', 'allow-popups-to-escape-sandbox', 'allow-presentation'];
+
+/** Builds the validated iframe shell, or `undefined` when the iframe is rejected. */
+function iframeShell(props: Record<string, unknown>, ctx: SanitizeContext): LNode | undefined {
+  const src = sanitizeIframeSrc(props.src, ctx.iframeOrigins);
+  if (src === undefined) return undefined;
+  const attrs = authoredAttributes('iframe', props, true);
+  const title = str(props.title);
+  if (title !== undefined && (title === '' || IFRAME_TITLE_BAD_RE.test(title) || utf8Length(title) > 256)) delete attrs.title;
+  const width = intIn(props.width, 1, 4096);
+  const height = intIn(props.height, 1, 4096);
+  if (width !== undefined) attrs.width = width;
+  if (height !== undefined) attrs.height = height;
+  const extra = { src, sandbox: IFRAME_SANDBOX, referrerPolicy: 'strict-origin-when-cross-origin', allowFullScreen: true, loading: 'lazy' };
+  return finishElement('iframe', attrs, extra, [], undefined, ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +548,11 @@ function walk(node: LNode, ctx: SanitizeContext): LNode[] {
     // Anything the parser attached to a carrier is author content.
     return [{ type: 'crowiSlot', value: slot }, ...walkChildren(children, ctx)];
   }
+  if (ctx.policy === 'relaxed' && tag === 'iframe') {
+    // A rejected iframe is unwrapped; the parser's raw-text body stays inert text.
+    const shell = iframeShell(props, ctx);
+    return shell ? [shell] : walkChildren(children, ctx);
+  }
   if (CODE_CONTENT_TAGS.has(tag)) return [];
   if (tag === 'select') {
     const parts: string[] = [];
@@ -474,7 +562,7 @@ function walk(node: LNode, ctx: SanitizeContext): LNode[] {
     return text === '' ? [] : [textNode(text)];
   }
   if (tag === 'template') return walkChildren(node.content?.children ?? children, ctx);
-  if (!ALLOWED_TAGS.has(tag)) return walkChildren(children, ctx);
+  if (!(ctx.policy === 'relaxed' ? RELAXED_ALLOWED_TAGS : ALLOWED_TAGS).has(tag)) return walkChildren(children, ctx);
 
   const key = ownerKey(node);
   const owner = key && ctx.owners.get(key.offset)?.entry.tagName === key.tag ? (ctx.owners.get(key.offset) as Owner) : undefined;
@@ -488,7 +576,7 @@ function walk(node: LNode, ctx: SanitizeContext): LNode[] {
     if (dir !== 'ltr' && dir !== 'rtl') return walkChildren(children, ctx);
   }
 
-  const attrs = authoredAttributes(tag, props);
+  const attrs = authoredAttributes(tag, props, ctx.policy === 'relaxed');
   if (owner) {
     // The owner table is the authority for id/name on generated structure.
     delete attrs.id;
@@ -524,13 +612,21 @@ function finishElement(
 ): LNode {
   const shell = sanitize(
     { type: 'element', tagName: tag, properties: attrs as Element['properties'], children: [] } as Element,
-    STRICT_HTML_SCHEMA,
+    ctx.policy === 'relaxed' ? RELAXED_HTML_SCHEMA : STRICT_HTML_SCHEMA,
   ) as unknown as LNode;
   const element: LNode = { type: 'element', tagName: tag, properties: { ...(shell.properties ?? {}), ...extra }, children };
   if (!owner) return element;
 
   const { entry } = owner;
+  // The author-class / owner-fixed-class merge lives here (not in owners.ts) because it needs the schema-sanitized className of this very element.
+  const authorClasses = element.properties?.className;
   Object.assign(element.properties as Record<string, unknown>, entry.fixed);
+  if (Array.isArray(authorClasses) && Array.isArray(entry.fixed.className)) {
+    // Owner-restored classes come first; the author's non-reserved ones follow.
+    (element.properties as Record<string, unknown>).className = [...new Set([...(entry.fixed.className as string[]), ...(authorClasses as string[])])];
+  } else if (Array.isArray(authorClasses)) {
+    (element.properties as Record<string, unknown>).className = authorClasses;
+  }
   let ownedAnchor = false;
   if (!owner.claimed) {
     // Clones the parser makes share one start offset; only the first gets the id.
@@ -839,14 +935,17 @@ function assertFinalShape(root: LNode): void {
 // ---------------------------------------------------------------------------
 // entry
 
-export function sanitizeWebHast(tree: Root, options: { policy: HtmlSanitizationPolicy; slotNonce: string }): SanitizeWebHastResult {
-  // Any other policy value (including one smuggled in from JS) is strict.
+export function sanitizeWebHast(
+  tree: Root,
+  options: { policy: HtmlSanitizationPolicy; slotNonce: string; iframeOrigins?: HtmlIframeOrigins },
+): SanitizeWebHastResult {
+  // Any policy value other than 'relaxed' (including one smuggled in from JS) is strict.
   try {
     if (typeof options?.slotNonce !== 'string' || !NONCE_RE.test(options.slotNonce)) throw new SanitizeFailureError('invalid-input');
     const invalid = validateWebRenderInput(tree);
     if (invalid) throw new SanitizeFailureError(invalid);
 
-    const prepared = prepareAuthoredTree(tree, options.slotNonce);
+    const prepared = prepareAuthoredTree(tree, options.slotNonce, { policy: options.policy, iframeOrigins: options.iframeOrigins });
     const parsed = parseAuthoredHast(prepared);
     const sanitized = sanitizeAuthoredTree(parsed, prepared.ctx);
     const composed = composeGeneratedFragments(sanitized, prepared.ctx);

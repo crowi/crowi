@@ -1234,3 +1234,35 @@ describe('strict HTML boundary', () => {
     });
   });
 });
+
+describe('relaxed HTML policy wiring', () => {
+  const origins = { webOrigin: 'https://wiki.example', apiOrigin: 'https://api.example', artifactOrigin: null };
+  const authorHtml = (value: string) => ({ type: 'html', value });
+  const renderWith = (options: { policy?: 'strict' | 'relaxed'; iframeOrigins?: typeof origins }, value: string): string =>
+    renderToStaticMarkup(renderMdastToReactNode({ type: 'root', children: [authorHtml(value)] }, { sectionWrap: false, components: {}, ...options }));
+
+  it('strict (the default) drops style/class and any iframe', () => {
+    const html = renderWith({}, '<div style="color:red" class="a">x</div><iframe src="https://www.youtube.com/embed/a"></iframe>');
+    expect(html).toContain('<div>x</div>');
+    expect(html).not.toContain('iframe');
+  });
+
+  it('relaxed keeps sanitized style/class and an allowed iframe when origins are passed', () => {
+    const html = renderWith(
+      { policy: 'relaxed', iframeOrigins: origins },
+      '<div style="color:red;background:url(https://e/x)" class="a crowi-x">x</div><iframe src="https://www.youtube.com/embed/a" srcdoc="s"></iframe>',
+    );
+    expect(html).toContain('<div style="color:red" class="a">x</div>');
+    expect(html).toContain('src="https://www.youtube.com/embed/a"');
+    expect(html).toContain('allow-scripts allow-same-origin');
+    expect(html).not.toContain('srcdoc');
+  });
+
+  it('relaxed without origin information renders no iframe', () => {
+    expect(renderWith({ policy: 'relaxed' }, '<iframe src="https://www.youtube.com/embed/a"></iframe>')).not.toContain('iframe');
+  });
+
+  it('relaxed rejects an iframe on the Web origin', () => {
+    expect(renderWith({ policy: 'relaxed', iframeOrigins: origins }, '<iframe src="https://wiki.example/admin/security"></iframe>')).not.toContain('iframe');
+  });
+});

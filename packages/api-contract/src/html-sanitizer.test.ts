@@ -8,7 +8,15 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 
-import { CLOBBERING_NAMES, safeDecodeFragment, sanitizeDisplayUrl, sanitizeWebHast, validateImageDisplayProps, validateWebRenderInput } from './html-sanitizer';
+import {
+  CLOBBERING_NAMES,
+  safeDecodeFragment,
+  sanitizeDisplayUrl,
+  sanitizeIframeSrc,
+  sanitizeWebHast,
+  validateImageDisplayProps,
+  validateWebRenderInput,
+} from './html-sanitizer';
 
 type Node = { type: string; [key: string]: unknown };
 const NONCE = 'abcdef0123456789abcdef0123456789';
@@ -726,9 +734,11 @@ describe('strict HTML policy', () => {
       assert.equal(run(tree as Node).failure, undefined);
     });
 
-    it('the policy argument is always treated as strict', () => {
-      const result = sanitizeWebHast(root(rawHtml('<script>x</script><b>y</b>')) as never, { policy: 'relaxed' as never, slotNonce: NONCE });
-      assert.equal(ser(result.tree as never), '<b>y</b>');
+    it('an unknown policy value is treated as strict', () => {
+      for (const policy of ['Relaxed', 'loose', '', undefined, null, 1]) {
+        const result = sanitizeWebHast(root(rawHtml('<center style="color:red">y</center>')) as never, { policy: policy as never, slotNonce: NONCE });
+        assert.equal(ser(result.tree as never), 'y', String(policy));
+      }
     });
   });
 
@@ -788,6 +798,299 @@ describe('strict HTML policy', () => {
       });
       assert.equal(results[0], results[1]);
       assert.equal(ser(JSON.parse(results[0] as string)), '<a>l</a><pre>G</pre>');
+    });
+  });
+});
+
+const ORIGINS = { webOrigin: 'https://wiki.example', apiOrigin: 'https://api.example:8443', artifactOrigin: 'https://artifact.example' };
+
+function runRelaxed(tree: Node, ...rest: unknown[]) {
+  const iframeOrigins = rest.length > 0 ? rest[0] : ORIGINS;
+  return sanitizeWebHast(tree as never, { policy: 'relaxed', slotNonce: NONCE, iframeOrigins: iframeOrigins as never });
+}
+
+function outRelaxed(...children: Node[]): string {
+  const result = runRelaxed(root(...children));
+  assert.equal(result.failure, undefined, `unexpected failure ${String(result.failure)}`);
+  return ser(result.tree as never);
+}
+
+function hasTag(children: Node[], tag: string, ...origins: unknown[]): boolean {
+  const result = runRelaxed(root(...children), origins.length > 0 ? origins[0] : ORIGINS);
+  assert.equal(result.failure, undefined);
+  return find(result.tree as never, tag).length > 0;
+}
+
+describe('relaxed HTML policy', () => {
+  describe('relaxed-shells', () => {
+    const EXTRA = ['address', 'hgroup', 'search', 'menu', 'center', 'font', 'big', 'tt', 'strike', 'acronym', 'nobr', 'rb', 'rtc', 'data', 'listing'];
+
+    it('keeps every passive layout tag that strict unwraps', () => {
+      for (const tag of EXTRA) {
+        const html = `<${tag} style="color:red" class="x">t</${tag}>`;
+        assert.ok(outRelaxed(rawHtml(html)).includes(`<${tag}`), tag);
+        assert.ok(!out(rawHtml(html)).includes(`<${tag}`), `strict ${tag}`);
+      }
+    });
+
+    it('keeps style and class on ordinary tags and drops them in strict', () => {
+      const html = '<div style="display:flex;gap:4px" class="a b">x</div>';
+      assert.equal(outRelaxed(rawHtml(html)), '<div className="a b" style="display:flex;gap:4px">x</div>');
+      assert.equal(out(rawHtml(html)), '<div>x</div>');
+    });
+
+    it('removes only the reserved class tokens, deduplicating in order', () => {
+      const html =
+        '<span class="  b crowi-x language-js katex-html katex shiki mention  b a sr-only footnotes diagram-embed wikilink-broken contains-task-list task-list-item data-footnote-backref">t</span>';
+      assert.equal(outRelaxed(rawHtml(html)), '<span className="b a">t</span>');
+      assert.equal(outRelaxed(rawHtml('<span class="crowi-x katex">t</span>')), '<span>t</span>');
+    });
+
+    it('drops a style whose parsers disagree but keeps the element and its text', () => {
+      const html = String.raw`<p style="a\;b:1">kept</p>`;
+      assert.equal(outRelaxed(rawHtml(html)), '<p>kept</p>');
+    });
+
+    it('drops background images and variables from style', () => {
+      assert.equal(outRelaxed(rawHtml('<div style="color:red;background:url(https://e/x)">x</div>')), '<div style="color:red">x</div>');
+      assert.equal(outRelaxed(rawHtml('<div style="--a:1;width:var(--a)">x</div>')), '<div>x</div>');
+    });
+
+    it('never allows code-content, form, embed, media or SVG elements', () => {
+      const html =
+        '<script>a</script><meta><base><link><form><input name=a><button>b</button><select><option>o</option></select><textarea>t</textarea><fieldset><legend>l</legend></fieldset><label>l</label><object></object><embed><param><frame><audio></audio><video></video><canvas></canvas><template>tt</template><svg><circle/></svg><math></math></form><style>p{}</style>';
+      const result = outRelaxed(rawHtml(html));
+      for (const tag of [
+        'script',
+        'meta',
+        'base',
+        'link',
+        'form',
+        'input',
+        'button',
+        'select',
+        'option',
+        'textarea',
+        'fieldset',
+        'legend',
+        'label',
+        'object',
+        'embed',
+        'param',
+        'frame',
+        'audio',
+        'video',
+        'canvas',
+        'template',
+        'svg',
+        'math',
+        'style',
+      ])
+        assert.ok(!result.includes(`<${tag}`), tag);
+    });
+
+    it('does not allow event handlers, srcdoc, data attributes or custom elements', () => {
+      assert.equal(outRelaxed(rawHtml('<div onclick="x()" data-a="1" srcdoc="s" is="x" role="button" aria-label="l" tabindex="0">t</div>')), '<div>t</div>');
+      assert.equal(hasTag([rawHtml('<my-widget>w</my-widget>')], 'my-widget'), false);
+    });
+
+    it('does not let an author forge reserved attributes or generated markup', () => {
+      const authored = outRelaxed(
+        rawHtml('<pre class="shiki" style="color:red"><code class="language-js">x</code></pre><span data-crowi-generated-slot="x">y</span>'),
+      );
+      assert.ok(!authored.includes('shiki'));
+      assert.ok(!authored.includes('language-js'));
+      assert.ok(!authored.includes('data-crowi'));
+      const generated = outRelaxed(gen('<pre class="shiki" style="color:red"><span style="color:#fff">x</span></pre>'));
+      assert.ok(generated.includes('class="shiki"') || generated.includes('shiki'));
+    });
+
+    it('keeps generated fragments after an unclosed passive tag', () => {
+      const result = outRelaxed(rawHtml('<center>a'), gen('<div>generated</div>'));
+      assert.ok(result.includes('generated'));
+    });
+
+    it('applies the same URL rules to links and images', () => {
+      assert.equal(outRelaxed(rawHtml('<a href="javascript:alert(1)">l</a>')), '<a>l</a>');
+      assert.equal(outRelaxed(rawHtml('<img src="data:image/svg+xml;base64,AAAA" alt="a">')), 'a');
+      assert.equal(outRelaxed(rawHtml('<a href="https://e.example/">l</a>')), '<a href="https://e.example/">l</a>');
+    });
+
+    it('keeps the raw image display transport attributes', () => {
+      const result = outRelaxed(rawHtml('<img src="https://e.example/a.png" alt="a" data-crowi-image-width="50%" style="border:1px solid red">'));
+      assert.ok(result.includes('dataCrowiImageWidth="50%"'));
+      assert.ok(result.includes('style="border:1px solid red"'));
+    });
+
+    it('does not mutate a frozen input', () => {
+      const tree = Object.freeze(root(rawHtml('<center style="color:red">x</center>')));
+      assert.equal(runRelaxed(tree as Node).failure, undefined);
+    });
+
+    it('is deterministic across nonces', () => {
+      const tree = root(rawHtml('<center class="a" style="color:red">x</center>'), gen('<div>g</div>'));
+      const a = ser(runRelaxed(tree).tree as never);
+      const b = ser(sanitizeWebHast(tree as never, { policy: 'relaxed', slotNonce: 'b'.repeat(32), iframeOrigins: ORIGINS }).tree as never);
+      assert.equal(a, b);
+    });
+
+    it('keeps an owner-fixed class and the author class together', () => {
+      const table = el('table', { className: ['x'], style: 'width:10px' }, [el('tbody', {}, [el('tr', {}, [el('td', {}, [text('c')])])])]);
+      const result = outRelaxed(table);
+      assert.ok(result.includes('className="x"'));
+      const task = el('ul', { className: ['contains-task-list', 'mine'] }, [el('li', { className: ['task-list-item'] }, [text('t')])]);
+      assert.ok(outRelaxed(task).includes('className="contains-task-list mine"'));
+    });
+  });
+
+  describe('relaxed-iframe', () => {
+    const YT = 'https://www.youtube.com/embed/abc';
+
+    it('builds an iframe shell with fixed attributes from a YouTube-style embed', () => {
+      const result = outRelaxed(
+        rawHtml(
+          `<iframe src="${YT}" width="560" height="315" title="Video" style="border:0" class="v" srcdoc="x" sandbox="" allow="camera" name="n" referrerpolicy="no-referrer" loading="eager" allowfullscreen>fallback</iframe>`,
+        ),
+      );
+      assert.equal(
+        result,
+        `<iframe allowFullScreen className="v" height="315" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation" src="${YT}" style="border:0" title="Video" width="560"></iframe>`,
+      );
+    });
+
+    it('never grants forms or top navigation and never emits allow', () => {
+      const result = outRelaxed(rawHtml(`<iframe src="${YT}" allow="geolocation"></iframe>`));
+      assert.ok(!result.includes('allow-forms'));
+      assert.ok(!result.includes('allow-top-navigation'));
+      assert.ok(!/ allow="/.test(result));
+    });
+
+    it('rejects Web, API (with port) and artifact origins and unwraps the fallback', () => {
+      for (const src of ['https://wiki.example/x', 'https://WIKI.example:443/y', 'https://api.example:8443/z', 'https://artifact.example/a']) {
+        assert.equal(outRelaxed(rawHtml(`<iframe src="${src}">fb</iframe><p>after</p>`)), 'fb<p>after</p>', src);
+      }
+      // Same host on another port is a different origin.
+      assert.ok(outRelaxed(rawHtml('<iframe src="https://api.example/z"></iframe>')).includes('<iframe'));
+    });
+
+    it('rejects http, relative, network-path, fragment, empty, scheme-less and dangerous src', () => {
+      for (const src of [
+        'http://e.example/',
+        '/x',
+        '//e.example/',
+        '#a',
+        '',
+        'e.example/x',
+        'data:text/html,x',
+        'blob:https://e.example/x',
+        'file:///etc/passwd',
+        'javascript:alert(1)',
+        'https://u:p@e.example/',
+        'https://',
+        'ht\ntps://e.example/',
+        ' \u0001https://e.example/',
+      ]) {
+        const result = outRelaxed(rawHtml(`<iframe src="${src}"></iframe>`));
+        assert.ok(!result.includes('<iframe'), JSON.stringify(src));
+      }
+    });
+
+    it('accepts an uppercase scheme and keeps the author spelling', () => {
+      const result = outRelaxed(rawHtml('<iframe src="HTTPS://Maps.Example/Embed?q=1"></iframe>'));
+      assert.ok(result.includes('src="HTTPS://Maps.Example/Embed?q=1"'));
+    });
+
+    it('rejects every iframe when origin information is missing or invalid', () => {
+      for (const origins of [
+        undefined,
+        null,
+        {},
+        { webOrigin: 'x', apiOrigin: 'https://a.example', artifactOrigin: null },
+        { webOrigin: 'https://w.example', apiOrigin: 'https://a.example' },
+        { webOrigin: 'https://w.example', apiOrigin: 'https://a.example', artifactOrigin: 'nope' },
+      ]) {
+        assert.equal(hasTag([rawHtml(`<iframe src="${YT}"></iframe>t`)], 'iframe', origins), false, JSON.stringify(origins));
+      }
+      assert.equal(hasTag([rawHtml(`<iframe src="${YT}"></iframe>`)], 'iframe'), true);
+      assert.equal(
+        hasTag([rawHtml(`<iframe src="${YT}"></iframe>`)], 'iframe', { webOrigin: 'https://w.example', apiOrigin: 'https://a.example', artifactOrigin: null }),
+        true,
+      );
+    });
+
+    it('strict never keeps an iframe, even with origins supplied', () => {
+      const result = sanitizeWebHast(root(rawHtml(`<iframe src="${YT}">x</iframe>t`)) as never, { policy: 'strict', slotNonce: NONCE, iframeOrigins: ORIGINS });
+      assert.equal(ser(result.tree as never), 't');
+    });
+
+    it('validates title, width and height', () => {
+      const attrs = (extra: string) => outRelaxed(rawHtml(`<iframe src="${YT}" ${extra}></iframe>`));
+      assert.ok(attrs('title="ok"').includes('title="ok"'));
+      assert.ok(!attrs('title=""').includes('title='));
+      assert.ok(!attrs(`title="${'a'.repeat(257)}"`).includes('title='));
+      assert.ok(attrs(`title="${'a'.repeat(256)}"`).includes('title='));
+      assert.ok(!attrs('title="a&#10;b"').includes('title='));
+      assert.ok(attrs('width="4096" height="1"').includes('width="4096"'));
+      for (const bad of ['0', '4097', '1.5', '10px', '-3', '']) assert.ok(!attrs(`width="${bad}"`).includes('width='), bad);
+    });
+
+    it('unwraps a rejected iframe whose body is inert text, restoring no author style or class', () => {
+      const children = [rawHtml('<iframe src="http://x/"><b style="color:red" class="c">in</b><script>s</script></iframe>after')];
+      for (const tag of ['iframe', 'b', 'script']) assert.equal(hasTag(children, tag), false, tag);
+      assert.ok(outRelaxed(...children).endsWith('after'));
+    });
+
+    it('treats a closed iframe whose first terminator candidate is incomplete as text', () => {
+      const html = `<iframe src="${YT}"></iframe x='</iframe>after`;
+      assert.equal(hasTag([rawHtml(html)], 'iframe'), false);
+      assert.ok(outRelaxed(rawHtml(html)).includes('after'));
+    });
+
+    it('does not let a later complete closer repair an incomplete first candidate, and keeps what follows', () => {
+      const html = `<iframe src="${YT}"></iframe x='</iframe>`;
+      const trailing = gen('<div>generated block</div>');
+      const result = runRelaxed(root(rawHtml(html), trailing));
+      assert.equal(result.failure, undefined);
+      const rendered = ser(result.tree as never);
+      assert.equal(find(result.tree as never, 'iframe').length, 0);
+      assert.ok(rendered.includes('generated block'));
+    });
+
+    it('demotes an unclosed iframe or one closed in another chunk, preserving following content', () => {
+      const unclosed = runRelaxed(root(rawHtml(`<iframe src="${YT}">`), gen('<div>g</div>'), text('t')));
+      const rendered = ser(unclosed.tree as never);
+      assert.equal(find(unclosed.tree as never, 'iframe').length, 0);
+      assert.ok(rendered.includes('<div>g</div>'));
+
+      const split = runRelaxed(root(rawHtml(`<iframe src="${YT}">`), rawHtml('</iframe>'), gen('<div>g2</div>')));
+      assert.equal(find(split.tree as never, 'iframe').length, 0);
+      assert.ok(ser(split.tree as never).includes('g2'));
+    });
+
+    it('recognises the end tag case-insensitively and with attributes', () => {
+      assert.ok(outRelaxed(rawHtml(`<IFRAME src="${YT}">x</IFRAME >`)).includes('<iframe'));
+      assert.ok(outRelaxed(rawHtml(`<iframe src="${YT}">x</iframe\n>`)).includes('<iframe'));
+    });
+
+    it('keeps generated slots that follow a valid iframe', () => {
+      const result = runRelaxed(root(rawHtml(`<iframe src="${YT}"></iframe>`), gen('<div>after</div>')));
+      const rendered = ser(result.tree as never);
+      assert.ok(rendered.includes('<iframe'));
+      assert.ok(rendered.includes('<div>after</div>'));
+    });
+
+    it('validates an iframe that is already a HAST element with the same rules', () => {
+      assert.ok(outRelaxed(el('iframe', { src: YT, srcDoc: 'x', sandbox: ['allow-forms'] }, [])).includes('<iframe'));
+      assert.ok(!outRelaxed(el('iframe', { src: 'https://wiki.example/' }, [text('fb')])).includes('<iframe'));
+      assert.ok(!outRelaxed(el('iframe', { src: YT, srcDoc: 'x', sandbox: ['allow-forms'] }, [])).includes('allow-forms'));
+    });
+
+    it('is exposed through sanitizeIframeSrc with the same decisions', () => {
+      assert.equal(sanitizeIframeSrc(YT, ORIGINS), YT);
+      assert.equal(sanitizeIframeSrc(`  ${YT}  `, ORIGINS), YT);
+      assert.equal(sanitizeIframeSrc('https://wiki.example/', ORIGINS), undefined);
+      assert.equal(sanitizeIframeSrc(YT, undefined), undefined);
+      assert.equal(sanitizeIframeSrc(1, ORIGINS), undefined);
     });
   });
 });

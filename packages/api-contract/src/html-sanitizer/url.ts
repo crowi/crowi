@@ -1,4 +1,5 @@
 import { IMAGE_ALIGN_VALUES, IMAGE_FLOAT_VALUES, validateImageSize } from '../util/image-display';
+import type { HtmlIframeOrigins } from './model';
 const ASCII_WS_EDGE_RE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g;
 // eslint-disable-next-line no-control-regex
 const SCHEME_NOISE_RE = /[\u0000- \u007f]/g;
@@ -81,4 +82,49 @@ export function validateImageDisplayProps(props: Readonly<Record<string, unknown
   const float = pick(props, 'data-crowi-image-float', 'dataCrowiImageFloat');
   if (typeof float === 'string' && IMAGE_FLOAT_VALUES.has(float)) out.float = float as ImageDisplayProps['float'];
   return out;
+}
+
+// eslint-disable-next-line no-control-regex
+const IFRAME_UNSAFE_CHAR_RE = /[\u0000-\u0020\u007f]/;
+
+function httpOrigin(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
+    return url.origin === 'null' ? undefined : url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The iframe `src` gate (relaxed policy only): an explicit absolute `https:`
+ * URL with a host and no credentials, whose origin is not the Web app, the
+ * API, or the artifact origin. Missing or malformed origin information denies
+ * every iframe. The author's spelling is kept once it passes.
+ */
+export function sanitizeIframeSrc(value: unknown, origins: HtmlIframeOrigins | undefined): string | undefined {
+  if (typeof value !== 'string' || typeof origins !== 'object' || origins === null) return undefined;
+  const blocked = new Set<string>();
+  for (const candidate of [origins.webOrigin, origins.apiOrigin]) {
+    const origin = httpOrigin(candidate);
+    if (origin === undefined) return undefined;
+    blocked.add(origin);
+  }
+  if (origins.artifactOrigin !== null) {
+    const origin = httpOrigin(origins.artifactOrigin);
+    if (origin === undefined) return undefined;
+    blocked.add(origin);
+  }
+
+  const trimmed = value.replace(ASCII_WS_EDGE_RE, '');
+  if (!/^https:/i.test(trimmed) || IFRAME_UNSAFE_CHAR_RE.test(trimmed)) return undefined;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'https:' || url.hostname === '' || url.username !== '' || url.password !== '') return undefined;
+    return blocked.has(url.origin) ? undefined : trimmed;
+  } catch {
+    return undefined;
+  }
 }
