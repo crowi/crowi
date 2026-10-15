@@ -58,6 +58,7 @@ You can write HTML directly inside Markdown. When a page is shown, only a fixed 
 - A link whose URL starts with `javascript:`, `vbscript:` or `data:` loses its link and only its text remains. Ordinary links such as `tel:` and `slack://` keep working.
 - For a `data:` image URL, only base64-encoded PNG, JPEG, GIF and WebP are shown. An image with any other `data:` URL (an SVG, for example) or a kind of URL that is not allowed is replaced by its alt text, and is not shown at all when it has none.
 - Output that Crowi generates, such as code highlighting, math, diagrams, link cards and expanded URLs, is not affected and looks the same as before.
+- On an instance where an administrator has relaxed these restrictions, `style`, `class`, external HTTPS `iframe`s and the like are shown too. `script` and form controls still have no effect there. The setting is under Security in the [Admin panel](../operations/admin).
 
 ## Crowi core extensions
 
