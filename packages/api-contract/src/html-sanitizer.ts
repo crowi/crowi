@@ -12,18 +12,21 @@ import type { LNode } from './html-sanitizer/model';
 export { CLOBBERING_NAMES, filterAuthorAnchorAttributes } from './html-sanitizer/anchors';
 export type { AnchorProvenance } from './html-sanitizer/anchors';
 export type { SanitizeFailure } from './html-sanitizer/model';
-export { sanitizeDisplayUrl, safeDecodeFragment, validateImageDisplayProps } from './html-sanitizer/url';
+export { sanitizeDisplayUrl, sanitizeIframeSrc, safeDecodeFragment, validateImageDisplayProps } from './html-sanitizer/url';
+export { sanitizeRelaxedStyle } from './relaxed-html-style';
 export type { ImageDisplayProps } from './html-sanitizer/url';
 export { validateWebRenderInput } from './html-sanitizer/validate';
 export {
+  RELAXED_HTML_SCHEMA,
   STRICT_HTML_SCHEMA,
+  sanitizeRelaxedClassName,
   composeGeneratedFragments,
   parseAuthoredHast,
   prepareAuthoredTree,
   sanitizeAuthoredTree,
   sanitizeWebHast,
 } from './html-sanitizer/sanitize';
-export type { HtmlSanitizationPolicy, PreparedParse, SanitizeContext, SanitizeWebHastResult } from './html-sanitizer/sanitize';
+export type { HtmlIframeOrigins, HtmlSanitizationPolicy, PreparedParse, SanitizeContext, SanitizeWebHastResult } from './html-sanitizer/sanitize';
 
 /** Demotes raw chunks whose leading tag is unknown to text, in place. */
 export function escapeUnknownRawHtml(tree: Root): void {

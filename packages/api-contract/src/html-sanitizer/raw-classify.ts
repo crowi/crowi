@@ -1,5 +1,5 @@
 import { isKnownTag } from '../util/known-tags';
-import type { LNode } from './model';
+import type { HtmlSanitizationPolicy, LNode } from './model';
 import { CODE_CONTENT_TAGS } from './model';
 
 /**
@@ -122,8 +122,8 @@ class CloserIndex {
 
   constructor(private readonly text: string) {}
 
-  /** First complete `</name …>` at or after `from` that ends inside [from, limit]. */
-  find(name: string, from: number, limit: number): number | undefined {
+  /** Candidates in source order, with `from` only ever growing within one run's scan. */
+  private candidatesFrom(name: string, from: number, limit: number): { candidates: Array<{ idx: number; e: number; complete: boolean }>; start: number } {
     const key = `${name}:${limit}`;
     let candidates = this.cache.get(key);
     if (!candidates) {
@@ -139,18 +139,34 @@ class CloserIndex {
       this.cache.set(key, candidates);
     }
     let start = this.cursor.get(key) ?? 0;
-    // `from` only grows within one run's scan, so the cursor never rewinds.
     while (start < candidates.length && (candidates[start] as { idx: number }).idx < from) start += 1;
     this.cursor.set(key, start);
+    return { candidates, start };
+  }
+
+  /** First complete `</name …>` at or after `from` that ends inside [from, limit]. */
+  find(name: string, from: number, limit: number): number | undefined {
+    const { candidates, start } = this.candidatesFrom(name, from, limit);
     for (let k = start; k < candidates.length; k += 1) {
       const c = candidates[k] as { e: number; complete: boolean };
       if (c.complete) return c.e;
     }
     return undefined;
   }
+
+  /**
+   * The relaxed iframe rule: only the FIRST `</name` terminator candidate at or
+   * after `from` counts, and only when it is a complete end tag ending inside
+   * [from, limit]. A later complete closer never repairs an incomplete first one.
+   */
+  firstComplete(name: string, from: number, limit: number): number | undefined {
+    const { candidates, start } = this.candidatesFrom(name, from, limit);
+    const first = candidates[start];
+    return first?.complete ? first.e : undefined;
+  }
 }
 
-function scanRun(run: Run): void {
+function scanRun(run: Run, policy: HtmlSanitizationPolicy): void {
   const { text } = run;
   const n = text.length;
   const closers = new CloserIndex(text);
@@ -202,6 +218,17 @@ function scanRun(run: Run): void {
     if (token.e > chunk.e) {
       token.demoted = true;
       run.edits.push({ s: token.s, e: token.e, action: 'text' });
+      continue;
+    }
+    if (policy === 'relaxed' && scan.name === 'iframe') {
+      const iframeEnd = closers.firstComplete('iframe', token.e, chunk.e);
+      if (iframeEnd === undefined) {
+        token.demoted = true;
+        run.edits.push({ s: token.s, e: token.e, action: 'text' });
+      } else {
+        // The whole shell stays raw for the parser; its raw-text body is not scanned.
+        i = iframeEnd;
+      }
       continue;
     }
     const closeEnd = closers.find(scan.name, token.e, chunk.e);
@@ -276,7 +303,7 @@ function segmentChunk(chunk: Chunk, run: Run, edits: Edit[]): LNode[] {
  * unclosed code-content/select tokens, a leading `<col>` and a trailing
  * unfinished tag/attribute/comment become literal text.
  */
-export function classifyAuthoredRaw(root: LNode): void {
+export function classifyAuthoredRaw(root: LNode, policy: HtmlSanitizationPolicy = 'strict'): void {
   const events = collectEvents(root);
 
   // Group consecutive raw events into runs: the tokenizer carries state
@@ -302,7 +329,7 @@ export function classifyAuthoredRaw(root: LNode): void {
   }
   if (runs.length === 0) return;
 
-  for (const run of runs) scanRun(run);
+  for (const run of runs) scanRun(run, policy);
 
   // `select` is closed only by a later explicit end tag anywhere in the
   // author raw that follows it.

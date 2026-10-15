@@ -1,7 +1,10 @@
+import { SecuritySettingsSchema, UpdateSecuritySettingsRequestSchema } from '@crowi/api-contract';
 import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
+import { isHtmlSanitizationEnabled } from 'src/util/admin-config';
+import { createJwtUtil } from 'src/util/jwt';
 
 /**
  * Reset the registration-related security:* keys back to defaults between
@@ -16,6 +19,9 @@ const resetSecurityConfig = async () => {
     'security:registrationWhiteList': [],
   });
   await configService.saveConfigValue('crowi', 'security:linkCardEnabled', true);
+  // The HTML policy key is normally absent; deleting it keeps every case starting from "never saved".
+  await crowi.model('Config').deleteMany({ ns: 'crowi', key: 'security:htmlSanitizationEnabled' }).exec();
+  await configService.load();
 };
 
 describe('Routes /api/admin/security (Hono)', () => {
@@ -77,6 +83,7 @@ describe('Routes /api/admin/security (Hono)', () => {
         registrationMode: 'Open',
         registrationWhiteList: [],
         linkCardEnabled: true,
+        htmlSanitizationEnabled: true,
       });
     });
 
@@ -93,6 +100,7 @@ describe('Routes /api/admin/security (Hono)', () => {
         registrationMode: 'Resricted',
         registrationWhiteList: ['allowed@example.com', 'team@example.org'],
         linkCardEnabled: true,
+        htmlSanitizationEnabled: true,
       });
     });
 
@@ -169,10 +177,13 @@ describe('Routes /api/admin/security (Hono)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 400 when linkCardEnabled is missing', async () => {
+    it('accepts a body without linkCardEnabled and keeps the stored value', async () => {
+      await crowi.getConfigService().saveConfigValue('crowi', 'security:linkCardEnabled', false);
       const { linkCardEnabled: _omit, ...bodyWithoutLinkCard } = validBody;
       const res = await request(app).put('/api/admin/security').set(authHeaders(adminToken)).send(bodyWithoutLinkCard);
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
+      expect(res.body.linkCardEnabled).toBe(false);
+      expect(res.body.registrationMode).toBe('Closed');
     });
 
     it('returns 400 when linkCardEnabled is not a boolean', async () => {
@@ -198,6 +209,7 @@ describe('Routes /api/admin/security (Hono)', () => {
         registrationMode: 'Resricted',
         registrationWhiteList: ['user@example.com'],
         linkCardEnabled: false,
+        htmlSanitizationEnabled: true,
       });
 
       // Round-trip via GET to verify the in-memory cache and the persisted
@@ -288,7 +300,209 @@ describe('Routes /api/admin/security (Hono)', () => {
           registrationMode: 'Open',
           registrationWhiteList: [],
           linkCardEnabled: true,
+          htmlSanitizationEnabled: true,
         });
+      });
+    });
+
+    describe('html-policy-write-contract', () => {
+      const KEY = 'security:htmlSanitizationEnabled';
+      const rowFor = (key: string) => crowi.model('Config').findOne({ ns: 'crowi', key }).lean().exec();
+      const put = (body: unknown) =>
+        request(app)
+          .put('/api/admin/security')
+          .set(authHeaders(adminToken))
+          .send(body as object);
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      it('rejects unauthenticated, non-admin, PAT and OAuth callers without touching the Config row', async () => {
+        const jwtUtil = createJwtUtil(crowi);
+        const { user } = await createTestUser({ name: 'Sec OAuth Admin', username: 'secOauthAdmin', email: 'sec-oauth-admin@example.com', admin: true });
+        const oauthToken = jwtUtil.signOauthAccessToken({ user, scopes: ['read'], clientId: 'crowi-cli' });
+        const body = { htmlSanitizationEnabled: false };
+
+        expect((await request(app).put('/api/admin/security').send(body)).status).toBe(401);
+        expect((await request(app).put('/api/admin/security').set(authHeaders(userToken)).send(body)).status).toBe(403);
+        expect((await request(app).put('/api/admin/security').set('Authorization', `Bearer ${oauthToken}`).send(body)).status).toBe(403);
+        expect(await rowFor(KEY)).toBeNull();
+      });
+
+      it('saves false explicitly and reads it back from GET and the response', async () => {
+        const res = await put({ htmlSanitizationEnabled: false });
+        expect(res.status).toBe(200);
+        expect(res.body.htmlSanitizationEnabled).toBe(false);
+        expect((await rowFor(KEY))?.value).toBe('false');
+        const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
+        expect(getRes.body).toEqual(res.body);
+      });
+
+      it('each field alone updates only that field and never creates the omitted keys', async () => {
+        const res = await put({ registrationMode: 'Closed' });
+        expect(res.status).toBe(200);
+        expect(await rowFor(KEY)).toBeNull();
+        expect(res.body).toMatchObject({ registrationMode: 'Closed', registrationWhiteList: [], linkCardEnabled: true, htmlSanitizationEnabled: true });
+
+        expect((await put({ registrationWhiteList: [' a@example.com ', ''] })).body).toMatchObject({
+          registrationMode: 'Closed',
+          registrationWhiteList: ['a@example.com'],
+        });
+        expect((await put({ registrationWhiteList: [] })).body.registrationWhiteList).toEqual([]);
+
+        const linkCard = await put({ linkCardEnabled: false });
+        expect(linkCard.body).toMatchObject({ registrationMode: 'Closed', linkCardEnabled: false, htmlSanitizationEnabled: true });
+        expect(await rowFor(KEY)).toBeNull();
+      });
+
+      it('an empty object is a 200 no-op that neither saves nor notifies', async () => {
+        const configService = crowi.getConfigService();
+        const saveConfig = jest.spyOn(configService, 'saveConfig');
+        const saveConfigValue = jest.spyOn(configService, 'saveConfigValue');
+        const notify = jest.spyOn(configService, 'notifyUpdated');
+
+        const res = await put({});
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ registrationMode: 'Open', registrationWhiteList: [], linkCardEnabled: true, htmlSanitizationEnabled: true });
+        expect(saveConfig).not.toHaveBeenCalled();
+        expect(saveConfigValue).not.toHaveBeenCalled();
+        expect(notify).not.toHaveBeenCalled();
+      });
+
+      it('a toggle-only PUT does not roll back a registration change made by another admin', async () => {
+        await crowi.getConfigService().saveConfig('crowi', { 'security:registrationMode': 'Closed' });
+        const res = await put({ htmlSanitizationEnabled: false });
+        expect(res.status).toBe(200);
+        expect(res.body.registrationMode).toBe('Closed');
+      });
+
+      it('skips the registration batch when no registration field is present', async () => {
+        const saveConfig = jest.spyOn(crowi.getConfigService(), 'saveConfig');
+        expect((await put({ linkCardEnabled: false, htmlSanitizationEnabled: false })).status).toBe(200);
+        expect(saveConfig).not.toHaveBeenCalled();
+      });
+
+      it('writes only the present registration keys in the batch', async () => {
+        const saveConfig = jest.spyOn(crowi.getConfigService(), 'saveConfig');
+        expect((await put({ registrationMode: 'Resricted' })).status).toBe(200);
+        expect(saveConfig).toHaveBeenCalledWith('crowi', { 'security:registrationMode': 'Resricted' });
+      });
+
+      it('a failed linkCardEnabled save leaves the new key untouched', async () => {
+        const Config = crowi.model('Config');
+        const original = Config.updateByParams.bind(Config);
+        jest.spyOn(Config, 'updateByParams').mockImplementation(async (ns: string, key: string, value: string) => {
+          if (key === 'security:linkCardEnabled') throw new Error('mongo write failed');
+          return original(ns, key, value);
+        });
+        const res = await put({ linkCardEnabled: false, htmlSanitizationEnabled: false });
+        expect(res.status).toBe(500);
+        expect(await rowFor(KEY)).toBeNull();
+      });
+
+      it('a failed registration save leaves the new key untouched and keeps the earlier link-card save', async () => {
+        jest.spyOn(crowi.getConfigService(), 'saveConfig').mockRejectedValue(new Error('batch failed'));
+        const res = await put({ linkCardEnabled: false, registrationMode: 'Closed', htmlSanitizationEnabled: false });
+        expect(res.status).toBe(500);
+        expect(await rowFor(KEY)).toBeNull();
+        jest.restoreAllMocks();
+        const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
+        expect(getRes.body).toMatchObject({ registrationMode: 'Open', linkCardEnabled: false, htmlSanitizationEnabled: true });
+      });
+
+      it('a failed write of the new key is a 500 that keeps the previous value', async () => {
+        await crowi.getConfigService().saveConfigValue('crowi', KEY, true);
+        const configService = crowi.getConfigService();
+        const original = configService.saveConfigValue.bind(configService);
+        jest.spyOn(configService, 'saveConfigValue').mockImplementation(async (ns: string, key: string, value: unknown) => {
+          if (key === KEY) throw new Error('mongo write failed');
+          return original(ns, key, value);
+        });
+        const res = await put({ linkCardEnabled: false, htmlSanitizationEnabled: false });
+        expect(res.status).toBe(500);
+        jest.restoreAllMocks();
+        const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
+        expect(getRes.body).toMatchObject({ linkCardEnabled: false, htmlSanitizationEnabled: true });
+      });
+
+      it('a notify failure after the database write is a 500 but the new value is stored', async () => {
+        jest.spyOn(crowi.getConfigService(), 'notifyUpdated').mockRejectedValueOnce(new Error('notify failed'));
+        const res = await put({ htmlSanitizationEnabled: false });
+        expect(res.status).toBe(500);
+        expect((await rowFor(KEY))?.value).toBe('false');
+        const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
+        expect(getRes.body.htmlSanitizationEnabled).toBe(false);
+      });
+    });
+
+    describe('html-policy-schema-shape', () => {
+      const put = (body: unknown) =>
+        request(app)
+          .put('/api/admin/security')
+          .set(authHeaders(adminToken))
+          .send(body as object);
+
+      it('GET and PUT 200 bodies carry all four fields with the right types', async () => {
+        const shape = {
+          registrationMode: expect.any(String),
+          registrationWhiteList: expect.any(Array),
+          linkCardEnabled: expect.any(Boolean),
+          htmlSanitizationEnabled: expect.any(Boolean),
+        };
+        const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
+        expect(getRes.body).toEqual(shape);
+        expect((await put({})).body).toEqual(shape);
+        expect((await put({ registrationMode: 'Open', registrationWhiteList: [], linkCardEnabled: true })).body).toEqual(shape);
+        expect(SecuritySettingsSchema.safeParse(getRes.body).success).toBe(true);
+        expect(UpdateSecuritySettingsRequestSchema.safeParse({}).success).toBe(true);
+      });
+
+      it.each([
+        { htmlSanitizationEnabled: null },
+        { htmlSanitizationEnabled: 'false' },
+        { htmlSanitizationEnabled: 0 },
+        { linkCardEnabled: null },
+        { registrationWhiteList: [1] },
+      ])('rejects the invalid value %j with 400 and saves nothing', async (body) => {
+        const res = await put(body);
+        expect(res.status).toBe(400);
+        const row = await crowi.model('Config').findOne({ ns: 'crowi', key: 'security:htmlSanitizationEnabled' }).lean().exec();
+        expect(row).toBeNull();
+      });
+    });
+
+    describe('html-policy-defaults', () => {
+      const KEY = 'security:htmlSanitizationEnabled';
+      const readFlag = async () => (await request(app).get('/api/admin/security').set(authHeaders(adminToken))).body.htmlSanitizationEnabled;
+      const setRaw = async (value: string) => {
+        await crowi.model('Config').updateOne({ ns: 'crowi', key: KEY }, { $set: { value } }, { upsert: true }).exec();
+        await crowi.getConfigService().load();
+      };
+
+      it('reads true when the row is missing', async () => {
+        expect(await readFlag()).toBe(true);
+      });
+
+      it.each(['null', '"false"', '0', '"off"'])('reads true for the non-boolean stored value %s', async (raw) => {
+        await setRaw(raw);
+        expect(await readFlag()).toBe(true);
+      });
+
+      it('reads false only for a stored boolean false and true for true', async () => {
+        await setRaw('false');
+        expect(await readFlag()).toBe(false);
+        await setRaw('true');
+        expect(await readFlag()).toBe(true);
+      });
+
+      it('isHtmlSanitizationEnabled falls back to true when the config cannot be read', () => {
+        const broken = {
+          getConfig: () => {
+            throw new Error('boom');
+          },
+        } as unknown as typeof crowi;
+        expect(isHtmlSanitizationEnabled(broken)).toBe(true);
       });
     });
   });

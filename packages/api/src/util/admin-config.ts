@@ -81,6 +81,19 @@ export const coerceNumber = (value: unknown, fallback = 0): number => {
  */
 export const isLinkCardEnabled = (crowi: Crowi): boolean => coerceBoolean(getCrowiConfigNamespace(crowi)['security:linkCardEnabled'], true);
 
+/**
+ * Read `security:htmlSanitizationEnabled`, default `true`. Only a stored
+ * boolean `false` turns the strict sanitizer off; a missing, malformed or
+ * unreadable value keeps it on.
+ */
+export const isHtmlSanitizationEnabled = (crowi: Crowi): boolean => {
+  try {
+    return coerceBoolean(getCrowiConfigNamespace(crowi)['security:htmlSanitizationEnabled'], true);
+  } catch {
+    return true;
+  }
+};
+
 const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'Open';
 
 /**

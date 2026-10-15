@@ -8168,6 +8168,9 @@
                         "enabled",
                         "origin"
                       ]
+                    },
+                    "htmlSanitizationEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -8178,7 +8181,8 @@
                     "capabilities",
                     "canSelfRegister",
                     "rendererStylesheets",
-                    "artifactDelivery"
+                    "artifactDelivery",
+                    "htmlSanitizationEnabled"
                   ]
                 }
               }
@@ -41740,12 +41744,16 @@
                     },
                     "linkCardEnabled": {
                       "type": "boolean"
+                    },
+                    "htmlSanitizationEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
                     "registrationWhiteList",
-                    "linkCardEnabled"
+                    "linkCardEnabled",
+                    "htmlSanitizationEnabled"
                   ]
                 }
               }
@@ -41876,7 +41884,8 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Update security:* settings (registrationMode / registrationWhiteList)",
+        "summary": "Partially update security:* settings",
+        "description": "Writes only the fields present in the body; an omitted field keeps its stored value. `{}` is a no-op 200. The saves run in order (linkCardEnabled, registrationMode / registrationWhiteList, htmlSanitizationEnabled) and are not transactional: a 500 may leave earlier fields saved.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -41899,13 +41908,11 @@
                   },
                   "linkCardEnabled": {
                     "type": "boolean"
+                  },
+                  "htmlSanitizationEnabled": {
+                    "type": "boolean"
                   }
-                },
-                "required": [
-                  "registrationMode",
-                  "registrationWhiteList",
-                  "linkCardEnabled"
-                ]
+                }
               }
             }
           }
@@ -41934,12 +41941,16 @@
                     },
                     "linkCardEnabled": {
                       "type": "boolean"
+                    },
+                    "htmlSanitizationEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
                     "registrationWhiteList",
-                    "linkCardEnabled"
+                    "linkCardEnabled",
+                    "htmlSanitizationEnabled"
                   ]
                 }
               }

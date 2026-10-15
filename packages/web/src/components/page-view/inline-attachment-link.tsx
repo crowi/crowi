@@ -73,7 +73,8 @@ interface InlineAttachmentLinkProps {
   /** `image` variant only. */
   alt?: string;
   /**
-   * `image` variant only. RFC-0015 image display attributes — the
+   * `link` variant: the author's style, applied to the `<a>`.
+   * `image` variant: RFC-0015 image display attributes — the
    * caller's already-re-validated width/height style (from
    * `getImageDisplayStyle`, `@/components/editor/image-display`).
    * MERGED (not replaced) with this component's own
@@ -137,7 +138,7 @@ export function InlineAttachmentLink({ attachmentId, variant, href, className, c
   return (
     // The href stays the raw-file URL so middle-click / "open in new tab"
     // still reach the file; only a plain left-click is intercepted.
-    <a href={href} className={className} onClick={handleClick}>
+    <a href={href} className={className} style={style} onClick={handleClick}>
       {children}
     </a>
   );

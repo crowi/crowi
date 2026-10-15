@@ -3,9 +3,10 @@
 import { memo, useRef, useState } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { m } from '@paraglide/messages.js';
+import { mergeListClassName } from '@/components/editor/list-classnames';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
-type ChildrenProps = { children?: React.ReactNode };
+type ChildrenProps = { children?: React.ReactNode; className?: unknown };
 
 /**
  * Page-view `table` override: wraps a rendered `<table>` so it can be
@@ -25,7 +26,7 @@ type ChildrenProps = { children?: React.ReactNode };
  * (`page-content.tsx`) adds a whole-container `key={revisionId}` so a new
  * revision remounts the whole subtree and discards any stale `open` state.
  */
-export const MarkdownTableFullscreen = memo(function MarkdownTableFullscreen({ children, ...props }: ChildrenProps) {
+export const MarkdownTableFullscreen = memo(function MarkdownTableFullscreen({ children, className, ...props }: ChildrenProps) {
   const [open, setOpen] = useState(false);
   // Preserve the inline scroll wrapper's rendered height while the table is
   // hoisted into the Dialog, so removing the table from that wrapper doesn't
@@ -96,7 +97,7 @@ export const MarkdownTableFullscreen = memo(function MarkdownTableFullscreen({ c
   // passes every author attribute (raw-HTML `class`, `hidden`, `aria-hidden`,
   // data attrs, …) through to the <table> unmodified.
   const table = (
-    <table className="w-full border-collapse text-sm" {...props}>
+    <table className={mergeListClassName('w-full border-collapse text-sm', className)} {...props}>
       {children}
     </table>
   );

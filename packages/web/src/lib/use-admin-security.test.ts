@@ -37,7 +37,7 @@ afterEach(() => {
 
 describe('useUpdateAdminSecuritySettings — invalidation (feature-admin-app-registration-mode AC-11)', () => {
   it('invalidates the app settings query after a successful security update', async () => {
-    const updated = { registrationMode: 'Closed' as const, registrationWhiteList: [], linkCardEnabled: true };
+    const updated = { registrationMode: 'Closed' as const, registrationWhiteList: [], linkCardEnabled: true, htmlSanitizationEnabled: true };
     securityPut.mockResolvedValue({ status: 200, json: async () => updated });
 
     const client = makeClient();
@@ -51,5 +51,22 @@ describe('useUpdateAdminSecuritySettings — invalidation (feature-admin-app-reg
     const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
     expect(keys).toContainEqual(adminAppSettingsKeys.settings);
     expect(keys).toContainEqual(appInfoKeys.all);
+  });
+});
+
+describe('useUpdateAdminSecuritySettings — partial body (html-policy-mutation)', () => {
+  it('forwards a partial request without filling in absent fields, and caches the full response', async () => {
+    const full = { registrationMode: 'Closed' as const, registrationWhiteList: ['a.example'], linkCardEnabled: false, htmlSanitizationEnabled: false };
+    securityPut.mockResolvedValue({ status: 200, json: async () => full });
+
+    const client = makeClient();
+    const { result } = renderHook(() => useUpdateAdminSecuritySettings(), { wrapper: wrapperFor(client) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ htmlSanitizationEnabled: false });
+    });
+
+    expect(securityPut).toHaveBeenCalledWith({ json: { htmlSanitizationEnabled: false } });
+    expect(client.getQueryData(['admin', 'security'])).toEqual(full);
   });
 });

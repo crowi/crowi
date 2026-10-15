@@ -7,6 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { mutateAsync } = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 vi.mock('@/lib/use-preview', () => ({ usePreview: () => ({ mutateAsync }) }));
 
+type Snapshot = { policy: 'strict' | 'relaxed'; iframeOrigins?: { webOrigin: string; apiOrigin: string; artifactOrigin: string | null } };
+const { policyRef } = vi.hoisted(() => ({ policyRef: { value: { policy: 'strict' } as Snapshot, calls: [] as unknown[][] } }));
+vi.mock('@/lib/use-html-sanitization-policy', () => ({
+  useHtmlSanitizationPolicy: (...args: unknown[]) => {
+    policyRef.calls.push(args);
+    return policyRef.value;
+  },
+}));
+
 import { MarkdownPreview } from './markdown-preview';
 
 const DEBOUNCE_MS = 250;
@@ -14,6 +23,8 @@ const DEBOUNCE_MS = 250;
 beforeEach(() => {
   vi.useFakeTimers();
   mutateAsync.mockReset();
+  policyRef.value = { policy: 'strict' };
+  policyRef.calls.length = 0;
 });
 
 afterEach(() => {
@@ -501,5 +512,79 @@ describe('MarkdownPreview — preview-render-failure', () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     });
     expect(screen.getByText('again')).toBeTruthy();
+  });
+});
+
+describe('MarkdownPreview — preview-policy', () => {
+  const origins = { webOrigin: 'https://wiki.example', apiOrigin: 'https://wiki.example', artifactOrigin: null };
+  const htmlAst = (value: string) => ({ type: 'root', children: [{ type: 'html', value }] });
+  const mountWith = async (ast: unknown, ui = <MarkdownPreview source="x" />) => {
+    mutateAsync.mockResolvedValue(ast);
+    const result = render(ui);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    return result;
+  };
+
+  it('passes the active flag to the policy hook, so an inactive pane starts no fetch', async () => {
+    render(<MarkdownPreview source="x" active={false} />);
+    expect(policyRef.calls.at(-1)?.[1]).toBe(false);
+    cleanup();
+    render(<MarkdownPreview source="x" />);
+    expect(policyRef.calls.at(-1)?.[1]).toBe(true);
+  });
+
+  it('re-renders the same AST under a changed policy snapshot without another preview request', async () => {
+    const { container, rerender } = await mountWith(
+      htmlAst('<div class="deco" style="color:red">x</div><iframe src="https://www.youtube.com/embed/a"></iframe>'),
+    );
+    expect(container.querySelector('.deco')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+
+    policyRef.value = { policy: 'relaxed', iframeOrigins: origins };
+    rerender(<MarkdownPreview source="x" />);
+    expect((container.querySelector('.deco') as HTMLElement).style.color).toBe('red');
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe('https://www.youtube.com/embed/a');
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    policyRef.value = { policy: 'strict' };
+    rerender(<MarkdownPreview source="x" />);
+    expect(container.querySelector('.deco')).toBeNull();
+  });
+
+  it('rejects an iframe on the web origin even when relaxed', async () => {
+    policyRef.value = { policy: 'relaxed', iframeOrigins: origins };
+    const { container } = await mountWith(htmlAst('<iframe src="https://wiki.example/admin/security"></iframe>'));
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('keeps fixed classes beside author classes on table, cells, heading, inline code and a link', async () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = await mountWith(
+      htmlAst(
+        '<table class="author-table"><tbody><tr><td class="author-cell">a</td></tr></tbody></table><h2 class="author-h" style="color:red">T</h2><p><code class="c1">c</code> <a href="https://example.com/" class="a1">l</a></p>',
+      ),
+    );
+    expect((container.querySelector('table') as HTMLElement).className).toBe('w-full border-collapse text-sm author-table');
+    expect((container.querySelector('td') as HTMLElement).className).toBe('px-3 py-2 align-top author-cell');
+    const h2 = container.querySelector('h2') as HTMLElement;
+    expect(h2.classList.contains('author-h')).toBe(true);
+    expect(h2.classList.contains('text-2xl')).toBe(true);
+    expect(h2.style.color).toBe('red');
+    const code = container.querySelector('code') as HTMLElement;
+    expect(code.classList.contains('c1')).toBe(true);
+    expect(code.classList.contains('font-mono')).toBe(true);
+    const a = container.querySelector('a') as HTMLElement;
+    expect(a.classList.contains('a1')).toBe(true);
+    expect(a.classList.contains('text-primary')).toBe(true);
+  });
+
+  it('merges an author image style with the validated display style (display wins)', async () => {
+    policyRef.value = { policy: 'relaxed' };
+    await mountWith(htmlAst('<img src="/x.png" alt="pic" style="border:1px solid red;width:5px" data-crowi-image-width="40px">'));
+    const img = screen.getByRole('img', { name: 'pic' }) as HTMLElement;
+    expect(img.style.border).toBe('1px solid red');
+    expect(img.style.width).toBe('40px');
   });
 });
