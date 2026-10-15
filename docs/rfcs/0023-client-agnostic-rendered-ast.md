@@ -98,7 +98,7 @@ The enforceable invariant is:
 | KaTeX | Typed node with TeX source and a web fast path (§8). |
 | Link card | Typed node with url and structured OGP: title, description, image, siteName, domain; the image slot is fixed client-side (§3). |
 | Error / limit placeholder | Typed node with fixed-enum kind, label, and reservation dimensions from cache/reservation.ts:98-127. |
-| html | Remains html; non-web clients show a visible placeholder; web is unchanged. |
+| html | Remains html; non-web clients show a visible placeholder. Generated html carries the origin mark `data.g = 1`; the web renders it through the strict HTML sanitizer (see §2.1). |
 
 This admits a stable Shiki token structure to a golden corpus and lets future
 Android, @crowi/cli, MCP, search highlighting, comment anchors, and AI
@@ -117,9 +117,26 @@ position. After serialization both sources are indistinguishable as
 { type: 'html', value: … }; there is no provenance to enforce or validate the
 stronger invariant.
 
+Generated html is therefore marked at the source instead. Each of the four
+producers that emit html (syntax highlighting, URL inline expansion, the
+code-block / embed dispatch, and `addNodeRenderer` results that turn a non-html
+node into html) stamps `data: { g: 1 }` on the node it creates, after the HTML is
+produced and merged with any existing sidecar. The mark is not a signature: it
+records that the server generated the node from the page body, and it is preserved
+by serialization and by the sidecar-stripping size guard. An html node without the
+mark, including anything `addUnifiedPlugin` emits, is author HTML. The renderer
+pipeline version is `2.0.0` so that every stored AST predating the mark is
+recomputed on read; no body, history, or Y.Text data changes.
+
+The web always renders html through a strict allow-list sanitizer: generated html
+keeps its display attributes and anchors, author html is reduced to the allow-list
+(no scripts, event handlers, arbitrary `style` / `class`, or dangerous URL
+schemes). The v1 projection is unchanged: every html node is still opaque on
+non-web clients, and the sidecar projection is unaffected.
+
 Therefore iOS v1 renders every html node as a visible placeholder. A
 safety-oriented iOS allow-list for author HTML is a future extension. Web
-behavior does not change. Web known-tags.ts is a browser-known-tag list, not a
+known-tags.ts is a browser-known-tag list, not a
 safety list: it includes script, iframe, object, embed, and style
 (known-tags.ts:57,75,92,108,117) and only controls unknown-tag text fallback.
 Its safety evaluation is an independent investigation, not a claimed
