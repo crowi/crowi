@@ -91,7 +91,7 @@ import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-
 import { trashPageCommand } from 'src/service/page-history/commands/trash';
 import { completeOperation, createPageHistoryOperation, hasOperationCompletionEvidence, resolvePageHistoryOperation } from 'src/service/page-history/operation';
 import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
-import { PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
+import { PAGE_LIST_PAGE_SELECT, PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
 import {
   computeRevisionRenderArtifactsAsync,
   type EnrichedPage,
@@ -643,7 +643,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // parallel (no id-exclusion dependency in this branch).
             const creatorMatch = creatorPageListMatch(targetUser._id, user._id);
             const [rawPages, creatorTotal] = await Promise.all([
-              Page.findListByCreator(targetUser, { limit, offset }, user),
+              Page.findListByCreator(targetUser, { limit, offset, select: PAGE_LIST_PAGE_SELECT }, user),
               Page.countDocuments(creatorMatch),
             ]);
             pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
@@ -688,7 +688,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // `creatorPageListMatch`.
             const excludedIds = [portalPage?._id, contentPage?._id].filter((id): id is Types.ObjectId => id != null);
             const [rawPages, pathTotal] = await Promise.all([
-              Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage, sort, desc: sortDir, excludeIds: excludedIds }),
+              Page.findListByStartWith(path, user, {
+                limit,
+                offset,
+                includeDeletedPage,
+                sort,
+                desc: sortDir,
+                excludeIds: excludedIds,
+                select: PAGE_LIST_PAGE_SELECT,
+              }),
               Page.countDocuments(startWithPageListMatch(path, user._id, { includeDeletedPage, excludeIds: excludedIds })),
             ]);
             pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
@@ -746,6 +754,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const conditions = portalPage ? { ...baseConditions, _id: { $nin: [portalPage._id] } } : baseConditions;
             const [rawPages, rootTotal] = await Promise.all([
               Page.find(conditions)
+                .select(PAGE_LIST_PAGE_SELECT)
                 .sort({ [sort]: sortDir })
                 .skip(offset)
                 .limit(limit)

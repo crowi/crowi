@@ -229,6 +229,27 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     revisionSpy.mockRestore();
   });
 
+  test('lists the subtree members with their yjsState', async () => {
+    const root = await createReadyPage('/subtree/yjs');
+    const child = await createReadyPage('/subtree/yjs/child');
+    await Page.updateOne({ _id: child._id }, { $set: { yjsState: Buffer.from('child-yjs') } });
+    const listed: PageDocument[] = [];
+    const findListByStartWith = Page.findListByStartWith.bind(Page);
+    const spy = jest.spyOn(Page, 'findListByStartWith').mockImplementation(async (...args) => {
+      const pages = await findListByStartWith(...args);
+      listed.push(...pages);
+      return pages;
+    });
+    try {
+      await expect(run(root, '/subtree/yjs-moved')).resolves.toMatchObject({ status: 'completed' });
+    } finally {
+      spy.mockRestore();
+    }
+    const listedChild = listed.find((page) => String(page._id) === String(child._id));
+    expect(listedChild?.isSelected('yjsState')).toBe(true);
+    expect(listedChild?.yjsState?.toString()).toBe('child-yjs');
+  });
+
   test('moves every sealed member through ordinary rename records while grouping subtree events', async () => {
     const root = await createReadyPage('/subtree/ac1');
     const child = await createReadyPage('/subtree/ac1/child');

@@ -1,6 +1,6 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
-import { PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
+import { PAGE_LIST_PAGE_SELECT, PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
 import Debug from 'debug';
 import type { PageDocument } from './page';
 import { UserDocument } from './user';
@@ -49,6 +49,7 @@ export default (crowi: Crowi) => {
 
     const populatedBookmarks = await Bookmark.populate(bookmarks, {
       path: 'page',
+      select: PAGE_LIST_PAGE_SELECT,
       // Populate creator / lastUpdateUser alongside the revision so the
       // page-row avatar resolves (mirrors the /pages/list listing); without
       // them the bookmark list renders an empty placeholder ring.

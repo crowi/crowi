@@ -56,6 +56,7 @@ import FileUploader from 'src/util/file-uploader';
 import { createJwtUtil } from 'src/util/jwt';
 import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 import { createMailTokenUtil } from 'src/util/mail-token';
+import { PAGE_LIST_PAGE_SELECT } from 'src/util/page-list-projection';
 import { pageToListRowResponse, populatePageRelationData } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
@@ -565,7 +566,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
           return c.json({ pages: [] }, 200);
         }
 
-        const found = (await Page.findPagesByIds(ids)) as PageDocument[];
+        const found = (await Page.findPagesByIds(ids, { select: PAGE_LIST_PAGE_SELECT })) as PageDocument[];
         const byId = new Map<string, PageDocument>();
         for (const p of found) byId.set(p._id.toString(), p);
 

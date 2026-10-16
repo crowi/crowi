@@ -33,6 +33,7 @@ import type { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { BookmarkDocument } from 'src/models/bookmark';
 import { creatorPageListMatch, type PageDocument } from 'src/models/page';
+import { PAGE_LIST_PAGE_SELECT } from 'src/util/page-list-projection';
 import { type EnrichedPage, pageToListRowResponse, populatePageRelationData } from 'src/util/page-response';
 import { escapeRegExp } from 'src/util/regex';
 import { toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
@@ -123,7 +124,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           Comment.countDocuments({ creator: targetUser._id }),
         ]);
 
-        const recentPagesRaw = await Page.findListByCreator(targetUser, { limit: 10, offset: 0 }, currentUser);
+        const recentPagesRaw = await Page.findListByCreator(targetUser, { limit: 10, offset: 0, select: PAGE_LIST_PAGE_SELECT }, currentUser);
         const recentPages = (await Page.populate(recentPagesRaw, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
 
         const bookmarkResult = await Bookmark.findByUserId(targetUser._id, { limit: 10, offset: 0 });
@@ -210,7 +211,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         // find + count share `creatorPageListMatch` and run in parallel —
         // same convention as the creator branch in listPages (page.ts).
         const [rawPages, total] = await Promise.all([
-          Page.findListByCreator(targetUser, { limit, offset }, currentUser),
+          Page.findListByCreator(targetUser, { limit, offset, select: PAGE_LIST_PAGE_SELECT }, currentUser),
           Page.countDocuments(creatorPageListMatch(targetUser._id, currentUser._id)),
         ]);
         const pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
