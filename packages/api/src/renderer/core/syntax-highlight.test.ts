@@ -128,6 +128,37 @@ describe('makeRemarkSyntaxHighlight', () => {
  * the `crowiCode` sidecar (lang / original value / themed token lines)
  * onto `data`. A token-derivation failure only skips the sidecar.
  */
+describe('generated html origin mark', () => {
+  it('stamps data.g = 1 on the html node and keeps it alongside the crowiCode sidecar', () => {
+    const tree: Root = { type: 'root', children: [{ type: 'code', lang: 'ts', value: 'x' } as Code] };
+    runPlugin(tree);
+    const html = tree.children[0] as Html & { data?: { g?: unknown; crowiCode?: unknown } };
+    expect(html.data?.g).toBe(1);
+    expect(html.data?.crowiCode).toBeDefined();
+  });
+
+  it('keeps the mark when token derivation fails (html-only output)', () => {
+    const noTokens: ShikiHighlighter = {
+      hasLang: () => true,
+      codeToHtml: () => '<pre class="shiki"><code>x</code></pre>',
+      codeToTokens: () => {
+        throw new Error('tokens failed');
+      },
+    };
+    const tree: Root = { type: 'root', children: [{ type: 'code', lang: 'ts', value: 'x' } as Code] };
+    makeRemarkSyntaxHighlight(makeStubDeps(noTokens))(createEmptyPipelineMetadata())(tree);
+    const html = tree.children[0] as Html & { data?: Record<string, unknown> };
+    expect(html.type).toBe('html');
+    expect(html.data).toEqual({ g: 1 });
+  });
+
+  it('does not mark a fence that stays a code node', () => {
+    const tree: Root = { type: 'root', children: [{ type: 'code', lang: 'brainfuck', value: '+' } as Code] };
+    runPlugin(tree);
+    expect((tree.children[0] as { data?: unknown }).data).toBeUndefined();
+  });
+});
+
 describe('crowiCode sidecar (RFC-0023)', () => {
   it('stamps data.crowiCode with lang, the ORIGINAL source and both-theme token lines; the html value is byte-identical to codeToHtml', () => {
     const codeNode: Code = { type: 'code', lang: 'ts', value: 'const x = 1;' };
@@ -154,7 +185,7 @@ describe('crowiCode sidecar (RFC-0023)', () => {
     const html = tree.children[0] as Html & { data?: unknown };
     expect(html.type).toBe('html');
     expect(html.value).toBe(fakeHighlighter.codeToHtml('const y = 2;', 'ts'));
-    expect(html.data).toBeUndefined();
+    expect(html.data).toEqual({ g: 1 });
   });
 
   it('fallback fences (no lang / unknown lang) get neither an html node nor a sidecar — the plain code node survives untouched', () => {

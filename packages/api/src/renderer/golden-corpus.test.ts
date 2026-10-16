@@ -276,8 +276,8 @@ describe('golden corpus self-description', () => {
 // infra (`util/page-response.ts`), already covered by
 // `page-response.test.ts`; nothing new to re-test here.
 describe('renderer version', () => {
-  it('RENDERER_PIPELINE_VERSION is 1.3.0 (new bundled break-normalization transform — minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('1.3.0');
+  it('RENDERER_PIPELINE_VERSION is 2.0.0 (generated html provenance mark — major bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('2.0.0');
   });
 });
 

@@ -38,8 +38,8 @@ export const PARAGLIDE_LOCALE_HEADER = 'x-paraglide-locale';
  * paraglideMiddleware relies on AsyncLocalStorage, which is unavailable in
  * the Edge runtime.
  */
-export function proxy(request: NextRequest) {
-  return paraglideMiddleware(request, () => {
+export async function proxy(request: NextRequest) {
+  const response = await paraglideMiddleware(request, () => {
     const cookieLocale = request.cookies.get(cookieName)?.value;
     const hasCookie = cookieLocale !== undefined && isLocale(cookieLocale);
     const locale = hasCookie ? cookieLocale : localeFromAcceptLanguage(request.headers.get('accept-language'));
@@ -52,6 +52,23 @@ export function proxy(request: NextRequest) {
     if (!hasCookie) response.cookies.set(cookieName, locale, { path: '/', maxAge: cookieMaxAge });
     return response;
   });
+  if (shouldDenyFraming(request.nextUrl.pathname)) {
+    response.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+    response.headers.set('X-Frame-Options', 'DENY');
+  }
+  return response;
+}
+
+/**
+ * Case-sensitive on purpose: Next matches routes case-insensitively for
+ * headers() but the page router is case-sensitive, so `/API` or `/_ARTIFACT-FRAME`
+ * fall through to the ordinary wiki page and must be framing-denied. The API and
+ * the artifact relay document own their framing policy.
+ */
+function shouldDenyFraming(pathname: string): boolean {
+  if (pathname === '/api' || pathname.startsWith('/api/')) return false;
+  if (pathname === '/_artifact-frame' || pathname === '/_artifact-frame/') return false;
+  return true;
 }
 
 /** First Accept-Language tag whose base language we ship messages for; `baseLocale` when none. */
@@ -64,7 +81,7 @@ function localeFromAcceptLanguage(header: string | null): Locale {
 }
 
 export const config = {
-  // Run on every request that touches the app, but skip static assets and
-  // Next.js' internal endpoints — none of those need locale handling.
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|logo|images).*)'],
+  // Every path: the framing-denial headers must reach ordinary wiki paths that
+  // a prefix exclusion (e.g. `/logo-guide`, `/images/wiki`) would skip.
+  matcher: ['/:path*'],
 };

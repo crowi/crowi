@@ -2,8 +2,8 @@
  * RFC-0006 Phase 4 Batch 9 — `admin.security` sub-contract ported to
  * `@hono/zod-openapi` route definitions.
  *
- *   GET /admin/security  — read the four `security:*` keys
- *   PUT /admin/security  — persist them
+ *   GET /admin/security  — read the `security:*` settings
+ *   PUT /admin/security  — persist the fields that are present
  *
  * Auth + install:
  *   - The handler installs `createJwtAdminRequired(crowi)` broadly on
@@ -45,7 +45,9 @@ export const updateSecuritySettingsRoute = createRoute({
   path: '/admin/security',
   tags: ['admin.security'],
   security: [{ bearerAuth: [] }],
-  summary: 'Update security:* settings (registrationMode / registrationWhiteList)',
+  summary: 'Partially update security:* settings',
+  description:
+    'Writes only the fields present in the body; an omitted field keeps its stored value. `{}` is a no-op 200. The saves run in order (linkCardEnabled, registrationMode / registrationWhiteList, htmlSanitizationEnabled) and are not transactional: a 500 may leave earlier fields saved.',
   request: {
     body: {
       content: { 'application/json': { schema: UpdateSecuritySettingsRequestSchema } },

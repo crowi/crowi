@@ -28,7 +28,7 @@ import { app, crowi } from 'src/test/setup';
  */
 describe('GET /api/app/info (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
-  const APP_KEYS = ['app:title', 'app:confidential', 'security:registrationMode', 'security:linkCardEnabled'];
+  const APP_KEYS = ['app:title', 'app:confidential', 'security:registrationMode', 'security:linkCardEnabled', 'security:htmlSanitizationEnabled'];
 
   const reloadConfigCache = async () => {
     await crowi.getConfigService().load();
@@ -261,6 +261,41 @@ describe('GET /api/app/info (Hono)', () => {
       const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.capabilities).not.toContain('link-card');
+    });
+  });
+
+  describe('public-html-policy', () => {
+    const KEY = 'security:htmlSanitizationEnabled';
+    const setRaw = async (value: string) => {
+      await Config.updateOne({ ns: 'crowi', key: KEY }, { $set: { value } }, { upsert: true }).exec();
+      await reloadConfigCache();
+    };
+
+    it('is true without authentication when no row exists, and the response is not cacheable', async () => {
+      const res = await request(app).get('/api/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.htmlSanitizationEnabled).toBe(true);
+      expect(res.headers['cache-control']).toBe('no-store');
+    });
+
+    it.each(['null', '"false"', '0'])('is true for the malformed stored value %s', async (raw) => {
+      await setRaw(raw);
+      const res = await request(app).get('/api/app/info');
+      expect(res.body.htmlSanitizationEnabled).toBe(true);
+    });
+
+    it('is false only for an explicit stored false', async () => {
+      await crowi.getConfigService().saveConfigValue('crowi', KEY, false);
+      const res = await request(app).get('/api/app/info');
+      expect(res.body.htmlSanitizationEnabled).toBe(false);
+      expect(AppInfoResponseSchema.safeParse(res.body).success).toBe(true);
+    });
+
+    it('exposes no other security setting', async () => {
+      await crowi.getConfigService().saveConfig('crowi', { 'security:registrationWhiteList': ['secret@example.com'] });
+      const res = await request(app).get('/api/app/info');
+      expect(JSON.stringify(res.body)).not.toContain('secret@example.com');
+      expect(res.body).not.toHaveProperty('registrationWhiteList');
     });
   });
 });

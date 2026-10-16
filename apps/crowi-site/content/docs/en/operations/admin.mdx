@@ -77,6 +77,15 @@ New-user registration settings.
   - `admin@example.com` — that exact full address only
   - `@example.com` — any local-part at that domain
   - `example.com` — that domain or any subdomain of it
+- **HTML sanitization for Markdown (htmlSanitizationEnabled)**: Switches how strictly raw HTML in page bodies is displayed. **On by default.** Stored bodies are never rewritten; only the display changes, so toggling off and on leaves bodies and history untouched.
+  - On — HTML is displayed under strict limits.
+  - Off — allows decorative `style` / `class`, passive layout elements and external HTTPS `iframe`s. `script`, `form`, `object` / `embed` and similar elements are never displayed, even when off.
+  - Even when off, author CSS background images (URL and other resource references) and CSS variables remain unavailable. A `style` whose parsing does not match (for example, invalid escapes) or that repeats a declaration is dropped as a whole attribute.
+  - When off, CSS can lay out and overlap content, so screen imitation cannot be prevented. Turn it off only on instances whose authors you trust.
+  - External HTTPS `iframe`s receive a fixed grant including script and same-origin permissions (`allow-scripts` / `allow-same-origin` and others). An initial `src` on the Web, API or artifact origin is excluded, but redirect destinations cannot be verified in advance.
+  - Ordinary Web pages (wiki, admin, login, editor) can never be displayed inside an `iframe`, whether the setting is on or off (the response headers refuse it). The only exception is the artifact relay document. A redirect from an external site therefore cannot show the admin UI inside a frame.
+  - The change applies **from the next time a page or the edit preview is opened**. Tabs that are already open do not switch by themselves; reload them.
+  - With multiple API replicas, stop viewing, keep a single replica for administration and confirm the save and GET, stop that replica too, restart all replicas so they re-read the setting, then resume viewing. Skipping this leaves a period in which replicas display differently.
 
 > **Note**: If you need a site-wide Basic-auth gate, configure it at the
 > **reverse proxy** in front of Crowi (e.g. nginx), not in Crowi itself.
@@ -390,6 +399,8 @@ Every content save — creating a page, creating a draft, an update or revert, a
 Assignment runs as a **separate, resumable step after the pointer write has committed**, never as part of it, so a crash between the two cannot fail the save. This repair command is what recovers an assignment interrupted that way.
 
 `--scan` **skips revisions younger than ten minutes**, so it cannot mistake an assignment still in flight for one that failed and run it twice. It also skips revisions older than the page's tracking start, which would otherwise be given sequences out of order. Run it after that window if you want it to pick up recent writes.
+
+`--scan` also finds pages that hold sequenced history but are marked as not tracked (a stale save could leave a page in that state). When their sequence numbers contain no duplicates it puts them back to tracked and lists them as `restored`; the unsequenced revisions that page still holds are numbered right away, without the ten-minute wait. A page whose sequence numbers are duplicated is reported as `blocked` and left unchanged.
 
 ### Settling a stopped move (`--transitions`)
 

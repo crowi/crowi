@@ -7,6 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { mutateAsync } = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 vi.mock('@/lib/use-preview', () => ({ usePreview: () => ({ mutateAsync }) }));
 
+type Snapshot = { policy: 'strict' | 'relaxed'; iframeOrigins?: { webOrigin: string; apiOrigin: string; artifactOrigin: string | null } };
+const { policyRef } = vi.hoisted(() => ({ policyRef: { value: { policy: 'strict' } as Snapshot, calls: [] as unknown[][] } }));
+vi.mock('@/lib/use-html-sanitization-policy', () => ({
+  useHtmlSanitizationPolicy: (...args: unknown[]) => {
+    policyRef.calls.push(args);
+    return policyRef.value;
+  },
+}));
+
 import { MarkdownPreview } from './markdown-preview';
 
 const DEBOUNCE_MS = 250;
@@ -14,6 +23,8 @@ const DEBOUNCE_MS = 250;
 beforeEach(() => {
   vi.useFakeTimers();
   mutateAsync.mockReset();
+  policyRef.value = { policy: 'strict' };
+  policyRef.calls.length = 0;
 });
 
 afterEach(() => {
@@ -83,6 +94,7 @@ describe('MarkdownPreview — diagram embed gets the same DiagramEmbed wrapper a
       children: [
         {
           type: 'html',
+          data: { g: 1 },
           value:
             '<div data-source-line="1"><img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+"></div>',
         },
@@ -102,7 +114,13 @@ describe('MarkdownPreview — diagram embed gets the same DiagramEmbed wrapper a
   it('does NOT wrap a diagram error placeholder (no diagram-embed marker) — renders the status text with no zoom button', async () => {
     const ast = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>' }],
+      children: [
+        {
+          type: 'html',
+          data: { g: 1 },
+          value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>',
+        },
+      ],
     };
     mutateAsync.mockResolvedValueOnce(ast);
 
@@ -121,6 +139,7 @@ describe('MarkdownPreview — diagram embed gets the same DiagramEmbed wrapper a
       children: [
         {
           type: 'html',
+          data: { g: 1 },
           value:
             '<div data-source-line="1"><img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" width="141" height="245"></div>',
         },
@@ -342,5 +361,230 @@ describe('MarkdownPreview — legacy attachment URL canonicalization (feature-ap
 
     const link = screen.getByRole('link', { name: 'legacy link' });
     expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
+  });
+});
+
+const txt = (value: string) => ({ type: 'text', value });
+const para = (...children: unknown[]) => ({ type: 'paragraph', children });
+
+async function showPreview(ast: unknown, props: { source?: string } = {}) {
+  mutateAsync.mockResolvedValueOnce(ast);
+  const result = render(<MarkdownPreview source={props.source ?? 'x'} />);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+  });
+  return result;
+}
+
+describe('MarkdownPreview — preview-strict', () => {
+  it('applies the same strict author-HTML rules as the page (event handlers, style and class are removed)', async () => {
+    const { container } = await showPreview({
+      type: 'root',
+      children: [
+        { type: 'html', value: '<div class="evil" style="position:fixed" onclick="x()">t</div><script>window.__pwn = 1</script><iframe src="//e/"></iframe>' },
+      ],
+    });
+    const div = container.querySelector('.crowi-prose > div') as HTMLElement;
+    expect(div.textContent).toBe('t');
+    expect(div.getAttribute('class')).toBeNull();
+    expect(div.getAttribute('style')).toBeNull();
+    expect(div.getAttribute('onclick')).toBeNull();
+    expect(container.querySelector('script, iframe')).toBeNull();
+  });
+
+  it('shows a typed card preview with its url and message as text, with the fixed classes', async () => {
+    const url = 'https://example.test/<script>alert(1)</script>';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [para(txt('@'), { type: 'link', url, children: [txt('card')] })],
+    });
+    render(<MarkdownPreview source="@[card](u)" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    expect(document.querySelector('.crowi-link-card-title')?.textContent).toContain('<script>');
+    expect(document.querySelector('script')).toBeNull();
+    expect(document.querySelector('.crowi-link-card-preview-message')?.textContent).toBe(m['edit.link_card_preview_pending']());
+  });
+
+  it('keeps the emoji role/aria-label for generated emoji and drops them from an author span', async () => {
+    await showPreview({
+      type: 'root',
+      children: [
+        para({ type: 'text', value: '😄', data: { hName: 'span', hProperties: { role: 'img', ariaLabel: 'smile emoji' }, hChildren: [txt('😄')] } }),
+        { type: 'html', value: '<span role="img" aria-label="forged">x</span>' },
+      ],
+    });
+    expect(screen.getByRole('img', { name: 'smile emoji' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'forged' })).toBeNull();
+  });
+});
+
+describe('MarkdownPreview — owned-affordances-preview', () => {
+  it('keeps footnote ref/backref/section/label attributes (no tabIndex on the ref) and the preview component map', async () => {
+    const { container } = await showPreview({
+      type: 'root',
+      children: [
+        para(txt('claim'), { type: 'footnoteReference', identifier: '1', label: '1' }),
+        { type: 'footnoteDefinition', identifier: '1', children: [para(txt('note'))] },
+      ],
+    });
+    const ref = container.querySelector('a[data-footnote-ref]') as HTMLAnchorElement;
+    expect(ref.getAttribute('href')).toBe('#user-content-fn-1');
+    expect(ref.getAttribute('aria-describedby')).toBe('footnote-label');
+    expect(ref.hasAttribute('tabindex')).toBe(false);
+    expect(container.querySelector('a[data-footnote-backref]')?.getAttribute('aria-label')).toBe('Back to reference 1');
+    expect(container.querySelector('section[data-footnotes]')).not.toBeNull();
+    expect(container.querySelector('h2#footnote-label')?.className).toContain('sr-only');
+  });
+
+  it('keeps wikilink/figure classes only on pipeline output, not on author class/data', async () => {
+    const { container } = await showPreview({
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value:
+            '<a class="wikilink-broken" href="#">forged</a><figure class="crowi-figure" data-crowi-image-align="center"><img src="/a.png" alt="a"></figure>',
+        },
+        para({ type: 'link', url: '#', title: null, children: [txt('real')], data: { hProperties: { className: 'wikilink-broken' } } }),
+      ],
+    });
+    const forged = screen.getByText('forged');
+    const real = screen.getByText('real');
+    expect(real.className).toContain('wikilink-broken');
+    expect(forged.className).not.toContain('wikilink-broken');
+    expect(container.querySelector('figure')?.className ?? '').not.toContain('crowi-image-align');
+  });
+
+  it('keeps ordinary links and raster data images, and shows alt text for a rejected image', async () => {
+    const { container } = await showPreview({
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value:
+            '<a href="tel:+1">call</a> <a href="javascript:alert(1)">bad</a> <img src="data:image/png;base64,iVBORw0KGgo=" alt="pixel"> <img src="data:image/svg+xml;base64,AAAA" alt="svg alt">',
+        },
+      ],
+    });
+    expect(screen.getByText('call').getAttribute('href')).toBe('tel:+1');
+    expect(screen.getByText('bad').hasAttribute('href')).toBe(false);
+    expect(screen.getByRole('img', { name: 'pixel' })).toBeTruthy();
+    expect(container.textContent).toContain('svg alt');
+  });
+});
+
+describe('MarkdownPreview — preview-render-failure', () => {
+  const cyclic = () => {
+    const ast: { type: string; children: unknown[] } = { type: 'root', children: [] };
+    ast.children.push(ast);
+    return ast;
+  };
+
+  it('shows an explicit failure (not the empty placeholder) for a non-empty source, and recovers once the source renders', async () => {
+    mutateAsync.mockResolvedValueOnce(cyclic());
+    const { rerender } = render(<MarkdownPreview source="bad" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    expect(screen.getByRole('alert').textContent).toContain(m['edit.preview_render_failed']());
+    expect(screen.queryByText(m['edit.preview_placeholder']())).toBeNull();
+
+    mutateAsync.mockResolvedValueOnce({ type: 'root', children: [para(txt('fixed'))] });
+    rerender(<MarkdownPreview source="good" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('fixed')).toBeTruthy();
+  });
+
+  it('lets the author re-run the preview from the failure notice', async () => {
+    mutateAsync.mockResolvedValueOnce(cyclic());
+    render(<MarkdownPreview source="bad" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    mutateAsync.mockResolvedValueOnce({ type: 'root', children: [para(txt('again'))] });
+    await act(async () => {
+      screen.getByRole('button', { name: m['edit.preview_retry']() }).click();
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    expect(screen.getByText('again')).toBeTruthy();
+  });
+});
+
+describe('MarkdownPreview — preview-policy', () => {
+  const origins = { webOrigin: 'https://wiki.example', apiOrigin: 'https://wiki.example', artifactOrigin: null };
+  const htmlAst = (value: string) => ({ type: 'root', children: [{ type: 'html', value }] });
+  const mountWith = async (ast: unknown, ui = <MarkdownPreview source="x" />) => {
+    mutateAsync.mockResolvedValue(ast);
+    const result = render(ui);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+    return result;
+  };
+
+  it('passes the active flag to the policy hook, so an inactive pane starts no fetch', async () => {
+    render(<MarkdownPreview source="x" active={false} />);
+    expect(policyRef.calls.at(-1)?.[1]).toBe(false);
+    cleanup();
+    render(<MarkdownPreview source="x" />);
+    expect(policyRef.calls.at(-1)?.[1]).toBe(true);
+  });
+
+  it('re-renders the same AST under a changed policy snapshot without another preview request', async () => {
+    const { container, rerender } = await mountWith(
+      htmlAst('<div class="deco" style="color:red">x</div><iframe src="https://www.youtube.com/embed/a"></iframe>'),
+    );
+    expect(container.querySelector('.deco')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+
+    policyRef.value = { policy: 'relaxed', iframeOrigins: origins };
+    rerender(<MarkdownPreview source="x" />);
+    expect((container.querySelector('.deco') as HTMLElement).style.color).toBe('red');
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe('https://www.youtube.com/embed/a');
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    policyRef.value = { policy: 'strict' };
+    rerender(<MarkdownPreview source="x" />);
+    expect(container.querySelector('.deco')).toBeNull();
+  });
+
+  it('rejects an iframe on the web origin even when relaxed', async () => {
+    policyRef.value = { policy: 'relaxed', iframeOrigins: origins };
+    const { container } = await mountWith(htmlAst('<iframe src="https://wiki.example/admin/security"></iframe>'));
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('keeps fixed classes beside author classes on table, cells, heading, inline code and a link', async () => {
+    policyRef.value = { policy: 'relaxed' };
+    const { container } = await mountWith(
+      htmlAst(
+        '<table class="author-table"><tbody><tr><td class="author-cell">a</td></tr></tbody></table><h2 class="author-h" style="color:red">T</h2><p><code class="c1">c</code> <a href="https://example.com/" class="a1">l</a></p>',
+      ),
+    );
+    expect((container.querySelector('table') as HTMLElement).className).toBe('w-full border-collapse text-sm author-table');
+    expect((container.querySelector('td') as HTMLElement).className).toBe('px-3 py-2 align-top author-cell');
+    const h2 = container.querySelector('h2') as HTMLElement;
+    expect(h2.classList.contains('author-h')).toBe(true);
+    expect(h2.classList.contains('text-2xl')).toBe(true);
+    expect(h2.style.color).toBe('red');
+    const code = container.querySelector('code') as HTMLElement;
+    expect(code.classList.contains('c1')).toBe(true);
+    expect(code.classList.contains('font-mono')).toBe(true);
+    const a = container.querySelector('a') as HTMLElement;
+    expect(a.classList.contains('a1')).toBe(true);
+    expect(a.classList.contains('text-primary')).toBe(true);
+  });
+
+  it('merges an author image style with the validated display style (display wins)', async () => {
+    policyRef.value = { policy: 'relaxed' };
+    await mountWith(htmlAst('<img src="/x.png" alt="pic" style="border:1px solid red;width:5px" data-crowi-image-width="40px">'));
+    const img = screen.getByRole('img', { name: 'pic' }) as HTMLElement;
+    expect(img.style.border).toBe('1px solid red');
+    expect(img.style.width).toBe('40px');
   });
 });

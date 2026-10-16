@@ -129,6 +129,19 @@ describe('InlineAttachmentLink — link variant', () => {
     expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
   });
 
+  it('keeps the author class and style on the final <a>', () => {
+    withQuery(
+      <InlineAttachmentProvider>
+        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/attachments/${HEX}`} className="base author" style={{ color: 'red' }}>
+          styled
+        </InlineAttachmentLink>
+      </InlineAttachmentProvider>,
+    );
+    const link = screen.getByRole('link', { name: 'styled' });
+    expect(link.className).toBe('base author');
+    expect(link.style.color).toBe('red');
+  });
+
   it('opens the detail modal on a plain left-click instead of navigating', async () => {
     metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     withQuery(
@@ -174,6 +187,26 @@ describe('InlineAttachmentLink — image variant', () => {
     );
     const img = screen.getByRole('img', { name: 'a diagram' });
     expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
+  });
+
+  it('keeps the author style, the display style (winning) and the cursor on the final <img>', () => {
+    withQuery(
+      <InlineAttachmentProvider>
+        <InlineAttachmentLink
+          attachmentId={HEX}
+          variant="image"
+          href={`/api/attachments/${HEX}`}
+          alt="a diagram"
+          className="author"
+          style={{ border: '1px solid red', width: '10px' }}
+        />
+      </InlineAttachmentProvider>,
+    );
+    const img = screen.getByRole('img', { name: 'a diagram' });
+    expect(img.className).toBe('author');
+    expect(img.style.border).toBe('1px solid red');
+    expect(img.style.width).toBe('10px');
+    expect(img.style.cursor).toBe('zoom-in');
   });
 
   it('opens the modal on a plain left-click', async () => {

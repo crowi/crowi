@@ -1,4 +1,4 @@
-import { CURRENT_AST_VERSION, unwrapRenderedAst } from '@crowi/api-contract';
+import { AST_INPUT_LIMIT_BYTES, CURRENT_AST_VERSION, unwrapRenderedAst } from '@crowi/api-contract';
 import { Hono } from 'hono';
 import { createAstNegotiation } from 'src/hono/middleware/ast-negotiation';
 import { pickRenderedAstShape } from './rendered-ast-negotiation';
@@ -92,5 +92,47 @@ describe('createAstNegotiation middleware', () => {
   it('a different integer flows through (the equality check lives in pickRenderedAstShape, not here)', async () => {
     const res = await buildApp().request('/probe', { headers: { 'X-Crowi-Ast-Version': '2' } });
     expect(await res.json()).toEqual({ astVersion: 2 });
+  });
+});
+
+describe('pickRenderedAstShape — generated-html provenance mark (provenance-negotiation)', () => {
+  const marked = {
+    type: 'root',
+    children: [
+      {
+        type: 'html',
+        value: '<pre>x</pre>',
+        data: { g: 1, crowiCode: { lang: 'ts', value: 'x', tokens: [[{ content: 'x', light: { color: '#111' }, dark: { color: '#eee' } }]] } },
+      },
+      { type: 'html', value: '<div>plain</div>', data: { g: 1 } },
+    ],
+  };
+
+  it('a marked bare Root is returned as the same reference, mark intact', () => {
+    const out = pickRenderedAstShape(undefined, marked) as typeof marked;
+    expect(out).toBe(marked);
+    expect(out.children[1].data).toEqual({ g: 1 });
+  });
+
+  it('v1 keeps its existing projection: sidecar html becomes a code node, sidecar-less html stays the html placeholder', () => {
+    const out = pickRenderedAstShape(CURRENT_AST_VERSION, marked) as { root: { children: Array<{ type: string; reason?: string }> } };
+    expect(out.root.children[0].type).toBe('code');
+    expect(out.root.children[1]).toMatchObject({ type: 'html' });
+  });
+
+  it('the mark alone can push an AST over the 8 MiB v1 input gate while the bare Root still carries it', () => {
+    const base = { type: 'html', value: '' };
+    const wrap = (node: object) => ({ type: 'root', children: [node] });
+    const emptyBytes = Buffer.byteLength(JSON.stringify(wrap(base)), 'utf8');
+    const padded = { type: 'html', value: 'p'.repeat(AST_INPUT_LIMIT_BYTES - emptyBytes) };
+    expect(Buffer.byteLength(JSON.stringify(wrap(padded)), 'utf8')).toBe(AST_INPUT_LIMIT_BYTES);
+    const unmarkedOut = pickRenderedAstShape(CURRENT_AST_VERSION, wrap(padded)) as { root: { children: Array<{ kind?: string }> } };
+    expect(unmarkedOut.root.children[0].kind).not.toBe('envelope-invalid');
+
+    const withMark = wrap({ ...padded, data: { g: 1 } });
+    const v1 = pickRenderedAstShape(CURRENT_AST_VERSION, withMark) as { root: { children: Array<{ kind?: string }> } };
+    expect(v1.root.children[0].kind).toBe('envelope-invalid');
+    const bare = pickRenderedAstShape(undefined, withMark);
+    expect(bare).toBe(withMark);
   });
 });

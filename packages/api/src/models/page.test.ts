@@ -10,6 +10,7 @@ import {
   STATUSES,
   visiblePageGrantOr,
 } from 'src/models/page';
+import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { crowi, Fixture } from 'src/test/setup';
 
 describe('Page', () => {
@@ -2369,7 +2370,7 @@ describe('Page', () => {
         const oldRevision2 = await Revision.create({ page: page._id, path: page.path, body: 'old-2', format: 'markdown', author: user._id });
         await Page.updateOne({ _id: page._id }, { $set: { revision: oldRevision2._id } });
         const pageBeforeUpdate = await Page.findById(page._id);
-        expect(pageBeforeUpdate.historyTracking.state).toBe('untracked');
+        expect(pageBeforeUpdate.historyTracking?.state ?? 'untracked').toBe('untracked');
 
         const updated = await Page.updatePage(pageBeforeUpdate, 'new content', user, {});
 
@@ -2392,8 +2393,8 @@ describe('Page', () => {
         const page = await createUntrackedPage('/history-tracking/never-written');
 
         const reloaded = await Page.findById(page._id);
-        expect(reloaded.historyTracking.state).toBe('untracked');
-        expect(reloaded.historySequence).toBe(0);
+        expect(reloaded.historyTracking?.state ?? 'untracked').toBe('untracked');
+        expect(reloaded.historySequence ?? 0).toBe(0);
       });
     });
 
@@ -2411,17 +2412,117 @@ describe('Page', () => {
           grantedUsers: [user._id],
         });
 
-        expect(created.historyTracking.state).toBe('untracked');
+        const raw = await Page.collection.findOne({ _id: created._id });
+        expect(raw.historyTracking).toBeUndefined();
+        expect(raw.historySequence).toBeUndefined();
+        expect(created.historyTracking).toBeUndefined();
       });
 
-      test('a legacy Page (predates historyTracking) reads back as untracked — simulated via a raw $unset, which bypasses save hooks', async () => {
+      test('a Page is created without the two history fields; readers treat the absence as untracked / counter 0', async () => {
         const created = await createUntrackedPage('/history-tracking/legacy');
-        expect(created.historyTracking.state).toBe('untracked');
 
-        await Page.updateOne({ _id: created._id }, { $unset: { historyTracking: '' } });
+        const raw = await Page.collection.findOne({ _id: created._id });
+        expect(raw.historyTracking).toBeUndefined();
+        expect(raw.historySequence).toBeUndefined();
         const reloaded = await Page.findById(created._id);
-        expect(reloaded.historyTracking.state).toBe('untracked');
-        expect(reloaded.historyTracking.trackingStartedAt).toBeNull();
+        expect(reloaded.historyTracking?.state ?? 'untracked').toBe('untracked');
+        expect(reloaded.historySequence ?? 0).toBe(0);
+      });
+
+      test('AC-7: createPage promotes a freshly created Page to ready / 1 with its first Revision at sequence 1', async () => {
+        const created = await Page.createPage('/history-tracking/ac7-create-page', 'v1', user, {});
+
+        const raw = await Page.collection.findOne({ _id: created._id });
+        expect(raw.historyTracking.state).toBe('ready');
+        expect(raw.historySequence).toBe(1);
+        expect((await Revision.findById(created.revision))?.historySequence).toBe(1);
+      });
+    });
+
+    describe('schema defaults removed: a stale hydrated document cannot demote a promoted Page', () => {
+      /** A legacy raw Page (no history fields) with one unsequenced Revision as its pointer. */
+      async function insertLegacyPage(path: string, extra: Record<string, unknown> = {}) {
+        const { insertedId } = await Page.collection.insertOne({
+          path,
+          creator: user._id,
+          lastUpdateUser: user._id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          redirectTo: null,
+          grant: Page.GRANT_PUBLIC,
+          status: 'published',
+          grantedUsers: [user._id],
+          ...extra,
+        });
+        const revision = await Revision.create({ page: insertedId, path, body: 'v0', format: 'markdown', author: user._id });
+        await Page.updateOne({ _id: insertedId }, { $set: { revision: revision._id } });
+        return { pageId: insertedId, revision };
+      }
+
+      test('AC-1: a later save() of a stale hydrated doc leaves the promoted state in place', async () => {
+        const { pageId, revision } = await insertLegacyPage('/history-tracking/ac1-stale-save');
+        const stale = await Page.findById(pageId);
+
+        await allocateContentSequence(crowi, pageId, revision._id);
+        stale.updatedAt = new Date(Date.now() + 1000);
+        await stale.save();
+
+        const raw = await Page.collection.findOne({ _id: pageId });
+        expect(raw.historyTracking.state).toBe('ready');
+        expect(raw.historySequence).toBe(1);
+      });
+
+      test('AC-2: pushRevision through a stale doc gives the new Revision sequence 2 and never a second sequence 1', async () => {
+        const { pageId, revision } = await insertLegacyPage('/history-tracking/ac2-stale-push');
+        const stale = await Page.findById(pageId);
+
+        await allocateContentSequence(crowi, pageId, revision._id);
+        const updated = await Page.updatePage(stale, 'stale writer body', user, {});
+
+        expect(await Revision.countDocuments({ page: pageId, historySequence: 1 })).toBe(1);
+        expect((await Revision.findById(updated.revision))?.historySequence).toBe(2);
+        const raw = await Page.collection.findOne({ _id: pageId });
+        expect(raw.historyTracking.state).toBe('ready');
+        expect(raw.historySequence).toBe(2);
+      });
+
+      test('AC-4: a Page with an explicit null historySequence is promoted by updatePage', async () => {
+        const { pageId } = await insertLegacyPage('/history-tracking/ac4-null-counter', { historySequence: null });
+        const page = await Page.findById(pageId);
+
+        const updated = await Page.updatePage(page, 'new body', user, {});
+
+        const raw = await Page.collection.findOne({ _id: pageId });
+        expect(raw.historyTracking.state).toBe('ready');
+        expect(raw.historySequence).toBe(1);
+        expect((await Revision.findById(updated.revision))?.historySequence).toBe(1);
+      });
+
+      test('AC-8: a historyTracking subdocument without state saves cleanly and stays without state', async () => {
+        const startedAt = new Date(Date.now() - 60_000);
+        const { pageId } = await insertLegacyPage('/history-tracking/ac8-partial', { historyTracking: { trackingStartedAt: startedAt } });
+        const page = await Page.findById(pageId);
+
+        page.updatedAt = new Date(Date.now() + 1000);
+        await expect(page.save()).resolves.toBeDefined();
+
+        const raw = await Page.collection.findOne({ _id: pageId });
+        expect(raw.historyTracking.state).toBeUndefined();
+        expect(raw.historyTracking.trackingStartedAt.getTime()).toBe(startedAt.getTime());
+      });
+
+      test('AC-10: updatePage on a demoted Page succeeds without a second sequence 1 and leaves it untracked', async () => {
+        const { pageId } = await insertLegacyPage('/history-tracking/ac10-demoted');
+        await Revision.create({ page: pageId, path: '/history-tracking/ac10-demoted', body: 'old', format: 'markdown', author: user._id, historySequence: 1 });
+        const page = await Page.findById(pageId);
+
+        const updated = await Page.updatePage(page, 'new body', user, {});
+
+        expect(updated).toBeDefined();
+        expect(await Revision.countDocuments({ page: pageId, historySequence: 1 })).toBe(1);
+        const raw = await Page.collection.findOne({ _id: pageId });
+        expect(raw.historyTracking).toBeUndefined();
+        expect((await Revision.findById(updated.revision))?.historySequence ?? null).toBeNull();
       });
     });
 

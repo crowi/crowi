@@ -17,7 +17,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import { resolveArtifactPolicySnapshot } from 'src/artifact/policy';
 import type Crowi from 'src/crowi';
-import { isLinkCardEnabled } from 'src/util/admin-config';
+import { isHtmlSanitizationEnabled, isLinkCardEnabled } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../app';
 
@@ -106,6 +106,8 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
       enabled: artifactPolicySnapshot.deliveryMode !== 'disabled',
       origin: artifactPolicySnapshot.artifactOrigin,
     };
+    // The viewer decides per displayed page whether to relax rendering, so no cache may keep a stale `false`.
+    c.header('Cache-Control', 'no-store');
     return c.json(
       {
         title,
@@ -116,6 +118,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         canSelfRegister,
         rendererStylesheets,
         artifactDelivery,
+        htmlSanitizationEnabled: isHtmlSanitizationEnabled(crowi),
       } satisfies AppInfoResponse,
       200,
     );

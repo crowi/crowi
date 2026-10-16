@@ -4,7 +4,7 @@ import { isHttpUrl, type OgMeta } from './fetch-og';
 /**
  * Card HTML builders. Output is restricted to the elements the web
  * editor's sanitize allow-list already recognises (`figure` / `a` /
- * `div` / `img` / `span` — `packages/web/src/components/editor/known-tags.ts`),
+ * `div` / `img` / `span` — `packages/api-contract/src/util/known-tags.ts`),
  * so `stripUnknownElements` passes the structure through unchanged.
  *
  * `figure.crowi-link-card > a > (div.crowi-link-card-body[> div.title,

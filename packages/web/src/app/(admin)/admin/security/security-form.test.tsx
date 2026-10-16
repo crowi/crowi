@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SecuritySettings, UpdateSecuritySettingsRequest } from '@crowi/api-contract';
 
@@ -31,6 +31,7 @@ const BASE_SETTINGS: SecuritySettings = {
   registrationMode: 'Open',
   registrationWhiteList: [],
   linkCardEnabled: true,
+  htmlSanitizationEnabled: true,
 };
 
 afterEach(() => {
@@ -38,6 +39,11 @@ afterEach(() => {
   mutateAsync.mockReset();
   isPendingRef.value = false;
 });
+
+const linkCardSwitch = () => screen.getByRole('switch', { name: m['admin.security.field_link_card_label']() });
+const htmlSwitch = () => screen.getByRole('switch', { name: m['admin.security.field_html_sanitization_label']() });
+const submitButton = () => screen.getByRole('button', { name: m['admin.common.submit']() });
+const sentPayload = (call = 0) => mutateAsync.mock.calls[call][0] as UpdateSecuritySettingsRequest;
 
 describe('SecurityForm — linkCardEnabled Switch', () => {
   it('renders the section heading/help copy', () => {
@@ -47,74 +53,158 @@ describe('SecurityForm — linkCardEnabled Switch', () => {
     expect(screen.getByText(m['admin.security.field_link_card_help']())).toBeTruthy();
   });
 
-  it('is checked when settings.linkCardEnabled is true', () => {
+  it('reflects settings.linkCardEnabled', () => {
     render(<SecurityForm settings={BASE_SETTINGS} />);
-    const toggle = screen.getByRole('switch');
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('is unchecked when settings.linkCardEnabled is false', () => {
+    expect(linkCardSwitch()).toHaveAttribute('aria-checked', 'true');
+    cleanup();
     render(<SecurityForm settings={{ ...BASE_SETTINGS, linkCardEnabled: false }} />);
-    const toggle = screen.getByRole('switch');
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(linkCardSwitch()).toHaveAttribute('aria-checked', 'false');
   });
 
   it('the submit button starts disabled (form not dirty)', () => {
     render(<SecurityForm settings={BASE_SETTINGS} />);
-    expect(screen.getByRole('button', { name: m['admin.common.submit']() })).toBeDisabled();
+    expect(submitButton()).toBeDisabled();
   });
 
-  it('clicking the switch alone flips aria-checked and marks the form dirty (enables Submit)', () => {
+  it('toggling away and back re-disables Submit (dirty is a comparison with the baseline)', () => {
     render(<SecurityForm settings={BASE_SETTINGS} />);
-    const toggle = screen.getByRole('switch');
-    const submit = screen.getByRole('button', { name: m['admin.common.submit']() });
-
-    fireEvent.click(toggle);
-
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(submit).not.toBeDisabled();
+    fireEvent.click(linkCardSwitch());
+    expect(submitButton()).not.toBeDisabled();
+    fireEvent.click(linkCardSwitch());
+    expect(submitButton()).toBeDisabled();
   });
 
-  it('toggling back to the original value re-disables Submit (isDirty compares against the settings prop, not a dirty flag)', () => {
-    render(<SecurityForm settings={BASE_SETTINGS} />);
-    const toggle = screen.getByRole('switch');
-    const submit = screen.getByRole('button', { name: m['admin.common.submit']() });
-
-    fireEvent.click(toggle); // true -> false, dirty
-    expect(submit).not.toBeDisabled();
-    fireEvent.click(toggle); // false -> true, back to original
-    expect(submit).toBeDisabled();
-  });
-
-  it('submitting a linkCardEnabled-only change includes it (unchanged) alongside the registration fields in the PUT payload', async () => {
+  it('a link-card-only change sends only linkCardEnabled', async () => {
     mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, linkCardEnabled: false });
     render(<SecurityForm settings={BASE_SETTINGS} />);
 
-    fireEvent.click(screen.getByRole('switch'));
-    fireEvent.click(screen.getByRole('button', { name: m['admin.common.submit']() }));
+    fireEvent.click(linkCardSwitch());
+    fireEvent.click(submitButton());
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    const payload = mutateAsync.mock.calls[0][0] as UpdateSecuritySettingsRequest;
-    expect(payload).toEqual({
-      registrationMode: 'Open',
-      registrationWhiteList: [],
-      linkCardEnabled: false,
-    });
+    expect(sentPayload()).toEqual({ linkCardEnabled: false });
+    expect(Object.keys(sentPayload())).toEqual(['linkCardEnabled']);
+  });
+});
+
+describe('SecurityForm — htmlSanitizationEnabled Switch', () => {
+  it('renders the heading, label and the standing explanation of the limits', () => {
+    render(<SecurityForm settings={BASE_SETTINGS} />);
+    expect(screen.getByText(m['admin.security.section_html_sanitization_heading']())).toBeTruthy();
+    expect(screen.getByText(m['admin.security.html_sanitization_activation_help']())).toBeTruthy();
+    const help = screen.getByText(m['admin.security.field_html_sanitization_help']());
+    expect(help.textContent).toMatch(/iframe/i);
+    expect(help.textContent).toMatch(/CSS/);
   });
 
-  it('a successful submit shows the saved confirmation and reflects the server-returned linkCardEnabled back into the switch state', async () => {
-    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, linkCardEnabled: false });
+  it('defaults to ON, and treats a missing field from an older API as ON', () => {
+    render(<SecurityForm settings={BASE_SETTINGS} />);
+    expect(htmlSwitch()).toHaveAttribute('aria-checked', 'true');
+    cleanup();
+    const { htmlSanitizationEnabled: _omitted, ...legacy } = BASE_SETTINGS;
+    render(<SecurityForm settings={legacy as SecuritySettings} />);
+    expect(htmlSwitch()).toHaveAttribute('aria-checked', 'true');
+    expect(submitButton()).toBeDisabled();
+  });
+
+  it('a toggle-only change sends only htmlSanitizationEnabled', async () => {
+    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, htmlSanitizationEnabled: false });
     render(<SecurityForm settings={BASE_SETTINGS} />);
 
-    fireEvent.click(screen.getByRole('switch'));
-    fireEvent.click(screen.getByRole('button', { name: m['admin.common.submit']() }));
+    fireEvent.click(htmlSwitch());
+    fireEvent.click(submitButton());
 
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(sentPayload()).toEqual({ htmlSanitizationEnabled: false });
+    expect(Object.keys(sentPayload())).toEqual(['htmlSanitizationEnabled']);
+  });
+
+  it('a whitelist-only change sends only registrationWhiteList; a whitespace-only edit sends nothing', async () => {
+    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, registrationWhiteList: ['example.com'] });
+    render(<SecurityForm settings={BASE_SETTINGS} />);
+    const textarea = screen.getByRole('textbox');
+
+    fireEvent.change(textarea, { target: { name: 'registrationWhiteListRaw', value: '  \n\n ' } });
+    expect(submitButton()).toBeDisabled();
+
+    fireEvent.change(textarea, { target: { name: 'registrationWhiteListRaw', value: ' example.com \r\n' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(sentPayload()).toEqual({ registrationWhiteList: ['example.com'] });
+  });
+
+  it('clearing the whitelist is sent explicitly as an empty array', async () => {
+    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, registrationWhiteList: [] });
+    render(<SecurityForm settings={{ ...BASE_SETTINGS, registrationWhiteList: ['example.com'] }} />);
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { name: 'registrationWhiteListRaw', value: '' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(sentPayload()).toEqual({ registrationWhiteList: [] });
+  });
+
+  it('a success response becomes the next comparison source', async () => {
+    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, htmlSanitizationEnabled: false });
+    render(<SecurityForm settings={BASE_SETTINGS} />);
+
+    fireEvent.click(htmlSwitch());
+    fireEvent.click(submitButton());
     await waitFor(() => expect(screen.getByText(m['admin.security.success_saved']())).toBeTruthy());
-    // `updated.linkCardEnabled` (the server echo) is what's reflected here —
-    // `settings` itself is a static prop in this isolated test (a real page
-    // re-renders it from the query cache the mutation's `onSuccess` seeds),
-    // so `isDirty` against the ORIGINAL `settings` prop is a separate concern
-    // this test does not assert on.
-    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    expect(htmlSwitch()).toHaveAttribute('aria-checked', 'false');
+    // Saved value is the new baseline: nothing left to send.
+    expect(submitButton()).toBeDisabled();
+
+    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, htmlSanitizationEnabled: false, linkCardEnabled: false });
+    fireEvent.click(linkCardSwitch());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    expect(sentPayload(1)).toEqual({ linkCardEnabled: false });
+  });
+
+  it('disables every input and the submit while saving and does not resubmit', async () => {
+    let resolve: (value: SecuritySettings) => void = () => {};
+    mutateAsync.mockReturnValueOnce(new Promise<SecuritySettings>((r) => (resolve = r)));
+    const { rerender } = render(<SecurityForm settings={BASE_SETTINGS} />);
+
+    fireEvent.click(htmlSwitch());
+    fireEvent.click(submitButton());
+    isPendingRef.value = true;
+    rerender(<SecurityForm settings={BASE_SETTINGS} />);
+
+    expect(htmlSwitch()).toBeDisabled();
+    expect(linkCardSwitch()).toBeDisabled();
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.getByRole('combobox')).toBeDisabled();
+    expect(screen.getByRole('button', { name: m['admin.common.submit_pending']() })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('button', { name: m['admin.common.submit_pending']() }).closest('form') as HTMLFormElement);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve({ ...BASE_SETTINGS, htmlSanitizationEnabled: false });
+    });
+    isPendingRef.value = false;
+    rerender(<SecurityForm settings={BASE_SETTINGS} />);
+    expect(htmlSwitch()).not.toBeDisabled();
+    expect(screen.getByRole('textbox')).not.toBeDisabled();
+  });
+
+  it('keeps the input and baseline after a failure, shows the error only, and re-sends the same changes', async () => {
+    mutateAsync.mockRejectedValueOnce(new Error('boom'));
+    render(<SecurityForm settings={BASE_SETTINGS} />);
+
+    fireEvent.click(htmlSwitch());
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.getByText('boom')).toBeTruthy());
+    expect(screen.queryByText(m['admin.security.success_saved']())).toBeNull();
+    expect(htmlSwitch()).toHaveAttribute('aria-checked', 'false');
+    expect(submitButton()).not.toBeDisabled();
+
+    mutateAsync.mockResolvedValueOnce({ ...BASE_SETTINGS, htmlSanitizationEnabled: false });
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    expect(sentPayload(1)).toEqual({ htmlSanitizationEnabled: false });
   });
 });

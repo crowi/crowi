@@ -85,6 +85,11 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
    done | while read pkg; do npm view "$pkg" dist-tags --json | head -3; done
    ```
    publish 漏れ(直近 bump のはずが古い)をゼロ確認。
+   **`@crowi/plugin-slack` がこのリリースで publish されたら、`latest` を付け替える。** このパッケージだけ作成時の誤りで新しい版が `alpha` タグに載り、`latest` が古い版に取り残される。alpha が外れるまでは毎回必要。付け替えは npm の認証 (2FA) が要るので、ユーザーに次のコマンドの実行を頼み、そのあと `npm view @crowi/plugin-slack dist-tags` で確認する:
+   ```bash
+   npm dist-tag add @crowi/plugin-slack@<publish された版> latest
+   ```
+   publish されていないリリースでは何もしない (報告にも書かない)。
 3. **Docker**: `scripts/release-tags.mjs` の tag 規則に従い(実装が正本)、
    `crowi/crowi:<ver>`(full)/ slim variant / `crowi/crowi-web:<ver>` を
    `docker pull` → 起動スモーク(env 不足エラーに到達すれば「image は壊れていない」で

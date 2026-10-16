@@ -46,6 +46,10 @@ export { redactErrorReason };
  * `historySequence` yet. That is Phase 2's real backfill migration's job
  * (RFC §13.2), not something this operator tool should do implicitly.
  *
+ * `--scan` also puts back to `ready` the Pages a stale document save demoted
+ * to `untracked` while they held sequenced history, and reports them as
+ * `restored`.
+ *
  * The `repaired`/`blocked`/`failed` detail arrays (codex review attempt 3,
  * AC-7/8: "operator report truncated" — a prior version reduced these to
  * counts only) are preserved here in full, with every id serialized to a
@@ -69,6 +73,7 @@ export interface PageHistoryRepairSummary {
   };
   unsequencedRevisions?: {
     scannedPages: number;
+    restored: { pageId: string; restoredSequence: number; trackingStartedAt: string; reason: string }[];
     repaired: { pageId: string; revisionId: string; assignedSequence: number; reason: string }[];
     blocked: { pageId: string; revisionId?: string; duplicateSequence: number; reason: string }[];
     failed: { pageId: string; revisionId?: string; sequence?: number; reason: string }[];
@@ -168,6 +173,12 @@ export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRep
     const result = await scanUnsequencedRevisions(crowi, scanOptions);
     summary.unsequencedRevisions = {
       scannedPages: result.scannedPages,
+      restored: result.restored.map((r) => ({
+        pageId: String(r.pageId),
+        restoredSequence: r.restoredSequence,
+        trackingStartedAt: r.trackingStartedAt.toISOString(),
+        reason: r.reason,
+      })),
       repaired: result.repaired.map((r) => ({
         pageId: String(r.pageId),
         revisionId: String(r.revisionId),

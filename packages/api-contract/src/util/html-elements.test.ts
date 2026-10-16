@@ -7,153 +7,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { KNOWN_HTML_ELEMENTS, STRIP_KNOWN_HTML_TAGS_MAX_LENGTH, stripKnownHtmlTags } from './html-elements';
-
-/**
- * The web body renderer's INLINE HTML allow-list (the lower-case `HTML_TAGS`
- * array in `packages/web/src/components/editor/known-tags.ts`, excluding the
- * camelCase SVG tags). The body renders each of these as a real element, so a
- * TOC label MUST strip them to match the body text. This is duplicated here on
- * purpose: `@crowi/api-contract` is the lower layer and cannot import from
- * `@crowi/web`, so the cross-guard below pins the strip set as a SUPERSET of
- * this list. If `known-tags.ts` gains an inline HTML tag, update both lists in
- * lockstep — this test fails until the strip set covers it.
- */
-const WEB_BODY_INLINE_HTML_TAGS = [
-  'a',
-  'abbr',
-  'address',
-  'area',
-  'article',
-  'aside',
-  'audio',
-  'b',
-  'base',
-  'bdi',
-  'bdo',
-  'blockquote',
-  'body',
-  'br',
-  'button',
-  'canvas',
-  'caption',
-  'cite',
-  'code',
-  'col',
-  'colgroup',
-  'data',
-  'datalist',
-  'dd',
-  'del',
-  'details',
-  'dfn',
-  'dialog',
-  'div',
-  'dl',
-  'dt',
-  'em',
-  'embed',
-  'fieldset',
-  'figcaption',
-  'figure',
-  'footer',
-  'form',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'head',
-  'header',
-  'hgroup',
-  'hr',
-  'html',
-  'i',
-  'iframe',
-  'img',
-  'input',
-  'ins',
-  'kbd',
-  'label',
-  'legend',
-  'li',
-  'link',
-  'main',
-  'map',
-  'mark',
-  'menu',
-  'meta',
-  'meter',
-  'nav',
-  'noscript',
-  'object',
-  'ol',
-  'optgroup',
-  'option',
-  'output',
-  'p',
-  'param',
-  'picture',
-  'pre',
-  'progress',
-  'q',
-  'rp',
-  'rt',
-  'ruby',
-  's',
-  'samp',
-  'script',
-  'search',
-  'section',
-  'select',
-  'slot',
-  'small',
-  'source',
-  'span',
-  'strong',
-  'style',
-  'sub',
-  'summary',
-  'sup',
-  'svg',
-  'table',
-  'tbody',
-  'td',
-  'template',
-  'textarea',
-  'tfoot',
-  'th',
-  'thead',
-  'time',
-  'title',
-  'tr',
-  'track',
-  'u',
-  'ul',
-  'var',
-  'video',
-  'wbr',
-  // Obsolete but still browser-recognised (rendered, not stripped, by the body).
-  'acronym',
-  'big',
-  'center',
-  'dir',
-  'font',
-  'frame',
-  'frameset',
-  'marquee',
-  'menuitem',
-  'nobr',
-  'noembed',
-  'noframes',
-  'rb',
-  'rtc',
-  'strike',
-  'tt',
-  'xmp',
-  'listing',
-  'basefont',
-];
+import { HTML_TAGS } from './known-tags';
 
 describe('util/html-elements', () => {
   describe('KNOWN_HTML_ELEMENTS', () => {
@@ -175,12 +29,11 @@ describe('util/html-elements', () => {
       }
     });
 
-    // Cross-guard: the strip set must be a SUPERSET of the body renderer's
-    // inline HTML allow-list so a `### <strike>X</strike>` strips in the TOC
-    // exactly as the body renders it (TOC label == body text). Catches drift if
-    // the web list gains an inline tag this set misses.
+    // The strip set must cover every HTML tag the body renders as an element,
+    // so a `### <strike>X</strike>` strips in the TOC exactly as the body
+    // renders it (TOC label == body text).
     it('covers the entire web body inline HTML allow-list (TOC label == body text)', () => {
-      const missing = WEB_BODY_INLINE_HTML_TAGS.filter((tag) => !KNOWN_HTML_ELEMENTS.has(tag));
+      const missing = HTML_TAGS.filter((tag) => !KNOWN_HTML_ELEMENTS.has(tag));
       assert.deepEqual(missing, [], `strip set is missing body-rendered inline tags: ${missing.join(', ')}`);
     });
   });

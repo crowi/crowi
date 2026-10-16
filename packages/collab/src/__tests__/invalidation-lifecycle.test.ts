@@ -73,8 +73,16 @@ interface HarnessConnection {
   disconnect(): Promise<void>;
 }
 
+// Every harness built in this file, so `afterEach` can wait out the
+// checkpoints a last close starts before the next test (or the Mongo
+// teardown) runs.
+const harnesses = new Set<HocuspocusLifecycleHarness>();
+
 class HocuspocusLifecycleHarness {
   readonly documents = new Map<string, HarnessDocument>();
+  // A last close starts the checkpoint without awaiting it, like Hocuspocus;
+  // tracked so teardown can wait for it instead of closing Mongo under it.
+  private readonly pendingStores = new Set<Promise<void>>();
   readonly invalidator: PageInvalidator;
   readonly docBaseRevisions: DocBaseRevisionStore;
   readonly invalidatedPages: InvalidatedPagesStore;
@@ -87,6 +95,7 @@ class HocuspocusLifecycleHarness {
     private readonly models: CollabModels,
     opts: { schedule?: (fn: () => void, ms: number) => void } = {},
   ) {
+    harnesses.add(this);
     this.docBaseRevisions = createDocBaseRevisionStore();
     this.invalidatedPages = createInvalidatedPagesStore();
     const compactor = createCompactor({ models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision } });
@@ -121,6 +130,15 @@ class HocuspocusLifecycleHarness {
     });
   }
 
+  /** Waits for every checkpoint started by a close; rethrows the first failure. */
+  async settle(): Promise<void> {
+    while (this.pendingStores.size > 0) {
+      const results = await Promise.allSettled([...this.pendingStores]);
+      const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      if (failure) throw failure.reason;
+    }
+  }
+
   async openDirectConnection(pageId: string, context: CollabContext): Promise<HarnessConnection> {
     const document = await this.createDocument(pageId, context);
 
@@ -139,7 +157,9 @@ class HocuspocusLifecycleHarness {
         handle.closed = true;
         document.liveConnections.delete(handle);
         if (document.liveConnections.size === 0) {
-          void this.storeAndUnload(pageId, document, context);
+          const store = this.storeAndUnload(pageId, document, context);
+          this.pendingStores.add(store);
+          store.finally(() => this.pendingStores.delete(store)).catch(() => undefined);
         }
       },
     };
@@ -248,8 +268,13 @@ describe('external-edit invalidation real lifecycle edges (G1)', () => {
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
-  afterEach(() => {
-    warnSpy?.mockRestore();
+  afterEach(async () => {
+    try {
+      for (const harness of harnesses) await harness.settle();
+    } finally {
+      harnesses.clear();
+      warnSpy?.mockRestore();
+    }
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

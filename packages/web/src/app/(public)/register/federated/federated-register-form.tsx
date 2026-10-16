@@ -58,6 +58,7 @@ export function FederatedRegisterForm() {
   // reloading the page, unlike an actually-invalid grant.
   useEffect(() => {
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Switches to the invalid-link view when the token is missing.
       setTokenInvalid(true);
       setIsLoading(false);
       return;

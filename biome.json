@@ -12,6 +12,7 @@
       "!**/dist/**",
       "!**/.next/**",
       "!**/.next-e2e/**",
+      "!**/.next-e2e-prod/**",
       "!**/.turbo/**",
       "!**/node_modules/**",
       "!**/coverage/**",

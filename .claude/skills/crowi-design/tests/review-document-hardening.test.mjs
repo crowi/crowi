@@ -164,3 +164,39 @@ test('write loop accumulates preexisting and findings across rounds (not just th
   assert.ok(result.findings.some((f) => f.category === 'preexisting' && f.text === 'p1'))
   assert.ok(result.findings.some((f) => f.category === 'preexisting' && f.text === 'p2'))
 })
+
+test('the frontier tier goes to one lens only: the critical red-team lens in the deciding round', async () => {
+  const tierOf = (calls, label) => (calls.find((c) => c.label === `codex:${label}`)?.prompt.match(/--tier (\w+)/) || [])[1]
+  const okRound = [
+    ['codex:review_root-cause_1', ok(review('OK'))],
+    ['codex:review_red-team_1', ok(review('OK'))],
+    ['codex:review_coverage_1', ok(review('OK'))],
+    ['codex:review_implementability_1', ok(review('OK'))],
+    ['review:x:claude-critical#1', review('OK')],
+  ]
+  const critical = await run(REVIEW_ONLY_ARGS, okRound)
+  assert.equal(critical.result.reviewStats.deadLenses, 0, 'a mislabeled fake would silently kill a lens')
+  assert.deepEqual(
+    critical.calls.filter((c) => /--tier astra/.test(c.prompt)).map((c) => c.label),
+    ['codex:review_red-team_1'],
+    'a review-only pass is the deciding round',
+  )
+  assert.equal(tierOf(critical.calls, 'review_root-cause_1'), 'terra', 'the other lenses keep their tier')
+  const plain = await run({ ...REVIEW_ONLY_ARGS, critical: false }, okRound)
+  assert.equal(plain.result.reviewStats.deadLenses, 0)
+  assert.ok(!plain.calls.some((c) => /--tier astra/.test(c.prompt)), 'never without critical')
+})
+
+test('for an RFC the frontier tier follows the critical lens, which is completeness', async () => {
+  const { result, calls } = await run({ ...REVIEW_ONLY_ARGS, outputType: 'rfc' }, [
+    ['codex:review_approach_1', ok(review('OK'))],
+    ['codex:review_completeness_1', ok(review('OK'))],
+    ['codex:review_quality_1', ok(review('OK'))],
+    ['review:x:claude-critical#1', review('OK')],
+  ])
+  assert.equal(result.reviewStats.deadLenses, 0, 'a mislabeled fake would silently kill a lens')
+  assert.deepEqual(
+    calls.filter((c) => /--tier astra/.test(c.prompt)).map((c) => c.label),
+    ['codex:review_completeness_1'],
+  )
+})

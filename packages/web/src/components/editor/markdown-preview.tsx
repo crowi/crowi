@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { usePreview } from '@/lib/use-preview';
+import { useHtmlSanitizationPolicy } from '@/lib/use-html-sanitization-policy';
 import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import {
   getFigureLayoutClassName,
@@ -11,8 +13,9 @@ import {
   mergeImageStyle,
   stripImageDisplayTransportProps,
 } from './image-display';
-import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
-import { renderMdastToReactNode } from './render-mdast';
+import { authorFigureClassTokens, LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
+import { type RenderMdastResult, renderMdastToReactResult } from './render-mdast';
+import { Button } from '@/components/ui/button';
 import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
 import { m } from '@paraglide/messages.js';
 import { replaceLinkCardPreviewPlaceholders } from './link-card-preview-placeholder';
@@ -49,7 +52,7 @@ function isExternalHref(href: string | undefined): boolean {
 /**
  * Live preview pane fed by the same renderer pipeline as the show
  * page — `POST /api/pages/preview` returns mdast that we run
- * through `renderMdastToReactNode` with `sectionWrap: false` (no URL
+ * through `renderMdastToReactResult` with `sectionWrap: false` (no URL
  * hash / no copy-link affordance for preview).
  *
  * Debounce: 250ms via `useEffect` + `setTimeout`. We trigger the
@@ -67,6 +70,10 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
   const previewMutation = usePreview();
   const [renderedAst, setRenderedAst] = useState<unknown>(null);
   const [errored, setErrored] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+  // The editor remounts per edited page, so mount + pathname is one displayed
+  // view; keystrokes never re-fetch. Fetching starts when the pane is first active.
+  const sanitization = useHtmlSanitizationPolicy(usePathname() ?? '', active);
 
   useEffect(() => {
     // Inactive tab: skip the fetch entirely. Hidden panes still keep
@@ -76,6 +83,7 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     // Empty body short-circuits: no need to hit the server for the
     // empty AST, and the "Preview" placeholder below covers it.
     if (source === '') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clears the preview when the body is empty.
       setRenderedAst(null);
       setErrored(false);
       return;
@@ -108,9 +116,9 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     // would defeat the debounce. We intentionally only watch `source`
     // and `active`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, active]);
+  }, [source, active, retryNonce]);
 
-  const renderedNode: ReactNode = useMemo(() => {
+  const renderResult: RenderMdastResult = useMemo(() => {
     // feature-renderer-plugin-boundary Phase 3 — when the link-card
     // capability is off, skip the placeholder substitution entirely so
     // a disabled toggle also suppresses the editor-side `@[card](url)`
@@ -118,11 +126,15 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     // `@[card](url)` markdown source renders through unchanged, same as
     // any other unrecognised embed tag.
     const astForRender = linkCardEnabled ? replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()) : renderedAst;
-    return renderMdastToReactNode(astForRender, {
+    // Author HTML is restricted by the shared sanitizer under the policy the
+    // instance setting selects for this displayed view.
+    return renderMdastToReactResult(astForRender, {
       sectionWrap: false,
-      components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
+      policy: sanitization.policy,
+      iframeOrigins: sanitization.iframeOrigins,
+      components: previewComponents as unknown as Parameters<typeof renderMdastToReactResult>[1]['components'],
     });
-  }, [renderedAst, linkCardEnabled]);
+  }, [renderedAst, linkCardEnabled, sanitization]);
 
   if (source === '') {
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;
@@ -132,20 +144,34 @@ export function MarkdownPreview({ source, className, active = true, linkCardEnab
     return <div className={className ?? 'text-destructive text-sm'}>{m['edit.preview_failed']()}</div>;
   }
 
-  if (!renderedNode) {
+  if (renderResult.status === 'failed') {
+    // The body could not be turned into a safe tree. Say so (an empty pane
+    // would look like "nothing to preview") and let the author re-run the
+    // preview after editing.
+    return (
+      <div role="alert" className={className ?? 'text-destructive text-sm space-y-2'}>
+        <p>{m['edit.preview_render_failed']()}</p>
+        <Button type="button" variant="outline" size="sm" onClick={() => setRetryNonce((n) => n + 1)}>
+          {m['edit.preview_retry']()}
+        </Button>
+      </div>
+    );
+  }
+
+  if (renderResult.status === 'missing') {
     // First render after a non-empty source change — keep the pane
     // calm rather than flashing a loading spinner mid-typing.
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;
   }
 
-  return <div className={className ?? 'crowi-prose min-w-0'}>{renderedNode}</div>;
+  return <div className={className ?? 'crowi-prose min-w-0'}>{renderResult.node}</div>;
 }
 
 // Preview-specific component overrides. We intentionally omit the show
 // page's `<section>` wrapper + `<HeadingAnchor>` button — neither is
 // useful in a 2-column preview pane (no URL hash to react to, no copy-
 // link affordance needed for unsaved drafts).
-type ChildrenProps = { children?: React.ReactNode };
+type ChildrenProps = { children?: React.ReactNode; className?: unknown };
 
 const PREVIEW_HEADINGS = {
   h1: 'text-3xl font-bold tracking-tight mt-10 mb-4 first:mt-0 leading-tight',
@@ -159,8 +185,8 @@ const PREVIEW_HEADINGS = {
 type HeadingTag = keyof typeof PREVIEW_HEADINGS;
 
 function makePreviewHeading(Tag: HeadingTag) {
-  const Heading = ({ children, ...props }: ChildrenProps) => (
-    <Tag className={PREVIEW_HEADINGS[Tag]} {...props}>
+  const Heading = ({ children, className, ...props }: ChildrenProps) => (
+    <Tag className={mergeListClassName(PREVIEW_HEADINGS[Tag], className)} {...props}>
       {children}
     </Tag>
   );
@@ -179,7 +205,7 @@ export const previewComponents = {
   h4: makePreviewHeading('h4'),
   h5: makePreviewHeading('h5'),
   h6: makePreviewHeading('h6'),
-  a: ({ href: rawHref, children, ...props }: { href?: string; children?: React.ReactNode }) => {
+  a: ({ href: rawHref, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: unknown }) => {
     // Canonicalize a persisted legacy `/api/v2/attachments/...` href before
     // it reaches the DOM (spec §5.3, view/preview parity with
     // `page-content.tsx`'s `a:` override) — a no-op for every other href.
@@ -188,7 +214,10 @@ export const previewComponents = {
     return (
       <a
         href={href}
-        className="text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors"
+        className={mergeListClassName(
+          'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors',
+          className,
+        )}
         target={external ? '_blank' : undefined}
         rel={external ? 'noopener noreferrer' : undefined}
         {...props}
@@ -199,8 +228,10 @@ export const previewComponents = {
   },
   code: ({ className, children, ...props }: { className?: string; children?: React.ReactNode }) => {
     // Inline code only — block code arrives as raw shiki <pre> HTML
-    // and skips this component entirely.
-    if (className) {
+    // and skips this component entirely. A `language-` class marks a
+    // fence; any other class is an author class on an inline span (the
+    // sanitizer reserves `language-` for generated code).
+    if (className?.split(/\s+/).some((token) => token.startsWith('language-'))) {
       return (
         <code className={className} {...props}>
           {children}
@@ -208,12 +239,12 @@ export const previewComponents = {
       );
     }
     return (
-      <code className="text-foreground font-mono text-[0.95em] before:content-none after:content-none" {...props}>
+      <code className={mergeListClassName('text-foreground font-mono text-[0.95em] before:content-none after:content-none', className)} {...props}>
         {children}
       </code>
     );
   },
-  pre: ({ children, ...props }: ChildrenProps) => (
+  pre: ({ children, ...props }: { children?: React.ReactNode }) => (
     <pre
       className="bg-muted border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto max-w-full min-w-0"
       {...props}
@@ -221,35 +252,35 @@ export const previewComponents = {
       {children}
     </pre>
   ),
-  blockquote: ({ children, ...props }: ChildrenProps) => (
-    <blockquote className="border-l-2 border-foreground/25 pl-4 my-6 text-foreground/75 [&>p]:my-2" {...props}>
+  blockquote: ({ children, className, ...props }: ChildrenProps) => (
+    <blockquote className={mergeListClassName('border-l-2 border-foreground/25 pl-4 my-6 text-foreground/75 [&>p]:my-2', className)} {...props}>
       {children}
     </blockquote>
   ),
-  table: ({ children, ...props }: ChildrenProps) => (
+  table: ({ children, className, ...props }: ChildrenProps) => (
     <div className="my-6 overflow-x-auto">
-      <table className="w-full border-collapse text-sm" {...props}>
+      <table className={mergeListClassName('w-full border-collapse text-sm', className)} {...props}>
         {children}
       </table>
     </div>
   ),
-  thead: ({ children, ...props }: ChildrenProps) => (
-    <thead className="border-b border-foreground/15" {...props}>
+  thead: ({ children, className, ...props }: ChildrenProps) => (
+    <thead className={mergeListClassName('border-b border-foreground/15', className)} {...props}>
       {children}
     </thead>
   ),
-  tbody: ({ children, ...props }: ChildrenProps) => (
-    <tbody className="[&>tr]:border-b [&>tr]:border-foreground/10 [&>tr:last-child]:border-0" {...props}>
+  tbody: ({ children, className, ...props }: ChildrenProps) => (
+    <tbody className={mergeListClassName('[&>tr]:border-b [&>tr]:border-foreground/10 [&>tr:last-child]:border-0', className)} {...props}>
       {children}
     </tbody>
   ),
-  th: ({ children, ...props }: ChildrenProps) => (
-    <th className="px-3 py-2 text-left font-semibold text-foreground/80 align-top" {...props}>
+  th: ({ children, className, ...props }: ChildrenProps) => (
+    <th className={mergeListClassName('px-3 py-2 text-left font-semibold text-foreground/80 align-top', className)} {...props}>
       {children}
     </th>
   ),
-  td: ({ children, ...props }: ChildrenProps) => (
-    <td className="px-3 py-2 align-top" {...props}>
+  td: ({ children, className, ...props }: ChildrenProps) => (
+    <td className={mergeListClassName('px-3 py-2 align-top', className)} {...props}>
       {children}
     </td>
   ),
@@ -339,17 +370,13 @@ export const previewComponents = {
         </figure>
       );
     }
-    // Marker-bearing branch only: drop any incoming `style` (raw or
-    // forged) before deriving the safe, re-validated layout class —
-    // `props`'s declared type has no `style` field, so strip it via a
-    // cast instead of destructuring a field TypeScript doesn't know
-    // about.
+    // Marker-bearing branch: same composition as `page-content.tsx`.
     const restRaw = { ...(props as Record<string, unknown>) };
-    delete restRaw.style;
     const layoutClass = getFigureLayoutClassName(restRaw);
     const restProps = stripImageDisplayTransportProps(restRaw);
+    const extraTokens = authorFigureClassTokens(className);
     return (
-      <figure className={layoutClass ? `crowi-figure ${layoutClass}` : 'crowi-figure'} {...restProps}>
+      <figure className={mergeListClassName(layoutClass ? `crowi-figure ${layoutClass}` : 'crowi-figure', extraTokens)} {...restProps}>
         {children}
       </figure>
     );
@@ -374,14 +401,14 @@ export const previewComponents = {
       </div>
     );
   },
-  hr: ({ ...props }) => <hr className="my-10 border-foreground/10" {...props} />,
-  p: ({ children, ...props }: ChildrenProps) => (
-    <p className="my-4 leading-[1.7] text-foreground/90" {...props}>
+  hr: ({ className, ...props }: { className?: unknown }) => <hr className={mergeListClassName('my-10 border-foreground/10', className)} {...props} />,
+  p: ({ children, className, ...props }: ChildrenProps) => (
+    <p className={mergeListClassName('my-4 leading-[1.7] text-foreground/90', className)} {...props}>
       {children}
     </p>
   ),
-  strong: ({ children, ...props }: ChildrenProps) => (
-    <strong className="font-semibold text-foreground" {...props}>
+  strong: ({ children, className, ...props }: ChildrenProps) => (
+    <strong className={mergeListClassName('font-semibold text-foreground', className)} {...props}>
       {children}
     </strong>
   ),

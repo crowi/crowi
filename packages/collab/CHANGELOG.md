@@ -1,5 +1,17 @@
 # @crowi/collab
 
+## 0.1.0-alpha.7
+
+### Patch Changes
+
+- 8e845a1: Artifact pages can no longer be edited by mistake as Markdown: the Web hides every body-edit entry for an artifact page and shows a notice that points to the CLI or MCP when its edit URL is opened directly, and the server now checks the current revision's type on every body save (including internal writers and the realtime collaboration save path) so an artifact body is only stored together with a validated HTML write, while CLI / MCP updates that omit the type, version restore, history, download, rename and permission changes keep working.
+- Updated dependencies [24e3fcf]
+- Updated dependencies [8e845a1]
+- Updated dependencies [885d09f]
+- Updated dependencies [0978619]
+- Updated dependencies [9b81e1d]
+  - @crowi/api-contract@2.0.0-alpha.24
+
 ## 0.1.0-alpha.6
 
 ### Patch Changes

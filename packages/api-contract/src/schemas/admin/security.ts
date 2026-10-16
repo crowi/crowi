@@ -23,39 +23,40 @@ export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;
  *   - security:registrationMode       -> registrationMode
  *   - security:registrationWhiteList  -> registrationWhiteList
  *   - security:linkCardEnabled        -> linkCardEnabled
+ *   - security:htmlSanitizationEnabled -> htmlSanitizationEnabled
  *
  * NOTE: the legacy site-wide HTTP Basic auth (`security:basicName` /
  * `security:basicSecret`) was removed (breaking change). In the split
  * Next.js + Hono architecture, gate the site at a reverse proxy instead.
  * The old config keys, if present in the DB, are simply ignored.
  *
- * `linkCardEnabled` (feature-renderer-plugin-boundary Phase 3) controls
- * whether the core `@[card](url)` link-card embed is allowed to fetch
- * OGP metadata from external URLs. Missing / non-boolean stored values
- * read as `true` (default ON) — see
- * `packages/api/src/util/admin-config.ts`'s `coerceBoolean(value, true)`
- * call at every read site. Writing this field runs as its own
- * `ConfigService.saveConfigValue` call, BEFORE the batched write that
- * persists `registrationMode` / `registrationWhiteList`, so a failure
- * here short-circuits the whole PUT before any of it partially persists
- * — see `packages/api/src/hono/handlers/admin/security.ts`.
+ * `linkCardEnabled` controls whether the core `@[card](url)` link-card embed
+ * may fetch OGP metadata from external URLs. `htmlSanitizationEnabled`
+ * controls whether Markdown HTML is displayed with the strict sanitizer (ON,
+ * the default) or the relaxed one (OFF). For both, a missing / non-boolean
+ * stored value reads as `true`.
+ *
+ * Every field of the response is always present: the server returns the
+ * effective settings, not an echo of the request.
  */
 export const SecuritySettingsSchema = z.object({
   registrationMode: RegistrationModeSchema,
   registrationWhiteList: z.array(z.string()),
   linkCardEnabled: z.boolean(),
+  htmlSanitizationEnabled: z.boolean(),
 });
 export type SecuritySettings = z.infer<typeof SecuritySettingsSchema>;
 
 /**
  * Request body for PUT /admin/security.
  *
- * The contract accepts `registrationWhiteList` strictly as `string[]`. UIs that
- * present the list as a textarea should split on newlines and trim/filter
- * empty lines before sending. The server still defensively trims and drops
- * empty entries to mirror the legacy `stringToArrayFilter` behavior.
+ * Every field is optional and only the fields present are written; an omitted
+ * field keeps its stored value (no default is saved). `{}` is a no-op that
+ * returns the current settings. `registrationWhiteList` is a strict
+ * `string[]` (`[]` clears the list); the server trims entries and drops empty
+ * ones to mirror the legacy `stringToArrayFilter` behavior.
  */
-export const UpdateSecuritySettingsRequestSchema = SecuritySettingsSchema;
+export const UpdateSecuritySettingsRequestSchema = SecuritySettingsSchema.partial();
 export type UpdateSecuritySettingsRequest = z.infer<typeof UpdateSecuritySettingsRequestSchema>;
 
 /**

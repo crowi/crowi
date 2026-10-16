@@ -144,6 +144,7 @@ describe('dispatch effective results (§10) — asserted on the spliced AST node
     expect(node.type).toBe('html');
     expect(node.value).toBe('<div class="diagram">D</div>');
     expect((node.data?.crowiDiagram as { alt: string }).alt).toBe('diagram-fresh');
+    expect(node.data?.g).toBe(1);
   });
 
   it('cache hit (fresh): the sidecar comes from the cached entry', async () => {
@@ -166,6 +167,7 @@ describe('dispatch effective results (§10) — asserted on the spliced AST node
     await makeCodeBlockDispatch(registry, ctx, deps)(tree);
     expect(calls).toBe(1); // second dispatch was a fresh cache hit
     expect((firstChild(tree).data?.crowiDiagram as { alt: string }).alt).toBe('diagram-cached');
+    expect(firstChild(tree).data?.g).toBe(1);
   });
 
   it('html size-limit reject: html AND sidecar both become the size-limit placeholder (one selection)', async () => {
@@ -196,7 +198,7 @@ describe('dispatch effective results (§10) — asserted on the spliced AST node
     await makeCodeBlockDispatch(registry, buildCtx(cache, PLUGIN), { cache, pageId: new Types.ObjectId().toHexString() })(tree);
     const node = firstChild(tree);
     expect(node.value).toBe('<div>html-fine</div>');
-    expect(node.data).toBeUndefined();
+    expect(node.data).toEqual({ g: 1 });
   });
 
   it('a schema-invalid structured payload from a plugin degrades to a sidecar-less html node (mapper validation boundary)', async () => {
@@ -211,7 +213,7 @@ describe('dispatch effective results (§10) — asserted on the spliced AST node
     await makeCodeBlockDispatch(registry, buildCtx(cache, PLUGIN), { cache, pageId: new Types.ObjectId().toHexString() })(tree);
     const node = firstChild(tree);
     expect(node.value).toBe('<div>bad-structured</div>');
-    expect(node.data).toBeUndefined();
+    expect(node.data).toEqual({ g: 1 });
   });
 
   it('non-throw normalisation (§11): a structured payload whose stringify throws never breaks the write — html lands, sidecar absent', async () => {
@@ -233,7 +235,7 @@ describe('dispatch effective results (§10) — asserted on the spliced AST node
     ).resolves.toBeUndefined();
     const node = firstChild(tree);
     expect(node.value).toBe('<div>poison</div>');
-    expect(node.data).toBeUndefined();
+    expect(node.data).toEqual({ g: 1 });
   });
 
   it('circular structured payloads are equally survivable', async () => {
@@ -301,6 +303,7 @@ describe('dispatch effective results (§10) — asserted on the spliced AST node
     expect(node.type).toBe('html');
     expect(node.value).toBe('<div>recovered</div>');
     expect((node.data?.crowiDiagram as { alt: string }).alt).toBe('diagram-recovered');
+    expect(node.data?.g).toBe(1);
   });
 });
 

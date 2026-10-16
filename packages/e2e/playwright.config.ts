@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { E2E_API_URL, E2E_WEB_URL } from './src/config';
+import { E2E_API_URL, E2E_WEB_PROD, E2E_WEB_URL } from './src/config';
 
 export default defineConfig({
   testDir: './tests',
@@ -31,10 +31,11 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: 'pnpm --filter @crowi/e2e start:web',
+      command: E2E_WEB_PROD ? 'pnpm --filter @crowi/e2e start:web:prod' : 'pnpm --filter @crowi/e2e start:web',
       url: E2E_WEB_URL,
-      timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
+      timeout: E2E_WEB_PROD ? 600_000 : 120_000,
+      // A reused server on this port may be the dev one, where prefetching never runs.
+      reuseExistingServer: !process.env.CI && !E2E_WEB_PROD,
       stdout: 'pipe',
       stderr: 'pipe',
     },

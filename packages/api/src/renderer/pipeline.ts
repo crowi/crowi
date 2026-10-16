@@ -1,3 +1,4 @@
+import { markGeneratedHtml } from '@crowi/api-contract';
 import type { MentionResponse, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import type { RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
@@ -515,6 +516,8 @@ export async function runPipeline(
 
 interface MdastLikeNode {
   type?: string;
+  value?: unknown;
+  data?: object;
   children?: MdastLikeNode[];
 }
 
@@ -527,8 +530,12 @@ async function runNodeRenderers(tree: Root, registry: RendererRegistryImpl, ctx:
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (node.type && matchers.has(node.type)) {
+      // Marked only when this very call turned a non-html node into html; an
+      // author's html node a renderer merely touches stays unmarked.
       for (const renderer of registry.getNodeRenderers(node.type)) {
+        const wasHtml = node.type === 'html';
         await renderer(node, ctx);
+        if (!wasHtml && node.type === 'html' && typeof node.value === 'string') markGeneratedHtml(node);
       }
     }
     if (node.children) {

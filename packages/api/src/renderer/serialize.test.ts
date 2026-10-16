@@ -97,6 +97,24 @@ describe('serializeMdast', () => {
     expect(out.children[0].value).toBe('<pre class="shiki"><code>x</code></pre>');
   });
 
+  it('keeps the generated-html mark next to a sidecar through serialization', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value: '<pre>x</pre>',
+          data: { g: 1, crowiCode: { lang: 'ts', value: 'x', tokens: [] } },
+          position: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+        },
+      ],
+    } as unknown as Root;
+    const out = serializeMdast(tree) as { children: Array<{ data: unknown; position?: unknown }> };
+    expect(out.children[0].data).toEqual({ g: 1, crowiCode: { lang: 'ts', value: 'x', tokens: [] } });
+    expect(out.children[0].position).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(out)).children[0].data.g).toBe(1);
+  });
+
   it('does not mutate the input tree', () => {
     const tree = {
       type: 'root',

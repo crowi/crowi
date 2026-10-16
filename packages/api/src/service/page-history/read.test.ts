@@ -165,6 +165,44 @@ describe('service/page-history/read (RFC-0021 Phase 3)', () => {
       expect(result.entries.every((e) => e.sequence === null)).toBe(true);
     });
 
+    test('AC-21: a page without either history field reads as a content-only list', async () => {
+      const { insertedId } = await Page.collection.insertOne({
+        path: '/history-read/ac21-absent-fields',
+        creator: user._id,
+        lastUpdateUser: user._id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        redirectTo: null,
+        grant: Page.GRANT_PUBLIC,
+        status: STATUS_PUBLISHED,
+        grantedUsers: [user._id],
+      });
+      const revisions = [
+        await Revision.create({
+          path: '/history-read/ac21-absent-fields',
+          page: insertedId,
+          body: 'a',
+          format: 'markdown',
+          author: user._id,
+          createdAt: new Date(Date.now() - 2000),
+        }),
+        await Revision.create({
+          path: '/history-read/ac21-absent-fields',
+          page: insertedId,
+          body: 'b',
+          format: 'markdown',
+          author: user._id,
+          createdAt: new Date(Date.now() - 1000),
+        }),
+      ];
+
+      const result = await readPageHistory(crowi, { pageId: insertedId, limit: 50, cursor: null });
+
+      expect(result.tracking.state).toBe('untracked');
+      expect(result.entries.map((e) => (e as { revisionId?: string }).revisionId).sort()).toEqual(revisions.map((r) => String(r._id)).sort());
+      expect(result.entries.every((e) => e.sequence === null)).toBe(true);
+    });
+
     test('AC-7: a page left in the retired migrating state still reads', async () => {
       const page = await createReadyPage('/history-read/ac7');
       await Page.collection.updateOne({ _id: page._id }, { $set: { 'historyTracking.state': 'migrating' } });

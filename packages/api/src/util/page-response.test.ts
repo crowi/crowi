@@ -340,8 +340,25 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // next save.
   // Pinned here so an accidental future bump/no-bump alongside an
   // unrelated change is caught immediately.
-  it('RENDERER_PIPELINE_VERSION is 1.3.0 (new bundled transform, minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('1.3.0');
+  // feature-html-sanitizer-web bumps it to 2.0.0 (major): producers stamp
+  // `data.g = 1` on every generated `html` node, which an older stored AST
+  // lacks, so it recomputes per read.
+  it('RENDERER_PIPELINE_VERSION is 2.0.0 (generated html provenance mark, major bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('2.0.0');
+  });
+
+  it('recomputes a 1.3.0-stored AST on read so generated html carries data.g = 1, leaving the stored AST object untouched', async () => {
+    const body = 'See https://example.com/foo\n\n```ts\nconst x = 1;\n```\n';
+    const storedAst = { type: 'root', children: [{ type: 'code', lang: 'ts', value: 'const x = 1;' }] };
+    const before = structuredClone(storedAst);
+
+    const result = await computeRevisionRenderArtifactsAsync(crowi, undefined, storedAst, body, TEST_ACTOR, '1.3.0');
+
+    const recomputed = result.renderedAst as { children: Array<{ type: string; data?: { g?: unknown } }> };
+    expect(recomputed).not.toBe(storedAst);
+    const htmlNodes = recomputed.children.filter((c) => c.type === 'html');
+    for (const node of htmlNodes) expect(node.data?.g).toBe(1);
+    expect(storedAst).toEqual(before);
   });
 
   // The concrete read-path half of that bump: a revision saved by a

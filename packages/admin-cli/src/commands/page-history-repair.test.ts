@@ -76,7 +76,33 @@ describe('formatRepairReport', () => {
         unsequencedRevisions: { scannedPages: 3, repaired: [], blocked: [], failed: [], lastPageId: 'page-c' },
       });
       expect(exitCode).toBe(0);
-      expect(lines).toEqual(['unsequenced-revision scan: scanned=3 repaired=0 blocked=0 failed=0 lastPageId=page-c']);
+      expect(lines).toEqual(['unsequenced-revision scan: scanned=3 restored=0 repaired=0 blocked=0 failed=0 lastPageId=page-c']);
+    });
+
+    it('AC-19: lists restored pages without changing the exit code', () => {
+      const { lines, exitCode } = formatRepairReport({
+        unsequencedRevisions: {
+          scannedPages: 2,
+          restored: [
+            {
+              pageId: 'page-a',
+              restoredSequence: 4,
+              trackingStartedAt: '2026-01-02T03:04:05.000Z',
+              reason: 'page held sequenced history but was marked untracked; tracking put back to ready by the repair scan',
+            },
+          ],
+          repaired: [],
+          blocked: [],
+          failed: [],
+          lastPageId: 'page-b',
+        },
+      });
+      expect(exitCode).toBe(0);
+      expect(lines).toEqual([
+        'unsequenced-revision scan: scanned=2 restored=1 repaired=0 blocked=0 failed=0 lastPageId=page-b',
+        '  restored pages (tracking put back to ready):',
+        '    page page-a: historySequence=4 trackingStartedAt=2026-01-02T03:04:05.000Z — page held sequenced history but was marked untracked; tracking put back to ready by the repair scan',
+      ]);
     });
 
     it('lists every assigned sequence with its page/revision id and the reason it was assigned', () => {

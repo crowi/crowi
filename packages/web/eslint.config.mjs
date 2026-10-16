@@ -1,10 +1,49 @@
+import nextPlugin from "@next/eslint-plugin-next";
+import eslintReact from "@eslint-react/eslint-plugin";
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+
+const SOURCE_FILES = ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"];
 
 const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
+  {
+    files: SOURCE_FILES,
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+  },
+  nextPlugin.configs["core-web-vitals"],
+  { ...reactHooks.configs.flat.recommended, files: SOURCE_FILES },
+  ...tseslint.configs.recommended,
+  {
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-unused-expressions": [
+        "warn",
+        { allowShortCircuit: false, allowTernary: false, allowTaggedTemplates: false },
+      ],
+    },
+  },
+  {
+    files: SOURCE_FILES,
+    plugins: { "@eslint-react": eslintReact },
+    rules: {
+      "@eslint-react/no-missing-key": "error",
+      "@eslint-react/jsx-no-children-prop": "error",
+      "@eslint-react/dom-no-dangerously-set-innerhtml-with-children": "error",
+      "@eslint-react/jsx-no-comment-textnodes": "error",
+      "@eslint-react/no-missing-component-display-name": "error",
+    },
+  },
   {
     // feature-radix-upgrade-and-single-source: Radix primitives must be
     // imported from the `radix-ui` meta package only. A direct
@@ -30,9 +69,8 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
+    // Next build output and generated typings:
     ".next/**",
     "out/**",
     "build/**",
@@ -45,6 +83,7 @@ const eslintConfig = defineConfig([
     // the report with thousands of false positives from minified vendor
     // bundle chunks.
     ".next-e2e/**",
+    ".next-e2e-prod/**",
     // Paraglide JS generated output. Each emitted file starts with
     // `/* eslint-disable */`, but our config raises every rule it would
     // disable to "off" by default, leaving ~320 "Unused eslint-disable

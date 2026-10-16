@@ -70,6 +70,11 @@ import { CapabilitySchema } from './app-capabilities';
  * endpoint, so only the delivery mode and origin are exposed here —
  * `writeEnabled` / `settings` / `sameOriginInactiveReason` are admin-only
  * (`GET /admin/artifact`, `GetArtifactSettingsResponseSchema`).
+ *
+ * `htmlSanitizationEnabled` is the effective Security setting: `false` only
+ * when an admin turned the strict Markdown HTML sanitizer off. It is always
+ * present and the response is `Cache-Control: no-store`; the Web reads it once
+ * per displayed page, never from a shared cache.
  */
 export const AppInfoResponseSchema = z.object({
   title: z.string().nullable(),
@@ -80,5 +85,6 @@ export const AppInfoResponseSchema = z.object({
   canSelfRegister: z.boolean(),
   rendererStylesheets: z.array(z.string()),
   artifactDelivery: z.object({ enabled: z.boolean(), origin: z.string().nullable() }),
+  htmlSanitizationEnabled: z.boolean(),
 });
 export type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;

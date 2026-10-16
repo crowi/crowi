@@ -24,7 +24,7 @@ describe('requireHistoryReady (RFC-0021 §5.5a, feature-page-history-phase1-mode
   test('treats an entirely absent historyTracking as untracked (legacy Page shape)', () => {
     let caught: unknown;
     try {
-      requireHistoryReady({} as { historyTracking: { state: 'untracked' | 'migrating' | 'ready' } });
+      requireHistoryReady({});
     } catch (err) {
       caught = err;
     }

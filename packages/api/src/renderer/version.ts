@@ -89,5 +89,10 @@
  *     `collectPrefilteredTargets`), so a stale HISTORY revision keeps
  *     recomputing on every read of `GET /pages/revisions/:id`
  *     indefinitely; that is a per-read cost, not a correctness gap.
+ *   - 2.0.0  feature-html-sanitizer-web — `html` nodes the pipeline
+ *     generates (syntax highlight, URL expansion, structured dispatch,
+ *     node renderers) carry `data.g = 1`, which the Web renderer uses to
+ *     tell them from author HTML. Pre-2.0 ASTs lack the mark, so they are
+ *     invalidated wholesale: MAJOR bump.
  */
-export const RENDERER_PIPELINE_VERSION = '1.3.0';
+export const RENDERER_PIPELINE_VERSION = '2.0.0';

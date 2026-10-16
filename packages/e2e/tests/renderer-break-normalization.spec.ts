@@ -9,7 +9,9 @@ import { expect, test } from '../src/fixtures';
  * spec's D-3 web-display-unchanged claim covers — an ordinary GFM table
  * cell and an author-built `white-space:pre` span (already excluded from
  * normalization, so it stays `html`, but the SAME real `<br>` element is
- * what makes it a real second line there too).
+ * what makes it a real second line there too). The default strict HTML
+ * policy drops the author's `style`, so the spans are located by their
+ * text; the `<br>` inside the raw-HTML span is what is measured.
  *
  * Both measurements compare against a single-line REFERENCE element on
  * the SAME page (same table / same paragraph) rather than a hardcoded
@@ -64,9 +66,9 @@ test('a normalized bare <br> renders as a real second line in a table cell and i
     expect(multiHeight).toBeLessThan(referenceHeight * 2.5);
   });
 
-  await test.step('white-space:pre span: the bare <br> span is between 1x and 2.5x the height of the single-line reference span in the same paragraph', async () => {
-    const refSpan = userAPage.locator('span[style*="white-space"]').nth(0);
-    const multiSpan = userAPage.locator('span[style*="white-space"]').nth(1);
+  await test.step('raw-HTML span: the bare <br> span is between 1x and 2.5x the height of the single-line reference span in the same paragraph', async () => {
+    const refSpan = userAPage.locator('p span', { hasText: `${token}-ref-span` });
+    const multiSpan = userAPage.locator('p span', { hasText: `${token}-multi-a` });
     await expect(refSpan).toBeVisible();
     await expect(multiSpan).toBeVisible();
     await expect(refSpan).toContainText(`${token}-ref-span`);

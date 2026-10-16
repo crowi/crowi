@@ -94,6 +94,10 @@ describe('GET /_artifact-frame', () => {
       expect(iframeAttr(html, 'sandbox')).toBe('allow-scripts');
       expect(iframeAttr(html, 'referrerpolicy')).toBe('no-referrer');
       expect(html).toContain(`src="${src}"`);
+      expect(html).not.toMatch(/<script\b/i);
+      // The relay must stay frameable by the wiki page: framing denial
+      // belongs to the app pages (proxy), not to this document.
+      expect(res.headers.get('X-Frame-Options')).toBeNull();
     });
 
     it('400s (text/plain) a src on a different host', async () => {
