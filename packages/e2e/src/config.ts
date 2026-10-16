@@ -14,6 +14,13 @@ export const E2E_API_PORT = 4290;
 export const E2E_WEB_PORT = 4291;
 export const E2E_API_URL = `http://localhost:${E2E_API_PORT}`;
 export const E2E_WEB_URL = `http://localhost:${E2E_WEB_PORT}`;
+/**
+ * `E2E_WEB_PROD=1` (the `e2e:prod` script) serves the web app from a production
+ * build instead of `next dev`. Behaviour that only exists in a production build
+ * — Link prefetching above all, which `next dev` turns off — can only be
+ * observed in this mode, so specs about it skip themselves otherwise.
+ */
+export const E2E_WEB_PROD = process.env.E2E_WEB_PROD === '1';
 export const E2E_MAILPIT_API_URL = 'http://localhost:8025/api/v1';
 
 export const E2E_ROOT_DIR = process.cwd();

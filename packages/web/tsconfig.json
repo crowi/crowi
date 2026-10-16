@@ -13,5 +13,5 @@
     ".next/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", ".next/dev/**", ".next-e2e/**"]
+  "exclude": ["node_modules", ".next/dev/**", ".next-e2e/**", ".next-e2e-prod/**"]
 }
