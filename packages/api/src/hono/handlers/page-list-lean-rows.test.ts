@@ -66,6 +66,47 @@ const expectProjected = (calls: Array<{ ids: string[]; projection: Record<string
   }
 };
 
+interface PageFind {
+  projection: Record<string, number> | undefined;
+  docs: Array<Record<string, unknown>>;
+}
+
+/**
+ * Records every Page collection `find` issued while `fn` runs together with
+ * the raw documents it returned, so a read of a given page can be traced to
+ * the projection it was loaded with.
+ */
+const recordPageFinds = async (fn: () => Promise<void>) => {
+  const Page = crowi.model('Page');
+  const calls: PageFind[] = [];
+  const original = Page.collection.find.bind(Page.collection);
+  const spy = jest.spyOn(Page.collection, 'find').mockImplementation(((filter: unknown, options?: { projection?: Record<string, number> }) => {
+    const cursor = (original as (...args: unknown[]) => { toArray: () => Promise<Array<Record<string, unknown>>> })(filter, options);
+    const toArray = cursor.toArray.bind(cursor);
+    cursor.toArray = async () => {
+      const docs = await toArray();
+      calls.push({ projection: options?.projection, docs });
+      return docs;
+    };
+    return cursor;
+  }) as never);
+  try {
+    await fn();
+  } finally {
+    spy.mockRestore();
+  }
+  return calls;
+};
+
+const expectPageWithoutYjsState = (calls: PageFind[], pageId: string) => {
+  const hit = calls.filter((c) => c.docs.some((d) => String(d._id) === pageId));
+  expect(hit.length).toBeGreaterThan(0);
+  for (const c of hit) {
+    expect(c.projection).toMatchObject({ yjsState: 0 });
+    for (const d of c.docs) expect(Object.hasOwn(d, 'yjsState')).toBe(false);
+  }
+};
+
 interface Driver extends SearchDriver {
   nextResult: SearchHits;
 }
@@ -117,6 +158,7 @@ describe('page list lean rows', () => {
     expect(del.status).toBe(200);
     const bm = await request(app).post('/api/bookmarks').set(wsHeaders(token)).send({ page_id: pageA._id });
     expect(bm.status).toBe(200);
+    await crowi.model('Page').updateMany({ _id: { $in: [pageA._id, trashed._id] } }, { $set: { yjsState: Buffer.from(`yjs-${RUN}`) } });
   });
 
   afterAll(async () => {
@@ -295,6 +337,77 @@ describe('page list lean rows', () => {
       } finally {
         lru.mockRestore();
       }
+    });
+  });
+
+  describe('list rows read the page without yjsState', () => {
+    const withSearchDriver = async (fn: () => Promise<void>) => {
+      const driver = buildDriver();
+      driver.nextResult = { total: 1, hits: [{ id: pageA._id, path: pageA.path, snippet: 'lean', score: 1 }] };
+      const registry = crowi.pluginRegistries;
+      if (!registry) throw new Error('pluginRegistries not initialized');
+      const original = registry.active.search;
+      registry.active.search = driver;
+      try {
+        await fn();
+      } finally {
+        registry.active.search = original;
+      }
+    };
+
+    it.each([
+      ['GET /pages/list path', () => request(app).get('/api/pages/list').set(wsHeaders(token)).query({ path: BASE })],
+      ['GET /pages/list root', () => request(app).get('/api/pages/list').set(wsHeaders(token)).query({ limit: 100 })],
+      ['GET /pages/list creator', () => request(app).get('/api/pages/list').set(wsHeaders(token)).query({ user: userId })],
+      ['GET /bookmarks/me', () => request(app).get('/api/bookmarks/me').set(wsHeaders(token))],
+      ['GET /user/:username', () => request(app).get(`/api/user/${username}`).set(wsHeaders(token))],
+      ['GET /user/:username/pages', () => request(app).get(`/api/user/${username}/pages`).set(wsHeaders(token))],
+      ['GET /user/:username/bookmarks', () => request(app).get(`/api/user/${username}/bookmarks`).set(wsHeaders(other.token))],
+    ])('%s', async (_name, send) => {
+      const calls = await recordPageFinds(async () => {
+        const res = await send();
+        expect(res.status).toBe(200);
+      });
+      expectPageWithoutYjsState(calls, pageA._id);
+    });
+
+    it('GET /pages/list trash', async () => {
+      const calls = await recordPageFinds(async () => {
+        const res = await request(app)
+          .get('/api/pages/list')
+          .set(wsHeaders(token))
+          .query({ path: `/trash${BASE}`, include_deleted: 'true' });
+        expect(res.status).toBe(200);
+      });
+      expectPageWithoutYjsState(calls, trashed._id);
+    });
+
+    it('GET /search', async () => {
+      await withSearchDriver(async () => {
+        const calls = await recordPageFinds(async () => {
+          const res = await request(app).get('/api/search').set(wsHeaders(token)).query({ q: 'lean' });
+          expect(res.status).toBe(200);
+        });
+        expectPageWithoutYjsState(calls, pageA._id);
+      });
+    });
+
+    it('GET /me/recently-viewed-pages', async () => {
+      const lru = jest.spyOn(crowi.lru, 'get').mockResolvedValueOnce([pageA._id]);
+      try {
+        const calls = await recordPageFinds(async () => {
+          const res = await request(app).get('/api/me/recently-viewed-pages').set(wsHeaders(token));
+          expect(res.status).toBe(200);
+        });
+        expectPageWithoutYjsState(calls, pageA._id);
+      } finally {
+        lru.mockRestore();
+      }
+    });
+
+    it('keeps the stored yjsState intact', async () => {
+      const stored = await crowi.model('Page').findById(pageA._id).lean();
+      expect(Buffer.from(stored?.yjsState.buffer ?? stored?.yjsState).toString()).toBe(`yjs-${RUN}`);
     });
   });
 

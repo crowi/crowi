@@ -56,6 +56,7 @@ import Debug from 'debug';
 import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
+import { PAGE_LIST_PAGE_SELECT } from 'src/util/page-list-projection';
 import { pageToListRowResponse, populatePageRelationData } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
@@ -150,7 +151,7 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
       // can outrun it — the API boundary re-checks rather than trusting
       // the driver's hits unconditionally.
       const [pages, bookmarkCounts] = await Promise.all([
-        Page.findListByPageIds(objectIds, { limit: hits.length }, user._id) as Promise<PageDocument[]>,
+        Page.findListByPageIds(objectIds, { limit: hits.length, select: PAGE_LIST_PAGE_SELECT }, user._id) as Promise<PageDocument[]>,
         Bookmark.getCountsByPageIds(objectIds),
       ]);
 

@@ -422,7 +422,7 @@ export interface PageModel extends Model<PageDocument> {
   isNonExistentUserPage(path: string): Promise<boolean>;
   isNonExistentUserTrashPage(path: string): Promise<boolean>;
   findListByPageIds(ids, options, viewerId?: Types.ObjectId | string): any;
-  findPagesByIds(ids): any;
+  findPagesByIds(ids, options?: { select?: string }): any;
   findListByCreator(user, option, currentUser): any;
   getStreamOfFindAll(options?): any;
   findListByStartWith(path, userData, option): Promise<PageDocument[]>;
@@ -1559,8 +1559,10 @@ export default (crowi: Crowi) => {
       query.$or = visiblePageGrantOr(viewerId);
     }
 
+    const finder = Page.find(query);
+    if (options.select) finder.select(options.select);
     return (
-      Page.find(query)
+      finder
         // .sort({createdAt: -1}) // TODO optionize
         .skip(offset)
         .limit(limit)
@@ -1572,7 +1574,7 @@ export default (crowi: Crowi) => {
     );
   };
 
-  pageSchema.statics.findPagesByIds = function (ids) {
+  pageSchema.statics.findPagesByIds = function (ids, options: { select?: string } = {}) {
     const query: any = {
       _id: { $in: ids },
       redirectTo: null,
@@ -1580,7 +1582,9 @@ export default (crowi: Crowi) => {
       status: { $nin: PAGE_TRANSITIONAL_STATUSES },
     };
 
-    return Page.find(query)
+    const finder = Page.find(query);
+    if (options.select) finder.select(options.select);
+    return finder
       .populate([
         { path: 'creator', model: 'User' },
         {
@@ -1601,7 +1605,9 @@ export default (crowi: Crowi) => {
     const offset = option.offset || 0;
     const conditions = creatorPageListMatch(user._id, currentUser._id);
 
-    return Page.find(conditions)
+    const finder = Page.find(conditions);
+    if (option.select) finder.select(option.select);
+    return finder
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
@@ -1664,7 +1670,9 @@ export default (crowi: Crowi) => {
     const query = startWithPageListMatch(path, userData._id, { includeDeletedPage, excludeIds });
     debug('findListByStartWith query:', JSON.stringify({ path, opt, userData: userData._id }));
 
-    return Page.find(query)
+    const finder = Page.find(query);
+    if (option.select) finder.select(option.select);
+    return finder
       .populate({ path: 'revision', select: PAGE_LIST_REVISION_SELECT, populate: { path: 'author', model: 'User' } })
       .sort(sortOpt)
       .skip(opt.offset)
