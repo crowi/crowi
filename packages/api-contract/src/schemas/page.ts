@@ -149,6 +149,13 @@ export const RevisionSchema = z.object({
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 
+// Revision as it appears on page-list rows: the body, derived meta and
+// AST are not read from the database for list rows (the list view never
+// renders them), so they are absent from the wire. Detail responses keep
+// using `RevisionSchema`.
+export const RevisionListRowSchema = RevisionSchema.omit({ body: true, meta: true, renderedAst: true, renderedAstArtifactKey: true });
+export type RevisionListRow = z.infer<typeof RevisionListRowSchema>;
+
 // Page extended data schema
 export const PageExtendedSchema = z.record(z.string(), z.any()).optional();
 
@@ -194,6 +201,13 @@ export const PageSchema = z.object({
   contentType: PageContentTypeSchema,
 });
 export type Page = z.infer<typeof PageSchema>;
+
+// Page as it appears in list rows (page lists, search hits, bookmarks,
+// recently viewed, profile): the latest revision carries no body.
+export const PageListRowSchema = PageSchema.extend({
+  revision: z.union([z.string(), RevisionListRowSchema]).optional(),
+});
+export type PageListRow = z.infer<typeof PageListRowSchema>;
 
 // Page with populated revision - for detailed page responses
 export const PageWithRevisionSchema = PageSchema.extend({
@@ -283,7 +297,7 @@ export type Pager = z.infer<typeof PagerSchema>;
 
 // List pages response schema
 export const ListPagesResponseSchema = z.object({
-  pages: z.array(PageSchema),
+  pages: z.array(PageListRowSchema),
   pager: PagerSchema,
   portalPage: PageSchema.nullable().optional(),
   // When listing a portal path (`/foo/`) that has NO portal document of

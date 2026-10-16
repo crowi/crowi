@@ -11,6 +11,7 @@ import { allocateContentSequence } from 'src/service/page-history/content-sequen
 import { deletePageWithMode, PageCleanupIncompleteError, type PageDeletionInput } from 'src/service/page-history/deletion';
 import { mapWithConcurrency, RENAME_TREE_CONCURRENCY } from 'src/util/map-with-concurrency';
 import { escapeRegExp } from 'src/util/regex';
+import { PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 // Split into their own leaf module (feature-page-history-phase1-model) so
 // `page-history-event.ts` can depend on `GRANTS` without a page.ts <->
@@ -1565,7 +1566,7 @@ export default (crowi: Crowi) => {
         .limit(limit)
         .populate([
           { path: 'creator', model: 'User' },
-          { path: 'revision', model: 'Revision', populate: { path: 'author' } },
+          { path: 'revision', model: 'Revision', select: PAGE_LIST_REVISION_SELECT, populate: { path: 'author' } },
         ])
         .exec()
     );
@@ -1585,6 +1586,7 @@ export default (crowi: Crowi) => {
         {
           path: 'revision',
           model: 'Revision',
+          select: PAGE_LIST_REVISION_SELECT,
           populate: {
             path: 'author',
             model: 'User',
@@ -1603,7 +1605,7 @@ export default (crowi: Crowi) => {
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
-      .populate({ path: 'revision', populate: { path: 'author' } })
+      .populate({ path: 'revision', select: PAGE_LIST_REVISION_SELECT, populate: { path: 'author' } })
       .exec();
   };
 
@@ -1663,7 +1665,7 @@ export default (crowi: Crowi) => {
     debug('findListByStartWith query:', JSON.stringify({ path, opt, userData: userData._id }));
 
     return Page.find(query)
-      .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
+      .populate({ path: 'revision', select: PAGE_LIST_REVISION_SELECT, populate: { path: 'author', model: 'User' } })
       .sort(sortOpt)
       .skip(opt.offset)
       .limit(opt.limit)

@@ -1,4 +1,4 @@
-import { type ListPagesResponse, PageStatusEnum } from '@crowi/api-contract';
+import { type ListPagesResponse, type PageListRow, PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -112,6 +112,29 @@ describe('PageList — portalize banner at the content-page fallback (RFC-0020, 
     expect(screen.queryByTestId('portalize-banner-stub')).toBeNull();
     // The page itself is still listed — only the banner is withheld.
     expect(row('/foo')).not.toBeNull();
+  });
+});
+
+describe('PageList — body-less rows beside full portal / content pages', () => {
+  const leanRow = (path: string): PageListRow => ({
+    ...makePage({ _id: `id:${path}`, path }),
+    revision: { _id: `rev:${path}`, path, format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z', contentType: 'markdown' },
+  });
+
+  it('lists body-less rows together with a full contentPage', () => {
+    serve({ pages: [leanRow('/foo/bar')], contentPage: pageAt('/foo'), total: 1 });
+    render(<PageList initialParams={{ path: '/foo/' }} />);
+
+    expect(row('/foo/bar')?.closest('a')?.getAttribute('href')).toBe('/foo/bar');
+    expect(row('/foo')).not.toBeNull();
+  });
+
+  it('lists body-less rows below a full portalPage and renders the portal header', () => {
+    serve({ pages: [leanRow('/foo/bar')], portalPage: makePage({ _id: 'portal-1', path: '/foo/' }) as never, total: 1 });
+    render(<PageList initialParams={{ path: '/foo/' }} />);
+
+    expect(row('/foo/bar')?.closest('a')?.getAttribute('href')).toBe('/foo/bar');
+    expect(portalHeaderProps.length).toBeGreaterThan(0);
   });
 });
 

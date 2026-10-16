@@ -91,7 +91,15 @@ import { type SubtreeRenameInput, subtreeRenameCommand } from 'src/service/page-
 import { trashPageCommand } from 'src/service/page-history/commands/trash';
 import { completeOperation, createPageHistoryOperation, hasOperationCompletionEvidence, resolvePageHistoryOperation } from 'src/service/page-history/operation';
 import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
-import { computeRevisionRenderArtifactsAsync, type EnrichedPage, isPopulatedRevision, pageToResponse, populatePageRelationData } from 'src/util/page-response';
+import { PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
+import {
+  computeRevisionRenderArtifactsAsync,
+  type EnrichedPage,
+  isPopulatedRevision,
+  pageToListRowResponse,
+  pageToResponse,
+  populatePageRelationData,
+} from 'src/util/page-response';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
@@ -741,7 +749,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
                 .sort({ [sort]: sortDir })
                 .skip(offset)
                 .limit(limit)
-                .populate({ path: 'revision', populate: { path: 'author' } })
+                .populate({ path: 'revision', select: PAGE_LIST_REVISION_SELECT, populate: { path: 'author' } })
                 .populate('creator')
                 .populate('lastUpdateUser')
                 .exec(),
@@ -783,7 +791,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const enrichedPortalPage = portalIndex >= 0 ? enrichedTargets[portalIndex] : null;
           const enrichedContentPage = contentIndex >= 0 ? enrichedTargets[contentIndex] : null;
 
-          const pageResponses = enrichedPages.map((page) => pageToResponse(page));
+          const pageResponses = enrichedPages.map((page) => pageToListRowResponse(page));
           // The portal document is rendered as a full page (PageContent)
           // by the web client, so — unlike the list rows — it needs
           // `renderedAst`. Mirror the getPage detail path: emit meta +

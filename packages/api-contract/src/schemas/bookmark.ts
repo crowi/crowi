@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { PageSchema, PagerSchema } from './page';
+import { PageListRowSchema, PageSchema, PagerSchema } from './page';
 import { UserPublicSchema } from './user-public';
 
 // Bookmark schema with populated page
@@ -11,6 +11,10 @@ export const BookmarkSchema = z.object({
   createdAt: z.string(),
 });
 export type Bookmark = z.infer<typeof BookmarkSchema>;
+
+// Bookmark whose page is a body-less list row (bookmark lists and profile).
+export const BookmarkListRowSchema = BookmarkSchema.extend({ page: PageListRowSchema });
+export type BookmarkListRow = z.infer<typeof BookmarkListRowSchema>;
 
 // GET /bookmarks?page_id=xxx
 export const GetBookmarkRequestSchema = z.object({
@@ -49,7 +53,7 @@ export type GetBookmarkResponse = z.infer<typeof GetBookmarkResponseSchema>;
 
 // GET /bookmarks/me?limit&offset
 export const ListMyBookmarksResponseSchema = z.object({
-  bookmarks: z.array(BookmarkSchema),
+  bookmarks: z.array(BookmarkListRowSchema),
   pager: PagerSchema,
   total: z.number(),
 });

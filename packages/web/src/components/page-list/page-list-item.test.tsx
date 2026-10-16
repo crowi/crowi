@@ -1,4 +1,4 @@
-import type { Page } from '@crowi/api-contract';
+import type { Page, PageListRow } from '@crowi/api-contract';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,24 @@ afterEach(() => {
 });
 
 describe('PageListItem', () => {
+  it('renders a list row whose revision has no body, crediting the revision author', () => {
+    const row: PageListRow = {
+      ...makePage({ path: '/docs/lean', creator: null, lastUpdateUser: null, likerCount: 4 }),
+      revision: {
+        _id: 'rev-1',
+        path: '/docs/lean',
+        format: 'markdown',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        contentType: 'markdown',
+        author: { _id: 'u1', username: 'carol', name: 'Carol', email: 'c@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
+      },
+    };
+    render(<PageListItem page={row} />);
+    expect(screen.getByTitle('/docs/lean').textContent).toBe('lean');
+    expect(screen.getByText('4')).toBeTruthy();
+    expect(screen.getByText(/carol/i)).toBeTruthy();
+  });
+
   it('renders the basename as the row title', () => {
     render(<PageListItem page={makePage({ path: '/docs/example' })} />);
     expect(screen.getByTitle('/docs/example').textContent).toBe('example');

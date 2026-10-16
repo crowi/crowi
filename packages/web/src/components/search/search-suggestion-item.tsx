@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { Compass, LayoutFreeform, Lock } from 'lucide-react';
-import type { Page } from '@crowi/api-contract';
+import type { PageListRow } from '@crowi/api-contract';
 import { isPrivateGrant } from '@/lib/page-grant';
 import { SearchHitSnippet } from './search-hit-snippet';
 
 interface SearchSuggestionItemProps {
   href: string;
-  page: Page;
+  page: PageListRow;
   snippet?: string;
   onClick?: () => void;
 }

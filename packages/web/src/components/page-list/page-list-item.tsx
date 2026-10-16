@@ -1,6 +1,6 @@
 'use client';
 
-import type { Page } from '@crowi/api-contract';
+import type { PageListRow } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 export type PageListVariant = 'default' | 'trash';
 
 interface PageListItemProps {
-  page: Page;
+  page: PageListRow;
   variant?: PageListVariant;
   /**
    * Sanitised search-result excerpt, rendered as an extra line below the
@@ -66,7 +66,7 @@ export function PageListItem({ page, variant = 'default', snippet }: PageListIte
   );
 }
 
-function PageRowBody({ page, isTrash = false, snippet }: { page: Page; isTrash?: boolean; snippet?: string }) {
+function PageRowBody({ page, isTrash = false, snippet }: { page: PageListRow; isTrash?: boolean; snippet?: string }) {
   // Populated user fields may arrive as bare ObjectId strings; only the
   // object form carries a name / avatar. `resolveDisplayUser` also falls
   // back to the revision author (last resort) — see its doc comment.

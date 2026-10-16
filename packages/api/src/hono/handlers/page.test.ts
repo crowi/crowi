@@ -3339,6 +3339,30 @@ describe('Routes /api/pages/list (Hono listPages — trash / include_deleted)', 
     expect(res.body.portalPage).not.toBeNull();
     expect(res.body.portalPage.revision.renderedAst).toBeTruthy();
   });
+
+  it('keeps the portal revision a full document while a row revision in the same response is body-less', async () => {
+    const portalPath = `${PATH_PREFIX}portal-lean/`;
+    const rowPath = `${portalPath}row`;
+    const headers = authHeaders(accessToken);
+
+    const portalRes = await request(app).post('/api/pages').set(headers).send({ path: portalPath, body: '# Portal heading' });
+    expect(portalRes.status).toBe(200);
+    const rowRes = await request(app).post('/api/pages').set(headers).send({ path: rowPath, body: 'row body text' });
+    expect(rowRes.status).toBe(200);
+
+    const res = await request(app).get('/api/pages/list').set(headers).query({ path: portalPath });
+    expect(res.status).toBe(200);
+    const row = (res.body.pages as Array<{ _id: string; revision: Record<string, unknown> }>).find((p) => p._id === rowRes.body.page._id);
+    expect(row).toBeDefined();
+    expect(row?.revision._id).toBe(rowRes.body.page.revision._id);
+    expect(res.body.portalPage.revision._id).toBe(portalRes.body.page.revision._id);
+    expect(res.body.portalPage.revision._id).not.toBe(row?.revision._id);
+    expect(res.body.portalPage.revision.body).toContain('Portal heading');
+    expect(res.body.portalPage.revision.renderedAst).toBeTruthy();
+    expect(row?.revision).not.toHaveProperty('body');
+    expect(row?.revision).not.toHaveProperty('renderedAst');
+    expect(row?.revision).not.toHaveProperty('meta');
+  });
 });
 
 /**

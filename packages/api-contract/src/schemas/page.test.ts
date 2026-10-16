@@ -6,7 +6,21 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { ARTIFACT_DIAGNOSTIC_CODES, ArtifactWriteRejectionSchema, ListPagesRequestSchema, ListPagesResponseSchema, PageSchema } from './page';
+import { BookmarkListRowSchema } from './bookmark';
+import { RecentlyViewedPagesResponseSchema } from './me';
+import {
+  ARTIFACT_DIAGNOSTIC_CODES,
+  ArtifactWriteRejectionSchema,
+  ListPagesRequestSchema,
+  ListPagesResponseSchema,
+  PageListRowSchema,
+  PageSchema,
+  PageWithRevisionSchema,
+  RevisionListRowSchema,
+  RevisionSchema,
+} from './page';
+import { SearchHitSchema } from './search';
+import { UserBookmarksResponseSchema, UserPagesResponseSchema } from './user';
 
 const basePage = {
   _id: '000000000000000000000001',
@@ -118,6 +132,29 @@ describe('schemas/page', () => {
       const parsed = ArtifactWriteRejectionSchema.safeParse(envelope({ href: '/admin', detail: 'x' }));
       assert.equal(parsed.success, true);
       assert.deepEqual(Object.keys(parsed.success ? parsed.data.error : {}).sort(), ['code', 'message', 'reason', 'ruleId']);
+    });
+  });
+
+  describe('list rows (body-less revision)', () => {
+    const leanRevision = { _id: '000000000000000000000002', path: '/foo', format: 'markdown', createdAt: '2026-01-01T00:00:00.000Z', contentType: 'markdown' };
+    const leanPage = { ...basePage, revision: leanRevision };
+
+    it('is accepted by every list response and the detail schemas still require a body', () => {
+      assert.equal(PageListRowSchema.safeParse(leanPage).success, true);
+      assert.equal(ListPagesResponseSchema.safeParse({ pages: [leanPage], pager: { prev: null, next: null, offset: 0 }, total: 1 }).success, true);
+      assert.equal(SearchHitSchema.safeParse({ pageId: 'p', path: '/foo', bookmarkCount: 0, page: leanPage }).success, true);
+      assert.equal(RecentlyViewedPagesResponseSchema.safeParse({ pages: [leanPage] }).success, true);
+      assert.equal(UserPagesResponseSchema.safeParse({ pages: [leanPage], pager: { prev: null, next: null, offset: 0 }, total: 1 }).success, true);
+      const bookmark = { _id: 'b', page: leanPage, user: 'u', createdAt: '2026-01-01T00:00:00.000Z' };
+      assert.equal(BookmarkListRowSchema.safeParse(bookmark).success, true);
+      assert.equal(UserBookmarksResponseSchema.safeParse({ bookmarks: [bookmark], pager: { prev: null, next: null, offset: 0 }, total: 1 }).success, true);
+      assert.equal(RevisionSchema.safeParse(leanRevision).success, false);
+      assert.equal(PageWithRevisionSchema.safeParse(leanPage).success, false);
+    });
+
+    it('has no body / meta / AST in its shape', () => {
+      const keys = Object.keys(RevisionListRowSchema.shape);
+      for (const omitted of ['body', 'meta', 'renderedAst', 'renderedAstArtifactKey']) assert.equal(keys.includes(omitted), false);
     });
   });
 });

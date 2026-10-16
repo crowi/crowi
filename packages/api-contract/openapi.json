@@ -2539,9 +2539,6 @@
                         "path": {
                           "type": "string"
                         },
-                        "body": {
-                          "type": "string"
-                        },
                         "format": {
                           "type": "string",
                           "default": "markdown"
@@ -2588,96 +2585,6 @@
                         },
                         "createdAt": {
                           "type": "string"
-                        },
-                        "meta": {
-                          "type": "object",
-                          "properties": {
-                            "toc": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "level": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "maximum": 6
-                                  },
-                                  "text": {
-                                    "type": "string"
-                                  },
-                                  "anchorId": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "level",
-                                  "text",
-                                  "anchorId"
-                                ]
-                              }
-                            },
-                            "wikiLinks": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "raw": {
-                                    "type": "string"
-                                  },
-                                  "target": {
-                                    "type": "string"
-                                  },
-                                  "displayText": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "raw",
-                                  "target"
-                                ]
-                              }
-                            },
-                            "mentions": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "username": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "username"
-                                ]
-                              }
-                            },
-                            "codeBlockLanguages": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "rawSpaceLinks": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        },
-                        "renderedAst": {
-                          "anyOf": [
-                            {
-                              "$ref": "#/components/schemas/RenderedAstEnvelope"
-                            },
-                            {
-                              "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                            }
-                          ]
-                        },
-                        "renderedAstArtifactKey": {
-                          "type": "string",
-                          "maxLength": 64
                         },
                         "rendererVersion": {
                           "type": "string"
@@ -2811,7 +2718,6 @@
                       "required": [
                         "_id",
                         "path",
-                        "body",
                         "createdAt",
                         "contentType"
                       ]
@@ -4698,9 +4604,6 @@
                         "path": {
                           "type": "string"
                         },
-                        "body": {
-                          "type": "string"
-                        },
                         "format": {
                           "type": "string",
                           "default": "markdown"
@@ -4747,96 +4650,6 @@
                         },
                         "createdAt": {
                           "type": "string"
-                        },
-                        "meta": {
-                          "type": "object",
-                          "properties": {
-                            "toc": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "level": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "maximum": 6
-                                  },
-                                  "text": {
-                                    "type": "string"
-                                  },
-                                  "anchorId": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "level",
-                                  "text",
-                                  "anchorId"
-                                ]
-                              }
-                            },
-                            "wikiLinks": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "raw": {
-                                    "type": "string"
-                                  },
-                                  "target": {
-                                    "type": "string"
-                                  },
-                                  "displayText": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "raw",
-                                  "target"
-                                ]
-                              }
-                            },
-                            "mentions": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "username": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "username"
-                                ]
-                              }
-                            },
-                            "codeBlockLanguages": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "rawSpaceLinks": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        },
-                        "renderedAst": {
-                          "anyOf": [
-                            {
-                              "$ref": "#/components/schemas/RenderedAstEnvelope"
-                            },
-                            {
-                              "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                            }
-                          ]
-                        },
-                        "renderedAstArtifactKey": {
-                          "type": "string",
-                          "maxLength": 64
                         },
                         "rendererVersion": {
                           "type": "string"
@@ -4970,7 +4783,6 @@
                       "required": [
                         "_id",
                         "path",
-                        "body",
                         "createdAt",
                         "contentType"
                       ]
@@ -12744,9 +12556,6 @@
                                   "path": {
                                     "type": "string"
                                   },
-                                  "body": {
-                                    "type": "string"
-                                  },
                                   "format": {
                                     "type": "string",
                                     "default": "markdown"
@@ -12793,96 +12602,6 @@
                                   },
                                   "createdAt": {
                                     "type": "string"
-                                  },
-                                  "meta": {
-                                    "type": "object",
-                                    "properties": {
-                                      "toc": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "level": {
-                                              "type": "integer",
-                                              "minimum": 1,
-                                              "maximum": 6
-                                            },
-                                            "text": {
-                                              "type": "string"
-                                            },
-                                            "anchorId": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "level",
-                                            "text",
-                                            "anchorId"
-                                          ]
-                                        }
-                                      },
-                                      "wikiLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "raw": {
-                                              "type": "string"
-                                            },
-                                            "target": {
-                                              "type": "string"
-                                            },
-                                            "displayText": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "raw",
-                                            "target"
-                                          ]
-                                        }
-                                      },
-                                      "mentions": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "username": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "username"
-                                          ]
-                                        }
-                                      },
-                                      "codeBlockLanguages": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "rawSpaceLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  },
-                                  "renderedAst": {
-                                    "anyOf": [
-                                      {
-                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                      },
-                                      {
-                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                      }
-                                    ]
-                                  },
-                                  "renderedAstArtifactKey": {
-                                    "type": "string",
-                                    "maxLength": 64
                                   },
                                   "rendererVersion": {
                                     "type": "string"
@@ -13016,7 +12735,6 @@
                                 "required": [
                                   "_id",
                                   "path",
-                                  "body",
                                   "createdAt",
                                   "contentType"
                                 ]
@@ -15455,9 +15173,6 @@
                                   "path": {
                                     "type": "string"
                                   },
-                                  "body": {
-                                    "type": "string"
-                                  },
                                   "format": {
                                     "type": "string",
                                     "default": "markdown"
@@ -15504,96 +15219,6 @@
                                   },
                                   "createdAt": {
                                     "type": "string"
-                                  },
-                                  "meta": {
-                                    "type": "object",
-                                    "properties": {
-                                      "toc": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "level": {
-                                              "type": "integer",
-                                              "minimum": 1,
-                                              "maximum": 6
-                                            },
-                                            "text": {
-                                              "type": "string"
-                                            },
-                                            "anchorId": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "level",
-                                            "text",
-                                            "anchorId"
-                                          ]
-                                        }
-                                      },
-                                      "wikiLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "raw": {
-                                              "type": "string"
-                                            },
-                                            "target": {
-                                              "type": "string"
-                                            },
-                                            "displayText": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "raw",
-                                            "target"
-                                          ]
-                                        }
-                                      },
-                                      "mentions": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "username": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "username"
-                                          ]
-                                        }
-                                      },
-                                      "codeBlockLanguages": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "rawSpaceLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  },
-                                  "renderedAst": {
-                                    "anyOf": [
-                                      {
-                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                      },
-                                      {
-                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                      }
-                                    ]
-                                  },
-                                  "renderedAstArtifactKey": {
-                                    "type": "string",
-                                    "maxLength": 64
                                   },
                                   "rendererVersion": {
                                     "type": "string"
@@ -15727,7 +15352,6 @@
                                 "required": [
                                   "_id",
                                   "path",
-                                  "body",
                                   "createdAt",
                                   "contentType"
                                 ]
@@ -15947,9 +15571,6 @@
                                       "path": {
                                         "type": "string"
                                       },
-                                      "body": {
-                                        "type": "string"
-                                      },
                                       "format": {
                                         "type": "string",
                                         "default": "markdown"
@@ -15996,96 +15617,6 @@
                                       },
                                       "createdAt": {
                                         "type": "string"
-                                      },
-                                      "meta": {
-                                        "type": "object",
-                                        "properties": {
-                                          "toc": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "level": {
-                                                  "type": "integer",
-                                                  "minimum": 1,
-                                                  "maximum": 6
-                                                },
-                                                "text": {
-                                                  "type": "string"
-                                                },
-                                                "anchorId": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "level",
-                                                "text",
-                                                "anchorId"
-                                              ]
-                                            }
-                                          },
-                                          "wikiLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "raw": {
-                                                  "type": "string"
-                                                },
-                                                "target": {
-                                                  "type": "string"
-                                                },
-                                                "displayText": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "raw",
-                                                "target"
-                                              ]
-                                            }
-                                          },
-                                          "mentions": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "username": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "username"
-                                              ]
-                                            }
-                                          },
-                                          "codeBlockLanguages": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "rawSpaceLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "renderedAst": {
-                                        "anyOf": [
-                                          {
-                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                          },
-                                          {
-                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                          }
-                                        ]
-                                      },
-                                      "renderedAstArtifactKey": {
-                                        "type": "string",
-                                        "maxLength": 64
                                       },
                                       "rendererVersion": {
                                         "type": "string"
@@ -16219,7 +15750,6 @@
                                     "required": [
                                       "_id",
                                       "path",
-                                      "body",
                                       "createdAt",
                                       "contentType"
                                     ]
@@ -16689,9 +16219,6 @@
                                       "path": {
                                         "type": "string"
                                       },
-                                      "body": {
-                                        "type": "string"
-                                      },
                                       "format": {
                                         "type": "string",
                                         "default": "markdown"
@@ -16738,96 +16265,6 @@
                                       },
                                       "createdAt": {
                                         "type": "string"
-                                      },
-                                      "meta": {
-                                        "type": "object",
-                                        "properties": {
-                                          "toc": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "level": {
-                                                  "type": "integer",
-                                                  "minimum": 1,
-                                                  "maximum": 6
-                                                },
-                                                "text": {
-                                                  "type": "string"
-                                                },
-                                                "anchorId": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "level",
-                                                "text",
-                                                "anchorId"
-                                              ]
-                                            }
-                                          },
-                                          "wikiLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "raw": {
-                                                  "type": "string"
-                                                },
-                                                "target": {
-                                                  "type": "string"
-                                                },
-                                                "displayText": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "raw",
-                                                "target"
-                                              ]
-                                            }
-                                          },
-                                          "mentions": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "username": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "username"
-                                              ]
-                                            }
-                                          },
-                                          "codeBlockLanguages": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "rawSpaceLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "renderedAst": {
-                                        "anyOf": [
-                                          {
-                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                          },
-                                          {
-                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                          }
-                                        ]
-                                      },
-                                      "renderedAstArtifactKey": {
-                                        "type": "string",
-                                        "maxLength": 64
                                       },
                                       "rendererVersion": {
                                         "type": "string"
@@ -16961,7 +16398,6 @@
                                     "required": [
                                       "_id",
                                       "path",
-                                      "body",
                                       "createdAt",
                                       "contentType"
                                     ]
@@ -17451,9 +16887,6 @@
                                   "path": {
                                     "type": "string"
                                   },
-                                  "body": {
-                                    "type": "string"
-                                  },
                                   "format": {
                                     "type": "string",
                                     "default": "markdown"
@@ -17500,96 +16933,6 @@
                                   },
                                   "createdAt": {
                                     "type": "string"
-                                  },
-                                  "meta": {
-                                    "type": "object",
-                                    "properties": {
-                                      "toc": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "level": {
-                                              "type": "integer",
-                                              "minimum": 1,
-                                              "maximum": 6
-                                            },
-                                            "text": {
-                                              "type": "string"
-                                            },
-                                            "anchorId": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "level",
-                                            "text",
-                                            "anchorId"
-                                          ]
-                                        }
-                                      },
-                                      "wikiLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "raw": {
-                                              "type": "string"
-                                            },
-                                            "target": {
-                                              "type": "string"
-                                            },
-                                            "displayText": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "raw",
-                                            "target"
-                                          ]
-                                        }
-                                      },
-                                      "mentions": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "username": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "username"
-                                          ]
-                                        }
-                                      },
-                                      "codeBlockLanguages": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "rawSpaceLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  },
-                                  "renderedAst": {
-                                    "anyOf": [
-                                      {
-                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                      },
-                                      {
-                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                      }
-                                    ]
-                                  },
-                                  "renderedAstArtifactKey": {
-                                    "type": "string",
-                                    "maxLength": 64
                                   },
                                   "rendererVersion": {
                                     "type": "string"
@@ -17723,7 +17066,6 @@
                                 "required": [
                                   "_id",
                                   "path",
-                                  "body",
                                   "createdAt",
                                   "contentType"
                                 ]
@@ -18142,9 +17484,6 @@
                                   "path": {
                                     "type": "string"
                                   },
-                                  "body": {
-                                    "type": "string"
-                                  },
                                   "format": {
                                     "type": "string",
                                     "default": "markdown"
@@ -18191,96 +17530,6 @@
                                   },
                                   "createdAt": {
                                     "type": "string"
-                                  },
-                                  "meta": {
-                                    "type": "object",
-                                    "properties": {
-                                      "toc": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "level": {
-                                              "type": "integer",
-                                              "minimum": 1,
-                                              "maximum": 6
-                                            },
-                                            "text": {
-                                              "type": "string"
-                                            },
-                                            "anchorId": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "level",
-                                            "text",
-                                            "anchorId"
-                                          ]
-                                        }
-                                      },
-                                      "wikiLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "raw": {
-                                              "type": "string"
-                                            },
-                                            "target": {
-                                              "type": "string"
-                                            },
-                                            "displayText": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "raw",
-                                            "target"
-                                          ]
-                                        }
-                                      },
-                                      "mentions": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "username": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "username"
-                                          ]
-                                        }
-                                      },
-                                      "codeBlockLanguages": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "rawSpaceLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  },
-                                  "renderedAst": {
-                                    "anyOf": [
-                                      {
-                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                      },
-                                      {
-                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                      }
-                                    ]
-                                  },
-                                  "renderedAstArtifactKey": {
-                                    "type": "string",
-                                    "maxLength": 64
                                   },
                                   "rendererVersion": {
                                     "type": "string"
@@ -18414,7 +17663,6 @@
                                 "required": [
                                   "_id",
                                   "path",
-                                  "body",
                                   "createdAt",
                                   "contentType"
                                 ]
@@ -20238,9 +19486,6 @@
                                       "path": {
                                         "type": "string"
                                       },
-                                      "body": {
-                                        "type": "string"
-                                      },
                                       "format": {
                                         "type": "string",
                                         "default": "markdown"
@@ -20287,96 +19532,6 @@
                                       },
                                       "createdAt": {
                                         "type": "string"
-                                      },
-                                      "meta": {
-                                        "type": "object",
-                                        "properties": {
-                                          "toc": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "level": {
-                                                  "type": "integer",
-                                                  "minimum": 1,
-                                                  "maximum": 6
-                                                },
-                                                "text": {
-                                                  "type": "string"
-                                                },
-                                                "anchorId": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "level",
-                                                "text",
-                                                "anchorId"
-                                              ]
-                                            }
-                                          },
-                                          "wikiLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "raw": {
-                                                  "type": "string"
-                                                },
-                                                "target": {
-                                                  "type": "string"
-                                                },
-                                                "displayText": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "raw",
-                                                "target"
-                                              ]
-                                            }
-                                          },
-                                          "mentions": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "username": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "username"
-                                              ]
-                                            }
-                                          },
-                                          "codeBlockLanguages": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "rawSpaceLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "renderedAst": {
-                                        "anyOf": [
-                                          {
-                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                          },
-                                          {
-                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                          }
-                                        ]
-                                      },
-                                      "renderedAstArtifactKey": {
-                                        "type": "string",
-                                        "maxLength": 64
                                       },
                                       "rendererVersion": {
                                         "type": "string"
@@ -20510,7 +19665,6 @@
                                     "required": [
                                       "_id",
                                       "path",
-                                      "body",
                                       "createdAt",
                                       "contentType"
                                     ]
@@ -26799,9 +25953,6 @@
                                   "path": {
                                     "type": "string"
                                   },
-                                  "body": {
-                                    "type": "string"
-                                  },
                                   "format": {
                                     "type": "string",
                                     "default": "markdown"
@@ -26848,96 +25999,6 @@
                                   },
                                   "createdAt": {
                                     "type": "string"
-                                  },
-                                  "meta": {
-                                    "type": "object",
-                                    "properties": {
-                                      "toc": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "level": {
-                                              "type": "integer",
-                                              "minimum": 1,
-                                              "maximum": 6
-                                            },
-                                            "text": {
-                                              "type": "string"
-                                            },
-                                            "anchorId": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "level",
-                                            "text",
-                                            "anchorId"
-                                          ]
-                                        }
-                                      },
-                                      "wikiLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "raw": {
-                                              "type": "string"
-                                            },
-                                            "target": {
-                                              "type": "string"
-                                            },
-                                            "displayText": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "raw",
-                                            "target"
-                                          ]
-                                        }
-                                      },
-                                      "mentions": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "object",
-                                          "properties": {
-                                            "username": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "username"
-                                          ]
-                                        }
-                                      },
-                                      "codeBlockLanguages": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "rawSpaceLinks": {
-                                        "type": "array",
-                                        "items": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  },
-                                  "renderedAst": {
-                                    "anyOf": [
-                                      {
-                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                      },
-                                      {
-                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                      }
-                                    ]
-                                  },
-                                  "renderedAstArtifactKey": {
-                                    "type": "string",
-                                    "maxLength": 64
                                   },
                                   "rendererVersion": {
                                     "type": "string"
@@ -27071,7 +26132,6 @@
                                 "required": [
                                   "_id",
                                   "path",
-                                  "body",
                                   "createdAt",
                                   "contentType"
                                 ]
@@ -39152,9 +38212,6 @@
                                       "path": {
                                         "type": "string"
                                       },
-                                      "body": {
-                                        "type": "string"
-                                      },
                                       "format": {
                                         "type": "string",
                                         "default": "markdown"
@@ -39201,96 +38258,6 @@
                                       },
                                       "createdAt": {
                                         "type": "string"
-                                      },
-                                      "meta": {
-                                        "type": "object",
-                                        "properties": {
-                                          "toc": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "level": {
-                                                  "type": "integer",
-                                                  "minimum": 1,
-                                                  "maximum": 6
-                                                },
-                                                "text": {
-                                                  "type": "string"
-                                                },
-                                                "anchorId": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "level",
-                                                "text",
-                                                "anchorId"
-                                              ]
-                                            }
-                                          },
-                                          "wikiLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "raw": {
-                                                  "type": "string"
-                                                },
-                                                "target": {
-                                                  "type": "string"
-                                                },
-                                                "displayText": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "raw",
-                                                "target"
-                                              ]
-                                            }
-                                          },
-                                          "mentions": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "username": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "username"
-                                              ]
-                                            }
-                                          },
-                                          "codeBlockLanguages": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "rawSpaceLinks": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "string"
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "renderedAst": {
-                                        "anyOf": [
-                                          {
-                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
-                                          },
-                                          {
-                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
-                                          }
-                                        ]
-                                      },
-                                      "renderedAstArtifactKey": {
-                                        "type": "string",
-                                        "maxLength": 64
                                       },
                                       "rendererVersion": {
                                         "type": "string"
@@ -39424,7 +38391,6 @@
                                     "required": [
                                       "_id",
                                       "path",
-                                      "body",
                                       "createdAt",
                                       "contentType"
                                     ]

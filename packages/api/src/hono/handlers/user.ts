@@ -33,7 +33,7 @@ import type { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { BookmarkDocument } from 'src/models/bookmark';
 import { creatorPageListMatch, type PageDocument } from 'src/models/page';
-import { type EnrichedPage, pageToResponse, populatePageRelationData } from 'src/util/page-response';
+import { type EnrichedPage, pageToListRowResponse, populatePageRelationData } from 'src/util/page-response';
 import { escapeRegExp } from 'src/util/regex';
 import { toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
 
@@ -41,7 +41,7 @@ import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { applyScope } from '../middleware/require-scope';
 
-import { bookmarkToResponse, bookmarksToResponseList } from './_helpers/bookmark-response';
+import { bookmarkToListRowResponse, bookmarksToResponseList } from './_helpers/bookmark-response';
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:user');
@@ -149,10 +149,11 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             bookmarksCount,
             likesCount,
             commentsCount,
-            recentPages: enrichedRecentPages.map((page) => pageToResponse(page)),
-            recentBookmarks: recentBookmarks.map((bookmark) =>
-              bookmarkToResponse(bookmark, enrichedByPageId.get(toStringId((bookmark.page as PageDocument)._id)) ?? null),
-            ),
+            recentPages: enrichedRecentPages.map((page) => pageToListRowResponse(page)),
+            recentBookmarks: recentBookmarks.flatMap((bookmark) => {
+              const enriched = enrichedByPageId.get(toStringId((bookmark.page as PageDocument)._id));
+              return enriched ? [bookmarkToListRowResponse(bookmark, enriched)] : [];
+            }),
           },
           200,
         );
@@ -224,7 +225,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
         return c.json(
           {
-            pages: enrichedPages.map((page) => pageToResponse(page)),
+            pages: enrichedPages.map((page) => pageToListRowResponse(page)),
             pager: { prev, next, offset },
             total,
           },
@@ -263,7 +264,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
         return c.json(
           {
-            pages: enrichedPages.map((page) => pageToResponse(page)),
+            pages: enrichedPages.map((page) => pageToListRowResponse(page)),
             pager: { prev, next, offset },
             total,
           },

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Bookmark as BookmarkType } from '@crowi/api-contract';
+import type { BookmarkListRow as BookmarkType } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Bookmark } from 'lucide-react';
 import Link from 'next/link';

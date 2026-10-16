@@ -1,5 +1,6 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
+import { PAGE_LIST_REVISION_SELECT } from 'src/util/page-list-projection';
 import Debug from 'debug';
 import type { PageDocument } from './page';
 import { UserDocument } from './user';
@@ -52,7 +53,7 @@ export default (crowi: Crowi) => {
       // page-row avatar resolves (mirrors the /pages/list listing); without
       // them the bookmark list renders an empty placeholder ring.
       populate: [
-        { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
+        { path: 'revision', model: 'Revision', select: PAGE_LIST_REVISION_SELECT, populate: { path: 'author', model: 'User' } },
         { path: 'creator', model: 'User' },
         { path: 'lastUpdateUser', model: 'User' },
       ],
