@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { PageSchema } from './page';
+import { PageListRowSchema } from './page';
 
 // Language enum - matches User model. Only `en` / `ja` are live UI locales
 // (paraglide `locales`); the legacy regional variants (`en-US` / `en-GB`) were
@@ -145,6 +145,6 @@ export const PasswordErrorResponseSchema = z.object({
 export type PasswordErrorResponse = z.infer<typeof PasswordErrorResponseSchema>;
 
 export const RecentlyViewedPagesResponseSchema = z.object({
-  pages: z.array(PageSchema),
+  pages: z.array(PageListRowSchema),
 });
 export type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;

@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { PageSchema } from './page';
+import { PageListRowSchema } from './page';
 
 /**
  * Page-type filter for search. Mirrors `SearchPageType` in
@@ -48,7 +48,7 @@ export const SearchHitSchema = z.object({
   score: z.number().optional(),
   snippet: z.string().optional(),
   bookmarkCount: z.number(),
-  page: PageSchema,
+  page: PageListRowSchema,
 });
 export type SearchHit = z.infer<typeof SearchHitSchema>;
 
