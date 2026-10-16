@@ -1265,6 +1265,61 @@ describe('Page', () => {
     });
   });
 
+  describe('list-row revision projection', () => {
+    let author;
+    let revisionId;
+    const PATH = '/lean-model/a';
+
+    beforeAll(async () => {
+      author = createdUsers[0];
+    });
+
+    beforeEach(async () => {
+      await Page.deleteMany({});
+      const Revision = crowi.model('Revision');
+      const revision = await Revision.create({
+        path: PATH,
+        body: 'full body text',
+        author: author._id,
+        format: 'markdown',
+        meta: { toc: [{ level: 1, text: 'x', anchorId: 'x' }], wikiLinks: [], mentions: [], codeBlockLanguages: [] },
+        renderedAst: { type: 'root', children: [] },
+      });
+      revisionId = revision._id;
+      await Fixture.generate('Page', [{ path: PATH, grant: Page.GRANT_PUBLIC, creator: author, status: 'published', revision: revisionId }]);
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({});
+      await crowi.model('Revision').deleteMany({ path: PATH });
+    });
+
+    const expectLean = (page) => {
+      const revision = page.revision.toObject();
+      expect(String(revision._id)).toBe(String(revisionId));
+      expect(revision.path).toBe(PATH);
+      expect(String(revision.author._id)).toBe(String(author._id));
+      expect(revision.body).toBeUndefined();
+      expect(revision.meta).toBeUndefined();
+      expect(revision.renderedAst).toBeUndefined();
+    };
+
+    test('findListByCreator / findListByStartWith / findListByPageIds / findPagesByIds fetch the revision without body, meta and AST', async () => {
+      const [byCreator] = await Page.findListByCreator(author, {}, author);
+      const [byStart] = await Page.findListByStartWith('/lean-model/', author, {});
+      const [byIds] = await Page.findListByPageIds([byCreator._id], {});
+      const [byIdList] = await Page.findPagesByIds([byCreator._id]);
+      for (const page of [byCreator, byStart, byIds, byIdList]) expectLean(page);
+    });
+
+    test('populatePageData keeps the full revision for single-page reads', async () => {
+      const [page] = await Page.findListByCreator(author, {}, author);
+      const full = await Page.findPageById(page._id);
+      const populated = await Page.populatePageData(full, null);
+      expect(populated.revision.body).toBe('full body text');
+    });
+  });
+
   describe('findSubpagesByUserNamespace (feature-user-page-subpages-tab)', () => {
     let author;
     let other;

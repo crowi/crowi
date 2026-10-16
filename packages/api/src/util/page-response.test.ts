@@ -11,6 +11,9 @@ import {
   type PageLike,
   type PopulatedRevision,
   computeRevisionRenderArtifactsAsync,
+  isPopulatedRevision,
+  isPopulatedRevisionListRow,
+  pageToListRowResponse,
   pageToResponse,
   populatePageRelationData,
   toRevisionResponse,
@@ -880,5 +883,59 @@ describe('populatePageRelationData — C-PERF fixed bulk-query budget + D-2 in-p
       await Seen.removeByPageId(page._id);
       await Page.deleteOne({ _id: page._id });
     }
+  });
+});
+
+describe('list-row guard and serializer', () => {
+  const revisionId = new Types.ObjectId();
+  const author = { _id: new Types.ObjectId(), username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: new Date() };
+  const enriched = (revision: unknown) =>
+    ({
+      _id: new Types.ObjectId(),
+      path: '/x',
+      createdAt: new Date(),
+      likerCount: 1,
+      seenUsersCount: 2,
+      isLiked: true,
+      revision,
+    }) as unknown as EnrichedPage;
+
+  it('recognizes a populated revision without a body but not a bare id, null or undefined', () => {
+    const lean = { _id: revisionId, path: '/x' };
+    expect(isPopulatedRevisionListRow(lean)).toBe(true);
+    expect(isPopulatedRevision(lean)).toBe(false);
+    expect(isPopulatedRevisionListRow(revisionId)).toBe(false);
+    expect(isPopulatedRevisionListRow(null)).toBe(false);
+    expect(isPopulatedRevisionListRow(undefined)).toBe(false);
+  });
+
+  it('keeps the revision metadata and never emits body, meta or AST even when the input carries them', () => {
+    const response = pageToListRowResponse(
+      enriched({
+        _id: revisionId,
+        path: '/x',
+        body: 'SECRET BODY',
+        meta: { toc: [] },
+        renderedAst: { type: 'root', children: [] },
+        author,
+        editVia: 'pat',
+        contentType: 'artifact',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+    );
+    const revision = response.revision as Record<string, unknown>;
+    expect(revision._id).toBe(revisionId.toString());
+    expect(revision.contentType).toBe('artifact');
+    expect(revision.editVia).toBe('pat');
+    expect(revision.author).toMatchObject({ username: 'alice' });
+    for (const key of ['body', 'meta', 'renderedAst', 'renderedAstArtifactKey']) expect(Object.hasOwn(revision, key)).toBe(false);
+    expect(response.likerCount).toBe(1);
+  });
+
+  it('defaults a legacy revision contentType to markdown, tolerates a missing author, and omits an unpopulated revision', () => {
+    const legacy = pageToListRowResponse(enriched({ _id: revisionId, path: '/x' }));
+    expect(legacy.revision).toMatchObject({ contentType: 'markdown', author: null, format: 'markdown' });
+    expect(pageToListRowResponse(enriched(revisionId)).revision).toBeUndefined();
+    expect(pageToListRowResponse(enriched(undefined)).revision).toBeUndefined();
   });
 });

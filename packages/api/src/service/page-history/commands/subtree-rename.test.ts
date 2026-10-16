@@ -242,6 +242,12 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     expect(await Page.findById(child._id).lean()).toMatchObject({ path: '/subtree/moved/child' });
     expect(await Page.findById(grandchild._id).lean()).toMatchObject({ path: '/subtree/moved/child/grandchild' });
 
+    // The member listing reads revisions without their body; the stored bodies must be untouched.
+    for (const member of [root, child, grandchild]) {
+      const stored = await Page.findById(member._id).lean();
+      expect(await Revision.findById(stored.revision).lean()).toMatchObject({ body: 'body' });
+    }
+
     const rootOperation = await PageHistoryOperation.findOne({ command: 'subtree_rename' }).lean();
     expect(rootOperation.memberPageIds.map(String).sort()).toEqual([root._id, child._id, grandchild._id].map(String).sort());
     expect(rootOperation.groupOperationId).toEqual(expect.any(String));

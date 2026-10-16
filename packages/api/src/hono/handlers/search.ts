@@ -56,7 +56,7 @@ import Debug from 'debug';
 import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
-import { pageToResponse, populatePageRelationData } from 'src/util/page-response';
+import { pageToListRowResponse, populatePageRelationData } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -199,7 +199,7 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
         score: hit.score,
         snippet: hit.snippet,
         bookmarkCount: bookmarkCounts.get(hit.id) ?? 0,
-        page: pageToResponse(enrichedPages[i]),
+        page: pageToListRowResponse(enrichedPages[i]),
       }));
 
       // Subtract the hits we dropped (not-granted / no backing doc) from
