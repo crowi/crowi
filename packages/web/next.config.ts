@@ -59,7 +59,7 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
     ...(ALLOWED_DEV_ORIGINS?.length ? { allowedDevOrigins: ALLOWED_DEV_ORIGINS } : {}),
 
     // `distDir` defaults to `.next` — this MUST stay the default for every
-    // path that isn't a throwaway e2e dev server. `next dev` rewrites
+    // path that isn't a throwaway e2e server. `next dev` rewrites
     // whatever `distDir` resolves to into `<distDir>/dev` at startup
     // (`next/dist/server/config.js`) and takes an exclusive lockfile there
     // (`setup-dev-bundler.js`'s `Lockfile.acquireWithRetriesOrExit`), so two
@@ -70,7 +70,9 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
     // `start:web`) gives the e2e dev server its own distDir — and therefore
     // its own lock + build manifest + server output — so it can run
     // alongside a live `pnpm dev` without contention (feature-e2e-dev-server-
-    // isolation). `next build` (Docker / Vercel) never sets this env, so
+    // isolation). `start:web:prod` likewise builds and serves the e2e
+    // production build from `.next-e2e-prod`. The Docker / Vercel
+    // `next build` never sets this env, so
     // `output: 'standalone'` production artifacts keep landing at the
     // well-known `.next/standalone` / `.next/routes-manifest.json` paths
     // that `Dockerfile`, `turbo.json`'s build `outputs`, and
@@ -107,6 +109,10 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
     // instruction file agents load on their own — the repo's agent guidance
     // is kept in the files it maintains, not in ones a dependency writes.
     agentRules: false,
+
+    // Optimistic routing matches the server's raw `%5F…` folder names against the URL's `_…`, so a Link into any `/_*` route is
+    // prefetched in an endless loop (seen in Next 16.3.8 and 16.4.2). Remove once Next matches the escaped names.
+    experimental: { optimisticRouting: false },
 
     // Proxy `/api/*` to the Crowi API server (`CROWI_API_URL`). In dev the
     // API runs on a different port (4301) than the web app (4302), so relative

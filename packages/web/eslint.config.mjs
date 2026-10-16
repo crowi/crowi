@@ -83,6 +83,7 @@ const eslintConfig = defineConfig([
     // the report with thousands of false positives from minified vendor
     // bundle chunks.
     ".next-e2e/**",
+    ".next-e2e-prod/**",
     // Paraglide JS generated output. Each emitted file starts with
     // `/* eslint-disable */`, but our config raises every rule it would
     // disable to "off" by default, leaving ~320 "Unused eslint-disable
