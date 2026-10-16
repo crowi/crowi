@@ -272,6 +272,23 @@ describe('recent', () => {
     expect(first[2]).toBe(JSON.stringify((pages[0] as { lastUpdateUser: unknown }).lastUpdateUser));
   });
 
+  it('renders body-less list rows without fetching the body', async () => {
+    const row = page({ revision: { _id: 'r1', path: '/a', format: 'markdown', createdAt: '2026-01-01T00:00:00.000Z', contentType: 'markdown' } });
+    handler = (url) => (url.pathname.endsWith('/app/info') ? jsonResponse(200, {}) : jsonResponse(200, listBody([row])));
+    await run('recent');
+    expect(out().split('\n')[0]).toBe('/a\t2026-01-02T03:04:05.000Z\talice\tp1');
+
+    stdout.mockClear();
+    await run('recent', '--template', '{{path}}|{{revision.body}}|{{revision._id}}');
+    expect(out()).toBe('/a||r1\n');
+
+    stdout.mockClear();
+    await run('recent', '--json');
+    expect(JSON.parse(out()).pages[0].revision).not.toHaveProperty('body');
+
+    expect(urls().every((u) => u.pathname.endsWith('/pages/list') || u.pathname.endsWith('/app/info'))).toBe(true);
+  });
+
   it('preserves raw JSON and empty conventions', async () => {
     const body = { ...listBody([page({ extra: { deep: [1, 2] } })], { appliedPathPrefix: '/a' }), total: 77, unknownTop: { k: 'v' } };
     handler = (url) => (url.pathname.endsWith('/app/info') ? jsonResponse(200, {}) : jsonResponse(200, body));
