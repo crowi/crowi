@@ -13,7 +13,7 @@ import {
   mergeImageStyle,
   stripImageDisplayTransportProps,
 } from './image-display';
-import { authorFigureClassTokens, LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
+import { authorFigureClassTokens, classNameTokens, LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { type RenderMdastResult, renderMdastToReactResult } from './render-mdast';
 import { Button } from '@/components/ui/button';
 import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
@@ -210,6 +210,13 @@ export const previewComponents = {
     // it reaches the DOM (spec §5.3, view/preview parity with
     // `page-content.tsx`'s `a:` override) — a no-op for every other href.
     const href = canonicalizeLegacyAttachmentUrl(rawHref);
+    if (href === undefined) {
+      return (
+        <a className={classNameTokens(className).join(' ') || undefined} {...props}>
+          {children}
+        </a>
+      );
+    }
     const external = isExternalHref(href);
     return (
       <a

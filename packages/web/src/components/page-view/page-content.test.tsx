@@ -1234,3 +1234,31 @@ describe('PageContent — page-policy-memo', () => {
     expect((container.querySelector('ul') as HTMLElement).className).toContain('my-list');
   });
 });
+
+describe('PageContent — an author <a> without a usable href reads as text', () => {
+  it('keeps the element and its anchor name but drops the link styling when the sanitizer removed the href', () => {
+    renderPage(
+      pageWithAst({
+        type: 'root',
+        children: [
+          { type: 'html', value: '<p><a href="javascript:alert(1)">dropped</a> <a name="target">anchor</a> <a href="https://example.com/">kept</a></p>' },
+        ],
+      }),
+    );
+    const dropped = screen.getByText('dropped');
+    expect(dropped.tagName).toBe('A');
+    expect(dropped.hasAttribute('href')).toBe(false);
+    expect(dropped.getAttribute('class')).toBeNull();
+    const anchor = screen.getByText('anchor');
+    expect(anchor.getAttribute('name')).toBe('target');
+    expect(anchor.getAttribute('class')).toBeNull();
+    expect(screen.getByRole('link', { name: 'kept' }).getAttribute('class')).toContain('text-primary');
+  });
+
+  it('keeps an empty href a styled link to the current page', () => {
+    renderPage(pageWithLink('', 'self'));
+    const self = screen.getByText('self');
+    expect(self.getAttribute('href')).toBe('');
+    expect(self.getAttribute('class')).toContain('text-primary');
+  });
+});

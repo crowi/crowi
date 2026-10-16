@@ -66,12 +66,17 @@ export function mergeListClassName(base: string, incoming: unknown): string {
   return base;
 }
 
-/** Author classes on a figure, minus the generated `crowi-figure` marker. */
-export function authorFigureClassTokens(className: unknown): string[] {
+/** The class tokens of a renderer-supplied `className` (a string or an array of strings). */
+export function classNameTokens(className: unknown): string[] {
   const tokens = Array.isArray(className)
     ? className.filter((c): c is string => typeof c === 'string')
     : typeof className === 'string'
       ? className.split(/\s+/)
       : [];
-  return tokens.filter((token) => token !== '' && token !== 'crowi-figure');
+  return tokens.filter((token) => token !== '');
+}
+
+/** Author classes on a figure, minus the generated `crowi-figure` marker. */
+export function authorFigureClassTokens(className: unknown): string[] {
+  return classNameTokens(className).filter((token) => token !== 'crowi-figure');
 }

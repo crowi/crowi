@@ -267,7 +267,15 @@ const components = {
     // (attachment link, internal router link, plain external `<a>`) reads
     // the canonical value. A no-op for every other href shape.
     const href = canonicalizeLegacyAttachmentUrl(rawHref);
-    const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
+    // No href at all (an anchor target, or a link whose URL the sanitizer refused): styled as a link it would look clickable and do nothing.
+    if (href === undefined) {
+      return (
+        <a className={className} style={style} {...props}>
+          {children}
+        </a>
+      );
+    }
+    const isExternal = href.startsWith('http://') || href.startsWith('https://');
     // Wikilinks / mentions stamp `className` server-side via
     // `data.hProperties.className`; mdast-util-to-hast forwards that
     // straight to the hast `properties.className` and into our props.
