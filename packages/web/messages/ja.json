@@ -215,7 +215,7 @@
   "admin.section_users": "ユーザー管理",
   "admin.security.failed_to_load": "セキュリティ設定の読み込みに失敗しました。",
   "admin.security.failed_to_save": "セキュリティ設定の保存に失敗しました。",
-  "admin.security.field_html_sanitization_help": "既定は ON で、ページ本文の HTML は厳しく制限して表示します。OFF にすると、装飾用の style / class、受動的なレイアウト要素、外部 HTTPS の iframe が使えます。script・form・object/embed などは OFF でも表示されません。OFF では著者が CSS で画面を偽装できる点は防げません。著者 CSS の背景画像（URL などのリソース参照）と CSS 変数は OFF でも使えず、解析結果が一致しない style や宣言が重複する style は属性ごと無効になります。外部 iframe には script と同一 origin 扱いの権限（allow-scripts / allow-same-origin など）が固定で付き、初期 src が Web・API・artifact の origin のものだけ除外します。リダイレクト先は検証できません。通常の Web ページはどの設定でも iframe 内に表示できず（artifact 用の中継文書だけは例外）、リダイレクトで管理画面などが frame に入ることはありません。保存本文は変更されません。",
+  "admin.security.field_html_sanitization_help": "既定は ON です。ON のあいだは、ページ本文の HTML のうち、文字の装飾や表など安全なものだけを表示します。OFF にすると、style や class による装飾、決まった一部のレイアウト用の要素、外部サイト（HTTPS）の iframe も表示します。どちらの設定でも、保存されている本文は書き換えません。",
   "admin.security.field_html_sanitization_label": "Markdown の HTML サニタイズを有効にする",
   "admin.security.field_link_card_help": "有効にすると、ページの保存または再描画時に外部リンク先へ OGP 情報を取得する server-side リクエストが発生します。無効にすると新規のリクエストは行われません。",
   "admin.security.field_link_card_label": "外部リンクのカード化を許可する",
@@ -1310,5 +1310,11 @@
   "user_page.tab_subpages": "配下ページ",
   "user_page.view_all_bookmarks": "{count} 件すべてを表示",
   "user_page.view_all_pages": "{count} 件すべてを表示",
-  "user_page.view_all_subpages": "{count} 件すべてを表示"
+  "user_page.view_all_subpages": "{count} 件すべてを表示",
+  "admin.security.html_sanitization_caveats_heading": "OFF にする前に確認してください",
+  "admin.security.html_sanitization_caveat_never_shown": "script・form・object・embed などは、OFF でも表示しません。",
+  "admin.security.html_sanitization_caveat_css_spoofing": "OFF のときは、ページの作者が CSS で本文をこの Wiki の画面に似せて見せることができます。これは防げません。",
+  "admin.security.html_sanitization_caveat_css_limits": "CSS の背景画像などのリソースの参照と、CSS 変数は、OFF でも使えません。解析結果が食い違う style と、同じ宣言が重複する style は、属性ごと無視します。",
+  "admin.security.html_sanitization_caveat_iframe": "外部の iframe では、埋め込んだサイトの script が動きます。allow-scripts や allow-same-origin などの権限を常に付けるためです。埋め込み先がこの Wiki 自身（Web・API・artifact 配信のアドレス）のときは表示しません。ただし、外部サイトが別の URL へ転送した場合、転送先は確かめられません。",
+  "admin.security.html_sanitization_caveat_no_framing": "この Wiki の通常の画面は、どの設定でも iframe の中に表示されません。例外は artifact 用の中継ページだけです。そのため、転送を使っても、管理画面などが埋め込まれることはありません。"
 }

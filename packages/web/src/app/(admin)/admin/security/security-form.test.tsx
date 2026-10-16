@@ -92,9 +92,10 @@ describe('SecurityForm — htmlSanitizationEnabled Switch', () => {
     render(<SecurityForm settings={BASE_SETTINGS} />);
     expect(screen.getByText(m['admin.security.section_html_sanitization_heading']())).toBeTruthy();
     expect(screen.getByText(m['admin.security.html_sanitization_activation_help']())).toBeTruthy();
-    const help = screen.getByText(m['admin.security.field_html_sanitization_help']());
-    expect(help.textContent).toMatch(/iframe/i);
-    expect(help.textContent).toMatch(/CSS/);
+    expect(screen.getByText(m['admin.security.field_html_sanitization_help']()).textContent).toMatch(/iframe/i);
+    expect(screen.getByText(m['admin.security.html_sanitization_caveats_heading']())).toBeTruthy();
+    expect(screen.getByText(m['admin.security.html_sanitization_caveat_css_spoofing']()).textContent).toMatch(/CSS/);
+    expect(screen.getByText(m['admin.security.html_sanitization_caveat_iframe']()).textContent).toMatch(/allow-scripts/);
   });
 
   it('defaults to ON, and treats a missing field from an older API as ON', () => {
