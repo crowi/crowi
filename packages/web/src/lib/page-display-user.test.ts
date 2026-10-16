@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Page, PageUser, PageWithRevision, Revision } from '@crowi/api-contract';
+import type { Page, PageListRow, PageUser, PageWithRevision, Revision } from '@crowi/api-contract';
 import { resolveDisplayUser } from './page-display-user';
 
 const ALICE: PageUser = { _id: 'u-alice', username: 'alice', name: 'Alice', email: 'alice@example.com', createdAt: '2026-01-01T00:00:00.000Z' };
@@ -78,5 +78,19 @@ describe('resolveDisplayUser', () => {
       revision: makeRevision({ author: CAROL }),
     };
     expect(resolveDisplayUser(page)).toEqual(CAROL);
+  });
+
+  it('uses the author of a body-less list-row revision when no page user is populated, and still prefers lastUpdateUser', () => {
+    const revision = {
+      _id: 'rev-1',
+      path: '/docs/example',
+      format: 'markdown',
+      createdAt: '2026-05-01T00:00:00.000Z',
+      contentType: 'markdown' as const,
+      author: CAROL,
+    };
+    const row: PageListRow = { ...makePage({ lastUpdateUser: 'u-bob', creator: null }), revision };
+    expect(resolveDisplayUser(row)).toEqual(CAROL);
+    expect(resolveDisplayUser({ ...row, lastUpdateUser: BOB })).toEqual(BOB);
   });
 });

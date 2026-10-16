@@ -1,6 +1,6 @@
 'use client';
 
-import type { Page } from '@crowi/api-contract';
+import type { PageListRow } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { FolderTree } from 'lucide-react';
 import Link from 'next/link';
@@ -49,9 +49,9 @@ export function UserSubpages({ username, preview = false, previewLimit = 5 }: Us
   // shift from a concurrent create/delete/rename can otherwise repeat a row
   // across two fetched pages, which would both double-render it and collide
   // on React's list `key`.
-  const rawPages: Page[] = data?.pages.flatMap((p) => p.pages) ?? [];
+  const rawPages: PageListRow[] = data?.pages.flatMap((p) => p.pages) ?? [];
   const seen = new Set<string>();
-  const allPages: Page[] = [];
+  const allPages: PageListRow[] = [];
   for (const page of rawPages) {
     if (seen.has(page._id)) continue;
     seen.add(page._id);

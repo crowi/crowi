@@ -211,6 +211,49 @@ describe('useToggleLike — pageListKeys family (D-2 registry)', () => {
   });
 });
 
+describe('useToggleLike — pageListKeys family with body-less rows', () => {
+  interface LeanRow extends PageSlice {
+    revision: { _id: string; path: string };
+  }
+  interface LeanListData {
+    pages: LeanRow[];
+    portalPage: (PageSlice & { revision: { _id: string; body: string } }) | null;
+  }
+  const KEY = ['pages', 'list', { path: '/docs/' }] as const;
+  const seed = (client: QueryClient) =>
+    client.setQueryData<LeanListData>(KEY, {
+      pages: [{ _id: PAGE_ID, isLiked: false, likerCount: 1, revision: { _id: 'rev-1', path: '/docs/a' } }],
+      portalPage: { _id: 'portal-1', isLiked: false, likerCount: 0, revision: { _id: 'rev-p', body: '# portal' } },
+    });
+
+  it('flips the row optimistically, then settles on the server value, without inventing a revision body', async () => {
+    const client = makeClient();
+    seed(client);
+    likePage.mockResolvedValue(okResponse({ _id: PAGE_ID, isLiked: true, likerCount: 2 }));
+
+    const { result } = renderHook(() => useToggleLike(PAGE_ID, false), { wrapper: wrapperFor(client) });
+    await act(async () => result.current.toggleAsync());
+
+    const cached = client.getQueryData<LeanListData>(KEY);
+    expect(cached?.pages[0]).toMatchObject({ isLiked: true, likerCount: 2, revision: { _id: 'rev-1', path: '/docs/a' } });
+    expect(cached?.pages[0].revision).not.toHaveProperty('body');
+    expect(cached?.portalPage?.revision.body).toBe('# portal');
+  });
+
+  it('rolls a body-less row back to its original shape on failure', async () => {
+    const client = makeClient();
+    seed(client);
+    likePage.mockResolvedValue(failResponse());
+
+    const { result } = renderHook(() => useToggleLike(PAGE_ID, false), { wrapper: wrapperFor(client) });
+    act(() => result.current.toggle());
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const cached = client.getQueryData<LeanListData>(KEY);
+    expect(cached?.pages[0]).toEqual({ _id: PAGE_ID, isLiked: false, likerCount: 1, revision: { _id: 'rev-1', path: '/docs/a' } });
+  });
+});
+
 // -- userPageKeys.profile — recentPages[], recentBookmarks[].page ----------
 describe('useToggleLike — userPageKeys.profile family (D-2 registry)', () => {
   interface UserPageData {
