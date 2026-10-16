@@ -41,7 +41,7 @@ import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { applyScope } from '../middleware/require-scope';
 
-import { bookmarkToListRowResponse, bookmarksToResponseList } from './_helpers/bookmark-response';
+import { bookmarksToListRows, bookmarksToResponseList } from './_helpers/bookmark-response';
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:user');
@@ -150,10 +150,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             likesCount,
             commentsCount,
             recentPages: enrichedRecentPages.map((page) => pageToListRowResponse(page)),
-            recentBookmarks: recentBookmarks.flatMap((bookmark) => {
-              const enriched = enrichedByPageId.get(toStringId((bookmark.page as PageDocument)._id));
-              return enriched ? [bookmarkToListRowResponse(bookmark, enriched)] : [];
-            }),
+            recentBookmarks: bookmarksToListRows(recentBookmarks, enrichedByPageId),
           },
           200,
         );

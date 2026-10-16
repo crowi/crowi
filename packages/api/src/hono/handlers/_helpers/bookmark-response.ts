@@ -67,6 +67,11 @@ export async function bookmarksToResponseList(crowi: Crowi, bookmarks: BookmarkD
   const pages = bookmarks.map((bookmark) => bookmark.page as PageDocument);
   const enrichedPages = await populatePageRelationData(crowi, pages, viewer);
   const enrichedByPageId = new Map<string, EnrichedPage>(enrichedPages.map((page) => [toStringId(page._id), page]));
+  return bookmarksToListRows(bookmarks, enrichedByPageId);
+}
+
+/** Serializes bookmarks as list rows, dropping any whose page has no enriched entry. */
+export function bookmarksToListRows(bookmarks: BookmarkDocument[], enrichedByPageId: Map<string, EnrichedPage>) {
   return bookmarks.flatMap((bookmark) => {
     const enriched = enrichedByPageId.get(toStringId((bookmark.page as PageDocument)._id));
     return enriched ? [bookmarkToListRowResponse(bookmark, enriched)] : [];

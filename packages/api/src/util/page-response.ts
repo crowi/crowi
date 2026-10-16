@@ -195,13 +195,8 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   // other way (legacy data, a future writer bug).
   const isMarkdown = contentType === 'markdown';
   return {
-    _id: revision._id.toString(),
-    path: revision.path,
+    ...revisionToListRowResponse(revision),
     body: revision.body,
-    format: revision.format || 'markdown',
-    author: revision.author ? toPageUser(revision.author) : null,
-    ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
-    createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
     // Sync path: only emits stored meta + renderedAst. Detail endpoints
     // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
     // afterwards to fold in the on-the-fly fallback for legacy revisions.
@@ -212,7 +207,6 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
     ...(isMarkdown && options.withRenderedAst
       ? { renderedAst: revision.renderedAst as Revision['renderedAst'], rendererVersion: revision.rendererVersion }
       : {}),
-    contentType,
   };
 };
 
