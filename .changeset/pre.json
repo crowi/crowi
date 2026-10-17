@@ -155,6 +155,8 @@
     "history-full-width",
     "history-page-chrome-and-mobile-diff",
     "html-mail-and-invite-tokens",
+    "html-sanitizer-toggle",
+    "html-sanitizer-web",
     "id-url-no-focus-ring",
     "image-affordance-duplicate-panel",
     "image-affordance-icon-heading-clear",
@@ -216,6 +218,8 @@
     "page-link-space-paths-phase2-api",
     "page-link-space-paths-web",
     "page-list-exclude-portal-self",
+    "page-list-lean-rows",
+    "page-list-skip-yjs-state",
     "page-list-sort",
     "page-markdown-download",
     "page-path-plus-space",
@@ -264,6 +268,7 @@
     "remove-external-share-feature",
     "remove-site-basic-auth",
     "remove-social-login-scaffolding",
+    "rename-dialog-keep-user-select-all",
     "rename-dialog-select-leaf",
     "rename-promotes-untracked-page",
     "rename-tree-subtree-move",
@@ -337,6 +342,7 @@
     "web-auth-state-centralization",
     "web-error-screens",
     "web-image-runtime-config",
+    "web-reserved-route-prefetch-loop",
     "wikilink-format-code-exclusion-preserve-timestamps"
   ]
 }

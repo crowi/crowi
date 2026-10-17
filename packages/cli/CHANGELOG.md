@@ -1,5 +1,15 @@
 # @crowi/cli
 
+## 1.0.0-alpha.9
+
+### Patch Changes
+
+- f8fc038: Page list rows (page lists, bookmarks, profile pages, search results and recently viewed pages) no longer load or return the latest revision's body, rendered AST and metadata, which makes long lists lighter and faster. The revision object is still present on each row with its id, path, author and content type; fetch the page itself to read its body. The portal page shown above a list is unchanged, and `crowi recent --json` and `{{revision.body}}` templates no longer include the body.
+- Updated dependencies [2f353d3]
+- Updated dependencies [52a2d23]
+- Updated dependencies [f8fc038]
+  - @crowi/api-contract@2.0.0-alpha.25
+
 ## 1.0.0-alpha.8
 
 ### Minor Changes
