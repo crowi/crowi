@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { isPlainPrimaryClick } from '@/lib/is-plain-primary-click';
 import { InlineAttachmentModal } from './inline-attachment-modal';
 
 /**
@@ -84,10 +85,6 @@ interface InlineAttachmentLinkProps {
    */
   style?: React.CSSProperties;
 }
-
-// A modifier-key or non-primary-button click is left alone so the
-// browser's native "open in new tab / window" still works.
-const isPlainPrimaryClick = (event: React.MouseEvent) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
 /**
  * In-body attachment reference. Left-click opens the shared detail modal

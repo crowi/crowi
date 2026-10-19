@@ -16,9 +16,12 @@ import { SiteBrand } from '@/components/site-brand';
 
 const renderWith = (ui: ReactNode) => {
   const client = new QueryClient();
+  client.setQueryData(['pages', 'list', '/'], []);
+  client.setQueryData(['comments', { pageId: 'page-1' }], []);
+  client.setQueryData(['presenceToken', 'page-1'], 'token');
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
-  return invalidate;
+  return { invalidate, isInvalidated: (key: unknown[]) => client.getQueryState(key)?.isInvalidated };
 };
 
 const topLink = () => screen.getByRole('link', { name: 'トップ' });
@@ -34,29 +37,30 @@ describe('a link back to the top page while on it', () => {
   it.each([
     ['the sidebar top link', () => <SidebarNavLinks />, topLink],
     ['the site logo', () => <SiteBrand />, brandLink],
-  ])('%s refetches the page queries in place', (_name, ui, link) => {
-    const invalidate = renderWith(ui());
-    const notPrevented = fireEvent.click(link());
-    expect(invalidate).toHaveBeenCalledTimes(1);
-    expect(notPrevented).toBe(false);
+  ])('%s refetches the page lists in place, leaving the realtime tokens alone', (_name, ui, link) => {
+    const { isInvalidated } = renderWith(ui());
+    expect(fireEvent.click(link())).toBe(false);
+    expect(isInvalidated(['pages', 'list', '/'])).toBe(true);
+    expect(isInvalidated(['comments', { pageId: 'page-1' }])).toBe(true);
+    expect(isInvalidated(['presenceToken', 'page-1'])).toBe(false);
   });
 
   it('leaves a modified click to the browser', () => {
-    const invalidate = renderWith(<SiteBrand />);
+    const { invalidate } = renderWith(<SiteBrand />);
     expect(fireEvent.click(brandLink(), { metaKey: true })).toBe(true);
     expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('navigates normally from an old revision of the top page', () => {
     search.current = 'revision_id=abc';
-    const invalidate = renderWith(<SiteBrand />);
+    const { invalidate } = renderWith(<SiteBrand />);
     expect(fireEvent.click(brandLink())).toBe(true);
     expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('navigates normally from any other page', () => {
     pathname.current = '/some/page';
-    const invalidate = renderWith(<SidebarNavLinks />);
+    const { invalidate } = renderWith(<SidebarNavLinks />);
     expect(fireEvent.click(topLink())).toBe(true);
     expect(invalidate).not.toHaveBeenCalled();
   });
