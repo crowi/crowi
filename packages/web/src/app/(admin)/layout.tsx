@@ -26,7 +26,7 @@ import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
 import { Toaster } from '@/components/ui/sonner';
 import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
-import { MAIN_CONTENT_ID, useRouteFocus } from '@/lib/use-route-focus';
+import { MAIN_CONTENT_ID, MAIN_FOCUS_FRAME_CLASSNAME, useRouteFocus } from '@/lib/use-route-focus';
 import { SkipLink } from '@/components/skip-link';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -153,7 +153,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <aside className="lg:sticky lg:top-8 lg:self-start">
           <AdminSidebar />
         </aside>
-        <main id={MAIN_CONTENT_ID} tabIndex={-1} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} className={MAIN_FOCUS_FRAME_CLASSNAME}>
           <AdminBreadcrumb />
           {children}
         </main>

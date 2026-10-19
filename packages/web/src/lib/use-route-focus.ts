@@ -11,6 +11,9 @@ import { decodePagePathFromUrl } from './page-path';
  */
 export const MAIN_CONTENT_ID = 'main-content';
 
+/** The focus frame both shell layouts draw on that landmark: inset and faint, see the (auth) layout. */
+export const MAIN_FOCUS_FRAME_CLASSNAME = 'focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/40';
+
 // Module-level rather than context: the redirecting page sits below the
 // layout that owns the hook. Held as the page path the redirect is headed
 // for, not a bare flag, so a redirect that never lands (the reader followed a
