@@ -48,7 +48,7 @@
     "css-tree": "^3.2.1",
     "hast-util-raw": "^9.1.0",
     "hast-util-sanitize": "^5.0.2",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "style-to-js": "1.1.21",
     "vfile": "^6.0.3",
     "zod": "catalog:"
