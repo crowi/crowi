@@ -1,5 +1,14 @@
 # @crowi/web
 
+## 2.0.0-alpha.26
+
+### Patch Changes
+
+- 2132468: The frame drawn around the page after moving to another page and pressing a key (such as Page Down) is now a faint line around the whole content area instead of a strong ring that cut across the article, which sat off to one side on wide screens with the table of contents shown.
+- 9ff626b: On the top page, clicking the sidebar's top link or the site logo refreshes the page list in place, so pages created since the visit appear without reloading the browser. A faint reload icon on hover hints at it.
+- Updated dependencies [1773ab0]
+  - @crowi/api-contract@2.0.0-alpha.26
+
 ## 2.0.0-alpha.25
 
 ### Minor Changes
