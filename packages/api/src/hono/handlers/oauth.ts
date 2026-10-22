@@ -2,6 +2,7 @@
  * RFC-0010 Phase 3+4 — OAuth 2.0 authorization-server endpoints.
  *
  *   POST /oauth/authorize                          — JWT (web session only)
+ *   POST /oauth/authorize/deny                     — JWT (web session only)
  *   POST /oauth/token                              — public (RFC 6749 / 8628)
  *   POST /oauth/revoke                             — public (RFC 7009)
  *   GET  /.well-known/oauth-authorization-server   — public (RFC 8414)
@@ -10,7 +11,7 @@
  *   POST /oauth/device/verify                      — JWT (web session only)
  *   GET  /oauth/client-info                        — public (RFC-0016 §4.4, client metadata lookup)
  *
- * `/oauth/authorize` and `/oauth/device/verify` ride per-path
+ * `/oauth/authorize`, `/oauth/authorize/deny` and `/oauth/device/verify` ride per-path
  * `createJwtAuth(crowi)` applies (no other handler owns `/oauth/*`, so the
  * applies are self-contained, mirroring `tokenAuth`'s `/auth/logout`
  * install). Both are **web-session only** (PHASE3-Q9 / PHASE4-Q5): minting
@@ -33,6 +34,7 @@
  */
 import type { ForbiddenError, NotFoundError, OAuthError, TokenResponse } from '@crowi/api-contract';
 import {
+  authorizeDenyRoute,
   authorizeRoute,
   clientInfoRoute,
   DISCOVERY_SCOPES_SUPPORTED,
@@ -55,7 +57,7 @@ import type { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import { createJwtUtil } from 'src/util/jwt';
-import { isRedirectUriAllowed } from 'src/util/oauth-redirect-uri';
+import { buildAuthorizationResponseUri, isRedirectUriAllowed } from 'src/util/oauth-redirect-uri';
 import { isWithinReuseGrace } from 'src/util/oauth-refresh-grace';
 import { verifyPkceS256 } from 'src/util/pkce';
 import { normalizeUserCode } from 'src/util/user-code';
@@ -149,12 +151,13 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
   const User = crowi.model('User');
   const jwtUtil = createJwtUtil(crowi);
 
-  // `/oauth/authorize` and `/oauth/device/verify` both require an
+  // `/oauth/authorize`, `/oauth/authorize/deny` and `/oauth/device/verify` all require an
   // authenticated web session. The other routes are public, so we install
   // jwtAuth on each literal path only (same per-path install as `tokenAuth`'s
   // `/auth/logout`). `/oauth/device/authorize`, `/oauth/device` (lookup) and
   // `/oauth/token` (incl. the device grant) stay public.
   app.use('/oauth/authorize', createJwtAuth(crowi));
+  app.use('/oauth/authorize/deny', createJwtAuth(crowi));
   app.use('/oauth/device/verify', createJwtAuth(crowi));
 
   /**
@@ -241,13 +244,30 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS),
         });
 
-        const url = new URL(redirect_uri);
-        url.searchParams.set('code', code);
-        if (state != null) url.searchParams.set('state', state);
-
-        return c.json({ redirectUri: url.toString() }, 200);
+        return c.json({ redirectUri: buildAuthorizationResponseUri(redirect_uri, { code, state }) }, 200);
       } catch (err) {
         debug('authorize failed:', err);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(authorizeDenyRoute, async (c) => {
+      if (c.get('authContext').kind !== 'web') {
+        return c.json(FORBIDDEN_BODY, 403);
+      }
+      const { client_id, redirect_uri, state } = c.req.valid('json');
+
+      try {
+        const client = await OAuthClient.findByClientId(client_id);
+        if (!client) {
+          return c.json(oauthError('invalid_client', 'Unknown client'), 400);
+        }
+        // Never bounce the browser to an unregistered URI (RFC 6749 §4.1.2.1).
+        if (!isRedirectUriAllowed(client, redirect_uri)) {
+          return c.json(oauthError('invalid_request', 'redirect_uri is not registered for this client'), 400);
+        }
+        return c.json({ redirectUri: buildAuthorizationResponseUri(redirect_uri, { error: 'access_denied', state }) }, 200);
+      } catch (err) {
+        debug('authorize/deny failed:', err);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     })

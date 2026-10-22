@@ -230,7 +230,7 @@ export const buildHonoApp = (crowi: Crowi) => {
   // RFC-0010 Phase 3/4 — OAuth authorization-server endpoints. `/oauth/token`,
   // `/oauth/revoke`, `/.well-known/oauth-authorization-server`,
   // `/oauth/device/authorize` and `GET /oauth/device` are public;
-  // `/oauth/authorize` and `/oauth/device/verify` install their own per-path
+  // `/oauth/authorize`, `/oauth/authorize/deny` and `/oauth/device/verify` install their own per-path
   // `createJwtAuth` (no prefix overlap with any other handler's broad apply,
   // so they are self-contained).
   const withOAuth = registerOAuthRoutes(withOAuthSession, crowi);
