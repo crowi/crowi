@@ -39,7 +39,7 @@
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "jest": "catalog:",
     "ts-jest": "catalog:",
     "tsup": "catalog:",

@@ -31,7 +31,7 @@
  * (same model as PATs). Access tokens are stateless scope-bearing JWTs
  * (`signOauthAccessToken`).
  */
-import type { ForbiddenError, NotFoundError, OAuthError } from '@crowi/api-contract';
+import type { ForbiddenError, NotFoundError, OAuthError, TokenResponse } from '@crowi/api-contract';
 import {
   authorizeRoute,
   clientInfoRoute,
@@ -48,6 +48,7 @@ import {
   tokenRoute,
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
+import crypto from 'node:crypto';
 import Debug from 'debug';
 import type { Context } from 'hono';
 import type { Types } from 'mongoose';
@@ -112,6 +113,12 @@ const oauthError = (error: OAuthError['error'], description?: string): OAuthErro
   ...(description ? { error_description: description } : {}),
 });
 
+const INVALID_REFRESH_BODY = oauthError('invalid_grant', 'Refresh token is invalid, expired, or revoked');
+const INVALID_GRANT_BODY = oauthError('invalid_grant', 'The authorization was revoked');
+
+/** Constructor name only: a driver/model error message may carry values. */
+const errorClass = (err: unknown): string => (err instanceof Error ? err.name : typeof err);
+
 /**
  * Read a request body as a plain record from either JSON or
  * `application/x-www-form-urlencoded` (RFC 6749 / 7009). Returns `{}` on a
@@ -136,6 +143,7 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
   const OAuthClient = crowi.model('OAuthClient');
   const OAuthAuthorizationCode = crowi.model('OAuthAuthorizationCode');
   const OAuthRefreshToken = crowi.model('OAuthRefreshToken');
+  const OAuthTokenFamilyRevocation = crowi.model('OAuthTokenFamilyRevocation');
   const OAuthDeviceCode = crowi.model('OAuthDeviceCode');
   const PersonalAccessToken = crowi.model('PersonalAccessToken');
   const User = crowi.model('User');
@@ -271,7 +279,9 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             return c.json(oauthError('invalid_grant', 'User is no longer active'), 400);
           }
 
-          return c.json(await issueTokens(user, record.clientId, record.scopes), 200);
+          const issued = await issueTokens(user, record.clientId, record.scopes, crypto.randomUUID());
+          if (!issued) return c.json(INVALID_GRANT_BODY, 400);
+          return c.json(issued, 200);
         }
 
         if (body.grant_type === 'refresh_token') {
@@ -294,15 +304,20 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             // otherwise — is ever returned here (§D-1).
             const known = await OAuthRefreshToken.findOne({ tokenHash: presentedHash });
             if (known) {
-              if (known.revokedAt && isWithinReuseGrace(known.revokedAt)) {
+              if (!known.familyId) {
+                // Pre-family row: no family to revoke and none is invented.
+                // Revoke just this row (a no-op when it is already revoked,
+                // which keeps the original revokedAt).
+                await OAuthRefreshToken.updateOne({ _id: known._id, userId: known.userId, revokedAt: null }, { $set: { revokedAt: new Date() } });
+              } else if (known.revokedAt && isWithinReuseGrace(known.revokedAt)) {
                 // §D-4: record that a revocation was suppressed, without any
                 // value that could be used to look up or replay the token.
                 debug('refresh reuse suppressed within grace window: clientId=%s elapsedMs=%d', known.clientId, Date.now() - known.revokedAt.getTime());
               } else {
-                await OAuthRefreshToken.revokeChain(presentedHash);
+                await OAuthRefreshToken.revokeFamily(known.familyId, known.userId);
               }
             }
-            return c.json(oauthError('invalid_grant', 'Refresh token is invalid, expired, or revoked'), 400);
+            return c.json(INVALID_REFRESH_BODY, 400);
           }
 
           if (active.clientId !== body.client_id) {
@@ -333,7 +348,12 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           // chain's ORIGIN authorization time, not this rotation's time —
           // `active.createdAt` is the fallback for a legacy row that
           // predates `authorizedAt`.
-          const issued = await issueTokens(user, active.clientId, nextScopes, active.authorizedAt ?? active.createdAt);
+          if (!active.familyId) {
+            // findActiveByHash never returns a family-less row; this narrows the type.
+            return c.json(INVALID_REFRESH_BODY, 400);
+          }
+          const issued = await issueTokens(user, active.clientId, nextScopes, active.familyId, active.authorizedAt ?? active.createdAt);
+          if (!issued) return c.json(INVALID_REFRESH_BODY, 400);
           const successorHash = OAuthRefreshToken.hashToken(issued.refresh_token);
           active.revokedAt = new Date();
           active.rotatedTo = successorHash;
@@ -386,14 +406,16 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             return c.json(oauthError('invalid_grant', 'User is no longer active'), 400);
           }
 
-          return c.json(await issueTokens(user, consumed.clientId, consumed.grantedScopes), 200);
+          const issued = await issueTokens(user, consumed.clientId, consumed.grantedScopes, crypto.randomUUID());
+          if (!issued) return c.json(INVALID_GRANT_BODY, 400);
+          return c.json(issued, 200);
         }
 
         // discriminatedUnion already constrains grant_type; this is
         // unreachable but keeps the contract explicit for SDKs.
         return c.json(oauthError('unsupported_grant_type', 'Unsupported grant_type'), 400);
       } catch (err) {
-        debug('token failed:', err);
+        debug('token failed: %s', errorClass(err));
         return c.json(oauthError('invalid_request', 'Internal error processing token request'), 400);
       }
     })
@@ -408,9 +430,12 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
 
       try {
         if (token.startsWith(OAuthRefreshToken.TOKEN_PREFIX)) {
-          // Revoke the whole rotation chain for a refresh token.
-          const hash = OAuthRefreshToken.hashToken(token);
-          await OAuthRefreshToken.revokeChain(hash);
+          // Revoke the whole sign-in family the presented token belongs to.
+          // Unknown and pre-family tokens are a no-op (still 200).
+          const known = await OAuthRefreshToken.findOne({ tokenHash: OAuthRefreshToken.hashToken(token) });
+          if (known?.familyId) {
+            await OAuthRefreshToken.revokeFamily(known.familyId, known.userId);
+          }
         } else if (token.startsWith(PersonalAccessToken.TOKEN_PREFIX)) {
           const hash = PersonalAccessToken.hashToken(token);
           await PersonalAccessToken.updateOne({ tokenHash: hash, revokedAt: null }, { revokedAt: new Date() });
@@ -419,7 +444,7 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         // are stateless and short-lived (RFC-0010 OQ-A); still 200.
         return c.json({}, 200);
       } catch (err) {
-        debug('revoke failed (still 200 per RFC 7009):', err);
+        debug('revoke failed (still 200 per RFC 7009): %s', errorClass(err));
         return c.json({}, 200);
       }
     })
@@ -545,13 +570,22 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
   /**
    * Mint a fresh access (JWT) + refresh (DB-backed) pair for a grant.
    *
-   * `authorizedAt` is the rotation chain's origin authorization time:
-   * authorization-code / device-code grants default to "now" (a fresh
-   * chain), while a refresh grant passes `active.authorizedAt ??
-   * active.createdAt` so every successor in a chain reports the SAME
-   * authorization time, not the time of its own rotation.
+   * `familyId` is the sign-in family: authorization-code / device-code grants
+   * pass a new UUID, a refresh grant passes the predecessor's value.
+   * `authorizedAt` is the family's origin authorization time: first grants
+   * default to "now", a refresh grant passes `active.authorizedAt ??
+   * active.createdAt` so every successor reports the SAME authorization time.
+   *
+   * Returns null when the family was revoked while this request was in
+   * flight: the freshly inserted row is revoked and no token is returned.
    */
-  async function issueTokens(user: { _id: Types.ObjectId; email: string }, clientId: string, scopes: string[], authorizedAt: Date = new Date()) {
+  async function issueTokens(
+    user: { _id: Types.ObjectId; email: string },
+    clientId: string,
+    scopes: string[],
+    familyId: string,
+    authorizedAt: Date = new Date(),
+  ): Promise<TokenResponse | null> {
     const accessToken = jwtUtil.signOauthAccessToken({
       user,
       scopes,
@@ -559,14 +593,21 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
       expiresInSec: ACCESS_TOKEN_TTL_SEC,
     });
     const { token: refreshToken, tokenHash } = OAuthRefreshToken.generateToken();
-    await OAuthRefreshToken.create({
+    const row = await OAuthRefreshToken.create({
       tokenHash,
       clientId,
       userId: user._id,
       scopes,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
       authorizedAt,
+      familyId,
     });
+    // A revoke that saved its record before this insert is invisible to the
+    // bulk update, so re-check after the insert.
+    if (await OAuthTokenFamilyRevocation.isRevoked(familyId, user._id)) {
+      await OAuthRefreshToken.updateOne({ _id: row._id, userId: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } });
+      return null;
+    }
     return {
       access_token: accessToken,
       token_type: 'Bearer' as const,

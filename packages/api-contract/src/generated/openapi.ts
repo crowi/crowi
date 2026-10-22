@@ -2546,7 +2546,6 @@ export interface paths {
                                 revision?: string | {
                                     _id: string;
                                     path: string;
-                                    body: string;
                                     /** @default markdown */
                                     format: string;
                                     author?: {
@@ -2560,25 +2559,6 @@ export interface paths {
                                         createdAt: string;
                                     } | null;
                                     createdAt: string;
-                                    meta?: {
-                                        toc?: {
-                                            level: number;
-                                            text: string;
-                                            anchorId: string;
-                                        }[];
-                                        wikiLinks?: {
-                                            raw: string;
-                                            target: string;
-                                            displayText?: string;
-                                        }[];
-                                        mentions?: {
-                                            username: string;
-                                        }[];
-                                        codeBlockLanguages?: string[];
-                                        rawSpaceLinks?: string[];
-                                    };
-                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -3837,7 +3817,6 @@ export interface paths {
                                 revision?: string | {
                                     _id: string;
                                     path: string;
-                                    body: string;
                                     /** @default markdown */
                                     format: string;
                                     author?: {
@@ -3851,25 +3830,6 @@ export interface paths {
                                         createdAt: string;
                                     } | null;
                                     createdAt: string;
-                                    meta?: {
-                                        toc?: {
-                                            level: number;
-                                            text: string;
-                                            anchorId: string;
-                                        }[];
-                                        wikiLinks?: {
-                                            raw: string;
-                                            target: string;
-                                            displayText?: string;
-                                        }[];
-                                        mentions?: {
-                                            username: string;
-                                        }[];
-                                        codeBlockLanguages?: string[];
-                                        rawSpaceLinks?: string[];
-                                    };
-                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -3949,7 +3909,6 @@ export interface paths {
                                     revision?: string | {
                                         _id: string;
                                         path: string;
-                                        body: string;
                                         /** @default markdown */
                                         format: string;
                                         author?: {
@@ -3963,25 +3922,6 @@ export interface paths {
                                             createdAt: string;
                                         } | null;
                                         createdAt: string;
-                                        meta?: {
-                                            toc?: {
-                                                level: number;
-                                                text: string;
-                                                anchorId: string;
-                                            }[];
-                                            wikiLinks?: {
-                                                raw: string;
-                                                target: string;
-                                                displayText?: string;
-                                            }[];
-                                            mentions?: {
-                                                username: string;
-                                            }[];
-                                            codeBlockLanguages?: string[];
-                                            rawSpaceLinks?: string[];
-                                        };
-                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -4168,7 +4108,6 @@ export interface paths {
                                     revision?: string | {
                                         _id: string;
                                         path: string;
-                                        body: string;
                                         /** @default markdown */
                                         format: string;
                                         author?: {
@@ -4182,25 +4121,6 @@ export interface paths {
                                             createdAt: string;
                                         } | null;
                                         createdAt: string;
-                                        meta?: {
-                                            toc?: {
-                                                level: number;
-                                                text: string;
-                                                anchorId: string;
-                                            }[];
-                                            wikiLinks?: {
-                                                raw: string;
-                                                target: string;
-                                                displayText?: string;
-                                            }[];
-                                            mentions?: {
-                                                username: string;
-                                            }[];
-                                            codeBlockLanguages?: string[];
-                                            rawSpaceLinks?: string[];
-                                        };
-                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -4391,7 +4311,6 @@ export interface paths {
                                 revision?: string | {
                                     _id: string;
                                     path: string;
-                                    body: string;
                                     /** @default markdown */
                                     format: string;
                                     author?: {
@@ -4405,25 +4324,6 @@ export interface paths {
                                         createdAt: string;
                                     } | null;
                                     createdAt: string;
-                                    meta?: {
-                                        toc?: {
-                                            level: number;
-                                            text: string;
-                                            anchorId: string;
-                                        }[];
-                                        wikiLinks?: {
-                                            raw: string;
-                                            target: string;
-                                            displayText?: string;
-                                        }[];
-                                        mentions?: {
-                                            username: string;
-                                        }[];
-                                        codeBlockLanguages?: string[];
-                                        rawSpaceLinks?: string[];
-                                    };
-                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -4598,7 +4498,6 @@ export interface paths {
                                 revision?: string | {
                                     _id: string;
                                     path: string;
-                                    body: string;
                                     /** @default markdown */
                                     format: string;
                                     author?: {
@@ -4612,25 +4511,6 @@ export interface paths {
                                         createdAt: string;
                                     } | null;
                                     createdAt: string;
-                                    meta?: {
-                                        toc?: {
-                                            level: number;
-                                            text: string;
-                                            anchorId: string;
-                                        }[];
-                                        wikiLinks?: {
-                                            raw: string;
-                                            target: string;
-                                            displayText?: string;
-                                        }[];
-                                        mentions?: {
-                                            username: string;
-                                        }[];
-                                        codeBlockLanguages?: string[];
-                                        rawSpaceLinks?: string[];
-                                    };
-                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5316,7 +5196,6 @@ export interface paths {
                                     revision?: string | {
                                         _id: string;
                                         path: string;
-                                        body: string;
                                         /** @default markdown */
                                         format: string;
                                         author?: {
@@ -5330,25 +5209,6 @@ export interface paths {
                                             createdAt: string;
                                         } | null;
                                         createdAt: string;
-                                        meta?: {
-                                            toc?: {
-                                                level: number;
-                                                text: string;
-                                                anchorId: string;
-                                            }[];
-                                            wikiLinks?: {
-                                                raw: string;
-                                                target: string;
-                                                displayText?: string;
-                                            }[];
-                                            mentions?: {
-                                                username: string;
-                                            }[];
-                                            codeBlockLanguages?: string[];
-                                            rawSpaceLinks?: string[];
-                                        };
-                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -7464,7 +7324,6 @@ export interface paths {
                                 revision?: string | {
                                     _id: string;
                                     path: string;
-                                    body: string;
                                     /** @default markdown */
                                     format: string;
                                     author?: {
@@ -7478,25 +7337,6 @@ export interface paths {
                                         createdAt: string;
                                     } | null;
                                     createdAt: string;
-                                    meta?: {
-                                        toc?: {
-                                            level: number;
-                                            text: string;
-                                            anchorId: string;
-                                        }[];
-                                        wikiLinks?: {
-                                            raw: string;
-                                            target: string;
-                                            displayText?: string;
-                                        }[];
-                                        mentions?: {
-                                            username: string;
-                                        }[];
-                                        codeBlockLanguages?: string[];
-                                        rawSpaceLinks?: string[];
-                                    };
-                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -12030,7 +11870,6 @@ export interface paths {
                                     revision?: string | {
                                         _id: string;
                                         path: string;
-                                        body: string;
                                         /** @default markdown */
                                         format: string;
                                         author?: {
@@ -12044,25 +11883,6 @@ export interface paths {
                                             createdAt: string;
                                         } | null;
                                         createdAt: string;
-                                        meta?: {
-                                            toc?: {
-                                                level: number;
-                                                text: string;
-                                                anchorId: string;
-                                            }[];
-                                            wikiLinks?: {
-                                                raw: string;
-                                                target: string;
-                                                displayText?: string;
-                                            }[];
-                                            mentions?: {
-                                                username: string;
-                                            }[];
-                                            codeBlockLanguages?: string[];
-                                            rawSpaceLinks?: string[];
-                                        };
-                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -17624,7 +17444,6 @@ export interface components {
                 revision?: string | {
                     _id: string;
                     path: string;
-                    body: string;
                     /** @default markdown */
                     format: string;
                     author?: {
@@ -17638,25 +17457,6 @@ export interface components {
                         createdAt: string;
                     } | null;
                     createdAt: string;
-                    meta?: {
-                        toc?: {
-                            level: number;
-                            text: string;
-                            anchorId: string;
-                        }[];
-                        wikiLinks?: {
-                            raw: string;
-                            target: string;
-                            displayText?: string;
-                        }[];
-                        mentions?: {
-                            username: string;
-                        }[];
-                        codeBlockLanguages?: string[];
-                        rawSpaceLinks?: string[];
-                    };
-                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */
@@ -18126,7 +17926,6 @@ export interface components {
                 revision?: string | {
                     _id: string;
                     path: string;
-                    body: string;
                     /** @default markdown */
                     format: string;
                     author?: {
@@ -18140,25 +17939,6 @@ export interface components {
                         createdAt: string;
                     } | null;
                     createdAt: string;
-                    meta?: {
-                        toc?: {
-                            level: number;
-                            text: string;
-                            anchorId: string;
-                        }[];
-                        wikiLinks?: {
-                            raw: string;
-                            target: string;
-                            displayText?: string;
-                        }[];
-                        mentions?: {
-                            username: string;
-                        }[];
-                        codeBlockLanguages?: string[];
-                        rawSpaceLinks?: string[];
-                    };
-                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
-                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */

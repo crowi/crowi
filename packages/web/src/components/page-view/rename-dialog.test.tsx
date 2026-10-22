@@ -66,4 +66,27 @@ describe('RenameDialog', () => {
     expect(screen.getByText(m['page_list.failed_to_load']())).toBeTruthy();
     expect((screen.getByRole('button', { name: m['page.rename.submit']() }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('keeps a select-all made on the already-focused field right after opening', async () => {
+    render(<RenameDialog page={page} open onOpenChange={vi.fn()} />);
+    const input = screen.getByLabelText(m['page.rename.new_path']()) as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    await waitFor(() => expect([input.selectionStart, input.selectionEnd]).toEqual(['/docs/'.length, '/docs/original'.length]));
+    // The user's Ctrl/Cmd+A (or a test runner's fill) on the focused field: the whole value is theirs to replace.
+    input.select();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, '/docs/original'.length]);
+  });
+
+  it('re-narrows to the leaf the select-all the focus trap makes when it moves focus back into the field', async () => {
+    render(<RenameDialog page={page} open onOpenChange={vi.fn()} />);
+    const input = screen.getByLabelText(m['page.rename.new_path']()) as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    await waitFor(() => expect([input.selectionStart, input.selectionEnd]).toEqual(['/docs/'.length, '/docs/original'.length]));
+    input.blur();
+    // What Radix FocusScope does when focus returns from outside the dialog: focus, then select all.
+    input.focus();
+    input.select();
+    await waitFor(() => expect([input.selectionStart, input.selectionEnd]).toEqual(['/docs/'.length, '/docs/original'.length]));
+  });
 });

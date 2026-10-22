@@ -1,4 +1,9 @@
-import type { Page, PageWithRevision } from '@crowi/api-contract';
+import type { Page, PageListRow, PageWithRevision, RevisionListRow } from '@crowi/api-contract';
+
+// Detail pages and list rows share these fields; a list row's revision has no body.
+type DisplayUserSource = Pick<Page | PageWithRevision | PageListRow, 'creator' | 'lastUpdateUser'> & {
+  revision?: string | Pick<RevisionListRow, 'author'> | null;
+};
 
 /**
  * Resolve the user to credit for a page: the last editor, else the
@@ -17,7 +22,7 @@ import type { Page, PageWithRevision } from '@crowi/api-contract';
  * page-list row (`PageListItem`) so the "who touched this page"
  * precedence stays identical across surfaces.
  */
-export function resolveDisplayUser(page: Page | PageWithRevision) {
+export function resolveDisplayUser(page: DisplayUserSource) {
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
   const revision = typeof page.revision === 'object' && page.revision ? page.revision : null;

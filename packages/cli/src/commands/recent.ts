@@ -1,4 +1,4 @@
-import { LIST_PAGES_PREFIX_LIMIT, LIST_PAGES_PREFIX_OFFSET, type ListPagesResponse, type Page } from '@crowi/api-contract';
+import { LIST_PAGES_PREFIX_LIMIT, LIST_PAGES_PREFIX_OFFSET, type ListPagesResponse, type PageListRow } from '@crowi/api-contract';
 import type { Command } from 'commander';
 
 import { getGlobalOptions } from '../cli';
@@ -18,7 +18,7 @@ interface RecentOptions {
 }
 
 /** Only the fields the CLI renders; everything else is read leniently. */
-type RecentPage = Partial<Pick<Page, '_id' | 'path' | 'updatedAt' | 'lastUpdateUser'>>;
+type RecentPage = Partial<Pick<PageListRow, '_id' | 'path' | 'updatedAt' | 'lastUpdateUser'>>;
 
 type RecentResponse = Omit<Partial<ListPagesResponse>, 'pages'> & { pages?: RecentPage[] };
 
@@ -108,6 +108,7 @@ export function registerRecent(program: Command): void {
       'after',
       `
 Columns: path, updatedAt (UTC), lastUpdateUser (last updater, not the creator), _id.
+Rows do not include the page body (revision.body is empty in templates and absent in --format json); fetch a page to read its body.
 This is the live list of current pages, one row per page. Paging with --offset can repeat or skip pages that were updated between calls, and rows with the same update time have no defined order.
 
 Examples:

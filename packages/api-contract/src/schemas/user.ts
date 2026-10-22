@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
-import { PageSchema, PagerSchema } from './page';
-import { BookmarkSchema } from './bookmark';
+import { PageListRowSchema, PagerSchema } from './page';
+import { BookmarkListRowSchema } from './bookmark';
 import { UserPublicSchema } from './user-public';
 
 // NOTE: BookmarkSchema and UserPublicSchema are exported from their own
@@ -95,14 +95,14 @@ export const UserPageResponseSchema = z.object({
   likesCount: z.number(),
   commentsCount: z.number(),
   // Optionally include recent items for initial display
-  recentPages: z.array(PageSchema).optional(),
-  recentBookmarks: z.array(BookmarkSchema).optional(),
+  recentPages: z.array(PageListRowSchema).optional(),
+  recentBookmarks: z.array(BookmarkListRowSchema).optional(),
 });
 export type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 
 // User bookmarks response schema - paginated bookmarks list
 export const UserBookmarksResponseSchema = z.object({
-  bookmarks: z.array(BookmarkSchema),
+  bookmarks: z.array(BookmarkListRowSchema),
   pager: PagerSchema,
   total: z.number(),
 });
@@ -110,7 +110,7 @@ export type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
 
 // User pages response schema - paginated pages list
 export const UserPagesResponseSchema = z.object({
-  pages: z.array(PageSchema),
+  pages: z.array(PageListRowSchema),
   pager: PagerSchema,
   total: z.number(),
 });

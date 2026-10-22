@@ -229,6 +229,27 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     revisionSpy.mockRestore();
   });
 
+  test('lists the subtree members with their yjsState', async () => {
+    const root = await createReadyPage('/subtree/yjs');
+    const child = await createReadyPage('/subtree/yjs/child');
+    await Page.updateOne({ _id: child._id }, { $set: { yjsState: Buffer.from('child-yjs') } });
+    const listed: PageDocument[] = [];
+    const findListByStartWith = Page.findListByStartWith.bind(Page);
+    const spy = jest.spyOn(Page, 'findListByStartWith').mockImplementation(async (...args) => {
+      const pages = await findListByStartWith(...args);
+      listed.push(...pages);
+      return pages;
+    });
+    try {
+      await expect(run(root, '/subtree/yjs-moved')).resolves.toMatchObject({ status: 'completed' });
+    } finally {
+      spy.mockRestore();
+    }
+    const listedChild = listed.find((page) => String(page._id) === String(child._id));
+    expect(listedChild?.isSelected('yjsState')).toBe(true);
+    expect(listedChild?.yjsState?.toString()).toBe('child-yjs');
+  });
+
   test('moves every sealed member through ordinary rename records while grouping subtree events', async () => {
     const root = await createReadyPage('/subtree/ac1');
     const child = await createReadyPage('/subtree/ac1/child');
@@ -241,6 +262,12 @@ describe('service/page-history/commands/subtree-rename (RFC-0021 Phase 2c-2b)', 
     expect(await Page.findById(root._id).lean()).toMatchObject({ path: '/subtree/moved' });
     expect(await Page.findById(child._id).lean()).toMatchObject({ path: '/subtree/moved/child' });
     expect(await Page.findById(grandchild._id).lean()).toMatchObject({ path: '/subtree/moved/child/grandchild' });
+
+    // The member listing reads revisions without their body; the stored bodies must be untouched.
+    for (const member of [root, child, grandchild]) {
+      const stored = await Page.findById(member._id).lean();
+      expect(await Revision.findById(stored.revision).lean()).toMatchObject({ body: 'body' });
+    }
 
     const rootOperation = await PageHistoryOperation.findOne({ command: 'subtree_rename' }).lean();
     expect(rootOperation.memberPageIds.map(String).sort()).toEqual([root._id, child._id, grandchild._id].map(String).sort());

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Page } from '@crowi/api-contract';
+import type { PageListRow } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { List, Loader2, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { PageListItem, type PageListVariant } from './page-list-item';
  */
 
 interface PageRowsCardProps {
-  pages: Page[];
+  pages: PageListRow[];
   variant?: PageListVariant;
   /**
    * Per-page sanitised search-excerpt lookup. Only the search results view
@@ -29,7 +29,7 @@ interface PageRowsCardProps {
    * O(1) lookup) — every other caller (`PageList` / `UserRecentPages` /
    * `UserBookmarks`) omits it, so those rows keep their plain layout.
    */
-  getSnippet?: (page: Page) => string | undefined;
+  getSnippet?: (page: PageListRow) => string | undefined;
 }
 
 /**

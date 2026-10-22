@@ -588,3 +588,17 @@ describe('MarkdownPreview — preview-policy', () => {
     expect(img.style.width).toBe('40px');
   });
 });
+
+describe('MarkdownPreview — an author <a> without a usable href reads as text', () => {
+  it('drops the link styling like the page does', async () => {
+    const { container } = await showPreview({
+      type: 'root',
+      children: [{ type: 'html', value: '<p><a href="javascript:alert(1)">dropped</a> <a href="https://example.com/">kept</a></p>' }],
+    });
+    const anchors = container.querySelectorAll('.crowi-prose a');
+    expect(anchors[0]?.textContent).toBe('dropped');
+    expect(anchors[0]?.hasAttribute('href')).toBe(false);
+    expect(anchors[0]?.getAttribute('class')).toBeNull();
+    expect(anchors[1]?.getAttribute('class')).toContain('text-primary');
+  });
+});

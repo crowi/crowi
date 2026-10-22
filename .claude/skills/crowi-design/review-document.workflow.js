@@ -20,6 +20,8 @@ export const meta = {
 //     maxReviewAttempts: 2,
 //     critical?: boolean,        // correctness-critical (data loss / auth / race /
 //                                // migration / crypto) -> add one Claude lens
+//     escalate?: boolean,        // the main session sets this only after sol/opus rounds failed
+//                                // to resolve the document (see SKILL.md); never on a first pass
 //     reviewOnly?: true, docPath?: '<existing doc>' } // review an existing RFC/spec only
 // ----------------------------------------------------------------------------
 // NOTE: in this runtime the workflow `args` input arrives as a JSON STRING
@@ -47,6 +49,7 @@ const DECISIONS = JSON.stringify(A.decisions || {}, null, 2)
 const MAX = A.maxReviewAttempts ?? 2
 const REVIEW_ONLY = A.reviewOnly === true
 const CRITICAL = A.critical === true
+const ESCALATE = A.escalate === true
 // 縮退した round (codex 判定をほぼ経ていない) を明示的に受け入れる escape hatch。
 // 既定 false: 縮退 round は OK/ISSUES ではなく DEGRADED を返す。
 const ACCEPT_FALLBACK = A.acceptFallback === true
@@ -394,19 +397,20 @@ async function runReview(doc, attempt) {
   // hardest default tier (sol). So a doc that terra keeps bouncing gets one
   // stronger judgment before we give up, without paying sol on every round.
   const reviewTier = attempt === MAX ? 'sol' : 'terra'
-  // The frontier model (astra) is the most expensive one, so it gets exactly
-  // one read: the critical lens (lenses[1] — red-team for a spec, completeness
-  // for an RFC) of a correctness-critical document, in the
-  // round that decides the verdict (the last one, or a review-only pass).
+  // The frontier tiers (codex astra, claude fable) are the most expensive, so
+  // they never run by default: sol and opus are the ceiling. Only when the main
+  // session passes `escalate` (sol/opus rounds already failed to settle the
+  // document) does the critical lens (lenses[1] — red-team for a spec,
+  // completeness for an RFC) of the deciding round get one frontier read.
   const decisive = REVIEW_ONLY || attempt === MAX
+  const frontier = ESCALATE && decisive
   // `args.reviewTier` forces a tier for EVERY lens of EVERY round, overriding
-  // both the escalation and the astra read above. Use it when the caller
+  // both the escalation and the frontier read above. Use it when the caller
   // already knows the doc needs a specific tier — e.g. a /crowi-spec-review
   // re-run after a structural rewrite, where round 1 IS the decisive round and
   // waiting for attempt === MAX would just burn terra rounds on a doc that has
   // already been through one pass.
-  const tierFor = (l) =>
-    A.reviewTier || (CRITICAL && decisive && l.key === claudeCriticalLens.key ? 'astra' : reviewTier)
+  const tierFor = (l) => A.reviewTier || (frontier && l.key === claudeCriticalLens.key ? 'astra' : reviewTier)
   const jobs = lenses.map((l) => () =>
     codexStage({
       label: `review_${l.key}_${attempt}`,
@@ -430,6 +434,7 @@ async function runReview(doc, attempt) {
       agent(lensPrompt({ key: `claude-${claudeCriticalLens.key}`, task: claudeCriticalLens.task }, doc), {
         agentType: 'general-purpose',
         effort: 'high',
+        ...(frontier ? { model: 'fable' } : {}),
         label: `review:${SLUG}:claude-critical#${attempt}`,
         phase: 'Review',
         schema: REVIEW,

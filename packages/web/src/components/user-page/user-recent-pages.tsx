@@ -1,6 +1,6 @@
 'use client';
 
-import type { Page } from '@crowi/api-contract';
+import type { PageListRow } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { FileText } from 'lucide-react';
 import Link from 'next/link';
@@ -37,7 +37,7 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
   }
 
   // Flatten all infinite-query pages of results.
-  const allPages: Page[] = data?.pages.flatMap((p) => p.pages) ?? [];
+  const allPages: PageListRow[] = data?.pages.flatMap((p) => p.pages) ?? [];
   const total = data?.pages[0]?.total ?? 0;
 
   if (allPages.length === 0) {

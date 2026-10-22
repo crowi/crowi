@@ -69,6 +69,7 @@ crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{
 - `--limit` は 1〜100 (既定 50)、`--offset` は 0〜2147483647 (既定 0) で、どちらも 10 進数字だけを受け付けます。不正な値は通信の前に終了コード `6` で拒否されます。
 - `--prefix` は保存されたパスに対する、大文字小文字を区別するリテラルの前方一致です。`/team` は `/team` と `/team/` と `/teamwork` に、`/team/` は `/team/` とその配下に一致します (`/team` は含みません)。先頭の `/` がなければ補われ、`--prefix /` は prefix なしと同じです。空文字は拒否されます。
 - 一覧はライブです。`--offset` で順に取得する間にページが更新されると、重複や取りこぼしが起こり得ます。同じ更新日時のページの順序は決まっていません。cursor や全件の自動巡回はありません。
+- 一覧の行にはページの本文が含まれません。`--json` の `revision` に `body` は無く、`--template` の `{{revision.body}}` は空になります。本文は `crowi get <path>` で取得します。
 - `--json` はサーバの応答全体をそのまま出力します。`--template` なしの `--format template` は元のページから同じ 4 項目を引くので、`lastUpdateUser` は JSON オブジェクトになります。名前は `{{lastUpdateUser.username}}` で取り出します。
 - `--prefix` は `path_prefix` に対応したサーバが必要です。応答で prefix の適用を確認できないと、標準出力には何も書かず、`server did not confirm literal prefix filtering; upgrade Crowi and retry` を出して終了コード `7` で終わります。`--prefix` なし (または `--prefix /`) なら古いサーバでも使えます。
 

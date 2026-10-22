@@ -15,9 +15,9 @@ import request from 'supertest';
  *  - PKCE S256 success / wrong-verifier failure
  *  - single-use authorization code (second exchange 400)
  *  - expired authorization code (400) — via direct model seed
- *  - refresh_token rotation + reuse detection (chain revocation)
+ *  - refresh_token rotation + reuse detection (family revocation)
  *  - refresh_token reuse grace window (spec §D-2): reuse within the window is
- *    suppressed (chain survives, identical response, no token returned,
+ *    suppressed (family survives, identical response, no token returned,
  *    debug log carries no secret); reuse outside the grace window and an
  *    explicit revoke both still revoke the whole chain unconditionally
  *  - redirect_uri: unregistered rejected, loopback any-port allowed
@@ -539,6 +539,266 @@ describe('Routes /api/oauth (Hono)', () => {
       expect(res.status).toBe(200);
       const noToken = await request(app).post('/api/oauth/revoke').send({});
       expect(noToken.status).toBe(200);
+    });
+  });
+
+  describe('refresh-token families', () => {
+    const token = (body: Record<string, unknown>) => request(app).post('/api/oauth/token').send(body);
+    const refreshWith = (refresh_token: string) => token({ grant_type: 'refresh_token', refresh_token, client_id: 'crowi-cli' });
+    const rowOf = (plain: string) => Refresh().findOne({ tokenHash: Refresh().hashToken(plain) });
+
+    const getInitialPair = async () => {
+      const { code, verifier } = await authorizeOk();
+      const res = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: REDIRECT, client_id: 'crowi-cli' });
+      expect(res.status).toBe(200);
+      return res.body as { access_token: string; refresh_token: string };
+    };
+
+    const rawLegacy = async (extra: Record<string, unknown> = {}) => {
+      const { token: plain, tokenHash } = Refresh().generateToken();
+      await Refresh().collection.insertOne({
+        tokenHash,
+        clientId: 'crowi-cli',
+        userId: user._id,
+        scopes: ['pages:read'],
+        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: new Date(),
+        revokedAt: null,
+        rotatedTo: null,
+        ...extra,
+      });
+      return { plain, tokenHash };
+    };
+
+    it('mints a UUID family on authorization_code and inherits it through rotation and forks', async () => {
+      const pair = await getInitialPair();
+      const origin = await rowOf(pair.refresh_token);
+      expect(origin?.familyId).toMatch(/^[0-9a-f-]{36}$/);
+
+      const r1 = await refreshWith(pair.refresh_token);
+      expect(r1.status).toBe(200);
+      expect((await rowOf(r1.body.refresh_token))?.familyId).toBe(origin?.familyId);
+      const r2 = await refreshWith(r1.body.refresh_token);
+      expect((await rowOf(r2.body.refresh_token))?.familyId).toBe(origin?.familyId);
+
+      const second = await getInitialPair();
+      expect((await rowOf(second.refresh_token))?.familyId).not.toBe(origin?.familyId);
+    });
+
+    it('mints a UUID family on the device_code grant', async () => {
+      const start = await request(app).post('/api/oauth/device/authorize').send({ client_id: 'crowi-cli', scope: 'pages:read' });
+      expect(start.status).toBe(200);
+      await request(app)
+        .post('/api/oauth/device/verify')
+        .set('Authorization', `Bearer ${webToken}`)
+        .send({ user_code: start.body.user_code, action: 'approve' });
+      await Device().updateOne({ clientId: 'crowi-cli' }, { $set: { lastPolledAt: null } });
+      const res = await token({ grant_type: 'urn:ietf:params:oauth:grant-type:device_code', device_code: start.body.device_code, client_id: 'crowi-cli' });
+      expect(res.status).toBe(200);
+      expect((await rowOf(res.body.refresh_token))?.familyId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('keeps rotatedTo only on rows that are also revoked', async () => {
+      const pair = await getInitialPair();
+      const r1 = await refreshWith(pair.refresh_token);
+      const origin = await rowOf(pair.refresh_token);
+      expect(origin?.rotatedTo).toBe(Refresh().hashToken(r1.body.refresh_token));
+      expect(origin?.revokedAt).not.toBeNull();
+      const tip = await rowOf(r1.body.refresh_token);
+      expect(tip?.rotatedTo).toBeNull();
+      expect(tip?.revokedAt).toBeNull();
+    });
+
+    it('revokes an unlinked fork when reuse is detected', async () => {
+      const pair = await getInitialPair();
+      const origin = await rowOf(pair.refresh_token);
+      const r1 = await refreshWith(pair.refresh_token);
+      // A fork that never got linked into rotatedTo.
+      const fork = await Refresh().create({
+        tokenHash: Refresh().hashToken('crowi_rt_fork'),
+        clientId: 'crowi-cli',
+        userId: user._id,
+        scopes: ['pages:read'],
+        expiresAt: new Date(Date.now() + 86_400_000),
+        familyId: origin?.familyId,
+      });
+      await Refresh().updateOne({ _id: origin?._id }, { revokedAt: new Date(Date.now() - 120_000) });
+
+      const replay = await refreshWith(pair.refresh_token);
+      expect(replay.status).toBe(400);
+      expect((await Refresh().findById(fork._id))?.revokedAt).not.toBeNull();
+      expect((await refreshWith(r1.body.refresh_token)).status).toBe(400);
+    });
+
+    it('POST /oauth/revoke revokes the family, including an unlinked fork, and unknown/family-less tokens still 200', async () => {
+      const pair = await getInitialPair();
+      const origin = await rowOf(pair.refresh_token);
+      const r1 = await refreshWith(pair.refresh_token);
+      const fork = await Refresh().create({
+        tokenHash: Refresh().hashToken('crowi_rt_fork2'),
+        clientId: 'crowi-cli',
+        userId: user._id,
+        scopes: ['pages:read'],
+        expiresAt: new Date(Date.now() + 86_400_000),
+        familyId: origin?.familyId,
+      });
+
+      const revoke = await request(app).post('/api/oauth/revoke').send({ token: r1.body.refresh_token });
+      expect(revoke.status).toBe(200);
+      expect((await Refresh().findById(fork._id))?.revokedAt).not.toBeNull();
+      expect((await refreshWith(r1.body.refresh_token)).status).toBe(400);
+
+      const legacy = await rawLegacy();
+      const legacyRevoke = await request(app).post('/api/oauth/revoke').send({ token: legacy.plain });
+      expect(legacyRevoke.status).toBe(200);
+      expect(legacyRevoke.body).toEqual({});
+      expect((await Refresh().collection.findOne({ tokenHash: legacy.tokenHash }))?.revokedAt).toBeNull();
+    });
+
+    it('a reuse inside the grace window does not unlock a revoked family', async () => {
+      const pair = await getInitialPair();
+      const r1 = await refreshWith(pair.refresh_token);
+      const origin = await rowOf(pair.refresh_token);
+      await crowi.model('OAuthTokenFamilyRevocation').markRevoked(origin?.familyId as string, user._id, new Date());
+
+      const replay = await refreshWith(pair.refresh_token);
+      expect(replay.status).toBe(400);
+      expect(replay.body.error).toBe('invalid_grant');
+      const successor = await refreshWith(r1.body.refresh_token);
+      expect(successor.status).toBe(400);
+      expect(successor.body.error).toBe('invalid_grant');
+    });
+
+    describe('family-less rows (AC-7)', () => {
+      it.each([
+        ['missing', {}],
+        ['null', { familyId: null }],
+        ['empty', { familyId: '' }],
+      ])('rejects a %s-family refresh, revokes the row, creates no successor, invents no family', async (_label, extra) => {
+        const legacy = await rawLegacy(extra);
+        const before = await Refresh().countDocuments({ userId: user._id });
+
+        const res = await refreshWith(legacy.plain);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('invalid_grant');
+        expect(res.body.refresh_token).toBeUndefined();
+        const after = await Refresh().collection.findOne({ tokenHash: legacy.tokenHash });
+        expect(after?.revokedAt).toBeInstanceOf(Date);
+        expect(after?.familyId ?? null).toBe('familyId' in extra ? (extra as { familyId: string | null }).familyId : null);
+        expect(await Refresh().countDocuments({ userId: user._id })).toBe(before);
+      });
+
+      it('revokes an expired unrevoked legacy row seen through the known-row branch, and keeps an already revoked date', async () => {
+        const expired = await rawLegacy({ expiresAt: new Date(Date.now() - 1000) });
+        const res = await refreshWith(expired.plain);
+        expect(res.status).toBe(400);
+        expect((await Refresh().collection.findOne({ tokenHash: expired.tokenHash }))?.revokedAt).toBeInstanceOf(Date);
+
+        const earlier = new Date('2026-01-01T00:00:00Z');
+        const revoked = await rawLegacy({ revokedAt: earlier });
+        const again = await refreshWith(revoked.plain);
+        expect(again.status).toBe(400);
+        expect(again.body.error).toBe('invalid_grant');
+        expect(((await Refresh().collection.findOne({ tokenHash: revoked.tokenHash }))?.revokedAt as Date).getTime()).toBe(earlier.getTime());
+      });
+    });
+
+    describe('post-insert family check (F-3)', () => {
+      it('rejects with invalid_grant and no token when the family was revoked after the entry check', async () => {
+        const pair = await getInitialPair();
+        const origin = await rowOf(pair.refresh_token);
+        const Rev = crowi.model('OAuthTokenFamilyRevocation');
+        const original = Rev.isRevoked.bind(Rev);
+        let calls = 0;
+        const spy = jest.spyOn(Rev, 'isRevoked').mockImplementation(async (familyId, userId) => {
+          calls += 1;
+          if (calls === 2) await Rev.markRevoked(familyId, userId, new Date());
+          return original(familyId, userId);
+        });
+        let res: request.Response;
+        try {
+          res = await refreshWith(pair.refresh_token);
+        } finally {
+          spy.mockRestore();
+        }
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('invalid_grant');
+        expect(res.body.refresh_token).toBeUndefined();
+        expect(res.body.access_token).toBeUndefined();
+        const rows = await Refresh().find({ userId: user._id, familyId: origin?.familyId });
+        expect(rows.filter((r) => r.revokedAt == null)).toHaveLength(1);
+        expect(rows.find((r) => r.revokedAt == null)?.tokenHash).toBe(origin?.tokenHash);
+      });
+
+      it('returns no pair when the post-insert record read fails', async () => {
+        const pair = await getInitialPair();
+        const Rev = crowi.model('OAuthTokenFamilyRevocation');
+        const original = Rev.isRevoked.bind(Rev);
+        let calls = 0;
+        const spy = jest.spyOn(Rev, 'isRevoked').mockImplementation(async (familyId, userId) => {
+          calls += 1;
+          if (calls === 2) throw new Error('injected read failure');
+          return original(familyId, userId);
+        });
+        let res: request.Response;
+        try {
+          res = await refreshWith(pair.refresh_token);
+        } finally {
+          spy.mockRestore();
+        }
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('invalid_request');
+        expect(res.body.refresh_token).toBeUndefined();
+        expect(JSON.stringify(res.body)).not.toContain('injected');
+      });
+
+      it('returns no pair when the cleanup of a revoked-family successor fails, and F-2 still refuses that row', async () => {
+        const pair = await getInitialPair();
+        const origin = await rowOf(pair.refresh_token);
+        const Rev = crowi.model('OAuthTokenFamilyRevocation');
+        const original = Rev.isRevoked.bind(Rev);
+        let calls = 0;
+        const revSpy = jest.spyOn(Rev, 'isRevoked').mockImplementation(async (familyId, userId) => {
+          calls += 1;
+          if (calls === 2) await Rev.markRevoked(familyId, userId, new Date());
+          return original(familyId, userId);
+        });
+        const updateSpy = jest.spyOn(Refresh(), 'updateOne').mockRejectedValueOnce(new Error('injected cleanup') as never);
+        let res: request.Response;
+        try {
+          res = await refreshWith(pair.refresh_token);
+        } finally {
+          revSpy.mockRestore();
+          updateSpy.mockRestore();
+        }
+        expect(res.status).toBe(400);
+        expect(res.body.refresh_token).toBeUndefined();
+        const orphan = await Refresh().findOne({ userId: user._id, familyId: origin?.familyId, revokedAt: null, tokenHash: { $ne: origin?.tokenHash } });
+        expect(orphan).not.toBeNull();
+        expect(await Refresh().findActiveByHash(orphan?.tokenHash as string)).toBeNull();
+      });
+    });
+
+    it('does not put tokens, hashes or raw error messages in the debug log of a failing token request', async () => {
+      const pair = await getInitialPair();
+      const lines: string[] = [];
+      const Rev = crowi.model('OAuthTokenFamilyRevocation');
+      const spy = jest.spyOn(Rev, 'isRevoked').mockRejectedValue(new Error(`secret-${pair.refresh_token}`));
+      const log = Debug.log;
+      Debug.log = (...args: unknown[]) => {
+        lines.push(args.join(' '));
+      };
+      Debug.enable('crowi:hono:handlers:oauth');
+      try {
+        await refreshWith(pair.refresh_token);
+      } finally {
+        Debug.disable();
+        Debug.log = log;
+        spy.mockRestore();
+      }
+      expect(lines.some((l) => l.includes('token failed'))).toBe(true);
+      expect(lines.join('\n')).not.toContain(pair.refresh_token);
+      expect(lines.join('\n')).not.toContain('secret-');
     });
   });
 

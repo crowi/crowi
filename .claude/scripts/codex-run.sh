@@ -23,9 +23,10 @@
 #                                         # codex must run the suite itself.
 #                [--tier astra|sol|terra|luna]           # semantic model tier:
 #                                         # astra=frontier (gpt-6-astra, high) —
-#                                         #   the most expensive model; only for a
-#                                         #   small, explicitly critical part of a
-#                                         #   run, never as a stage default
+#                                         #   the most expensive model; never a
+#                                         #   default. Only after a sol run failed
+#                                         #   to resolve the problem (crowi-design
+#                                         #   SKILL "escalation")
 #                                         # sol=hardest (gpt-6.1-sol, effort high)
 #                                         # terra=general (gpt-6.1-sol, medium)
 #                                         # luna=simple (gpt-6-luna, low).

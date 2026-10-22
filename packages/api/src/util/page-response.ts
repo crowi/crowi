@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PageContentType, Revision, RevisionMetaShape } from '@crowi/api-contract';
+import type { PageContentType, PageListRow, Revision, RevisionListRow, RevisionMetaShape } from '@crowi/api-contract';
 import type { RenderActor, RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
 import { Types } from 'mongoose';
@@ -42,6 +42,12 @@ export interface PopulatedRevision {
 }
 
 /**
+ * Revision as populated for list rows (`PAGE_LIST_REVISION_SELECT`): the
+ * body, AST and meta are not read from the database at all.
+ */
+export type PopulatedRevisionListRow = Omit<PopulatedRevision, 'body' | 'meta' | 'renderedAst'>;
+
+/**
  * Looser shape than `PageDocument`: covers both Mongoose documents and the
  * plain objects produced by `.toObject()` / `.lean()`. Every field is
  * optional except `_id` + `path` so populated and unpopulated views (e.g.
@@ -50,7 +56,7 @@ export interface PopulatedRevision {
 export interface PageLike {
   _id: Types.ObjectId | string;
   path: string;
-  revision?: PopulatedRevision | Types.ObjectId | null;
+  revision?: PopulatedRevision | PopulatedRevisionListRow | Types.ObjectId | null;
   redirectTo?: string | null;
   status?: string | null;
   grant?: number;
@@ -146,6 +152,15 @@ export const isPopulatedRevision = (value: unknown): value is PopulatedRevision 
   return typeof value === 'object' && value !== null && '_id' in value && 'path' in value && 'body' in value;
 };
 
+/**
+ * List-row counterpart of `isPopulatedRevision`: a populated revision is an
+ * object carrying `_id` + string `path`; the body is not required because
+ * list rows are fetched without it. A bare `ObjectId` has no `path`.
+ */
+export const isPopulatedRevisionListRow = (value: unknown): value is PopulatedRevisionListRow => {
+  return typeof value === 'object' && value !== null && '_id' in value && typeof (value as { path?: unknown }).path === 'string';
+};
+
 // Epoch fallback (not "now") so a document missing timestamps doesn't
 // look like it was just created — schema only requires the field be set.
 const EPOCH_ISO = new Date(0).toISOString();
@@ -180,13 +195,8 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   // other way (legacy data, a future writer bug).
   const isMarkdown = contentType === 'markdown';
   return {
-    _id: revision._id.toString(),
-    path: revision.path,
+    ...revisionToListRowResponse(revision),
     body: revision.body,
-    format: revision.format || 'markdown',
-    author: revision.author ? toPageUser(revision.author) : null,
-    ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
-    createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
     // Sync path: only emits stored meta + renderedAst. Detail endpoints
     // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
     // afterwards to fold in the on-the-fly fallback for legacy revisions.
@@ -197,7 +207,18 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
     ...(isMarkdown && options.withRenderedAst
       ? { renderedAst: revision.renderedAst as Revision['renderedAst'], rendererVersion: revision.rendererVersion }
       : {}),
-    contentType,
+  };
+};
+
+export const revisionToListRowResponse = (revision: PopulatedRevisionListRow): RevisionListRow => {
+  return {
+    _id: revision._id.toString(),
+    path: revision.path,
+    format: revision.format || 'markdown',
+    author: revision.author ? toPageUser(revision.author) : null,
+    ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
+    createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
+    contentType: revision.contentType ?? 'markdown',
   };
 };
 
@@ -372,6 +393,44 @@ function isMdastRootLike(value: unknown): value is Root {
 
 export type PageToResponseOptions = RevisionResponseOptions;
 
+// Page fields shared by the detail and list-row serializers (everything
+// except `revision`, which differs per shape).
+const pageCommonFields = (page: EnrichedPage) => {
+  const pageObj: PageLike = typeof (page as PageDocument).toObject === 'function' ? (page as PageDocument).toObject() : (page as PageLike);
+  // latestRevision / likerCount / seenUsersCount / isLiked are dynamic
+  // properties assigned onto the Mongoose document (populatePageData,
+  // populatePageRelationData) rather than schema fields — toObject() drops
+  // them, so they must be read off the original `page`, not `pageObj`.
+  const dynamic = page as PageLike;
+
+  return {
+    pageObj,
+    fields: {
+      redirectTo: pageObj.redirectTo || null,
+      status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated' | 'draft') || undefined,
+      grant: pageObj.grant,
+      grantedUsers: pageObj.grantedUsers?.map(toStringId) || [],
+      creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
+      lastUpdateUser: pageObj.lastUpdateUser && isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
+      commentCount: pageObj.commentCount || 0,
+      extended: pageObj.extended,
+      createdAt: toISOStringOrNull(pageObj.createdAt) || EPOCH_ISO,
+      updatedAt: toISOStringOrNull(pageObj.updatedAt) || undefined,
+      // latestRevision is a dynamic, non-schema property assigned by
+      // populatePageData (like likerCount / seenUsersCount below), so it must be
+      // read off `dynamic` — `toObject()` strips it. Reading it off `pageObj`
+      // (the toObject result) always yielded `undefined`, which made the web
+      // stale-revision banner (`latestRevision !== revision._id`) never fire when
+      // viewing a page at `?revision_id=` a past version.
+      latestRevision: dynamic.latestRevision ? toStringId(dynamic.latestRevision) : undefined,
+      likerCount: page.likerCount,
+      seenUsersCount: page.seenUsersCount,
+      isLiked: page.isLiked,
+      contentType: pageObj.contentType ?? 'markdown',
+    },
+  };
+};
+
 /**
  * Project a populated Page document (or plain `PageLike`) into the contract
  * Page shape. Unpopulated refs collapse safely:
@@ -390,12 +449,7 @@ export type PageToResponseOptions = RevisionResponseOptions;
  */
 // biome-ignore lint/suspicious/noExplicitAny: see jsdoc
 export const pageToResponse = (page: EnrichedPage, options: PageToResponseOptions = {}): any => {
-  const pageObj: PageLike = typeof (page as PageDocument).toObject === 'function' ? (page as PageDocument).toObject() : (page as PageLike);
-  // latestRevision / likerCount / seenUsersCount / isLiked are dynamic
-  // properties assigned onto the Mongoose document (populatePageData,
-  // populatePageRelationData) rather than schema fields — toObject() drops
-  // them, so they must be read off the original `page`, not `pageObj`.
-  const dynamic = page as PageLike;
+  const { pageObj, fields } = pageCommonFields(page);
 
   return {
     _id: toStringId(pageObj._id),
@@ -404,26 +458,22 @@ export const pageToResponse = (page: EnrichedPage, options: PageToResponseOption
       pageObj.revision && isPopulatedRevision(pageObj.revision)
         ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta, withRenderedAst: options.withRenderedAst })
         : undefined,
-    redirectTo: pageObj.redirectTo || null,
-    status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated' | 'draft') || undefined,
-    grant: pageObj.grant,
-    grantedUsers: pageObj.grantedUsers?.map(toStringId) || [],
-    creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
-    lastUpdateUser: pageObj.lastUpdateUser && isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
-    commentCount: pageObj.commentCount || 0,
-    extended: pageObj.extended,
-    createdAt: toISOStringOrNull(pageObj.createdAt) || EPOCH_ISO,
-    updatedAt: toISOStringOrNull(pageObj.updatedAt) || undefined,
-    // latestRevision is a dynamic, non-schema property assigned by
-    // populatePageData (like likerCount / seenUsersCount below), so it must be
-    // read off `dynamic` — `toObject()` strips it. Reading it off `pageObj`
-    // (the toObject result) always yielded `undefined`, which made the web
-    // stale-revision banner (`latestRevision !== revision._id`) never fire when
-    // viewing a page at `?revision_id=` a past version.
-    latestRevision: dynamic.latestRevision ? toStringId(dynamic.latestRevision) : undefined,
-    likerCount: page.likerCount,
-    seenUsersCount: page.seenUsersCount,
-    isLiked: page.isLiked,
-    contentType: pageObj.contentType ?? 'markdown',
+    ...fields,
+  };
+};
+
+/**
+ * Page-list-row counterpart of `pageToResponse`: the revision is serialized
+ * without body / meta / AST and never reads them, so rows fetched with
+ * `PAGE_LIST_REVISION_SELECT` stay populated on the wire.
+ */
+export const pageToListRowResponse = (page: EnrichedPage): PageListRow => {
+  const { pageObj, fields } = pageCommonFields(page);
+
+  return {
+    _id: toStringId(pageObj._id),
+    path: pageObj.path,
+    revision: pageObj.revision && isPopulatedRevisionListRow(pageObj.revision) ? revisionToListRowResponse(pageObj.revision) : undefined,
+    ...fields,
   };
 };

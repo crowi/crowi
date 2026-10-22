@@ -179,6 +179,37 @@ describe('MCP server (/api/mcp)', () => {
     expect(Object.keys(result.structuredContent ?? {}).sort()).toEqual(['pager', 'pages']);
   });
 
+  it('list tool rows carry no revision body while get_page keeps it', async () => {
+    const path = `${PATH_PREFIX}lean-row`;
+    const created = await callMcp(fullPatToken, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'crowi_create_page', arguments: { path, body: '# lean row BODY-MARKER' } },
+    });
+    expect(created.status).toBe(200);
+    const listed = await callMcp(fullPatToken, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'crowi_list_pages', arguments: { path: PATH_PREFIX } },
+    });
+    const result = parseRpc(listed).result as { structuredContent?: { pages: Array<{ path: string; revision?: Record<string, unknown> }> } };
+    const row = result.structuredContent?.pages.find((p) => p.path === path);
+    expect(row).toBeDefined();
+    expect(JSON.stringify(result.structuredContent)).not.toContain('BODY-MARKER');
+    expect(typeof row?.revision).toBe('object');
+    expect(row?.revision).not.toHaveProperty('body');
+
+    const got = await callMcp(fullPatToken, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: { name: 'crowi_get_page', arguments: { path } },
+    });
+    expect(JSON.stringify(parseRpc(got).result)).toContain('BODY-MARKER');
+  });
+
   it('advertises Crowi path conventions via the initialize `instructions`', async () => {
     const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',

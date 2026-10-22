@@ -1,6 +1,6 @@
 {
   "name": "@crowi/api",
-  "version": "2.0.0-alpha.24",
+  "version": "2.0.0-alpha.26",
   "main": "dist/app.js",
   "types": "dist/app.d.ts",
   "bin": {
@@ -67,7 +67,7 @@
     "dotenv": "^16.5.0",
     "es-module-lexer": "^2.1.0",
     "github-slugger": "^2.0.0",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "hono-rate-limiter": "catalog:",
     "ioredis": "^5.6.1",
     "jiti": "^2.7.0",

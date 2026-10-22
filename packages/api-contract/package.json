@@ -1,6 +1,6 @@
 {
   "name": "@crowi/api-contract",
-  "version": "2.0.0-alpha.24",
+  "version": "2.0.0-alpha.26",
   "description": "API contract definitions for Crowi using Hono + zod-openapi",
   "repository": {
     "type": "git",
@@ -48,7 +48,7 @@
     "css-tree": "^3.2.1",
     "hast-util-raw": "^9.1.0",
     "hast-util-sanitize": "^5.0.2",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "style-to-js": "1.1.21",
     "vfile": "^6.0.3",
     "zod": "catalog:"

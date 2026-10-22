@@ -234,6 +234,16 @@ export function SecurityForm({ settings }: SecurityFormProps) {
               {m['admin.security.field_html_sanitization_label']()}
             </Label>
             <p className="text-muted-foreground text-xs">{m['admin.security.field_html_sanitization_help']()}</p>
+            <div className="pt-1 text-muted-foreground text-xs">
+              <p className="font-medium">{m['admin.security.html_sanitization_caveats_heading']()}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                <li>{m['admin.security.html_sanitization_caveat_never_shown']()}</li>
+                <li>{m['admin.security.html_sanitization_caveat_css_spoofing']()}</li>
+                <li>{m['admin.security.html_sanitization_caveat_css_limits']()}</li>
+                <li>{m['admin.security.html_sanitization_caveat_iframe']()}</li>
+                <li>{m['admin.security.html_sanitization_caveat_no_framing']()}</li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>

@@ -1,5 +1,31 @@
 # @crowi/web
 
+## 2.0.0-alpha.26
+
+### Patch Changes
+
+- 2132468: The frame drawn around the page after moving to another page and pressing a key (such as Page Down) is now a faint line around the whole content area instead of a strong ring that cut across the article, which sat off to one side on wide screens with the table of contents shown.
+- 9ff626b: On the top page, clicking the sidebar's top link or the site logo refreshes the page list in place, so pages created since the visit appear without reloading the browser. A faint reload icon on hover hints at it.
+- Updated dependencies [1773ab0]
+  - @crowi/api-contract@2.0.0-alpha.26
+
+## 2.0.0-alpha.25
+
+### Minor Changes
+
+- 2f353d3: Administrators can now switch HTML sanitization for Markdown from the Security admin page (on by default): turning it off allows decorative style/class, passive layout elements and external HTTPS iframes in page bodies and the edit preview from the next time a page is opened, without modifying stored bodies. Even when off, author CSS background images (URL and other resource references) and CSS variables stay unavailable, and a style whose parsing does not match or that repeats a declaration is dropped as a whole attribute. External HTTPS iframes receive a fixed permission grant and only an initial Web, API or artifact origin is excluded, while ordinary Web pages can no longer be framed under either setting (the artifact relay document is the only exception). The Security settings API now also accepts partial updates, saving only the fields that are sent.
+
+### Patch Changes
+
+- 52a2d23: The web app now always renders page, history and preview HTML through a strict allow-list sanitizer, so arbitrary HTML and CSS written in a page body (scripts, event handlers, `style`, custom `class`, unknown attributes) no longer take effect, while generated output such as code highlighting, math, diagrams, link cards and URL expansion keeps its current look, and the stored page body is never changed. The renderer stamps generated HTML with an origin mark and its pipeline version moves to 2.0.0, so existing pages are recomputed on read. Markdown and HTML links with `javascript:`, `vbscript:` or `data:` URLs lose their href and show their label as plain text while ordinary links such as `tel:`, `file://` and `slack://` are kept, and images with a non-raster `data:` URL (such as SVG) or a disallowed scheme are shown as their alt text. `@crowi/api-contract` gains the shared `html-sanitizer` subpath.
+- f8fc038: Page list rows (page lists, bookmarks, profile pages, search results and recently viewed pages) no longer load or return the latest revision's body, rendered AST and metadata, which makes long lists lighter and faster. The revision object is still present on each row with its id, path, author and content type; fetch the page itself to read its body. The portal page shown above a list is unchanged, and `crowi recent --json` and `{{revision.body}}` templates no longer include the body.
+- 210cdfa: The rename dialog no longer undoes a select-all made in the new-path field right after it opens. Selecting everything with Ctrl/Cmd+A and typing or pasting a path within the first moments used to snap the selection back to the page name, so the new path landed after the old parent path (`/a/b//a/b-new`) and the server refused it; only the select-all the dialog's own focus handling performs when focus returns to the field is narrowed to the page name now.
+- 977a122: Pages no longer keep re-requesting the history, search and notifications views in the background while they stay open. A link into one of those views, such as the "updated N ago" link in a page or portal header, made the browser fetch it hundreds of times a second until the tab was closed.
+- Updated dependencies [2f353d3]
+- Updated dependencies [52a2d23]
+- Updated dependencies [f8fc038]
+  - @crowi/api-contract@2.0.0-alpha.25
+
 ## 2.0.0-alpha.24
 
 ### Patch Changes

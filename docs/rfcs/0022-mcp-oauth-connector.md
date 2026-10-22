@@ -3,328 +3,120 @@
 - **Status**: Draft
 - **Author**: @sotarok
 - **Created**: 2026-07-29
-- **Depends on**:
-  - RFC-0006 (Hono Integration) — discovery, registration, authorization,
-    token, administration, and MCP endpoints use Hono and the shared
-    API-contract/OpenAPI pipeline.
-  - RFC-0010 (OAuth 2.0 Foundation & Scoped API Access) — this RFC extends
-    Crowi's authorization-code + PKCE flow, refresh-token rotation, scoped
-    access tokens, consent screen, and DB-backed `OAuthClient`.
-  - RFC-0011 (Crowi MCP Server) — this RFC completes the OAuth-for-MCP work
-    deferred there without changing the Streamable HTTP transport.
-  - The public API prefix migration from `/api/v2` to `/api` — it must land
-    before this RFC is implemented so Crowi publishes one canonical MCP
-    resource identifier and token audience.
-- **Related**:
-  - RFC-0012 (Crowi CLI) — seeded first-party OAuth clients remain valid and
-    are not converted into dynamic MCP clients.
-  - RFC-0019 (TOTP Two-Factor Authentication) — establishes standalone
-    MongoDB as a supported default and rejects multi-document transactions as
-    a required correctness mechanism.
-  - RFC-0021 (Page History for Non-content Changes) — provides the bounded
-    outbox and repair precedent used for cross-document recovery on standalone
-    MongoDB.
+- **Depends on**: RFC-0006 (Hono Integration), RFC-0010 (OAuth 2.0 Foundation & Scoped API Access), and RFC-0011 (Crowi MCP Server).
+- **Implementation prerequisite**: the refresh-token family feature (immutable per-sign-in family ids, durable family revocation records, and a boot migration that revokes legacy family-less refresh tokens).
+- **Satisfied foundations**: the `/api/v2` → `/api` migration, the PAT-only MCP credential boundary, and RBAC are on main.
+- **Sequencing dependency**: `feature-rbac-cli-permissions-cli-mcp` assumes MCP is PAT-only; coordinate its integration and authentication tests with §15.1, which adds audience-bound OAuth access.
+- **Related**: RFC-0012 (Crowi CLI) for seeded first-party clients and RFC-0019 (TOTP Two-Factor Authentication) for standalone MongoDB support.
 
 ## §0 Summary
 
-Crowi will support the URL-only connection flow used by ChatGPT custom
-connectors and other standards-compliant remote MCP clients. A client starts
-with Crowi's public MCP URL, discovers OAuth through RFC 9728 Protected
-Resource Metadata, dynamically registers as a public client, and completes an
-authorization-code flow with S256 PKCE.
+Crowi lets standards-compliant remote MCP clients connect using only its public MCP URL and OAuth. ChatGPT and Claude.ai are the first interoperability targets. Discovery uses Protected Resource Metadata (PRM, RFC 9728) and Authorization Server (AS) Metadata (RFC 8414); external clients identify themselves with an HTTPS Client ID Metadata Document (CIMD) URL on an administrator-allowed host; authorization uses a code and S256 PKCE; RFC 8707 `resource` binds the resulting access token to the MCP audience.
 
-The first implementation is standards-complete OAuth plus public Dynamic
-Client Registration (DCR):
+MCP accepts explicit Bearer PATs or OAuth access tokens with the exact MCP audience. Cookies, web-session Bearer JWTs, and unbound OAuth access tokens are rejected. Public REST rejects every OAuth access token that carries an audience. Effective access is the intersection of the user's RBAC decision, token scope, and applicable administrator cap.
 
-- every MCP `401` carries an RFC 6750 `WWW-Authenticate` challenge with
-  `resource_metadata`;
-- RFC 9728 metadata identifies Crowi's canonical protected resource and
-  authorization server;
-- RFC 8707 `resource` is preserved through authorization, code exchange,
-  refresh, JWT audience, and MCP validation;
-- public DCR creates secretless, untrusted clients in the existing
-  `OAuthClient` collection;
-- the connector selects its required scope set before authorization; the
-  interoperable default is `pages:read pages:write`, while administrators may
-  cap external clients at read-only;
-- administrators control enablement, DCR activation, scope caps, abuse
-  limits, inventory, and revocation from a dedicated **AI integrations**
-  area; and
-- users can inspect and revoke their own connected-client grants.
+The external-client master switch defaults off and the client-host allowlist starts empty. Administrators manage allowed hosts, client approval (including adding and approving a client by URL), a scope cap that defaults to read/write, inventory, and revocation. Approval snapshots the client's name and redirect URIs; a changed redirect set returns the client to pending. Users see and revoke their connected clients. Initial authorization offers read-only or read/write, with read/write as the default when permitted; missing tool scope returns an ordinary tool error without automatic step-up.
 
-DCR is selected for implementation cost, not because the MCP specification
-prefers it. The current MCP authorization specification says authorization
-servers **SHOULD** support Client ID Metadata Documents (CIMD) and **MAY**
-support DCR. Crowi deliberately starts with DCR because a durable client
-record maps to the required approval, revocation, quota, and
-connection-inventory lifecycle. This is not a dependency shortcut: the locked
-`@hono/mcp` DCR code is only a types/wire-shape reference. Its generated
-identifiers, generated secrets, public-client admission, and global limiter
-are not suitable for this RFC. Crowi must implement its own cryptographic
-identity generation, public-only validation, source-aware fail-closed
-limiting, quota reservation, lifecycle, and policy integration. CIMD would
-instead add a hardened outbound metadata resolver plus the same local policy
-record. The choice is therefore a present implementation-cost decision after
-pricing both complete subsystems, not a standards ranking or a claim that DCR
-is already implemented by a dependency.
+One `resolveOAuthClient` boundary resolves CIMD clients and seeded first-party clients. Crowi fetches a CIMD document only after the user authenticates at the authorization endpoint, or when an administrator adds a client by URL; code exchange, refresh, and MCP use the durable client record and current policy, so a vendor metadata outage does not break connected sessions. The prerequisite refresh-token family and its revocation record represent each user connection. A second use of an authorization code revokes the family issued from it. A crash that loses a code exchange or token response requires reconnecting. Standalone MongoDB remains supported, and deployments stop all old replicas before starting the new build.
 
-All client lookup is centralized in:
-
-```ts
-resolveOAuthClient(clientId: string): Promise<OAuthClientResolution>
-```
-
-Only a normalized internal client shape leaves this boundary. No other OAuth
-code reads `OAuthClient` directly or assumes that `client_id` is an opaque
-database key. That constraint is essential because a DCR `client_id` is an
-opaque generated value while a CIMD `client_id` is a URL. Adding CIMD later
-must replace or extend this one resolver rather than rewrite validation,
-authorization, token, consent, and administration paths.
-
-Crowi's default MongoDB is standalone. The implementation therefore uses
-single-document compare-and-set (CAS), bounded per-operation outbox state,
-deterministic identifiers, idempotent materialization, and repair workers. It
-does not require a replica set or multi-document transaction.
-
-The existing MCP transport is already compatible. Crowi uses
-`@hono/mcp`'s stateless, per-request `StreamableHTTPTransport`
-(`packages/api/src/mcp/attach.ts:16-20,101-119`). This RFC does not add a
-legacy `/sse` endpoint.
+Crowi stays on SDK v1 and MCP protocol 2025-11-25 for this RFC. It adopts the current authorization recommendations without claiming implementation of the distinct 2026-07-28 MCP transport and lifecycle.
 
 ## §1 Background and motivation
 
-### §1.1 Crowi has OAuth and MCP but not their interoperable boundary
+### §1.1 Current implementation
 
-RFC-0010 provides:
+Crowi already provides authorization-code OAuth with S256 PKCE, scoped access JWTs, refresh-token rotation with per-sign-in families and durable family revocation, consent, AS Metadata, and boot-seeded `OAuthClient` records. MCP exposes tools through `@hono/mcp` Streamable HTTP and dispatches to Hono routes that enforce token scopes and RBAC.
 
-- authorization code with S256 PKCE;
-- refresh-token rotation;
-- scoped JWT access tokens;
-- a consent screen;
-- RFC 8414 Authorization Server Metadata; and
-- a DB-backed `OAuthClient`.
+`packages/api/src/mcp/auth.ts` already installs `createMcpAuth`, a dedicated Bearer-only, PAT-only boundary using `resolveCredential` with cookie fallback disabled. It rejects web-session Bearer JWTs and cookies. It also rejects `oauth_access` JWTs because `packages/api/src/util/jwt.ts` currently signs them without a protected-resource audience. `verifyToken` checks only the issuer, and `jsonwebtoken` ignores `aud` unless an audience option is passed, so an audience claim alone would not keep a token out of REST. This RFC extends the MCP boundary only after audience binding and explicit REST audience rejection exist.
 
-RFC-0011 provides page and search tools over Streamable HTTP. The endpoint
-currently applies the shared `createJwtAuth(crowi)` middleware and dispatches
-tool calls to scope-protected Hono routes
-(`packages/api/src/mcp/attach.ts:55-119`,
-`packages/api/src/mcp/server.ts:67-99,132-159`).
+`packages/api/src/mcp/dispatch.ts` forwards the MCP caller's `Authorization` header verbatim into in-process route dispatch. With audience-bound tokens that forwarding would present an MCP-audience credential to REST authentication, so §6.4 replaces it with a private resolved-auth context.
 
-Those foundations do not yet let a generic external MCP client bootstrap:
+The remaining work is resource-aware OAuth issuance and validation, PRM and challenges, CIMD resolution and policy, and external-client consent and administration. Authorization requests, codes, refresh rows, and the web consent flow must retain `resource`. The public API already uses `/api`; it is not a pending migration or a second audience.
 
-1. MCP authentication failures return `401` without `WWW-Authenticate`.
-2. Crowi has no RFC 9728 Protected Resource Metadata endpoint.
-3. Authorization and token schemas do not accept RFC 8707 `resource`
-   (`packages/api-contract/src/schemas/oauth-endpoints.ts:59-66,94-115`).
-4. Authorization codes and refresh tokens do not retain a resource
-   (`packages/api/src/models/oauth-authorization-code.ts:26-38`,
-   `packages/api/src/models/oauth-refresh-token.ts:30-41`).
-5. OAuth access JWTs have scope and client id, but no protected-resource
-   audience (`packages/api/src/util/jwt.ts:15-37,114-160`).
-6. The authorization page does not preserve `resource` through consent
-   (`packages/web/src/app/(auth)/oauth/authorize/page.tsx:39-68`).
-7. The only clients are boot-seeded first-party clients. The model explicitly
-   says that no registration UI or endpoint exists
-   (`packages/api/src/models/oauth-client.ts:5-48`,
-   `packages/api/src/util/oauth-client-seed.ts:33-75`).
+### §1.2 Standards and client expectations
 
-A discovery-only patch would merely move the failure to client resolution or
-audience validation. The release unit must include discovery, client
-onboarding, resource binding, least-privilege consent, and revocation.
+The MCP authorization specification dated 2026-07-28 requires PRM, resource indicators at authorization and token exchange, audience validation, no token passthrough, S256 PKCE, and refresh-token rotation for public clients. Clients refuse an authorization server that does not advertise `code_challenge_methods_supported`. A Bearer challenge should include `resource_metadata` and scope guidance. RFC 9207 authorization-response issuer identification is currently SHOULD and is expected to become MUST. Protocol 2025-11-25 says the authorization server SHOULD accept resource URIs whose scheme and host differ only in case.
 
-### §1.2 The first `401` is part of the public protocol
+The same revision recommends CIMD for clients and authorization servers. Dynamic Client Registration (DCR, RFC 7591) is deprecated and retained as an optional backward-compatibility mechanism. Client preference is pre-registered credentials, then CIMD when advertised, then DCR, then manual configuration. Crowi implements CIMD plus its existing seeded clients and does not publish a registration endpoint.
 
-An MCP client begins OAuth discovery at the protected resource. It follows the
-`resource_metadata` URL in the Bearer challenge and then reads
-`authorization_servers` from the protected-resource document.
+ChatGPT's authentication documentation prefers CIMD and supports `none` or `private_key_jwt` token-endpoint authentication. Crowi selects the public-client `none` flow with S256 PKCE. When the authorization server advertises RFC 9207 support, the documented client ID is `https://chatgpt.com/oauth/client.json` and redirect URI is `https://chatgpt.com/connector_platform_oauth_redirect`. Without it, they are `https://chatgpt.com/oauth/{callback_id}/client.json` and `https://chatgpt.com/connector/oauth/{callback_id}`. Crowi advertises RFC 9207 support from §15.2, before external onboarding exists, so ChatGPT is expected to use the fixed form; host admission accepts either form. ChatGPT's live document declares `token_endpoint_auth_method: "private_key_jwt"` with `token_endpoint_auth_methods_supported: ["none", "private_key_jwt"]`. OpenAI's guidance also requires every scope the server advertises to be enabled for the client. The cited OpenAI page is written for plugins and does not state that it covers custom connectors; live custom-connector verification is therefore a release requirement.
 
-Crowi's existing test asserts only the status:
+Claude.ai selects CIMD only when AS Metadata includes both `client_id_metadata_document_supported: true` and `none` in `token_endpoint_auth_methods_supported`; otherwise it attempts DCR. Its client ID is `https://claude.ai/oauth/mcp-oauth-client-metadata`, its documented callback is `https://claude.ai/api/mcp/auth_callback`, and its live document lists `authorization_code`, `refresh_token`, and the JWT-bearer grant with `token_endpoint_auth_method: "none"`. It uses S256, refreshes five minutes before access expiry and on `401`, and expects public-client refresh rotation. Its traffic originates from Anthropic's published egress range (`160.79.104.0/21`), and both the MCP server's and the authorization server's discovery endpoints must be reachable from it. The PRM `resource` must equal the URL the user enters, including its path.
 
-```ts
-const res = await callMcp(null, {
-  jsonrpc: '2.0',
-  id: 1,
-  method: 'tools/list',
-});
-expect(res.status).toBe(401);
-```
+### §1.3 Dependency boundary
 
-This is `packages/api/src/mcp/mcp.test.ts:85-87`. The exact challenge becomes
-an endpoint contract and a regression test.
+`pnpm-workspace.yaml` and `pnpm-lock.yaml` resolve `@modelcontextprotocol/sdk` to 1.32.1 and `@hono/mcp` to 0.3.0. Neither SDK v1 nor v2 provides a server-side CIMD resolver, so Crowi owns resolution, local policy, and persistence. `@hono/mcp` supports SDK v1 only.
 
-### §1.3 The generic connector flow needs dynamic client onboarding
+SDK v2 targets the 2026-07-28 protocol: stateless requests without `initialize` or session IDs, `server/discover`, and `Mcp-Method` headers. It also moves authorization-server helpers to legacy. Upgrading requires separate transport and adapter work; it is not a prerequisite or an implicit part of this RFC. Both target clients' cited documentation still refers to protocol 2025-11-25. Dependency compatibility with their evolving protocol support is an ongoing risk verified in §13 and §15.
 
-ChatGPT supports CIMD, DCR, and predefined clients. Supporting all three does
-not itself select one. The generic custom connector flow starts with the MCP
-URL and does not require an operator to copy a client id or secret into the
-connector. Crowi also has no manual client-registration UI.
+### §1.4 Instance policy
 
-Public DCR is the first implementation for three concrete reasons:
-
-1. The repository resolves `@hono/mcp` to `0.3.0` and
-   `@modelcontextprotocol/sdk` to `1.29.0`
-   (`pnpm-lock.yaml:265-276`). Those installed packages include DCR handlers,
-   protected-resource metadata routing, and RFC 9728 types. They do not
-   provide a Crowi-ready server-side CIMD resolver.
-2. Neither option is intrinsically the lighter design. A safe CIMD resolver requires
-   SSRF protection, DNS pinning, single-flight fetches, negative caching,
-   per-host concurrency limits, bounded responses, and fail-closed behavior.
-   DCR instead requires rate limits, registration quotas, lifecycle cleanup,
-   and abuse visibility. Both are real subsystems.
-3. DCR maps directly to Crowi's existing DB-backed `OAuthClient`. This is a
-   lifecycle fit, not reuse of the installed handler. CIMD has no
-   durable client lifecycle of its own, but Crowi still needs local policy,
-   revocation, approval, audit, and connection visibility. That requires a
-   shadow/policy record in addition to the metadata resolver.
-
-The asymmetry in the specification remains explicit: CIMD is `SHOULD`, while
-DCR is `MAY`. CIMD-only is evaluated independently in §14.
-
-### §1.4 External AI access is an instance policy
-
-External MCP clients receive content and may eventually change pages as the
-authorizing user. Different deployments need different policies:
-
-- a personal instance may automatically activate strict public registrations;
-- an organization may require administrator approval;
-- a sensitive instance may disable new registration while preserving existing
-  approved connections; or
-- an incident response may disable all external clients immediately.
-
-These are administrator settings, not constants embedded in OAuth handlers.
+Allowing an external client lets another service read or change wiki content as an authorizing user. Host admission and client approval are administrator decisions; user consent remains mandatory for external clients. Turning the master switch off blocks external authorization, exchange, refresh, and MCP use while preserving PATs and seeded first-party clients.
 
 ## §2 Goals and non-goals
 
 ### §2.1 Goals
 
-- Let ChatGPT and another conforming MCP client begin with only Crowi's public
-  MCP URL.
-- Return RFC 9728 metadata and an RFC 6750 challenge from the protected
-  resource.
-- Bind codes, refresh tokens, and access tokens to the canonical MCP resource
-  using RFC 8707.
-- Validate issuer and audience at the MCP resource.
-- Support public, S256-only DCR without issuing a client secret.
-- Centralize every OAuth client lookup behind one CIMD-ready resolver.
-- Keep `client_id` syntax unconstrained by the DCR storage representation.
-- Require the client to choose `pages:read` or `pages:read pages:write`
-  before authorization; default connector documentation and compatibility
-  fixtures use the complete read/write set.
-- Let administrators control the external-client master switch, all three DCR
-  activation modes, maximum scope, abuse controls, client lifecycle, and
-  user/client connection visibility.
-- Let users inspect and revoke their own grants.
-- Make grant, client, and master-switch revocation effective for the next
-  request, including an already issued access JWT.
-- Preserve PAT behavior and seeded first-party OAuth clients.
-- Support a trusted split-origin MCP URL without trusting request host
-  headers.
-- Work correctly on standalone MongoDB.
-- Keep external URL construction independent of the public API prefix.
+- Let ChatGPT and Claude.ai start from only the public MCP URL, once an administrator has enabled and approved the integration.
+- Implement PRM discovery and an RFC 6750 Bearer challenge.
+- Resolve external URL-form client IDs through CIMD, restricted to administrator-allowed hosts, with durable local approval that snapshots the approved name and redirects, and durable revocation.
+- Keep connected sessions independent of the vendor's metadata availability: only authorization and administrator add-by-URL fetch metadata.
+- Bind authorization codes, refresh tokens, and access JWTs to the canonical MCP resource and validate issuer and audience at MCP; keep MCP-audience tokens out of public REST and out of in-process dispatch headers.
+- Support first-party resource-bound OAuth before external discovery and onboarding are exposed.
+- Offer initial read-only or read/write consent, defaulting to read/write subject to the administrator cap, with explicit scope negotiation for external clients.
+- Enforce RBAC, token scope, and administrator policy together; make family, client, and global revocation block the next MCP request; revoke the family issued from a reused authorization code.
+- Provide administrator inventory and user connection revocation; connections are not stored in a separate grant collection.
+- Preserve PATs, seeded general-API OAuth behavior, split-origin deployments, and standalone MongoDB support.
 
 ### §2.2 Non-goals
 
-- Implementing CIMD in the first release.
-- Advertising `client_id_metadata_document_supported` before CIMD exists.
-- Fetching arbitrary client metadata URLs in the first release.
-- Adding legacy HTTP+SSE or a separate `/sse` endpoint.
-- Supporting confidential dynamic clients or issuing client secrets.
-- A general UI for manually preregistering arbitrary OAuth applications.
-- Dynamic native-app callbacks, custom URI schemes, or loopback HTTP redirect
-  URIs. Existing seeded first-party exceptions remain unchanged.
-- Adding new MCP tools or scopes beyond the current page/search surface.
-- Treating ChatGPT action confirmation as a substitute for Crowi scope,
-  consent, or administrator policy.
-- Deriving a public issuer, resource, or metadata URL from request headers.
-- Keeping `/api/v2` as a second MCP audience after the prefix migration.
-- Requiring a MongoDB replica set or multi-document transaction.
-- Defining tool-result OAuth upscoping without a proven client-specific
-  transport contract.
+- DCR, a public registration API, confidential external clients, or client-secret issuance.
+- Metadata fetching from arbitrary hosts, native-app callbacks, custom URI schemes, or loopback HTTP redirects for external clients; these redirect forms remain available only to seeded first-party clients. Loopback-redirect CIMD clients such as Claude Code are therefore out of scope.
+- Fetching CIMD documents at code exchange, refresh, or MCP requests.
+- Tool-level OAuth step-up, a `_meta["securitySchemes"]` compatibility mirror, or local write elevation that cannot deliver credentials to the remote client.
+- New tools or scopes, a general manual client-registration UI, or treating client-side action confirmation as Crowi authorization.
+- Legacy `/sse`, SDK v2, or migration to the 2026-07-28 MCP transport and lifecycle.
+- MongoDB transactions, issuance outboxes, repair workers, idempotent token-response recovery, or runtime replica capability checks.
+- Deriving public identifiers from request headers or retaining `/api/v2` as an MCP audience.
 
 ## §3 Decision and end-to-end flow
 
-The normative path is DCR-first:
-
 1. The client calls the public Streamable HTTP MCP URL without credentials.
-2. Crowi returns `401` with `WWW-Authenticate` and `resource_metadata`.
-3. The client fetches Protected Resource Metadata.
-4. It fetches Authorization Server Metadata and discovers the DCR endpoint.
-5. It registers a public client, receiving an opaque `client_id`.
-6. Crowi resolves that id only through `resolveOAuthClient`.
-7. The client requests either `pages:read` or `pages:read pages:write` and
-   the canonical `resource`, using S256 PKCE. The interoperable connector
-   default is the complete read/write set.
-8. Crowi displays consent and binds the resource to the code.
-9. Code exchange repeats the resource and yields an audience-bound access
-   token plus a rotating refresh token.
-10. The client uses the access token on MCP. Crowi accepts only explicit
-    Bearer PATs or MCP-bound OAuth access tokens.
-11. A tool succeeds when the selected grant has its required scope. A
-    read-only token calling a write tool receives an ordinary MCP tool error,
-    not an OAuth upscoping instruction.
-12. A client needing writes reconnects through its supported OAuth setup flow
-    and requests the complete set; Crowi displays that authority at consent.
-13. User, administrator, client, and global revocation are enforced at the
-    next request through durable status fences.
-
-No discovery document advertises CIMD in this release. No authorization path
-implements a hidden CIMD special case.
+2. Crowi returns `401` with a Bearer challenge naming `resource_metadata` and the permitted initial scope set.
+3. The client reads PRM, then AS Metadata with S256, public-client `none`, RFC 9207 support, and CIMD support.
+4. The client submits its CIMD URL as `client_id`, the canonical `resource`, an exact redirect URI, state, requested scopes, and an S256 challenge.
+5. Before the user authenticates, Crowi checks only the request syntax, the master switch, and the client-ID host against the allowlist. It fetches nothing and creates no record; failures render a neutral local error.
+6. Crowi authenticates the user. `resolveOAuthClient` then fetches and validates the document and applies the durable client record. An unknown client gets a pending record that stores the requesting user; a pending client, a client whose redirects changed since approval, or a revoked or disallowed client cannot authorize.
+7. Crowi creates a single-use, short-lived authorization context bound to the authenticating browser session, then displays the approved client name with its metadata host, the redirect origin, the resource, the signed-in account, the negotiated scopes, and a warning to continue only if the user started this connection from their own client. External consent is never skipped.
+8. Consent creates a short-lived code bound to the client, user, exact redirect, selected scopes, PKCE challenge, and resource. The server builds every success and denial redirect to a validated callback, and each carries the exact issuer as `iss`.
+9. The client exchanges the code with its verifier. Crowi atomically consumes the code, validates the binding against the durable client record, and issues an audience-bound access JWT and opaque rotating refresh token in a new family recorded on the consumed code. A second presentation of the code revokes that family.
+10. MCP verifies the access JWT, client eligibility, family revocation, and current policy, then executes tools under the user's RBAC and effective scopes through a private in-process dispatch context.
+11. Refresh retains client, family, and resource, uses only the durable client record and policy, and may only reduce scope. User family revocation, administrator client revocation, host removal, or master-off blocks subsequent use at the applicable boundary.
+12. A missing tool scope returns an ordinary sanitized MCP `isError` result. Obtaining write access later requires a new normal authorization initiated by the client and explicit consent.
 
 ## §4 Trusted public URLs and discovery
 
-### §4.1 URL builders
+### §4.1 URL builders and routing
 
-One module owns three values:
+One module derives public identifiers from trusted configuration:
 
-| Value | Trusted source | Example after prefix migration |
+| Value | Trusted source | Example |
 |---|---|---|
-| Authorization Server issuer | normalized `CLIENT_URL` / `crowi.getBaseUrl()` | `https://wiki.example.com` |
-| Canonical MCP resource | normalized `MCP_PUBLIC_URL`, otherwise issuer + public API prefix + `/mcp` | `https://wiki.example.com/api/mcp` |
-| Protected Resource Metadata URL | canonical MCP resource origin + `/.well-known/oauth-protected-resource` | `https://wiki.example.com/.well-known/oauth-protected-resource` |
+| Authorization Server issuer | Normalized `CLIENT_URL` / `crowi.getBaseUrl()` | `https://wiki.example.com` |
+| Canonical MCP resource | Normalized `MCP_PUBLIC_URL`, otherwise issuer + `/api/mcp` | `https://wiki.example.com/api/mcp` |
+| PRM URL | MCP resource origin + `/.well-known/oauth-protected-resource` | `https://wiki.example.com/.well-known/oauth-protected-resource` |
 
-`MCP_PUBLIC_URL` is a full absolute MCP URL. In production it must:
+`MCP_PUBLIC_URL` is an absolute HTTPS URL with no credentials, query, or fragment and no trailing slash. Loopback development may use HTTP. Invalid public configuration prevents external OAuth enablement. Request `Host`, forwarded-host headers, and other caller input never determine issuer, audience, or discovery URLs.
 
-- use `https`;
-- contain no username, password, query, or fragment;
-- identify the externally reachable Streamable HTTP endpoint; and
-- normalize to a no-trailing-slash resource identifier.
+The canonical MCP resource is the URL users enter in their client, character for character. Operator documentation tells users to enter it exactly as the AI integrations page displays it, without a trailing slash; Claude.ai compares the PRM `resource` with the entered URL including its path.
 
-Loopback development may use `http`. External OAuth remains disabled when
-`CLIENT_URL` or `MCP_PUBLIC_URL` is invalid. The AI integrations page shows
-the resolved issuer, resource, and metadata URL read-only.
+Split-origin deployments may set `CLIENT_URL=https://wiki.example.com` and `MCP_PUBLIC_URL=https://mcp.example.net/api/mcp`. Resource metadata is served on the MCP origin and names the configured authorization-server issuer. Production and development proxies route both well-known aliases correctly, and every `/.well-known/*` path on both origins must be reachable from the target clients' egress ranges, including Anthropic's published range.
 
-Request `Host`, `X-Forwarded-Host`, and similar headers never participate.
-This follows the existing OAuth metadata boundary in
-`packages/api/src/hono/handlers/oauth.ts:168-181,403-425`.
-
-For split origins:
-
-```text
-CLIENT_URL=https://wiki.example.com
-MCP_PUBLIC_URL=https://mcp.example.net/api/mcp
-```
-
-the resource metadata is served on `mcp.example.net` and names
-`https://wiki.example.com` in `authorization_servers`.
-
-The public metadata, DCR, authorization, token, device-authorization, and MCP
-routes have an explicit connector CORS policy. It is configured as a bounded
-allow-list of connector origins (including the configured MCP origin where a
-browser client requires it), handles preflight, and exposes
-`WWW-Authenticate` on responses that may challenge a browser client. It is
-not inherited accidentally from the web `CLIENT_URL` CORS policy. Wildcard
-origins are not used for credentialed browser requests.
+Public metadata, authorization, token, and MCP routes have explicit browser CORS handling, including preflight and exposure of `WWW-Authenticate`. Allowed browser origins are configured separately from CIMD hosts and callback URIs; none of these lists substitutes for another. Credentialed browser requests do not use wildcard origins. Existing seeded device routes retain their own policy.
 
 ### §4.2 Protected Resource Metadata
 
-The API serves one RFC 9728 representation at:
-
-- `GET /.well-known/oauth-protected-resource`; and
-- `GET /.well-known/oauth-protected-resource{canonical-resource-path}`.
-
-The second route is a discovery alias, not another audience. For the
-post-migration default it is
-`/.well-known/oauth-protected-resource/api/mcp`.
+Serve the same RFC 9728 document at `GET /.well-known/oauth-protected-resource` and `GET /.well-known/oauth-protected-resource{canonical-resource-path}`. The default path alias is `/.well-known/oauth-protected-resource/api/mcp`; it does not introduce another audience.
 
 ```json
 {
@@ -336,1285 +128,440 @@ post-migration default it is
 }
 ```
 
-`pages:write` is omitted when the administrator scope cap is read-only. The
-document advertises only scopes used by current MCP tools.
+PRM `scopes_supported` lists exactly the permitted external MCP set: `pages:read pages:write` under the default cap and `pages:read` under the read-only cap. Every scope it lists is one an approved CIMD client can receive, which satisfies OpenAI's requirement that advertised scopes be enabled for the client. AS Metadata `scopes_supported` keeps the full catalog because it also serves seeded clients; §8.2 narrows external requests drawn from it instead of rejecting them. Publish only implemented capabilities; external onboarding is not advertised before its resolver and policy are ready.
 
-### §4.3 MCP `401` challenge
+### §4.3 MCP challenge
 
-An MCP-specific middleware wraps the entire authentication boundary and adds
-a challenge to every authentication `401`, including:
-
-- missing or malformed Authorization;
-- unknown, expired, or revoked PAT;
-- invalid or expired JWT;
-- wrong OAuth issuer or audience;
-- a revoked or disabled client;
-- a revoked grant; and
-- failure of the defensive Bearer-only guard.
-
-Missing credentials return:
+Every MCP authentication `401` includes a Bearer challenge. Missing credentials return the permitted initial scope set, which is read/write under the default cap because this RFC does not implement tool step-up:
 
 ```http
-WWW-Authenticate: Bearer resource_metadata="https://wiki.example.com/.well-known/oauth-protected-resource", scope="pages:read"
+WWW-Authenticate: Bearer resource_metadata="https://wiki.example.com/.well-known/oauth-protected-resource", scope="pages:read pages:write"
 ```
 
-Invalid credentials return:
+With the read-only cap, the challenge scope is `pages:read`. MCP clients take their initial request from the challenge `scope`, then from PRM `scopes_supported`. A client may request a smaller set. The consent screen remains authoritative about the actual scopes granted.
 
-```http
-WWW-Authenticate: Bearer error="invalid_token", error_description="The access token is invalid or no longer usable.", resource_metadata="https://wiki.example.com/.well-known/oauth-protected-resource", scope="pages:read"
+Malformed, expired, revoked, wrong-issuer, wrong-audience, or otherwise ineligible credentials return the same metadata and scope guidance plus `error="invalid_token"` and a neutral `error_description`. No error reveals whether a client or family exists. Database and infrastructure failures fail closed as server errors rather than being reported as bad credentials. User-status and tool-permission failures retain their distinct authorization errors.
+
+### §4.4 Authorization Server Metadata and responses
+
+AS Metadata retains the configured issuer and authorization-code, refresh-token, and applicable seeded-client capabilities. It includes:
+
+```json
+{
+  "authorization_response_iss_parameter_supported": true,
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["none"],
+  "client_id_metadata_document_supported": true
+}
 ```
 
-The middleware does not alter other API routes. Infrastructure failures remain
-`500`; they are not misreported as credential failures.
+The CIMD flag is present and true only while the external feature is enabled and operational. With the switch off, Claude.ai falls back to DCR, finds no registration endpoint, and shows its generic authorization failure; operator documentation names this symptom. `authorization_response_iss_parameter_supported` is advertised from the phase that builds every success and denial redirect on the server with `iss` (§15.2); today the denial redirect is assembled in the browser (`packages/web/src/app/(auth)/oauth/authorize/page.tsx`). The S256 and `none` fields describe implemented authorization-server behavior independently of the switch. No `registration_endpoint` is advertised. Cached metadata never overrides current admission or revocation checks.
 
-### §4.4 Authorization Server Metadata
+RFC 9207 `iss` is the exact metadata issuer in every successful and error authorization response delivered to a validated redirect URI, including denial. The server constructs these redirects; the browser navigates to the returned URL. Invalid or unvalidated redirects receive a local error page and no redirect. Web-session JWT issuer handling remains separate from OAuth authorization-response issuer identification.
 
-RFC 8414 metadata retains `CLIENT_URL` as `issuer` and adds
-`registration_endpoint` while the master switch permits external onboarding
-and DCR mode is not disabled. A cached direct call still passes runtime
-policy.
+## §5 CIMD resolution and local client policy
 
-The metadata continues to advertise:
+### §5.1 One client-resolution boundary
 
-- authorization code and refresh token grants;
-- S256;
-- `token_endpoint_auth_methods_supported: ["none"]`; and
-- existing seeded-client capabilities.
-
-It does not advertise `client_id_metadata_document_supported` in the first
-implementation.
-
-## §5 Public Dynamic Client Registration
-
-### §5.1 Registration contract
-
-The authorization server adds a public, prefix-independent OAuth registration
-route implementing the RFC 7591 subset needed by MCP clients:
+All OAuth client resolution uses:
 
 ```ts
-type DynamicClientRegistrationRequest = {
-  client_name: string;
-  redirect_uris: string[];
-  token_endpoint_auth_method?: 'none';
-  grant_types?: Array<'authorization_code' | 'refresh_token'>;
-  response_types?: Array<'code'>;
-  scope?: string;
-};
-```
-
-The response contains an opaque generated `client_id`, issue time, normalized
-public-client capabilities, exact redirect URIs, and the accepted scope
-maximum. It contains no client secret, registration access token, or
-client-management URI.
-
-Generated DCR ids use at least 256 bits of randomness. This generation rule is
-local to DCR. It is not a validation rule applied to inbound `client_id`
-values elsewhere.
-
-### §5.2 Validation
-
-Every dynamic client is forced to:
-
-- `type: "public"`;
-- `secretHash: null`;
-- `token_endpoint_auth_method: "none"`;
-- authorization-code and refresh-token grants only;
-- response type `code` only;
-- S256 PKCE for every authorization;
-- `firstParty: false`;
-- `trusted: false`; and
-- the canonical MCP resource only.
-
-Dynamic redirect URIs:
-
-- are required and limited to five;
-- must be absolute HTTPS URLs;
-- may not contain credentials or fragments;
-- are stored after URL validation; and
-- are compared by exact string equality during authorization.
-
-The request body is limited to 16 KiB, names to 128 Unicode code points, and
-individual redirect URIs to 2,048 bytes. These are DCR payload limits. The
-resolver and the shared authorize/token schemas do not impose a
-storage-derived length, character-class, opaque-id, or URL-format rule on
-`client_id`.
-
-Requested scopes are a maximum, not a grant. The effective maximum is the
-requested subset intersected with administrator policy. Omission defaults to
-`pages:read`. Existing records do not silently gain `pages:write` when an
-administrator later loosens global policy; expansion requires explicit client
-approval or re-registration.
-
-Dynamic clients cannot use the device authorization grant. Seeded clients keep
-their explicitly backfilled grant capabilities: `grantTypes` is
-`Array<'authorization_code' | 'refresh_token' | 'urn:ietf:params:oauth:grant-type:device_code'>`;
-the device-code value is present only for seeded rows that currently support
-it. Authorization-server discovery continues to advertise device authorization
-only while at least one applicable seeded client flow remains supported; DCR
-metadata and validation never advertise or accept it for dynamic clients.
-
-### §5.3 Activation modes
-
-The administrator selects exactly one DCR mode:
-
-| Mode | Registration result | Authorization behavior |
-|---|---|---|
-| `automatic` | Create `status: active`. | The client can proceed immediately, but user consent remains mandatory. |
-| `approval_required` | Create `status: pending`. | Crowi shows a local pending page and issues no code until an administrator approves. |
-| `disabled` | Do not advertise registration and reject direct DCR. | Existing active clients continue unless revoked or the master switch is off. |
-
-The master switch defaults off. DCR mode defaults to `approval_required` when
-external OAuth is first enabled. Operators may intentionally select
-`automatic`; this is not hard-coded as universally safe or universally
-forbidden.
-
-Turning off the master switch rejects new registration, authorization, token
-exchange, refresh, and MCP access for dynamic clients. It does not affect PATs
-or seeded clients.
-
-### §5.4 Abuse controls and bounded capacity
-
-Public DCR is unauthenticated and therefore has dedicated controls:
-
-- strict body and metadata validation;
-- per-source and global rate limits;
-- a configurable stored-client quota;
-- cleanup of unused registrations;
-- structured audit events;
-- administrator inventory and revocation; and
-- a dedicated, shared, fail-closed DCR limiter.
-
-Source addresses come only from a configured trusted-proxy chain or the socket
-peer. Stored correlation uses a keyed hash, not the raw address. The DCR
-limiter is a separate Redis-backed implementation (or a new explicit
-`failureMode: 'closed'` mode that is used only by this endpoint), with keys
-including the source hash and a global key. Crowi's existing fail-open,
-per-process limiter is not reused. External DCR cannot be enabled unless this
-shared limiter is healthy; loss of it rejects only new DCR with
-`temporarily_unavailable`, never changes the posture of MCP, autocomplete, or
-attachment limiters.
-
-The cross-replica client quota uses one bounded Mongo admission document.
-Registration atomically reserves a generated client id only if the reservation
-count is below the configured maximum. Client creation uses that id
-idempotently. A failed or crashed creation leaves a dated reservation that a
-reconciler can release after proving no matching client exists. Revoke and
-unused-client cleanup release reservations idempotently.
-
-Quota exhaustion rejects registration with `temporarily_unavailable`. It does
-not perform a cross-document “transactional eviction.” Cleanup may later free
-space, but admission never depends on a MongoDB transaction.
-
-The quota has both a global stored-client cap and a per-source stored-client
-cap. Before rejecting a new registration, admission may atomically reclaim
-only the oldest never-authorized `pending` or unused `active` registration
-that is beyond its configured short pending/unused lifetime; it never evicts a
-client with a grant. Pending registrations have a shorter default retention
-than active unused registrations and are bulk-removable by source/status in
-the administrator UI. This bounds unattended approval queues and prevents a
-small set of unauthenticated sources from holding the feature capacity for the
-full seven-day unused lifetime.
-
-### §5.5 One client-resolution boundary
-
-All OAuth paths use:
-
-```ts
-type ResolvedOAuthClient = {
-  clientId: string;
-  name: string;
-  type: 'public' | 'confidential';
-  redirectUris: string[];
-  allowedScopes: string[];
-  grantTypes: string[];
-  firstParty: boolean;
-  trusted: boolean;
-  source: 'seeded' | 'dynamic' | 'metadata_url';
-  status: 'pending' | 'active' | 'revoked';
-  policyVersion: number;
-  protocolVersion: number;
-};
-
-type OAuthClientResolution =
-  | { ok: true; client: ResolvedOAuthClient }
-  | {
-      ok: false;
-      reason: 'invalid' | 'disabled' | 'temporarily_unavailable';
-    };
-
 resolveOAuthClient(clientId: string): Promise<OAuthClientResolution>
 ```
 
-The first implementation returns seeded and DCR-backed clients only.
-`metadata_url` reserves the normalized source for future CIMD and is not
-reachable or advertised yet.
+The normalized result contains client ID, display name, metadata host where applicable, exact redirect URIs, supported grant types and scopes, public/confidential type, seeded/CIMD source, trusted/first-party flags, and local approval state. Failures distinguish invalid or ineligible clients from temporary resolution failure internally; wire errors remain neutral `invalid_client` or an appropriate temporary failure.
 
-No caller:
+Seeded first-party IDs resolve to their existing local records and capabilities. Other IDs must be eligible CIMD URLs. Shared authorize, token, consent, device, and administration code does not assume an opaque ID, reject URLs based on storage-derived syntax, or directly query clients outside the resolver/model boundary.
 
-- queries `OAuthClient` directly;
-- validates `client_id` by length, character class, prefix, or URL shape;
-- assumes a database miss is the only resolution failure;
-- says “not registered” in a protocol error; or
-- persists a `ResolvedOAuthClient` as though it were a Mongoose document.
+The resolver has two modes. Authorization after user authentication and the administrator add-by-URL action fetch and validate the document. Code exchange, refresh, MCP eligibility, and administrative lifecycle reads use only the durable client record and current policy and never fetch, so a vendor metadata outage leaves existing connections working.
 
-This is required because a future CIMD id is the metadata URL itself. A
-DB-first rule such as “look up the string and reject when missing” is
-incompatible with that client-id form.
+### §5.2 Host admission and bounded fetch
 
-The public `GET /oauth/client-info` route is removed. A replacement
-authorization-context endpoint calls this resolver and, only after
-validating the complete authorize request server-side, returns a short-lived,
-signed context id containing client status/source, exact validated redirect
-URI and origin, resource, requested/effective scopes, and consent mode. It
-does not reveal a client name or existence for an arbitrary `client_id`; a
-pending, revoked, disabled, or unresolved client receives the same neutral
-authorize-context result. The web page submits only this context id, never
-raw authorize query values, to complete or deny consent.
+The master switch defaults off. The administrator-managed allowlist starts empty and matches the normalized HTTPS hostname exactly, with no wildcard or implicit subdomain match. Admission is by host, not a complete metadata URL or path: ChatGPT's callback-specific form embeds a variable path. The original full URL remains the exact `client_id` identity. URLs must use HTTPS on the default HTTPS port and contain no credentials or fragment; IP literals are not accepted as external client hosts.
 
-The OAuth wire error remains the standard `invalid_client`, with neutral text
-such as “The client could not be resolved or is not eligible for this
-request.” Transient resolver failure may map to `temporarily_unavailable`;
-neither response assumes missing registration.
+Before the user authenticates, the authorization endpoint checks only `client_id` syntax, enablement, and host admission. The fetch and any record creation happen after authentication. Before fetching, check enablement, the allowed hostname, and any existing local revocation. The same checks apply to an administrator adding a client by URL, so clients can be added and approved only while the master switch is on. Resolve the hostname, reject non-public IPv4 and IPv6 destinations, and pin the validated address to the connection while verifying TLS for the original hostname. Redirects are bounded and permitted only within the same HTTPS host under the same address and port checks; a redirect to another host is rejected even if that host is also allowlisted. This prevents DNS rebinding and redirects from bypassing host admission.
+
+Use a five-second total fetch timeout, at most three redirects, and a 16 KiB maximum decoded response body. Accept only a valid JSON metadata object. Cache successful documents according to HTTP freshness and validation headers, honoring `no-store` and revalidation; expired metadata is not silently reused after a failed validation. Cache keys are exact client IDs. A cached document cannot override current host admission or durable revocation. Document-supplied logos, policy URLs, and key URLs (`logo_uri`, `jwks_uri`, and similar) are never fetched in this public-client flow.
+
+### §5.3 Metadata validation
+
+Require nonempty `client_id`, `client_name`, and `redirect_uris` of the correct JSON types. The document's `client_id` must equal the originally presented URL exactly, including after an allowed redirect; URL normalization is not an identity comparison. Bound names to 128 Unicode code points, redirect lists to five entries, and each URI to 2,048 bytes within the document-size bound.
+
+External redirects must be absolute HTTPS URLs without credentials or fragments, and each redirect's host must equal the `client_id` host. Store and compare their exact strings; no wildcard, prefix, port-agnostic, or origin-only redirect matching is permitted. In the shared matcher `packages/api/src/util/oauth-redirect-uri.ts`, the loopback any-port branch and the custom-scheme branch apply only to seeded first-party clients; CIMD clients reach only the exact-string branch. Every authorization redirect must occur in the approved redirect snapshot (§5.4), and token exchange must match the redirect bound into its code. Metadata changes cannot rewrite a code's client, redirect, resource, or scopes.
+
+Grant and authentication fields are validated individually:
+
+| Field | Rule |
+|---|---|
+| `grant_types` | Must include `authorization_code`. Refresh tokens are issued only when it also includes `refresh_token`. Every other listed grant type is ignored and never enabled for the client. |
+| `response_types` | When present, must contain `code`. |
+| `token_endpoint_auth_method` / `token_endpoint_auth_methods_supported` | The public flow is used when the single-valued method is `none`, or when `none` appears in the supported list even if the single-valued method names another method such as `private_key_jwt`. A document offering neither is rejected. |
+
+External clients therefore use the authorization-code grant, optional refresh, response type `code`, token authentication `none`, and S256 PKCE. No external record becomes trusted, first-party, confidential, or device-grant capable. Optional document scopes can narrow the supported MCP scopes but cannot expand them or confer consent.
+
+### §5.4 Durable approval and revocation
+
+Maintain one local `OAuthClient` record per exact CIMD `client_id`, protected by the existing unique identity constraint. Its source is CIMD, and its local status is `pending`, `active`, or `revoked`. A client first seen at authorization starts pending and stores the requesting user. An administrator can also add a client by URL from the AI integrations page; Crowi fetches and validates the document under the same rules and records it as active with the administrator as approver, so approval does not require a user to try first. Host admission permits resolution and does not replace per-client approval or user consent.
+
+Approval snapshots the validated redirect URI set and client name. Authorization accepts only redirects in the approved snapshot, and consent displays the approved name with the metadata host. The record also keeps the most recently fetched metadata for inventory. A later fetch whose redirect set differs from the approved snapshot returns the client to pending, and authorization is rejected until an administrator re-approves the new set; a changed name alone is shown in inventory beside the approved name. Metadata refresh never clears local revocation, approves a pending client, or confers trust. Concurrent discovery must not overwrite administrator state. Revoked records are retained so fetching the same document cannot recreate an active client.
+
+Client eligibility differs by path. Authorization requires an `active` client. Code exchange, refresh, and MCP require a client that is not `revoked`, current host admission, and the master switch; a client that has never been approved has no codes or connections, so returning an approved client to pending blocks new authorizations only. Existing connections keep their code-bound redirect and continue through exchange, refresh, and MCP, which use the durable record and never re-read metadata.
+
+Removing a host immediately makes its CIMD clients ineligible for authorization, exchange, refresh, and subsequent MCP requests. Re-adding a host does not undo explicit client revocation, and approval applies only to pending clients. Revoked clients and token families are not reactivated by this flow. The name alone is not proof of identity; consent always pairs it with the metadata host.
 
 ## §6 Resource, issuer, and audience binding
 
-### §6.1 Authorization request
+### §6.1 Authorization and code exchange
 
-`resource` becomes optional in shared schemas for seeded-client compatibility
-but mandatory for every dynamic client. It must equal the canonical MCP
-resource exactly after trusted normalization.
+Shared schemas accept an optional RFC 8707 `resource` to preserve seeded general-API flows. Accept one resource equal to the configured canonical MCP identifier after canonicalization: scheme and host compare case-insensitively and are lowercased; the path and everything else compare exactly. Reject multiple, unknown, fragment-bearing, or mismatched values.
 
-The authorization page preserves `resource` through:
+A CIMD client's only audience is MCP, so an external authorization request that omits `resource` binds to the canonical MCP resource. A seeded authorization intended for MCP must send `resource`; a seeded request without it stays on the general-API path.
 
-1. client/context validation;
-2. consent display;
-3. authenticated authorization submission; and
-4. the authorization-code record.
+Preserve the resource through the validated authorization context, consent, authenticated submission, and the code record. Code exchange verifies client, redirect, S256 verifier, current client eligibility, and selected scopes. An absent `resource` at exchange defaults to the code's bound resource; a present value must canonicalize to it, and a mismatch returns `invalid_grant`. An unbound seeded code cannot be upgraded into MCP authority at exchange.
 
-The server rejects an external request with missing, multiple, unknown, or
-fragment-bearing resources, or a different origin, port, path, or
-trailing-slash identity.
+### §6.2 Refresh
 
-### §6.2 Token exchange and refresh
+Bound refresh rows retain the canonical resource alongside their client, user, scopes, authorization time, and prerequisite `familyId`. An absent `resource` on refresh defaults to the row's bound resource; a present value must canonicalize to it. Refresh requires the same client, inherits the family unchanged, and may only reduce scopes. Policy can further reduce the issued scope; the token response reports the actual scope. Increasing authority requires a new authorization and family.
 
-Authorization-code exchange repeats the same `resource`. Mismatch or omission
-for a dynamic client returns `invalid_grant`.
-
-Refresh records add `resource`, `grantId`, lifecycle state, and operation
-coordinator fields. Refresh repeats the resource, cannot change the grant, and
-may only downscope. Refresh never adds `pages:write`; write requires a new
-authorization code after explicit consent.
-
-Seeded clients that omit `resource` keep their existing general-API behavior,
-but unbound OAuth tokens are never accepted at MCP. PATs remain a separate
-credential type and do not acquire an OAuth audience.
+Seeded clients that omit `resource` keep their general-API path, including existing device capabilities. Unbound refresh tokens cannot acquire an MCP resource during rotation. PATs remain a separate credential type without OAuth resource parameters.
 
 ### §6.3 OAuth access JWT
 
-Resource-bound OAuth tokens use normalized `CLIENT_URL` as issuer. Web-session
-JWT verification remains a separate domain; this RFC does not change the web
-session issuer merely to align MCP.
-
-An MCP access JWT contains:
+`signOauthAccessToken` takes the validated resource and family when issuing an MCP token. Resource-bound tokens use the configured public authorization-server issuer, not the web-session issuer, and contain:
 
 ```ts
 {
   type: 'oauth_access';
   userId: string;
-  email: string;
-  scope: 'pages:read' | 'pages:read pages:write';
+  scope: string;
   client_id: string;
-  grant_id: string;
+  family_id: string;
   aud: 'https://wiki.example.com/api/mcp';
   iss: 'https://wiki.example.com';
   exp: number;
 }
 ```
 
-The default MCP access lifetime is ten minutes. Expiry is defense in depth;
-immediate revocation relies on durable client, grant, and policy checks.
+MCP-audience tokens carry no `email` claim: the user is resolved by `userId`, and no authentication path reads the address from an OAuth token, so the claim would only disclose it to the external client. The `TokenPayload` variant for resource-bound tokens reflects this.
 
-### §6.4 Audience isolation
+The MCP access lifetime is the existing `ACCESS_TOKEN_TTL_SEC` default of one hour. Revocation does not depend on expiry: every MCP request checks family revocation, and for external clients also client status, host admission, and the master switch, so a revoked connection fails at its next request whatever the token's remaining lifetime. Each refresh inserts a successor row retained for the refresh-token lifetime, so a shorter access lifetime would multiply retained rows without improving revocation. Claude.ai refreshes five minutes before expiry, which the one-hour lifetime accommodates.
 
-An MCP-audience token must not become a general REST token merely because MCP
-reuses in-process Hono handlers
-(`packages/api/src/mcp/dispatch.ts:1-24,80-119`).
+MCP verifies signature, exact issuer, exact audience (passed to the verifier as the audience option), expiry, token type, user status, client eligibility, and family revocation. The family claim lets the prerequisite's durable revocation record also fence MCP access JWTs; this request-time check is supplied by this RFC, not by the prerequisite. Seeded general-API access JWTs retain their existing issuer, claims, and expiry behavior.
 
-The outer MCP boundary verifies once and builds a private resolved-auth
-context. `makeDispatch` is changed to construct the `Request` itself and adds
-that object to a module-private `WeakMap<Request, ResolvedMcpAuth>` before
-calling `honoApp.fetch(request)`. A first middleware in the dispatched router,
-ordered before `createJwtAuth` and `requireScope`, consumes and deletes that
-WeakMap entry, installs the resolved user/scopes in Hono context, and rejects
-any request without it. The map, key type, and consuming middleware are not
-exported; no header, URL, body field, symbol, or process-global identifier is
-accepted as a substitute. The public HTTP router never mounts this middleware
-and continues to reject the MCP audience. Tests exercise a real dispatched
-request, direct public requests, and forged serializable markers.
+### §6.4 Audience isolation and dispatch
+
+Public REST credential resolution rejects any `oauth_access` token that carries an `aud` claim, whatever its issuer. This is an explicit check after decoding, because issuer verification alone admits a token from the REST issuer and `jsonwebtoken` ignores `aud` without an audience option. MCP must not forward an MCP-audience token as a general-purpose credential or pass it to another resource server.
+
+MCP's in-process Hono dispatch carries a private resolved-auth context associated with the actual constructed `Request` through a module-private `WeakMap`. The dispatcher does not set an `Authorization` header on dispatched requests. A dispatch-only middleware that runs before any route authentication reads and deletes the entry once and installs a request variable holding the authenticated user, effective scopes, and an `authContext` whose kind is `oauth` or `pat`, never `web`. `createJwtAuth` recognizes that variable, so authentication middleware that runs more than once on one dispatched request (overlapping route prefixes, `createJwtAdminRequired` wrapping `createJwtAuth`) reuses it instead of falling back to header authentication. Because the kind is never `web`, web-session-only routes such as `createJwtAdminRequired` still refuse MCP callers. Public requests cannot supply this context through headers, query, body, or another serializable marker. Public requests without a private entry follow normal authentication, which rejects the MCP audience. The context never skips RBAC or route scope checks.
 
 ## §7 MCP credential boundary
 
-MCP accepts only an explicit `Authorization: Bearer ...` credential of one of
-these forms:
+Extend the existing `createMcpAuth` to accept valid Bearer PATs and `oauth_access` JWTs only when bound to the canonical MCP audience. Keep cookie eligibility disabled. A malformed Authorization header never falls back to a valid session cookie, and web-session `type: 'access'` JWTs remain invalid even in a Bearer header.
 
-- a valid Crowi PAT; or
-- a valid `type: "oauth_access"` token bound to the canonical MCP resource.
+PAT resolution and revocation remain unchanged. Seeded resource-bound OAuth uses its client and family checks without the external master switch or host allowlist. External OAuth additionally checks that the client is not revoked, current host admission, master enablement, and the current scope cap, all from durable state (§5.4). Unbound and wrong-resource OAuth remain rejected.
 
-MCP does not accept:
+## §8 Scope selection and tool authorization
 
-- access-token cookies;
-- refresh-token cookies;
-- ambient browser session state; or
-- a normal web-session `type: "access"` JWT, even when supplied in the
-  Authorization header.
-
-The current shared middleware accepts both web-session and OAuth Bearer JWTs
-and can fall back to a cookie
-(`packages/api/src/hono/middleware/auth.ts:67-85,127-149`). MCP therefore
-requires a dedicated credential policy before that fallback. A malformed
-Authorization header cannot fall through to a valid session cookie.
-
-This explicit decision narrows the remote-resource boundary and prevents a web
-session from receiving all scopes at MCP
-(`packages/api/src/hono/middleware/auth.ts:139-147`).
-
-## §8 Scope selection and write authorization
-
-### §8.1 Scope mapping
+### §8.1 Scope and RBAC
 
 | Tools | Required scope |
 |---|---|
 | Page reads, lists, history, backlinks, autocomplete, and search | `pages:read` |
 | Create, update, rename, delete, restore, and revert | `pages:write` |
 
-The existing descriptors already record these scopes
-(`packages/api/src/mcp/tools/page.ts:177-315`,
-`packages/api/src/mcp/tools/search.ts:41-52`). The same descriptor becomes the
-single source for advertised OAuth metadata, annotations, and expected
-downstream route scope.
+Existing tool descriptors and Hono handlers define required scopes. No new scopes or RBAC bypass are introduced. Effective access is RBAC decision ∩ token scope ∩ administrator cap, with seeded and PAT policy applied according to their existing boundaries. A token scope never grants access to a page the user cannot access.
 
-### §8.2 Authorization scope selection
+### §8.2 Scope negotiation and initial consent
 
-The authorization request selects the complete authority the connector will
-use: `pages:read` or `pages:read pages:write`. The documented, interoperable
-connector configuration requests read/write on its first authorization; an
-operator that selects the read-only cap receives only `pages:read`. Crowi does
-not claim that an MCP tool result, `_meta`, or a local page can deliver a
-stronger token to a remote credential store. A later expanded grant is a new
-normal OAuth authorization only when the client independently supports
-starting it; it is not a required connector feature in this RFC.
+External clients negotiate against the permitted external set, which is `pages:read pages:write` under the default cap and `pages:read` under the read-only cap. An omitted `scope` requests the permitted set. Requested scopes outside the permitted set, including unknown or catalog scopes outside MCP and write above a read-only cap, are dropped rather than rejected, and consent shows the narrowed set. A request left with no permitted scope after narrowing is treated as omitted, and consent preselects read-only in that case. Seeded clients keep the existing strict rule in `validateClientAndScopes` (`packages/api/src/hono/handlers/oauth.ts`), which rejects any scope outside the client's allowed set.
 
-Consent identifies:
+The initial choice is `pages:read` or `pages:read pages:write`. Default to read/write when the negotiated request includes write; an explicit read-only request stays read-only. A read-only administrator cap forces the consent and issued token to read-only. The user may choose a smaller permitted set, never more than negotiated, and the token response reports the exact granted scope.
 
-- the external client name and dynamic-client badge;
-- the exact redirect origin;
-- the Crowi MCP resource;
-- that wiki content may be sent to an external AI service; and
-- the exact requested read and, where present, write authority.
+Consent shows the approved client name and metadata host, external-client badge, exact redirect origin, MCP resource, the signed-in account, and selected authority. It explains that wiki content may be sent to the external service and that writes change Crowi as the user, and warns the user to continue only if they started this connection from their own client. External clients never skip consent.
 
-Dynamic clients never skip consent.
+### §8.3 Missing scope and future step-up
 
-### §8.3 Tool security metadata on SDK 1.29.0
+Missing scope produces an ordinary sanitized MCP `isError` tool result for both OAuth and PAT callers. This RFC emits neither tool-level OAuth challenges nor `_meta["mcp/www_authenticate"]`. Tool annotations continue to describe actual read/write/destructive behavior without implying an authorization channel.
 
-The current lock resolves `@modelcontextprotocol/sdk` to `1.29.0`
-(`pnpm-lock.yaml:12-14,274-276`). Its `registerTool` config supports
-`annotations` and `_meta` but has no top-level `securitySchemes`; Crowi's
-current registration passes only description and input schema
-(`packages/api/src/mcp/server.ts:151-158`). Treating top-level
-`securitySchemes` as though the installed SDK preserved it would silently
-advertise no tool policy.
+Top-level tool `securitySchemes` together with `_meta["mcp/www_authenticate"]` step-up is documented by OpenAI and remains separate future work. SDK v1 1.32.1 drops top-level `securitySchemes` from `tools/list`, so that work needs an explicit wire implementation and live client tests. The documentation provides no basis for a `_meta["securitySchemes"]` mirror, and this RFC emits none.
 
-The first implementation therefore uses an explicit compatibility extension:
+### §8.4 Administrator cap changes
 
-- each tool descriptor owns
-  `securitySchemes: [{ type: "oauth2", scopes: [...] }]`;
-- the registration adapter copies the exact array into
-  `_meta["securitySchemes"]`, a field that SDK 1.29.0 preserves through its
-  supported `_meta` object;
-- the adapter emits annotations from the same descriptor; and
-- a wire-level `tools/list` test, not only a TypeScript object test, asserts
-  that ChatGPT receives the security-scheme mirror for every tool.
+Setting the cap to read-only removes write from PRM, the challenge, and initial consent, masks write from existing external tokens, and restricts refresh output to read-only. Existing tokens may still perform authorized reads; write calls return an ordinary policy-denied tool error without reauthorization instructions. Returning the cap to read/write does not enlarge existing token scopes or reverse refresh downscoping; write authority absent from a connection requires fresh consent.
 
-This is the documented compatibility metadata surface for clients that read
-security schemes from `_meta`. Crowi does not cast an unsupported top-level
-field into the SDK config and assume success. When the SDK is upgraded to a
-version that natively serializes top-level `securitySchemes`, the adapter emits
-both the standard field and the `_meta` mirror from the same array until
-compatibility data shows the mirror can be removed.
+## §9 Data model and token lifecycle
 
-### §8.4 Insufficient scope
+### §9.1 Client records
 
-MCP dispatch intentionally converts downstream route responses into MCP tool
-results. It therefore cannot use a downstream `403` or a tool `_meta` field as
-an OAuth transport: SDK 1.29.0 starts upscoping only from an outer HTTP `403`
-and its `WWW-Authenticate` header, and Crowi has no Streamable-HTTP-compliant
-outer-403/retry protocol. A missing scope is returned as the normal sanitized
-MCP `isError` tool result, with no `mcp/www_authenticate` field and no promise
-of automatic reauthorization. PAT callers receive the same ordinary missing-
-scope result; they are never instructed to perform OAuth.
+Extend `OAuthClient` with source (`seeded` or `cimd`), status, the approved name and redirect snapshot, the most recently validated CIMD metadata, allowed scopes and grants, the requesting user or adding administrator, approval/revocation actors and timestamps, and authorization/use timestamps for inventory. Seeded rows are backfilled idempotently as active with their existing capabilities. Local identity is the exact `client_id`; metadata cache expiry does not delete approval or revocation state.
 
-If a future documented ChatGPT contract proves a tool-level OAuth escalation
-and token-delivery path, it is a separate RFC and must include exact wire
-tests against that client. It is not an assumed extension of SDK 1.29.0.
+### §9.2 Connections are refresh-token families
 
-### §8.5 Read-only administrator cap
+Connections are not stored in a separate grant collection. Each successful authorization starts a new prerequisite `familyId`; rotation, including concurrent forks, retains it. The existing refresh rows already identify user, client, scopes, and authorization time; this RFC adds resource binding. These rows plus the client record and durable `OAuthTokenFamilyRevocation` record supply the information needed for connection inventory and revocation.
 
-When maximum external scope becomes read-only:
+Connected apps derives live connections from eligible refresh tips and groups rows by family where appropriate. Separate authorizations remain separate connections; revoking one does not revoke a later consent or another sign-in. The existing public session identifier remains a refresh-row `_id`, not a new public family ID. The server verifies ownership, resolves that row's family, and invokes the prerequisite revocation operation. Administrator inventory derives connected users from the same rows and does not promise permanent connection history after token TTL expiry.
 
-- Protected Resource Metadata stops advertising `pages:write`;
-- new write authorization returns `invalid_scope`;
-- refresh cannot add write and an existing write grant is fenced;
-- an existing dynamic write token fails the current policy check; and
-- read-only tokens and grants continue to work.
+The prerequisite's family revocation records have no TTL. This RFC uses their presence for MCP access-JWT checks even after refresh rows expire. It does not add a positive family registry or require a refresh row to survive as an access-token validity anchor.
 
-A write tool returns a policy-denied result without an OAuth challenge.
+### §9.3 Code exchange and refresh rotation
 
-## §9 Data model and standalone-MongoDB protocol
+Keep `OAuthAuthorizationCode.consume` in `packages/api/src/models/oauth-authorization-code.ts`: its single `findOneAndUpdate` atomically sets `consumedAt` only for an unconsumed, unexpired code. One exchange wins. Binding or policy validation after consumption can burn the code, and a crash or lost response requires a new authorization; issued tokens are not stored for replay.
 
-### §9.1 OAuthClient additions
+Code reuse revokes the family issued from the code (RFC 6749 §4.1.2). The exchange generates the `familyId` before issuance, and the same atomic consumption stamps it on the code row and extends that row's expiry to ten minutes after consumption; a consumed row is never usable, so the extension only lengthens the detection window beyond the code's one-minute lifetime. When `consume` returns nothing, the token endpoint looks up a consumed row by code hash; if that row carries a `familyId`, it invokes the prerequisite `revokeFamily` for the row's user before returning `invalid_grant`. A reuse after the row's expiry is indistinguishable from an unknown code and returns `invalid_grant`.
 
-Stored clients add:
+Use the prerequisite token-family implementation for refresh rotation, replay/grace behavior, and family revocation. It persists a family revocation record before bulk-revoking existing rows and checks that record both at refresh entry and after successor insertion. It preserves its existing rotation behavior, including possible concurrent forks; this RFC does not promise a single CAS winner for refresh or add an idempotency protocol.
 
-```ts
-registrationSource: 'seeded' | 'dynamic';
-status: 'pending' | 'active' | 'revoked';
-grantTypes: Array<'authorization_code' | 'refresh_token' | 'urn:ietf:params:oauth:grant-type:device_code'>;
-requestedScopes: string[];
-effectiveMaxScopes: string[];
-createdByIpHash: string | null;
-approvedAt: Date | null;
-approvedBy: ObjectId | null;
-lastAuthorizedAt: Date | null;
-lastUsedAt: Date | null;
-revokedAt: Date | null;
-revokedBy: ObjectId | null;
-```
+Resource, client, and selected scope are validated before issuance and preserved on the successor. Client eligibility and current administrator policy are checked again from durable state before a response is returned. If a durable family revocation is observed after insertion, no token pair is returned, following the prerequisite. A request that already passed its final check can finish concurrently with revocation; the next MCP request and any later refresh still reject the revoked family.
 
-Seeded rows are idempotently backfilled as active, with their current
-authorization-code/refresh/device capabilities, and are not governed by the
-external-client master switch. Dynamic rows can never become seeded,
-first-party, trusted, or confidential.
+### §9.4 Revocation and request-time policy
 
-`requestedScopes` is the immutable registration request; `effectiveMaxScopes`
-is the administrator-approved subset. A policy loosening never changes the
-latter. The administrator inventory action **approve scope expansion** selects
-a subset of `requestedScopes`, CASes `effectiveMaxScopes` and policy version,
-and audits the actor. A dynamic client may instead re-register. This is the
-only way an already read-only effective maximum can later permit write.
+User connection revocation uses the prerequisite's owner-checked family operation. For MCP, every subsequent access request additionally checks `OAuthTokenFamilyRevocation` for the signed user/family pair. This gives MCP stronger access revocation than seeded general-API JWTs, which remain valid until their existing expiry unless otherwise invalidated.
 
-### §9.2 OAuthGrant
+Administrator client revocation changes the durable client status and blocks all its users at authorization, exchange, refresh, and the next MCP request. Master-off and host removal apply the corresponding current policy to all CIMD clients. Restoring enablement or host admission can resume otherwise eligible unexpired connections; it never clears explicit client or family revocation.
 
-A grant represents one user's authorization of one resolved client for one
-resource:
+Store external policy through the existing typed configuration system. Security-sensitive eligibility checks read authoritative durable client, family-revocation, and policy state from the primary; process caches and Redis notifications are optimizations, not the basis for revocation. A database failure cannot be treated as an active client, an unrevoked family, or an enabled policy. Request-time family, client, and policy checks replace a per-JWT denylist.
 
-```ts
-type OAuthGrant = {
-  _id: ObjectId;
-  userId: ObjectId;
-  clientId: string;
-  resource: string | null;
-  scopes: string[];
-  status: 'active' | 'revoked';
-  version: number;
-  activeKey: string;
-  lastAppliedOperationId: string | null;
-  createdAt: Date;
-  lastAuthorizedAt: Date;
-  lastUsedAt: Date | null;
-  revokedAt: Date | null;
-  revokedBy: ObjectId | null;
-};
-```
+### §9.5 Retention and deployment
 
-At most one grant is active for `{ userId, clientId, resource }`. A plain
-unique `activeKey` is
-`active:<sha256(userId + clientId + resource)>` while active and changes to
-`revoked:<grantId>` on revocation. This permits historical rows without a
-partial-index dependency.
+Usable-code and refresh-token lifetimes are unchanged; refresh rows retain their existing 30-day lifetime, and a consumed code row is retained for ten minutes after consumption (§9.3). Retain local client revocation records and the prerequisite's permanent family revocation records. Metadata caching follows HTTP headers independently of local lifecycle state. Token issuance relies on existing TTL sweeps for cleanup.
 
-Dynamic MCP grants always have the canonical resource. Seeded general-API and
-device grants use `resource: null` and a distinct `activeKey` namespace. They
-remain on the legacy seeded exchange/refresh path and are never accepted by
-MCP; only dynamic resource-bound authorization-code exchanges enter the MCP
-issuance coordinator below.
+The prerequisite boot migration revokes family-less refresh tokens rather than backfilling possibly disconnected chains. It runs before listening, and existing OAuth clients sign in once after that upgrade. This RFC adds its client backfill and resource-aware fields through the existing migration framework without reimplementing family migration.
 
-### §9.3 Why transactions are not a prerequisite
-
-Crowi's default `docker-compose.yml` runs `mongo:8` without replica-set
-initialization (`docker-compose.yml:23-31`). RFC-0019 and RFC-0021 both treat
-standalone MongoDB as supported. External MCP OAuth must therefore work in
-that standard configuration.
-
-The correctness rules are:
-
-- one document owns each irreversible state transition;
-- every cross-document effect has a deterministic operation id and target id;
-- the owner stores a bounded outbox/coordinator state;
-- target writes are idempotent;
-- access JWTs are signed only after durable materialization and a final
-  authoritative-state reread;
-- repair resumes incomplete operations; and
-- revocation documents are request-time fences, so asynchronous cleanup is
-  not an authorization dependency.
-
-Multi-document transactions may be used as an optional optimization on a
-replica set, but observable behavior and correctness cannot depend on them.
-
-### §9.4 Authorization-code exchange coordinator
-
-The authorization code remains the first-use boundary, but it is not the
-durable coordinator: its existing unconditional TTL index can delete it.
-An `OAuthIssuanceOperation` collection owns recovery and has an explicit
-terminal-state TTL index; the code stores only `issuanceOperationId` after it
-is consumed. Its bounded record contains:
-
-```ts
-type OAuthIssuanceOperation = {
-  operationId: string;
-  state:
-    | 'reserved'
-    | 'grant_applied'
-    | 'refresh_created'
-    | 'refresh_activated'
-    | 'committed'
-    | 'aborted';
-  grantId: ObjectId;
-  expectedGrantVersion: number | null;
-  refreshId: ObjectId;
-  codeId: ObjectId;
-  reservedAt: Date;
-  terminalAt: Date | null;
-};
-```
-
-Exchange proceeds:
-
-1. Atomically consume the code first, exactly as the current `consume()` does,
-   before client, redirect, PKCE, resource, or scope diagnostics. Any exchange
-   attempt burns the code; a second attempt returns `invalid_grant`.
-2. Validate the consumed code and request, then generate operation, grant,
-   refresh, and opaque refresh-token values in memory. Validation failure
-   creates an aborted operation and returns `invalid_grant`.
-3. Insert the durable operation with deterministic target ids, then CAS the
-   consumed code to reference it. A duplicate/loser returns `invalid_grant`.
-4. Create or update the grant using `activeKey`, expected version, and
-   `lastAppliedOperationId`. Repeating the same operation is a no-op. A normal
-   later authorization may set only scopes within the client's effective
-   maximum and current policy.
-5. Create the refresh row in `pending` state with deterministic id,
-   operation id, token hash, client, user, resource, grant id, and scopes.
-6. Advance the durable operation after each materialized target.
-7. CAS-activate the pending refresh first (`state: pending`, matching
-   operation id), advance the operation to `refresh_activated`, and only then
-   CAS it to `committed`. Repair always resumes `reserved`, `grant_applied`,
-   `refresh_created`, and `refresh_activated`; committed is terminal only
-   after active refresh is proven by id/state/operation id.
-8. Reread the client, grant, and durable policy. Only if all remain eligible
-   does Crowi sign the access JWT and return the in-memory refresh plaintext.
-
-A crash can strand an operation, applied grant, or pending refresh row, but
-cannot produce an access token before durable state exists. Repair resumes the
-deterministic writes. Because only hashes are stored, a crash after consuming
-the code but before returning the refresh plaintext may require a fresh
-authorization; the RFC does not weaken token-at-rest protection to make that
-rare response recoverable.
-
-If policy or revocation changes before the final reread, the operation becomes
-aborted, any pending refresh is revoked, and no access JWT is returned. An
-already expanded grant is still fenced by the new policy and can be
-downscoped/revoked by repair; temporary over-recording cannot authorize a
-request because every use rechecks the current policy.
-
-### §9.5 Refresh rotation coordinator
-
-Every new resource-bound refresh row has an immutable random `familyId`, an
-index on `{ familyId, state }`, and a bounded rotation coordinator. An initial
-MCP grant creates one family; a new authorization (including a later normal
-expanded authorization) creates a new family. The presented refresh-token
-document owns rotation. Clients may send a cryptographically random
-`Idempotency-Key` header; it is stored as the bounded rotation operation id
-  and expires with the short retry window. One CAS changes it from `active` to
-`rotating` and
-embeds an operation id plus deterministic successor id/hash. Only the CAS
-winner may create the successor.
-
-For an idempotent refresh, the opaque successor value is derived from a
-server-held rotation HMAC key and the operation id, then only its hash is
-stored. During the short retry window the server can recompute and return the
-same value without persisting refresh plaintext; after that window the receipt
-is removed and a consumed-token presentation is treated as replay.
-
-The winner:
-
-1. validates client, grant, resource, requested downscope, and policy;
-2. reserves rotation on the source document;
-3. creates the successor as `pending`;
-4. activates the successor idempotently, then CASes the source to `consumed`
-   with `rotatedTo`;
-5. rereads client, grant, and policy; and
-6. signs a new access JWT and returns the successor plaintext only while all
-   fences remain valid.
-
-A repair worker completes or revokes stale `rotating` operations. A request
-that finds `rotating` or `consumed` with the same `Idempotency-Key` operation
-id replays that
-operation's already-created successor result while it is within its short
-retry window; a request without that receipt receives `invalid_grant` but does
-not revoke the family merely for a concurrent loss. A later presentation of a
-consumed token outside that receipt window is hostile reuse: one bounded
-`updateMany({ familyId, state: { $in: ['active', 'rotating', 'pending'] } })`
-revokes the family. Thus there is one usable successor, benign retries do not
-kill it, and replay has bounded database work.
-
-### §9.6 Revocation as an authoritative fence
-
-Revoking one grant CASes that grant to `revoked` and changes its `activeKey`.
-That single write blocks the next MCP request and refresh. Cleanup of related
-refresh rows is an idempotent outbox effect and may complete later.
-
-Revoking a client CASes the client to `revoked`. That one row blocks all its
-authorization, exchange, refresh, and MCP use. Grant/refresh cleanup is again
-asynchronous and idempotent.
-
-The global master switch and maximum scope live in the existing typed `Config`
-namespace through `ConfigService`, with a monotonically increasing policy
-version. `ConfigService`/Redis invalidation is used for normal cached reads;
-security-critical transitions also compare the durable version captured in
-the grant/client at final issuance and MCP authorization. Cache-miss and
-version-check behavior has a defined latency budget: one batched client/grant
-lookup plus one cached policy read on MCP requests, and no more than two
-additional writes/reads on token issuance. Redis is an optimization, never
-the sole authority.
-
-The ten-minute access-token lifetime limits exposure from an implementation
-failure but is not the revocation mechanism. A JWT denylist is unnecessary.
-
-### §9.7 Retention
-
-Initial defaults:
-
-- pending dynamic clients: delete after 24 hours; unused active dynamic
-  clients: delete after 7 days;
-- used revoked clients and grants: retain for 90 days;
-- expired code and legacy refresh rows: retain existing TTL behavior; resource
-  refresh rows retain a bounded family record for replay/retention and are
-  swept after the configured retention period.
-
-Cleanup never removes an active grant or an active client with an active
-grant. Only `OAuthIssuanceOperation.terminalAt` is TTL-swept; the existing
-authorization-code TTL is not a recovery dependency. Indexes include
-`familyId/state`, `grantId/state`, operation id, active key, and expiry;
-tests size a 30-day, ten-minute-access family and prove replay remains one
-bounded update rather than a chain walk.
-
-### §9.8 Migration and rolling activation
-
-This RFC includes explicit migrations under the existing migration framework.
-They backfill seeded `OAuthClient` source/status/grant types and, before the
-feature is externally enabled, either backfill every live seeded refresh row
-into the legacy path (`resource: null`, legacy state) or explicitly retain it
-there until expiry. Existing `crowi-cli` and `crowi-ios` refresh tokens never
-encounter the resource-bound `active → rotating` predicate. New dynamic/MCP
-fields are additive first; indexes are built before code writes them.
-
-Deployment is expand/backfill/activate, not “enable after local tests”:
-
-1. deploy a compatibility release to every API replica. It understands old
-   rows, rejects dynamic clients and MCP-bound OAuth tokens while the durable
-   external-feature gate is disabled, and reports capability version `0022`.
-2. run migrations/backfill and verify all live replicas report that capability
-   and the policy/config schema version.
-3. enable one globally durable external-feature gate. New code checks it at
-   DCR, authorize, token, refresh, and MCP acceptance; compatibility code
-   checks it before it can resolve/issue/accept a dynamic client token.
-4. only then expose `registration_endpoint` and permit DCR.
-
-Rollback turns the durable gate off before any older replica is introduced.
-Interleaving tests run old-compatible and new handlers against the same Mongo
-state and prove no replica can issue or accept an unbound dynamic-client token
-before activation.
+Deployment is a maintenance procedure: disable external OAuth if necessary, stop all old API replicas, start the new build with boot migrations, verify the deployment, then enable external access. Rollback likewise disables external access and stops the current replicas before starting the selected build. Skipping the stop step leaves old writers/verifiers outside the new authorization guarantees and may cause reconnects or inconsistent policy enforcement. The design includes no runtime replica or fleet check.
 
 ## §10 Administrator and user experience
 
-### §10.1 AI integrations placement
+### §10.1 Placement and settings
 
-Crowi's administrator navigation has Security and Authentication entries
-followed by Plugins
-(`packages/web/src/components/admin/admin-sidebar.tsx:47-76`). Add
-**AI integrations** under Authentication and before Plugins.
-
-Routes are prefix-independent:
-
-- web: `/admin/ai-integrations`;
-- admin API: `/admin/ai-integrations/*`, protected by
-  `createJwtAdminRequired(crowi)`; and
-- user: `/me/connected-apps`, with authenticated user-only grant APIs.
-
-### §10.2 Settings
+Add **AI integrations** to administrator navigation under Authentication, before Plugins. The web route is `/admin/ai-integrations`; API contracts use `/admin/ai-integrations/*` under the canonical `/api` mount and `createJwtAdminRequired(crowi)`.
 
 | Setting | Values | Default |
 |---|---|---|
-| Allow external MCP OAuth clients | on/off | off |
-| DCR activation | automatic / approval required / disabled | approval required |
-| Maximum external scope | read-only / allow initial read/write | read-only |
-| Maximum stored dynamic clients | bounded integer | 100 |
-| Registration rate per source/hour | bounded integer | 10 |
-| Global registration rate/hour | bounded integer | 100 |
-| Stored dynamic clients per source | bounded integer | 3 |
-| Unused registration lifetime | 1–30 days | 7 days |
-| Revoked record retention | 30–365 days | 90 days |
+| Allow external MCP OAuth clients | On/off | Off |
+| Allowed client metadata hosts | Exact HTTPS hostnames | Empty |
+| Maximum external scope | Read-only / allow read/write | Allow read/write |
 
-The page also shows resolved trusted URLs and the health of admission
-dependencies. Setting changes validate the entire policy before durable
-persistence.
+The master switch and the empty allowlist keep external access closed until an administrator opens it; the scope cap then defaults to read/write, matching the consent default. The page shows the resolved issuer, MCP resource (the exact URL users enter), and metadata URL, explains host matching, and validates the full policy before saving. It also explains that with the switch off Claude.ai reports a generic authorization failure, and that Anthropic's egress range must reach the `/.well-known/*` endpoints.
 
-### §10.3 Inventory and actions
+### §10.2 Client inventory
 
-Administrators can see:
+Show the approved name with metadata host, the current metadata name when it differs, full client ID, seeded/CIMD source, pending/active/revoked state, approved and currently published redirects, supported scopes, the requesting user or adding administrator, approval/revocation actors and times, and authorization/use times. Show current connections and connected users with their resource and scopes, derived from retained refresh rows. Treat names and all remote metadata as text, never executable markup.
 
-- client name and complete client id;
-- seeded/dynamic source;
-- pending/active/revoked status;
-- exact redirect origins and URIs;
-- requested and effective maximum scopes;
-- created, approved, last-authorized, last-used, and revoked times;
-- active and historical connection counts; and
-- connected users, their granted scopes, and last use.
+Actions add and approve a client by URL, approve a pending client (including re-approval after a redirect change), revoke a client, or inspect its connections. There are no client-secret, trust-elevation, or source-conversion actions.
 
-Actions are approve, **approve scope expansion** (up to immutable requested
-scopes), revoke, inspect grants, bulk-remove pending/unused registrations, and
-remove an unused registration. There is no “make trusted,” “make first-party,”
-“convert to confidential,” or client-secret action.
+### §10.3 Connected apps
 
-Names and redirect metadata are untrusted input and render as text only.
+Provide `/me/connected-apps` and web-session-only, owner-checked list/revoke APIs using the existing OAuth-session surface where possible. Show client name and host, resource, scopes, authorization time, and available usage information. Revoke the selected connection's entire family, including forked refresh rows and its MCP access JWTs. General-API JWTs keep their existing expiry-based revocation.
 
-### §10.4 Connected apps
+There is no local write-elevation button. A user needing more scope starts a new OAuth authorization through the external client's supported connection flow. Reconnecting creates a new family and requires consent.
 
-Users can list active and recently revoked external grants with client name,
-dynamic badge, resource, scopes, authorization time, and last use. Revoking an
-active grant applies the fence in §9.6. Reconnecting creates a new grant and
-requires consent.
+### §10.4 Consent and redirect safety
 
-Connected apps does not offer write elevation. Write scope is deliverable only
-through the external client's tool-level reauthorization flow.
+The UI supports pending approval, read-only consent, read/write consent, and policy-denied/revoked states. A server-validated authorization context carries the exact redirect, client, resource, negotiated scopes, PKCE challenge, and state across login and consent. The context is single-use, expires after a few minutes, and is bound to the browser session that authenticated; submitting it from another session or a second time fails with a neutral local error. Completion and denial revalidate current client policy. The server builds the terminal success or denial redirect with `iss`; the browser does not assemble a redirect from raw query parameters.
 
-### §10.5 Consent and redirect safety
+A vendor-shared client ID such as ChatGPT's identifies the vendor, not the person who started the flow, so an attacker can send a victim an authorization link that delivers the code to the attacker's connection. The session-bound single-use context, the signed-in account named on consent, and the warning to continue only when the user started the connection from their own client mitigate this consent phishing.
 
-The authorization UI has four states:
+Replace arbitrary public client-info lookups with this validated context so an arbitrary `client_id` is not a client-name/status oracle. Unvalidated or ineligible requests receive neutral local errors; errors and denials redirect only to a validated callback and include RFC 9207 `iss` whenever an authorization response is sent there.
 
-1. pending administrator approval;
-2. read-only consent;
-3. read/write consent; and
-4. policy denied or revoked.
-
-Every denial or error redirect uses the redirect URI retained in a
-server-validated authorization context. The browser never constructs a target
-from a raw inbound `redirect_uri`. The existing all-or-nothing consent card
-remains appropriate because each authorization is a complete minimal grant
-(`packages/web/src/app/(auth)/oauth/authorize/consent-card.tsx:26-30,48-66`).
-
-Every `/oauth/authorize` GET, login/continue transition, and POST that renders
-or accepts consent sends route-specific anti-framing headers:
-`Content-Security-Policy: frame-ancestors 'none'` and
-`X-Frame-Options: DENY`. These headers apply before authentication redirects,
-not just on the final card, so a hostile DCR redirect cannot frame a victim's
-approval click.
+Every authorize, login/continue, and consent route involved in this flow sends `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` before authentication redirects. Consent submission retains web-session authentication and CSRF protection.
 
 ## §11 Component boundaries
 
-### §11.1 API contract
+| Component | Responsibility |
+|---|---|
+| `@crowi/api-contract` | PRM, AS Metadata additions, resource-aware authorize/token schemas, validated authorization context, admin policy/client inventory/add-by-URL, and user connection contracts |
+| API OAuth implementation | Trusted URL builders, CIMD resolver/cache, local client policy and approval snapshots, scope negotiation, PKCE/resource binding, server-built issuer responses, code-reuse family revocation, and family-aware token issuance |
+| MCP authentication and dispatch | Bearer credential boundary, audience/issuer/family/client checks, challenge, effective scopes, and private single-use in-process auth context |
+| REST authentication | Rejection of every `oauth_access` token carrying `aud` |
+| Existing family implementation | Family IDs, rotation/replay semantics, durable revocation with post-insert checks, and legacy boot migration |
+| Web | Consent, AI integrations administration, Connected apps, and translations |
+| Operations documentation | HTTPS/proxy/CORS configuration, same/split-origin URLs, the exact URL users enter, egress reachability of `/.well-known/*`, allowed hosts and approval, scope selection, revocation guarantees, switch-off symptoms, maintenance upgrade, and ChatGPT/Claude.ai walkthroughs |
 
-`@crowi/api-contract` adds:
-
-- Protected Resource Metadata schemas and routes;
-- optional `resource` on authorize, code exchange, and refresh requests;
-- conditional `registration_endpoint` in Authorization Server Metadata;
-- public DCR request, response, and error schemas;
-- authorization-context fields for external status, resource, redirect
-  URI/origin, requested/effective scopes, and consent mode, plus the
-  server-side context create/complete/deny routes;
-- administrator policy/client/grant contracts; and
-- user connected-app list/revoke contracts.
-
-Every contract or route change regenerates OpenAPI artifacts with
-`pnpm check:openapi`.
-
-### §11.2 API server
-
-The API owns:
-
-- trusted issuer/resource/metadata URL builders;
-- root and path-specific Protected Resource Metadata;
-- MCP-specific challenge and credential middleware;
-- `resolveOAuthClient`;
-- DCR validation, admission, quota, status, and cleanup;
-- code/refresh resource and grant binding;
-- CAS/outbox issuance, refresh rotation, and repair;
-- `OAuthGrant`;
-- public-issuer OAuth JWT signing and verification;
-- audience isolation for internal tool dispatch;
-- client/grant/policy request-time fences;
-- administrator/user lifecycle handlers; and
-- tool security metadata and ordinary sanitized missing-scope tool errors.
-
-Installed SDK helpers may be reused for standards-defined types,
-serialization, or validation after Crowi wire tests cover their behavior.
-They do not replace Crowi's models, consent, policy, resolver, or revocation.
-
-### §11.3 Web
-
-The web app owns:
-
-- preserving `resource` through authorization;
-- server-validated terminal redirect handling;
-- read-only, read/write, pending, and denied consent states;
-- external-client and redirect-origin disclosure;
-- the AI integrations page and navigation;
-- settings/client/grant queries and mutations; and
-- Connected apps list and revoke.
-
-Existing production proxy matching already includes `/.well-known/*`.
-Development rewrites and tests must cover the new routes
-(`packages/web/next.config.ts:136-189`, `Caddyfile:11-21`,
-`scripts/dev-caddy.mjs:30-37`).
-
-### §11.4 Operations documentation
-
-Documentation covers:
-
-- the canonical post-migration MCP URL;
-- same-origin defaults and `MCP_PUBLIC_URL`;
-- reverse-proxy routes for MCP and `/.well-known/*`;
-- HTTPS;
-- enabling external clients and choosing DCR mode;
-- read-only default and initial read/write authorization;
-- no tool-result OAuth step-up;
-- client/user/global revocation; and
-- a ChatGPT walkthrough beginning with only the MCP URL.
+Regenerate OpenAPI artifacts with `pnpm check:openapi` for contract or route changes. Existing production and development proxy support for `/.well-known/*` must be verified for both aliases. SDK helpers may supply validated wire types but do not replace Crowi's resolver, lifecycle, consent, or policy.
 
 ## §12 Security and failure handling
 
-### §12.1 Unauthenticated DCR abuse
+### §12.1 Metadata fetch and client identity
 
-Public registration is deliberately unauthenticated. Its controls are policy
-gates, bounded metadata, dedicated shared fail-closed source/global limits,
-per-source and global stored quotas, pending-first expiry/reclamation, audit,
-and revocation. Failures do not disclose existing metadata and never return a
-reusable secret. `/oauth/token`, `/oauth/authorize`, and
-`/oauth/device/authorize` receive their own endpoint-specific abuse limits;
-they are not left unlimited because DCR is public.
+Host admission, fetching only after user authentication or administrator action, HTTPS, public-address validation at connection time, same-host redirect checks, and bounded HTTP fetching constrain CIMD's outbound request surface. HTTP caching reduces repeated fetches without weakening durable policy. Token and authorization endpoints retain endpoint-appropriate abuse limits.
 
-### §12.2 Redirect and client impersonation
+CIMD ties metadata to an administrator-allowed HTTPS host but does not authenticate every bearer of a public client ID as that vendor. Redirect hosts equal to the `client_id` host, exact matching against the approved redirect snapshot, mandatory consent, and S256 bind code delivery and exchange. A redirect change requires re-approval, so a compromised or changed document cannot silently redirect new codes. Consent shows the approved name with the host and the signed-in account, and the session-bound authorization context limits consent phishing (§10.4). Document changes cannot confer local approval or undo revocation.
 
-Dynamic redirects are HTTPS-only and exact-match. Crowi validates client,
-status, redirect, resource, PKCE, and scope before any redirect can carry an
-authorization code.
+### §12.2 Authorization boundaries
 
-The consent route is not frameable, including login and continue states, so
-an attacker cannot turn a validated dynamic redirect into a clickjacked
-approval surface.
+Trusted configuration supplies all public identifiers. Resource binding is checked at authorization, code exchange, refresh, and MCP acceptance. REST rejection of audience-bearing OAuth tokens and the private internal dispatch context prevent token passthrough or expansion into general API access; dispatched requests carry an `oauth` or `pat` context, so web-session-only routes stay closed. Cookies and web-session JWTs remain outside MCP authentication. MCP-audience tokens carry no email address.
 
-A DCR client name is not proof of vendor identity. Consent and approval show
-the exact redirect origin and a dynamic-client badge. A future CIMD source may
-provide a URL-based identity, but this release does not claim that DCR does.
+RBAC and route scope enforcement remain authoritative. External result sanitization and prompt-injection handling from RFC-0011 remain applicable but do not replace authorization. Read-only policy and missing scope produce ordinary tool errors, not instructions to bypass consent.
 
-### §12.3 Host-header and audience confusion
+### §12.3 Recoverable failures
 
-Trusted configuration supplies every public identifier. The resource is
-checked at authorization, code exchange, refresh, JWT verification, and MCP.
-The private dispatch context prevents an MCP-audience token from becoming a
-general API token.
+A consumed code or lost refresh response cannot be recovered by reissuing its plaintext from durable storage. The user reconnects. An orphaned hashed refresh row remains subject to normal TTL and client/family/policy checks until it expires. Logs never include authorization codes, access JWTs, refresh plaintext or hashes, or raw metadata-fetch errors containing sensitive request data.
 
-### §12.4 Least privilege and external content
-
-The authorization request uses the smallest scope set the connector chooses;
-the documented interoperable configuration requests read/write once, and an
-administrator may enforce read-only. Page authorization remains user-relative,
-and underlying API route scope checks remain authoritative.
-
-RFC-0011 prompt-injection fencing and result sanitization continue to apply
-(`docs/rfcs/0011-crowi-mcp.md:343-407`,
-`packages/api/src/mcp/result.ts`). They do not replace OAuth access control.
-
-### §12.5 Failure matrix
-
-| Failure point | Durable outcome | Recovery |
-|---|---|---|
-| Before code consumption | No mutation | Client retries |
-| After code consumption before durable operation | Code is single-use; no token | Fresh authorization |
-| After durable operation reservation | Code single-use; no token | Repair or fresh authorization |
-| After grant CAS | Grant records operation; no token yet | Idempotent issuance repair |
-| After pending refresh create | Pending token is unusable | Coordinator repair activates or revokes |
-| After refresh activation before operation commit | Active refresh plus resumable nonterminal operation | Repair proves activation then commits, or revokes on conflict |
-| After commit before response | Durable grant/active refresh; response may be lost | Safe fresh authorization if plaintext was lost |
-| Concurrent code exchange | One reservation winner | Loser gets `invalid_grant` |
-| Concurrent refresh | One source-document CAS winner | Same idempotency key replays successor; a different concurrent loser gets `invalid_grant` without family revocation |
-| Grant revoke during issuance | Grant fence wins at final reread or next request | No usable request after revoke |
-| Client revoke before cleanup | Client row immediately blocks use | Async grant/refresh cleanup |
-| Master switch off | Durable policy immediately blocks dynamic clients | No dependency on pub/sub |
-| DCR limiter outage | New DCR fails closed | Existing authorized clients remain governed by Mongo |
-| Code-document TTL | Code may expire/delete | Durable issuance operation remains resumable |
-| Repair worker crash | Durable operation remains bounded and resumable | Another worker continues |
+Unavailable or invalid metadata blocks new authorization and administrator add-by-URL rather than redirecting to unvalidated locations. Code exchange, refresh, and MCP use the durable client record and policy, so a vendor metadata outage does not affect connected sessions. Revocation-record or policy-read failure blocks access; a network/cache failure cannot reactivate a client. A request already in flight at revocation may finish, but subsequent MCP requests are denied.
 
 ## §13 Verification requirements
 
 ### §13.1 Discovery and credential boundary
 
-- Missing Authorization returns exact `resource_metadata` and read-scope
-  challenge.
-- Malformed, expired, revoked, wrong-issuer, wrong-audience, disabled-client,
-  and revoked-grant credentials return `error="invalid_token"` plus
-  `error_description`.
-- Root and path-specific metadata return the same canonical values.
-- Host and forwarded-host changes cannot affect discovery, issuer, endpoints,
-  or JWT audience.
-- Same-origin and split-origin fixtures produce correct resource and
-  authorization-server origins.
-- Connector CORS preflight/allow-list behavior works for public endpoints and
-  exposes `WWW-Authenticate`; an unrelated origin is denied.
-- A valid access cookie does not authenticate MCP.
-- A malformed Authorization header plus valid session cookie still fails.
-- A web-session Bearer JWT fails; PAT and MCP OAuth Bearer credentials pass.
+- Assert exact root/path PRM equality, canonical resource/issuer, the resource equal to the configured URL without a trailing slash, same/split-origin proxy behavior, CORS preflight, and exposure of `WWW-Authenticate`.
+- Verify PRM `scopes_supported` and the challenge `scope` equal the permitted external set under each cap, while AS Metadata keeps the full catalog.
+- Verify AS Metadata advertises S256 and `none` independently of external enablement, RFC 9207 support only once server-built redirects with `iss` exist, and CIMD only while enabled; it never advertises a `registration_endpoint`.
+- Verify `iss` on every server-built successful/error authorization redirect, including denial, and no redirect when callback validation fails.
+- Assert challenges for missing, malformed, expired, revoked, wrong-issuer, and wrong-audience credentials, with policy-appropriate scope guidance.
+- Confirm cookies and web-session Bearer tokens fail even when otherwise valid; PATs and correctly bound OAuth succeed. Infrastructure errors fail closed without becoming misleading `invalid_token` responses.
+- Forge Host/forwarded-host headers and serializable dispatch markers; confirm none change identifiers or authorize public REST use of MCP tokens.
 
-### §13.2 Client resolution and DCR
+### §13.2 CIMD and local lifecycle
 
-- All OAuth paths use `resolveOAuthClient`; a static check rejects direct
-  `OAuthClient` lookup outside the resolver/model boundary.
-- Opaque and URL-form `client_id` values reach the resolver without a
-  field-specific syntax or length rule derived from storage.
-- Neutral `invalid_client` errors do not say “unregistered.”
-- DCR creates only secretless public clients with opaque ids.
-- Confidential methods, requested secrets, unsupported grants, unsafe
-  redirects, oversized metadata, and unknown scopes fail.
-- Automatic, approval-required, disabled, and master-off modes have distinct
-  behavior.
-- Rate limits fail closed as configured, and quota reservation remains correct
-  under concurrent registration and crash repair.
-- Dynamic clients cannot become trusted/first-party or use device grants.
-- Public `client-info` cannot be used as an arbitrary client existence/name
-  oracle; server-issued authorize contexts drive every consent state.
+- Exercise every OAuth path through `resolveOAuthClient` with seeded IDs, CIMD URLs, and neutral resolution errors; confirm exchange, refresh, and MCP succeed for an approved client while its metadata URL is unreachable.
+- Confirm an unauthenticated authorization request performs no fetch and creates no record, and that the record created after authentication stores the requesting user.
+- Test empty allowlist, exact host matching, callback-specific paths, forbidden subdomains/ports, public IPv4/IPv6 checks, DNS rebinding, same-host redirects, and cross-host rejection.
+- Test fetch timeout/size/redirect limits, malformed JSON, missing required fields, exact document `client_id`, exact redirects, redirect hosts differing from the `client_id` host, and HTTP freshness/revalidation/`no-store`.
+- Test field-level validation: `grant_types` without `authorization_code` is rejected; without `refresh_token` no refresh token is issued; extra grant types are ignored and never enabled; `response_types` without `code` is rejected; `none` is accepted from either the single-valued method or the supported list; a document offering neither is rejected.
+- Use both live documents as fixtures. ChatGPT (`https://chatgpt.com/oauth/client.json`): single-valued method `private_key_jwt`, supported `["none", "private_key_jwt"]`, grants `authorization_code` and `refresh_token`, `jwks_uri` and `logo_uri` present; it resolves to the public flow without fetching keys or logos or requiring an assertion. Claude.ai (`https://claude.ai/oauth/mcp-oauth-client-metadata`): method `none`, no supported list, grants including `urn:ietf:params:oauth:grant-type:jwt-bearer`; it resolves with that grant ignored. Both redirect hosts equal their `client_id` hosts.
+- Confirm loopback any-port and custom-scheme redirect matching apply only to seeded first-party clients; a CIMD document listing a loopback or custom-scheme redirect is rejected.
+- Test concurrent local record creation, pending approval, administrator add-by-URL as active, approval snapshots, a changed redirect set returning the client to pending and blocking new authorization while existing connections keep exchanging, refreshing, and calling MCP, a changed name not altering consent, revocation surviving metadata refresh, and host removal/re-addition without clearing client or family revocation.
+- Confirm external clients cannot become seeded/trusted, skip consent, or use device grants; consent renders name, host, and signed-in account safely.
 
 ### §13.3 Resource and token lifecycle
 
-- `resource` survives authorization query, consent, code, token exchange,
-  refresh rotation, and JWT.
-- Missing, unknown, or mismatched resources fail at every transition.
-- MCP JWTs contain public issuer, exact audience, scope, client id, grant id,
-  and ten-minute expiry.
-- MCP rejects unbound and wrong-resource OAuth tokens.
-- Public REST rejects an MCP-audience token while marked in-process dispatch
-  succeeds.
-- Refresh cannot add scope or change resource/grant.
-- Seeded authorization-code/device refresh flows remain on their explicit
-  legacy path and their regression suites remain green.
-- Direct REST cannot forge dispatch context; a real WeakMap-marked in-process
-  request succeeds before JWT/scope middleware.
+- Carry the exact resource through context, consent, code, exchange, refresh, JWT audience, and MCP validation; reject multiple/mismatched resources and attempts to upgrade an unbound seeded token.
+- Confirm an external authorization without `resource` binds to the MCP resource, and an exchange or refresh without `resource` uses the bound resource; confirm case-differing scheme/host canonicalize and path differences are rejected.
+- Verify exact public issuer, the one-hour default access expiry, client and family claims, absence of `email` on MCP-audience tokens, and separation from seeded general-API and web-session verification.
+- Confirm public REST rejects every `oauth_access` token carrying `aud`, including one signed with the REST issuer, while private dispatch succeeds and still enforces scope and RBAC.
+- Confirm dispatched requests carry no `Authorization` header, the private context is consumed exactly once, its `authContext.kind` is `oauth` or `pat`, and web-session-only routes such as admin routes refuse it.
+- Confirm refresh inherits family/resource/client, cannot add scope, respects the current cap, and returns the actual issued scope.
+- Preserve seeded general-API authorization/device/refresh behavior and PAT behavior, accounting for the prerequisite's one-time legacy sign-in requirement.
 
-### §13.4 Standalone MongoDB concurrency and repair
+### §13.4 Atomic consumption and family revocation
 
-- Tests run against standalone MongoDB without transaction support.
-- Failed code validation burns the code; two exchanges yield one consumed-code
-  winner and no partial usable token.
-- Initial grant creation and subsequent normal authorization are idempotent by
-  operation id.
-- Every crash point in §12.5 is injected and repaired.
-- Crash injection between refresh activation and operation commit repairs to a
-  terminal active/committed state or revokes deterministically.
-- Two refreshes with the same idempotency key yield one successor and the same
-  wire result; a different concurrent loser gets `invalid_grant` without
-  revoking it; hostile replay revokes the indexed family with one `updateMany`.
-- A long-lived ten-minute-access family has bounded replay query work and the
-  declared indexes/retention.
-- Grant/client/master revocation racing issuance cannot produce a request that
-  passes the next durable fence.
-- No test conditionally skips correctness when sessions/transactions are
-  unavailable.
+- Run against standalone MongoDB; concurrent exchanges produce one `consume` winner and the loser gets `invalid_grant`. Because the loser's reuse handling revokes the family stamped on the code, the winner's tokens are also refused: either issuance fails its post-insert revocation check or the next refresh and MCP request fail.
+- Present a consumed code again within ten minutes and confirm the family issued from it is revoked and the issued access and refresh tokens fail at their next use; a code reused after its row expires returns `invalid_grant` without side effects.
+- Inject a crash or response loss after code consumption and during refresh; verify reconnecting restores access.
+- Reuse the prerequisite's deterministic concurrent-fork and revoke-before/after-successor-insert tests; no test assumes a new refresh CAS or changes the existing grace behavior.
+- Verify owner-scoped family revocation blocks all forks, post-insert family checks prevent a late usable refresh token, and MCP rejects a previously issued access JWT at its next request.
+- Confirm durable client, host, and master policy block later issuance/use despite cached metadata; persistence failures never default to eligible.
+- Verify boot migration and the maintenance deployment instructions.
 
-### §13.5 Read/write story and SDK wire surface
+### §13.5 Scope, UI, and interoperability
 
-- Read-only and read/write authorization requests display and issue exactly
-  their requested permitted scopes.
-- Read/search tools succeed.
-- Every write tool advertises OAuth `pages:write`; every read tool advertises
-  `pages:read`.
-- SDK 1.29.0 `tools/list` output contains the exact
-  `_meta["securitySchemes"]` compatibility mirror.
-- Tool annotations match actual read/write/destructive behavior.
-- Read-token write calls return an ordinary `isError` without an OAuth
-  challenge or `mcp/www_authenticate`; PAT callers receive the same treatment.
-- A standard initial read/write authorization yields a token that can perform
-  writes. No test claims SDK 1.29.0 can consume a tool-level step-up signal.
-- Read-only administrator policy returns a non-reauthorizing policy error.
-
-### §13.6 Revocation, UI, and end-to-end
-
-- User grant revoke blocks access and refresh at the next request.
-- Administrator client revoke blocks all connected users.
-- Master-off blocks dynamic clients without changing PAT or seeded behavior.
-- Administrator inventory shows connected users and lifecycle state.
-- Connected apps lists and revokes grants but does not offer unreachable write
-  elevation.
-- Error and deny paths navigate only to server-validated redirect URIs.
-- A cross-origin frame of every authorize/login/continue/consent route is
-  denied by CSP frame-ancestors and X-Frame-Options.
-- Automated end-to-end coverage performs discovery, DCR, PKCE authorization,
-  resource-bound exchange, MCP initialize/list/read/write, refresh,
-  and all revocation levels.
-- Live verification covers ChatGPT and one other standards-compliant MCP
-  client.
-- API changes run `pnpm check:openapi`; all phases run targeted tests,
-  type-check, lint, and build gates.
+- Test scope negotiation: omitted scope yields the permitted set, a request left empty after narrowing preselects read-only on consent, unknown and above-cap scopes are dropped and the narrowed set shown on consent, seeded clients still reject unknown scopes; then the initial read-only/read/write choice, read/write default, forced read-only cap, exact token scope, cap changes on existing tokens, and RBAC denial despite sufficient scope.
+- Assert real `tools/list` and `tools/call` behavior on SDK 1.32.1: annotations reflect behavior, no security-scheme mirror is emitted, and missing scope gives ordinary `isError` without tool-level step-up metadata.
+- Test approval, add-by-URL, client inventory, user ownership checks, connection-family revoke, anti-framing, CSRF, and server-built success/deny/error redirects.
+- Test the authorization context: single use, expiry, and rejection when submitted from a different browser session.
+- Automate discovery → CIMD → approval/consent → PKCE/resource exchange → MCP initialize/list/read/write → refresh → family/client/global revocation on protocol 2025-11-25.
+- Verify live ChatGPT custom connectors and Claude.ai, including actual CIMD URL/callback, metadata selection, whether `resource` is sent, scope choice, expiry/401 refresh, reconnect behavior, and the switch-off symptom. Custom-connector compatibility is confirmed live; the plugin guide alone does not establish it.
+- Run targeted tests, type-check, lint, build, and OpenAPI checks appropriate to each implementation phase before external enablement.
 
 ## §14 Alternatives considered
 
-### §14.1 Standards-complete OAuth with public DCR first — selected
+### §14.1 Allowlisted CIMD with local client records — selected
 
-This is the design in this RFC. It fits the existing DB-backed client lifecycle
-after accounting for a complete custom DCR subsystem: cryptographic ids,
-public-only validation, a dedicated fail-closed shared limiter, source/global
-quotas, pending-first cleanup, approval, and request-time policy fences. The
-installed `@hono/mcp` DCR code is types/wire-shape reference only, not a
-hardened handler to reuse. The centralized resolver prevents the first
-implementation from becoming a permanent DB-only architecture.
+CIMD follows the current MCP recommendation and both initial clients' preferred path. Host admission bounds metadata retrieval and accommodates callback-specific paths; durable local records supply approval snapshots, revocation, and inventory independently of remote metadata caching and vendor availability. `resolveOAuthClient` keeps the rest of OAuth independent of client identity representation.
 
-The trade-off is a cross-cutting API, model, JWT, MCP, web, and administrator
-change. That scope reflects the actual authorization boundary.
+### §14.2 Public DCR — rejected
 
-### §14.2 CIMD-only — rejected for the first implementation
+MCP 2026-07-28 deprecates DCR for new implementations and retains it only as an optional compatibility mechanism. Both target clients support CIMD, so a public registration endpoint, activation modes, anonymous-registration abuse controls, quotas, and cleanup add no required initial capability. DCR may be added later behind the same resolver if a concrete client requires it.
 
-CIMD-only is a legitimate and standards-favored alternative. The MCP
-specification says authorization servers SHOULD support it, compared with MAY
-for DCR. It avoids a public registration endpoint and does not create an
-anonymous `OAuthClient` for each attempted connection. A URL `client_id` can
-also provide a more meaningful client identity boundary than an unverified DCR
-display name.
+### §14.3 DCR plus CIMD — rejected
 
-It is not selected now for implementation-specific reasons:
+Supporting both carries the registration and outbound-fetch surfaces together. The initial interoperability targets need only CIMD. Adding another resolution source later does not require changing authorization, consent, or token identity rules.
 
-1. Crowi's locked dependency surface provides useful standards types and wire
-   shapes, but no hardened DCR handler or server-side CIMD resolver. Its DCR
-   handler cannot satisfy Crowi's 256-bit id, cryptographic secret, public-only
-   admission, or source-aware limiter requirements.
-2. A safe CIMD resolver needs SSRF prevention, DNS pinning, single-flight,
-   negative caching, per-host concurrency limits, bounded fetches, and
-   fail-closed behavior. DCR also needs controls, so the decision is not based
-   on pretending either option is mechanism-free.
-3. Crowi already has a DB lifecycle for DCR. CIMD still needs durable shadow
-   records for local approval, revocation, scope caps, audit, and connection
-   visibility.
+### §14.4 Grant collection, outbox, and repair workers — rejected
 
-This rejection is about today's complete-system cost, not standards
-superiority. Before implementation, the team must write down the DCR and CIMD
-costed threat-model checklists and re-evaluate this choice; neither side may
-claim an installed helper as its implementation credit. A supported hardened
-CIMD resolver may change that result, but only if it also meets Crowi's local
-policy/lifecycle requirements.
+A separate `OAuthGrant` collection would duplicate the ownership and revocation boundaries that refresh-token families and their revocation records already provide, and would need cross-document synchronization with them. Durable token-response recovery would add collections, operation states, worker ownership, and a replay protocol to a flow where a rare crash is recoverable by reconnecting. Atomic code consumption, code-reuse family revocation, and the prerequisite's family revocation with post-insert checks cover single-use and revocation safety.
 
-### §14.3 DCR and CIMD together — rejected
+### §14.5 Tool-level step-up — deferred
 
-Shipping both maximizes compatibility but combines unauthenticated
-registration controls with outbound-fetch security and two lifecycle sources
-in the first release. The resolver seam preserves the option without doubling
-the initial security-critical surface.
+Top-level `securitySchemes` and tool-result `_meta["mcp/www_authenticate"]` form a documented client-specific path, but SDK v1 drops the top-level field on `tools/list`. Implementing that wire contract and testing live client token delivery is separate work. Initial scope selection suffices for this RFC. A local write-elevation button is also excluded because it cannot deliver new credentials to a remote client.
 
-### §14.4 Administrator manual preregistration — rejected
+### §14.6 Other excluded mechanisms
 
-Manual preregistration avoids public registration but does not fit the generic
-URL-only connector flow. Crowi has no client-registration UI, and no standard
-client-secret copy step is available in that flow.
-
-### §14.5 Protected-resource metadata and challenge only — rejected
-
-Discovery would proceed to a client and resource-bound token flow Crowi cannot
-complete. A small diff would provide no end-to-end connector value.
-
-### §14.6 Legacy `/sse` transport — rejected
-
-Crowi already uses stateless Streamable HTTP on `/mcp`
-(`packages/api/src/mcp/attach.ts:16-20,101-119`;
-`docs/rfcs/0011-crowi-mcp.md:169-178`). A legacy `/sse` endpoint does not solve
-OAuth and would add deprecated surface and tests.
-
-### §14.7 Initial read/write chooser — selected interoperable fallback
-
-The first release uses the normal OAuth scope chooser because it is the only
-proven end-to-end transport to deliver a token with writes to a remote MCP
-client. Documentation defaults compatible connectors to the complete
-read/write scope set, while an administrator can enforce read-only. This
-requests more authority up front than a hypothetical tool-level step-up, but
-it is honest, standards-compatible, and testable with SDK 1.29.0.
-
-### §14.8 User-initiated local write elevation — rejected
-
-Crowi could update a local grant and show a success page, but it cannot place
-the resulting access and refresh tokens into an unrelated external client's
-credential store. Refresh is also prohibited from adding scope. Without a
-defined delivery protocol this is not a fallback; it is misleading UI.
-
-### §14.9 Request-host resource derivation — rejected
-
-It appears convenient for reverse proxies but lets attacker-controlled input
-affect discovery and audience. `MCP_PUBLIC_URL` supports split origins through
-trusted configuration.
-
-### §14.10 Multi-document transactions — rejected as a requirement
-
-Transactions could simplify code/grant/refresh updates on replica sets, but
-Crowi's standard MongoDB is standalone. Requiring them would disable the
-feature in the default supported topology. CAS, bounded coordinators,
-idempotency, and repair provide the normative protocol.
-
-### §14.11 Short JWT lifetime without status checks — rejected
-
-Expiry bounds exposure but does not make revocation immediate. Durable
-client/grant/policy checks provide the fence; short lifetime is defense in
-depth.
-
-### §14.12 JWT denylist — rejected
-
-A denylist adds per-token state and cleanup while client and grant state are
-already needed for lifecycle and inventory. Checking those records revokes a
-whole relationship at once.
+- Manual preregistration alone does not deliver URL-only onboarding for external clients; seeded first-party records and administrator add-by-URL of CIMD clients remain supported.
+- Discovery alone cannot complete client resolution or issue an audience-bound token; it is implemented after the first usable OAuth-for-MCP phase.
+- Legacy `/sse` does not solve OAuth; Streamable HTTP stays in place.
+- Request-host URL derivation permits issuer/audience poisoning; trusted configuration handles split origins.
+- Transactions and runtime replica checks add topology or runtime requirements; single-document consumption, the family prerequisite, and a stop-all/start-new maintenance procedure suffice.
+- A shorter access-token lifetime does not provide next-request revocation and multiplies retained refresh rows; durable family/client/policy checks provide revocation without a per-JWT denylist.
+- Fetching CIMD metadata at exchange, refresh, or MCP requests would make connected sessions depend on vendor availability; the durable record carries what those paths need.
+- SDK v2 and the 2026-07-28 MCP lifecycle require separate transport work and adapter support; this RFC stays on the locked v1 stack.
 
 ## §15 Phased implementation plan
 
-The master switch remains off throughout development. No partial phase is
-advertised as external connector support.
+External OAuth remains off throughout development. Each phase has its own verification, and metadata never claims an unimplemented capability.
 
-### §15.0 Prerequisites and dependency audit
+### §15.0 Prerequisites and sequencing
 
-- Land the `/api/v2` to `/api` migration first.
-- Verify the current dependency lock and inspect the then-current supported MCP
-  SDK.
-- Cost DCR and CIMD as complete hardened subsystems; installed DCR code is
-  types/wire-shape reference only. Specifically determine whether the SDK
-  provides a production-ready server-side CIMD resolver; if it does,
-  re-evaluate §14.2 before implementation.
-- Verify the tool descriptor wire surface. Keep the explicit
-  `_meta["securitySchemes"]` adapter on SDK 1.29.0; adopt native top-level
-  support only after an exact-version wire test proves it.
+The refresh-token family feature, including its durable revocation record, post-successor-insert check, and boot migration, lands first. The `/api` migration, RBAC, and PAT-only `createMcpAuth` boundary are satisfied foundations. Coordinate with `feature-rbac-cli-permissions-cli-mcp`, whose PAT-only assumption changes in the first phase. Pin implementation and wire tests to SDK 1.32.1 / `@hono/mcp` 0.3.0 and protocol 2025-11-25; the later protocol migration is separate work.
 
-### §15.1 Trusted URLs, metadata, and credential boundary
+### §15.1 Audience-bound OAuth access for first-party MCP
 
-- Add trusted issuer/resource/metadata builders.
-- Add public-route connector CORS and endpoint-specific abuse limits.
-- Add root and path-specific Protected Resource Metadata.
-- Add MCP-specific `401` challenge and exact tests.
-- Add explicit PAT/OAuth-only MCP authentication and reject cookie/web-session
-  Bearer credentials.
-- Do not enable discovery until resource/audience enforcement exists.
+Implement trusted issuer/resource builders and resource propagation with canonicalization and absent-resource defaults through authorization, consent, code exchange, and refresh for seeded authorization-code clients. Extend `signOauthAccessToken` to write the validated resource as audience, carry the family, and omit `email` on MCP-audience tokens, keeping the one-hour default lifetime. Extend `createMcpAuth` to accept `oauth_access` only with the matching issuer/audience and valid client/family, while preserving PAT and cookie/web-session rejection. Add REST rejection of audience-bearing OAuth tokens, replace header forwarding in `dispatch.ts` with the single-use private dispatch context that keeps `oauth`/`pat` kinds, and add code-reuse family revocation.
 
-> **Update (feature-auth-cookie-fallback-scope)**: the credential-boundary
-> half of this bullet list landed early, ahead of the rest of §15 — `/mcp`
-> now runs a dedicated `createMcpAuth` (`packages/api/src/mcp/auth.ts`) that
-> rejects the `crowi.accessToken` cookie and a web-session Bearer, exactly as
-> asked above. It goes one step further than "PAT/OAuth-only", though:
-> `signOauthAccessToken` does not yet mint a resource/audience claim (the
-> binding this RFC's `§7`/`§6.2` require before MCP may accept an
-> `oauth_access` token at all), so an `oauth_access` Bearer is rejected too —
-> the boundary is **PAT-only** until a later phase adds that claim and
-> `createMcpAuth` can verify it. The metadata / discovery / DCR / consent
-> surface this section also lists (trusted issuer builders, Protected
-> Resource Metadata, the `401` `WWW-Authenticate` challenge) is unchanged —
-> none of it is implemented by this update.
+This is the first usable increment: first-party clients can authorize for the MCP resource and call MCP over OAuth. Seeded general-API flows remain explicit and cannot turn unbound tokens into MCP tokens. External discovery and onboarding remain unavailable.
 
-### §15.2 Resolver, DCR, and administrator policy
+### §15.2 Discovery, challenges, and issuer identification
 
-- Introduce `resolveOAuthClient` and migrate every OAuth lookup.
-- Add source/status fields and seeded-client backfill.
-- Add resource-refresh migration/legacy path, issuance-operation collection,
-  family indexes, and expand/backfill activation protocol.
-- Add public DCR validation, activation modes, admission, quota, cleanup, and
-  audit.
-- Add typed `ConfigService` AI integration policy and administrator contracts.
-- Add AI integrations settings, inventory, approval, revoke, and connection
-  visibility.
+Add RFC 9728 root/path metadata with the permitted external scope set, exact MCP `401` challenges and scope guidance, proxy/CORS coverage, and S256/public-client AS Metadata. Move success and denial redirect construction to the server with RFC 9207 `iss`, and advertise `authorization_response_iss_parameter_supported` in this phase once those redirects exist. CIMD is not advertised until its resolver and enablement checks exist.
 
-### §15.3 Resource-bound OAuth and standalone lifecycle
+### §15.3 CIMD, allowed hosts, and durable clients
 
-- Add `resource` contract fields and preserve them through the web authorize
-  flow.
-- Add `OAuthGrant` and resource/grant fields to codes and refresh rows.
-- Split OAuth issuer verification from web-session verification.
-- Add audience isolation and private in-process dispatch context.
-- Implement code issuance and refresh rotation coordinators, repair workers,
-  and crash/concurrency tests on standalone MongoDB.
-- Add request-time client/grant/policy fences.
+Centralize OAuth resolution, implement bounded public-address HTTPS fetching after user authentication and HTTP caching, validate documents field by field, enforce redirect-host equality and exact matching, restrict the matcher's loopback and custom-scheme branches to seeded first-party clients, add the empty host allowlist and disabled-by-default policy, and persist local client records with requesting user, approval snapshots, and revocation state. Add durable-record eligibility checks to authorize, token, refresh, and MCP, and external scope negotiation. Keep the CIMD flag conditional on feature enablement.
 
-### §15.4 Consent and interoperable write authorization
+### §15.4 Consent and administrator/user UI
 
-- Enforce exact selected scope consent and policy cap.
-- Add external-client consent copy.
-- Derive annotations and security schemes from tool descriptors.
-- Emit the `_meta["securitySchemes"]` compatibility mirror and pin wire tests.
-- Return ordinary sanitized missing-scope tool errors; do not emit unsupported
-  tool-level OAuth challenges.
-- Add route-specific authorize anti-framing headers and complete
-  authorization-context routes.
-- Add Connected apps list and revoke only.
+Implement single-use, session-bound authorization contexts, external name/host/account and content disclosure with the consent-phishing warning, read-only/read/write selection with the administrator cap, approval and re-approval, add-by-URL, inventory, and Connected apps list/family revoke. Add anti-framing/CSRF coverage, translations, and ordinary missing-scope tool errors. Keep external access disabled while this phase is incomplete.
 
-### §15.5 Interoperability and operations
+### §15.5 Interoperability verification
 
-- Run the complete automated story.
-- Verify with live ChatGPT and another standards-compliant MCP client using
-  the initial read/write flow.
-- Document same/split origin, DCR modes, read-only caps, initial read/write
-  selection, and
-  revocation.
-- Enable the feature only after OpenAPI, security, type, lint, test, and build
-  gates pass.
+Run the automated end-to-end flow and live ChatGPT custom-connector and Claude.ai checks on protocol 2025-11-25. Verify actual CIMD selection, callback/issuer behavior, whether `resource` is sent, read/write authorization, read-only policy, refresh timing and rotation, revocation, reconnect after lost responses, and the switch-off symptom. Document same/split origins, the exact URL users enter, egress reachability of `/.well-known/*`, allowed hosts, per-client approval and add-by-URL, scope and revocation behavior, and the stop-all/start-new upgrade procedure.
+
+### §15.6 Enablement
+
+After interoperability and implementation gates pass, an administrator may enable the feature, add intended metadata hosts, and approve resolved clients or add them by URL. No hosts or active external clients are shipped by default. Enabling uses normal durable administrator policy. Record SDK/protocol migration as separate dependency work without gating this RFC on v2.
 
 ## §16 Resolved decisions and open questions
 
 ### §16.1 Resolved decisions
 
-1. The first implementation is public DCR, not CIMD.
-2. Current MCP standards favor CIMD; DCR is selected only for present
-   implementation cost and model fit.
-3. All client lookup goes through a CIMD-ready resolver that does not assume an
-   opaque or DB-registered `client_id`.
-4. Initial authorization selects read-only or read/write; the interoperable
-   default is initial read/write, not tool-level OAuth step-up.
-5. SDK 1.29.0 uses an explicit `_meta["securitySchemes"]` compatibility
-   extension with wire tests.
-6. Tool results do not carry an unsupported OAuth upscoping channel.
-7. There is no undeliverable local write-elevation fallback.
-8. MCP accepts explicit PAT or MCP OAuth Bearer credentials only; cookies and
-   web-session Bearer JWTs are rejected.
-9. `MCP_PUBLIC_URL` supports split-origin deployment; request Host is never a
-   trust source.
-10. DCR activation is administrator-selectable:
-    automatic, approval-required, or disabled.
-11. The public API prefix migration lands before implementation.
-12. Standalone MongoDB is supported through CAS/outbox/repair; transactions are
-    not required.
-13. Streamable HTTP remains the only MCP transport in scope.
-14. Dynamic client/token acceptance is enabled only after all replicas report
-    capability `0022` and the durable external-feature gate is set.
+1. External onboarding is CIMD only; DCR is excluded unless a future concrete compatibility need justifies it behind the resolver.
+2. The master switch defaults off, the exact-host allowlist starts empty, and durable local records retain per-client approval and revocation. Approval snapshots the name and redirect set; a changed redirect set returns the client to pending, which blocks new authorization while exchange, refresh, and MCP require a non-revoked client plus current host admission and the master switch. Administrators can add and approve a client by URL.
+3. `resolveOAuthClient` is the single resolution boundary for CIMD and seeded first-party clients; remote metadata never overrides local lifecycle state. Metadata is fetched only after user authentication at authorization or by administrator add-by-URL; exchange, refresh, and MCP use the durable record.
+4. CIMD documents are validated field by field: `authorization_code` is required, `refresh_token` enables refresh, other grants are ignored, `response_types` must contain `code` when present, and `none` is accepted from the single-valued method or the supported list. Redirect hosts equal the `client_id` host and match exactly; loopback and custom-scheme matching stay with seeded first-party clients.
+5. Resource-aware OAuth access is the first implementation phase and enables first-party MCP use before external onboarding.
+6. RFC 8707 resource binding and exact issuer/audience validation are mandatory for MCP OAuth. External authorization without `resource` binds to MCP; exchange and refresh without `resource` use the bound value; scheme and host compare case-insensitively. PATs remain separate and cookies/web-session Bearer remain rejected.
+7. Public REST rejects every `oauth_access` token carrying `aud`. MCP dispatch uses a single-use private context with `oauth`/`pat` kinds and forwards no Bearer header. MCP-audience tokens carry no `email`.
+8. MCP access tokens keep the existing one-hour default lifetime; per-request family, client, and policy checks provide revocation.
+9. Initial authorization offers read-only or read/write and defaults to read/write when permitted. The administrator cap defaults to read/write. External scope requests are negotiated by narrowing; PRM advertises only the permitted external set. Missing tool scope returns an ordinary error.
+10. The authorization context is single-use, short-lived, and bound to the authenticating browser session; consent names the signed-in account and warns against connections the user did not start.
+11. Tool-level step-up and top-level `securitySchemes` are deferred; no `_meta["securitySchemes"]` mirror is supported.
+12. Connections are refresh-token families plus local client records; there is no separate `OAuthGrant`. The prerequisite supplies refresh revocation, and this RFC adds family checks to MCP access JWTs and family revocation on authorization-code reuse.
+13. Keep atomic code `consume` and prerequisite refresh rotation without outboxes, repair workers, or a new refresh idempotency protocol. A lost mid-flow response can require reconnecting.
+14. Standalone MongoDB is supported. Deployments stop old replicas and start the new build with boot migrations; no runtime fleet gate is designed.
+15. AS Metadata advertises S256 and `none`; RFC 9207 support is advertised from the phase where the server builds every success and denial redirect with `iss`. CIMD support is advertised only while enabled.
+16. SDK 1.32.1 and `@hono/mcp` 0.3.0 remain on MCP protocol 2025-11-25. Neither SDK major supplies server-side CIMD resolution; v2/2026-07-28 migration is separate work and a dependency risk.
+17. The `/api` migration, PAT-only MCP boundary, and RBAC are satisfied. Effective access is RBAC ∩ token scope ∩ applicable administrator cap; coordinate the PAT-only assumptions in `feature-rbac-cli-permissions-cli-mcp` before §15.1 lands.
+18. Public identifiers come from trusted configuration, including `MCP_PUBLIC_URL` for split origins; the PRM `resource` equals the URL users enter.
+19. Claude Code and other loopback-redirect CIMD clients are excluded by design.
 
-### §16.2 Residual open questions
+### §16.2 Remaining validation
 
-No unresolved architecture question blocks implementation. Two implementation
-gates intentionally depend on then-current external software:
-
-1. whether the supported MCP SDK at implementation start has gained a
-   production-ready server-side CIMD resolver sufficient to revisit the
-   DCR-first decision; and
-2. whether an exact supported SDK version natively preserves top-level tool
-   `securitySchemes`, allowing Crowi to emit both that field and the
-   compatibility mirror without a custom adapter.
-
-Both gates have explicit fallback behavior in §15.0 and must be recorded in
-the implementation plan rather than silently assumed.
+No architecture decision remains open. Live ChatGPT custom-connector behavior is a required interoperability check because the cited authentication guide is plugin-specific. Claude.ai's CIMD selection, refresh behavior, and whether it sends `resource` at authorization and token requests also require live verification; the design accepts either. Claude Code, which uses a loopback-redirect CIMD document, is excluded by design and is not part of these checks. These are release acceptance checks. Future SDK/protocol migration and tool step-up have separate scope.
 
 ## §17 References
 
+- [RFC 6749: OAuth 2.0 Authorization Framework](https://www.rfc-editor.org/rfc/rfc6749)
 - [RFC 6750: OAuth 2.0 Bearer Token Usage](https://www.rfc-editor.org/rfc/rfc6750)
-- [RFC 7591: OAuth 2.0 Dynamic Client Registration Protocol](https://www.rfc-editor.org/rfc/rfc7591)
+- [RFC 7636: Proof Key for Code Exchange](https://www.rfc-editor.org/rfc/rfc7636)
+- [RFC 7591: OAuth 2.0 Dynamic Client Registration Protocol](https://www.rfc-editor.org/rfc/rfc7591) — compatibility alternative, not implemented here.
 - [RFC 8414: OAuth 2.0 Authorization Server Metadata](https://www.rfc-editor.org/rfc/rfc8414)
 - [RFC 8707: Resource Indicators for OAuth 2.0](https://www.rfc-editor.org/rfc/rfc8707)
+- [RFC 9207: OAuth 2.0 Authorization Server Issuer Identification](https://www.rfc-editor.org/rfc/rfc9207)
 - [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728)
-- [MCP Authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
-- [OpenAI authentication guide for MCP servers](https://developers.openai.com/plugins/build/auth)
-- [OpenAI plugin reference](https://developers.openai.com/plugins/reference)
-- [Connect from ChatGPT](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt)
+- [OAuth Client ID Metadata Document (Internet-Draft)](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+- [MCP Authorization, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization) — current authorization requirements and recommendations.
+- [MCP Client Registration, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration) — CIMD validation, domain policy, selection priority, and DCR deprecation.
+- [MCP Authorization, 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization) — protocol baseline retained for this implementation, including scope selection and resource canonicalization.
+- [OpenAI authentication guide](https://developers.openai.com/apps-sdk/build/auth) — plugin documentation for CIMD, callbacks, S256, issuer identification, advertised scopes, and future tool step-up; custom-connector applicability requires live verification.
+- [Claude.ai connector authentication](https://www.claude.com/docs/connectors/building/authentication) — CIMD selection, DCR fallback, callback, S256, refresh behavior, egress range, PRM `resource` matching, and Claude Code's loopback client.
+- [ChatGPT client metadata document](https://chatgpt.com/oauth/client.json) and [Claude.ai client metadata document](https://claude.ai/oauth/mcp-oauth-client-metadata) — live verification fixtures.

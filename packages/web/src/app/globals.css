@@ -79,7 +79,7 @@
      compact page header are all placed against these, and the alignment only
      holds while the four agree — so they are one definition, not four
      hand-computed widths. `--shell-content` is `max-w-4xl` minus the `px-4`
-     gutters the header and `<main>` carry, i.e. the text column they run. */
+     gutters the header and the column inside `<main>` carry, i.e. the text column they run. */
   --shell-content: 54rem;
   --shell-rail: 14rem;
   --shell-gap: 1.5rem;

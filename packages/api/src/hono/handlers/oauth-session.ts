@@ -1,12 +1,12 @@
 /**
- * Self-service OAuth session (refresh-token rotation-chain tip) list + revoke.
+ * Self-service OAuth session (refresh-token family tip) list + revoke.
  *
  *   GET    /me/oauth-sessions       — list active tips (metadata only)
- *   DELETE /me/oauth-sessions/:id   — revoke the reachable rotation-chain component
+ *   DELETE /me/oauth-sessions/:id   — revoke the whole sign-in family
  *
  * Mirrors `./access-token.ts`'s web-session-only pattern and rides `registerMeRoutes`'s broad `/me/*` `createJwtAuth` apply (no second install here — see `hono/index.ts`).
  *
- * A "session" here is one active `OAuthRefreshToken` rotation-chain TIP document, not a stable identity: the public `id` is the tip's `_id`, which changes on every rotation. `DELETE` therefore does its ownership lookup WITHOUT an active-tip filter (a rotated-away id still resolves while its document exists, pre-TTL) and revokes via the existing `revokeChain` graph traversal, then re-confirms the SAME `_id + userId` is now revoked before returning 200 — `revokeChain` can no-op (its origin document TTL-deleted between the ownership lookup and the traversal) without throwing, so this re-check is the only way to avoid reporting success for a component that is, in fact, still active.
+ * A "session" here is one active `OAuthRefreshToken` tip document, not a stable identity: the public `id` is the tip's `_id`, which changes on every rotation. `DELETE` therefore does its ownership lookup WITHOUT an active-tip filter (a rotated-away id still resolves while its document exists, pre-TTL) and revokes the document's whole family via `revokeFamily`, then re-confirms the SAME `_id + userId` is now revoked before returning 200 — the addressed document can be TTL-deleted between the lookup and the check, and that must not be reported as success.
  */
 import type { ForbiddenError, NotFoundError, OAuthSession } from '@crowi/api-contract';
 import { deleteOAuthSessionRoute, listOAuthSessionsRoute } from '@crowi/api-contract';
@@ -126,29 +126,29 @@ export const registerOAuthSessionRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       try {
         // No active-tip filter: a rotated-away (no longer a tip) id must
         // still resolve here as long as its document has not been
-        // TTL-deleted, so `revokeChain` can walk the chain it belongs to.
+        // TTL-deleted, so the family it belongs to can still be revoked.
         const doc = await OAuthRefreshToken.findOne({ _id: new Types.ObjectId(id), userId: currentUser._id }).exec();
-        if (!doc) {
+        // A pre-family row has no family to revoke; its session is already
+        // dead (boot migration / refresh guard), so it reads as unknown.
+        if (!doc?.familyId) {
           return c.json(NOT_FOUND_BODY, 404);
         }
 
-        // Non-secret snapshot taken BEFORE `revokeChain` — the response is
+        // Non-secret snapshot taken BEFORE `revokeFamily` — the response is
         // built from this snapshot, never from a later re-read (there is
         // no guarantee a later read would still find the same shape).
         const snapshot = toSessionFields(doc);
 
         try {
-          await OAuthRefreshToken.revokeChain(doc.tokenHash);
+          await OAuthRefreshToken.revokeFamily(doc.familyId, currentUser._id);
         } catch {
-          debug('deleteOAuthSession: revokeChain failed');
+          debug('deleteOAuthSession: revokeFamily failed');
           return c.json(INTERNAL_ERROR_BODY, 500);
         }
 
-        // `revokeChain` no-ops (without throwing) when its own origin
-        // document was TTL-deleted between the ownership lookup above and
-        // its own re-query — re-confirm the addressed document is now
-        // revoked before reporting success, so that race never returns a
-        // 200 for a component that is still active.
+        // The addressed document may have been TTL-deleted after the
+        // lookup; the family is revoked regardless, but report 404 rather
+        // than 200 for a row that is not in a revoked state.
         let revokedNow: boolean;
         try {
           revokedNow = (await OAuthRefreshToken.exists({ _id: snapshot.id, userId: currentUser._id, revokedAt: { $ne: null } })) != null;

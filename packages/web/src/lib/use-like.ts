@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient, type InfiniteData, type Query, type QueryClient } from '@tanstack/react-query';
 import type {
-  Bookmark,
+  BookmarkListRow,
   ListPagesResponse,
   Page,
   PageWithRevision,
@@ -108,11 +108,15 @@ function asInfiniteContains<T>(findOne: (data: T) => Iterable<Pick<Page, '_id'>>
   return (data, pageId) => (data as InfiniteData<T>).pages.some((page) => collect(page, pageId));
 }
 
-/** Shared by every family whose payload is exactly `{ pages: Page[], ...rest }` (`UserPagesResponse`, `RecentlyViewedPagesResponse`). */
-function* pagesArrayPages<T extends { pages: Page[] }>(data: T): Iterable<Pick<Page, '_id'>> {
+/** Shared by every family whose payload is exactly `{ pages: PageListRow[], ...rest }` (`UserPagesResponse`, `RecentlyViewedPagesResponse`). */
+function* pagesArrayPages<T extends { pages: Array<Pick<Page, '_id' | 'isLiked' | 'likerCount'>> }>(data: T): Iterable<Pick<Page, '_id'>> {
   yield* data.pages;
 }
-function patchPagesArrayResponse<T extends { pages: Page[] }>(data: T, pageId: string, computeNext: ComputeNext): T {
+function patchPagesArrayResponse<T extends { pages: Array<Pick<Page, '_id' | 'isLiked' | 'likerCount'>> }>(
+  data: T,
+  pageId: string,
+  computeNext: ComputeNext,
+): T {
   let changed = false;
   const pages = data.pages.map((p) => {
     const next = patchPageIfMatch(p, pageId, computeNext);
@@ -200,7 +204,7 @@ function* bookmarksPages(data: UserBookmarksResponse): Iterable<Pick<Page, '_id'
 }
 function patchBookmarksResponse(data: UserBookmarksResponse, pageId: string, computeNext: ComputeNext): UserBookmarksResponse {
   let changed = false;
-  const bookmarks = data.bookmarks.map((b: Bookmark) => {
+  const bookmarks = data.bookmarks.map((b: BookmarkListRow) => {
     const next = patchPageIfMatch(b.page, pageId, computeNext);
     if (next === b.page) return b;
     changed = true;

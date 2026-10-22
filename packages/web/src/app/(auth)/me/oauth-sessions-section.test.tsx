@@ -100,24 +100,27 @@ describe('OAuthSessionsSection', () => {
     expect(screen.getByText('web のログインセッションはこの一覧に表示されません。')).toBeInTheDocument();
   });
 
-  // AC-11: revoking stops future refreshes reachable from the row, but an
+  // AC-11: revoking stops future refreshes of the whole sign-in family, but an
   // already-issued access token keeps working until its TTL.
-  it('explains that revoke stops reachable future refreshes while an issued access token stays usable until its TTL (AC-11)', () => {
+  it('explains that revoke stops future refreshes of the whole sign-in while an issued access token stays usable until its TTL (AC-11)', () => {
     render(<OAuthSessionsSection />);
     expect(
       screen.getByText(
-        '失効すると、選択した行から辿れる今後のアクセストークンの更新が止まります。発行済みのアクセストークンは有効期限 (既定 1 時間) まで引き続き利用できます。',
+        '失効すると、同じサインインから派生したすべてのアクセストークンの更新が止まります。発行済みのアクセストークンは有効期限 (既定 1 時間) まで引き続き利用できます。',
       ),
     ).toBeInTheDocument();
   });
 
-  // AC-14: a concurrent-refresh fork leaves multiple persistent rows from
-  // the same origin — each must be revoked individually.
-  it('explains that rows from a concurrent-refresh fork must be revoked individually (AC-14)', () => {
+  // AC-14: a concurrent-refresh fork leaves multiple rows of the same
+  // sign-in; revoking any one of them ends the whole sign-in.
+  it('explains that a concurrent-refresh fork leaves several rows and revoking any one ends the sign-in (AC-14)', () => {
     render(<OAuthSessionsSection />);
     expect(
-      screen.getByText(/同じ認証情報が複数箇所から同時に更新された場合は複数行がそのまま残ることがあり、その場合は各行を個別に失効する必要があります。/),
+      screen.getByText(
+        /同じサインインの行が有効期限まで複数残ることがありますが、そのどれか 1 行を失効させればサインイン全体が切れます。別々のサインインは別の系列として扱われ/,
+      ),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/個別に失効/)).not.toBeInTheDocument();
   });
 
   // AC-15: an ordinary rotation's transient 2-row state converges on

@@ -22,14 +22,15 @@ name: Release
 # manual "approve workflow run", so CI on the Version PR never started on its
 # own. The App needs Contents and Pull requests write on crowi/crowi.
 #
-# changesets/action writes the token it is given to ~/.netrc, and git pushes
-# with it — unless checkout left its own token in the git config, which git
-# sends first. So checkout keeps no credentials, and the App token is minted
-# right before changesets/action (installation tokens last one hour; the
-# install and build steps before it would otherwise eat into that). Every
-# later push in this job goes through the same .netrc, so the tags it pushes
-# (changesets' per-package tags and the distribution tag) go out with the App
-# token too and DO start `on: push: tags` workflows (only
+# changesets/action takes the App token through its `github-token` input and
+# pushes the Version PR commit and the per-package tags through the GitHub API.
+# It refuses to run when a GITHUB_TOKEN env var differs from that input, so
+# the step sets none. It leaves no git credentials behind and checkout keeps
+# none either, so the distribution tag step creates its tag through the API
+# with the same App token. The App token is minted right before
+# changesets/action (installation tokens last one hour; the install and build
+# steps before it would otherwise eat into that). Because every tag goes out
+# with the App token, they DO start `on: push: tags` workflows (only
 # docker-elasticsearch's `es-v*` exists today, which no release tag matches).
 on:
   workflow_dispatch:
@@ -92,12 +93,9 @@ jobs:
       # `0.1.0-dev` predates its alphas, so its releases go to `alpha` and its
       # `latest` has to be moved by hand after any release that publishes it
       # (see operations/release-runbook.mdx). Leaving pre mode resolves it.
-      # Pinned to v1: the action's v2 line requires Changesets CLI v3 and refuses
-      # to run against the CLI v2 this repo uses ("Changesets CLI v2 is not
-      # supported; use Changesets action v1 instead"). v2 also renames every
-      # input below (publish/version/commit/title -> publish-script/
-      # version-script/commit-message/pr-title), so moving up means migrating
-      # the CLI and the inputs in one change, not bumping this line.
+      #
+      # changesets/action@v2 refuses to run unless the repo's @changesets/cli
+      # is v3; the two move together.
       - name: Create bot App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -109,14 +107,14 @@ jobs:
 
       - name: Create Release PR or Publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          publish: pnpm changeset publish
-          version: pnpm changeset version
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
+          github-token: ${{ steps.app-token.outputs.token }}
+          publish-script: pnpm changeset publish
+          version-script: pnpm changeset version
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NPM_CONFIG_PROVENANCE: 'true'
 
       # --- Distribution (umbrella) version tag --------------------------------
@@ -138,19 +136,19 @@ jobs:
       # triggered by `workflow_run` (this Release workflow completing), NOT by
       # this tag push: it reads the version from the artifact uploaded below,
       # and that artifact only exists when a publish happened. This tag is
-      # pushed with the App token (see the header), so a `v*` tag trigger
+      # created with the App token (see the header), so a `v*` tag trigger
       # added to any workflow would fire here too — docker.yml must not grow
       # one, or every release builds twice. The tag is the durable release
       # record; docker.yml can fall back to the latest `v*` tag.
       - name: Create and push distribution tag
         if: steps.changesets.outputs.published == 'true'
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           DIST_VERSION: ${{ steps.dist.outputs.dist-version }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag "$DIST_VERSION"
-          git push origin "$DIST_VERSION"
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$DIST_VERSION" \
+            -f sha="$GITHUB_SHA"
 
       # changesets/action publishes a per-package GitHub Release for every
       # @crowi/* that bumped, useful for bisecting a single package — but it

@@ -297,8 +297,10 @@ timing, port/process reuse) rather than a straightforward deterministic
 regression, **do not diagnose the root cause and design the fix by reasoning
 inline in a Claude Sonnet session.** Stop, and hand the investigation +
 countermeasure design to Codex at `--tier sol` (`.claude/scripts/codex-run.sh
---tier sol`, the strongest codex tier that is meant as a default, at high effort) or a Fable-model subagent (`Agent`
-with `model: "fable"`). Claude's job is to execute/glue/gate the design that
+--tier sol`, the strongest codex tier that is meant as a default, at high effort) or an Opus subagent (`Agent`
+with `model: "opus"`, high effort). Escalate to Codex astra or a Fable subagent (`model: "fable"`) only when
+the sol/Opus design has already failed — its root cause did not hold up under the repro, or a second sol/Opus
+pass contradicts the first — and say so to the user in one line before running it. Claude's job is to execute/glue/gate the design that
 comes back — write the repro, apply the fix, run the gates, commit — not to
 originate the root-cause theory itself.
 
@@ -314,7 +316,7 @@ verified reasoning pass before code changes.
 **How to apply**: mid-investigation, the moment a CI failure looks
 flaky/infra-shaped instead of a deterministic repro-first bug (the normal
 crowi-fix case), stop inline investigation. Route the diagnosis + design step
-through Codex sol or Fable, then implement from that design under the normal
+through Codex sol or an Opus subagent (Fable/astra only after those failed), then implement from that design under the normal
 gates (repro → fix → type-check/test/lint → commit). Skipping this and just
 committing an inline Sonnet-authored theory is the failure mode this rule
 exists to prevent.

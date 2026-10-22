@@ -32,7 +32,7 @@ import { PluginReadinessBanner } from '@/components/admin/plugin-readiness-banne
 import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
 import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
-import { MAIN_CONTENT_ID, useRouteFocus } from '@/lib/use-route-focus';
+import { MAIN_CONTENT_ID, MAIN_FOCUS_FRAME_CLASSNAME, useRouteFocus } from '@/lib/use-route-focus';
 import { SkipLink } from '@/components/skip-link';
 
 // Routes whose nested layout escapes the centred column to fill the
@@ -227,12 +227,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       */}
         <div aria-hidden className="h-1 transition-colors" style={{ backgroundColor: 'var(--page-grant-accent)' }} />
 
-        <main
-          id={MAIN_CONTENT_ID}
-          tabIndex={-1}
-          className="max-w-4xl mx-auto px-4 py-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          {children}
+        {/* The landmark spans the viewport so its focus frame traces the region the page actually takes up: the page view,
+          the editor and history widen out of the centred column, and the TOC rail pulls the article off centre. The frame
+          is inset (the shell clips anything past the viewport edge) and faint — it only answers "where did focus go" after
+          a navigation, so it must not compete with the content for readers who never asked. */}
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} className={MAIN_FOCUS_FRAME_CLASSNAME}>
+          <div className="max-w-4xl mx-auto px-4 py-8">{children}</div>
         </main>
 
         {showSidebar && <PageSidebar path={sidebarPath} />}

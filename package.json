@@ -23,21 +23,7 @@
   "pnpm": {
     "overrides": {
       "fast-xml-parser": "5.7.3",
-      "@hono/node-server@<2.0.11": "2.0.11",
-      "brace-expansion@1": "1.1.21",
-      "brace-expansion@2": "2.1.7",
-      "brace-expansion@5": "5.0.12",
-      "postcss@<8.5.23": "8.5.23",
-      "browserslist@<4.28.7": "4.28.7",
-      "qs@>=6.14.2 <6.16.0": "6.16.0",
-      "fflate@>=0.8.0 <0.8.3": "0.8.3",
-      "postcss-selector-parser@>=7.1.0 <7.1.6": "7.1.6",
-      "@humanfs/node@<0.16.8": "0.16.8",
-      "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
-      "sharp@<0.35.5": "0.35.5",
-      "js-yaml@>=3.0.0 <3.15.2": "3.15.2",
-      "svgo@>=4.0.0 <4.1.0": "4.1.0",
-      "baseline-browser-mapping@<2.11.0": "2.11.0"
+      "js-yaml@>=4.0.0 <4.3.2": "4.3.2"
     }
   },
   "scripts": {
@@ -74,7 +60,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "catalog:",
     "@typescript-eslint/eslint-plugin": "catalog:",
     "@typescript-eslint/parser": "catalog:",
