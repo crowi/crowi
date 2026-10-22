@@ -783,7 +783,7 @@ describe('PluginManager.activate — credential-vault deny-list boot validation 
       {
         plugin: bad,
         error:
-          "Plugin '@crowi/plugin-vault-bad' declares modelAccess including 'PersonalAccessToken', but credential-bearing core models cannot be granted to plugins. Denied models: Config, OAuthAuthorizationCode, OAuthClient, OAuthDeviceCode, OAuthRefreshToken, PersonalAccessToken, Share, ShareAccess.",
+          "Plugin '@crowi/plugin-vault-bad' declares modelAccess including 'PersonalAccessToken', but credential-bearing core models cannot be granted to plugins. Denied models: Config, OAuthAuthorizationCode, OAuthClient, OAuthDeviceCode, OAuthRefreshToken, OAuthTokenFamilyRevocation, PersonalAccessToken, Share, ShareAccess.",
       },
     ]);
   });
