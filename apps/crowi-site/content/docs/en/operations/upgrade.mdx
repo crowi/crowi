@@ -24,6 +24,12 @@ A single-replica deployment — including development — satisfies this automat
 
 ## Version-specific notes
 
+### The release that moved refresh tokens to family ids
+
+OAuth refresh tokens are now revoked by an immutable per-sign-in family id. A boot-time migration (run automatically before the server listens) revokes every existing token that has no family id. **Existing OAuth clients such as the CLI must sign in once again after the upgrade.** Tokens that had already forked before the upgrade are revoked as well, so none is left usable. If the migration fails, boot fails and the server never listens with it unapplied.
+
+Always **stop every old replica, then start with the new version**. Skipping the stop is not allowed even for a blue/green cutover when the old replicas can still write to the database. If an old replica keeps running alongside, a token it issues in the meantime is revoked when the new version refreshes it and returns `invalid_grant`, so the user signs in again. That is the only effect of mixing; there is no heartbeat or generation check, so avoid it through the procedure.
+
 ### The release that added account linking
 
 A new replica issues a state cookie per external-account linking flow. An old replica does not know that name: it reads the fixed sign-in state cookie instead, and deletes it before validating. In a mixed fleet, a callback that lands on an old replica breaks not only the linking attempt in progress but **any ordinary sign-in happening at the same time**. Nothing bridges the two generations, so replace them together as described above.
