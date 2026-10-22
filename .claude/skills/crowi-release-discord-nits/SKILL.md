@@ -36,7 +36,7 @@ CI がリリースごとに Discord へ自動投稿する告知(`Crowi Releases`
 
 ### Step 2: 実際に出荷された変更点の収集(CHANGELOG 差分が正)
 
-`.changeset/*.md` は `pnpm changeset version` の時点で消費されて消えるため、「その回に
+`.changeset/*.md` は `pnpm changeset version` の時点で消費されるため、「その回に
 何が実際に入ったか」の正本はその version 化コミットが書いた各パッケージの
 `CHANGELOG.md` — spec や changeset 原文の言い回しではなく、最終的にユーザーに見える
 単位でまとまっている。

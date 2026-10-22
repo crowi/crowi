@@ -312,17 +312,7 @@ an `es-v*` tag push (auxiliary).
 - **Docker (api) build fails with `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`**: pnpm 10
   changed `pnpm deploy` to refuse non-injected workspaces; `packages/api/Dockerfile`
   passes `pnpm deploy --legacy` to keep the pre-v10 behaviour.
-- **`.changeset/*.md` files pile up instead of being deleted after each version bump
-  (not a bug)**: while in prerelease (`pre` mode), `@changesets/cli`'s `version`
-  command only appends the consumed changeset ids to `.changeset/pre.json`'s
-  `changesets` array on every run — it does not delete the corresponding `.md`
-  files. That's upstream, intentional behavior (the deletion code path only runs
-  when `preState.mode === "exit"`). The files get consumed and deleted in one
-  batch, along with `pre.json` itself, the moment "beta → stable" runs
-  `changeset pre exit` followed by `changeset version` for the 2.0.0 release. Do
-  not delete them by hand during the alpha period — the stable release's
-  aggregated CHANGELOG generation and version computation re-consumes every
-  on-disk `.md` file at that point, so removing them early would leave gaps.
+- **Consumed `.changeset/*.md` files move to `.changeset/pre/` instead of being deleted (not a bug)**: while in prerelease (`pre` mode), `changeset version` moves every changeset it consumed into `.changeset/pre/`. They are consumed for good, with the whole directory, when "beta → stable" runs `changeset pre exit` followed by `changeset version` for the 2.0.0 release, and that run builds the stable CHANGELOG entries from them. Edit or delete a file there only when its change should not appear in the stable release notes.
 
 ## Related
 
