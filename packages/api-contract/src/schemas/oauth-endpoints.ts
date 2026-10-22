@@ -67,6 +67,18 @@ export const AuthorizeRequestSchema = z.object({
 export type AuthorizeRequest = z.infer<typeof AuthorizeRequestSchema>;
 
 /**
+ * `POST /oauth/authorize/deny` request body (sent when the user cancels the
+ * consent screen). No scope / PKCE: a denial needs neither, and requiring
+ * them would let a malformed authorize URL block even the cancel.
+ */
+export const AuthorizeDenyRequestSchema = z.object({
+  client_id: z.string().min(1),
+  redirect_uri: z.string().min(1),
+  state: z.string().optional(),
+});
+export type AuthorizeDenyRequest = z.infer<typeof AuthorizeDenyRequestSchema>;
+
+/**
  * `POST /oauth/authorize` response. The server returns the fully-formed
  * redirect URI (callback + `?code=…&state=…`) as JSON rather than a 303 so
  * the consent screen (which calls this with `fetch`) can navigate to it via
