@@ -6,7 +6,7 @@
 // tooling). RFC: feature-ci-release-automation, follow-on to D3.
 //
 // Why this exists:
-//   `changesets/action@v1` creates a GitHub Release per published package
+//   `changesets/action` creates a GitHub Release per published package
 //   (`@crowi/api@2.0.0-alpha.X` / `@crowi/plugin-aws@…` / …). Useful for
 //   bisecting a single package, but the operator-facing question is "what is
 //   in this Crowi distribution version?" — and a per-package release tree is

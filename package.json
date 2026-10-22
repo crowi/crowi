@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "catalog:",
     "@typescript-eslint/eslint-plugin": "catalog:",
     "@typescript-eslint/parser": "catalog:",
