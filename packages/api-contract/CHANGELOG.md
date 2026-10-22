@@ -1,5 +1,11 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.26
+
+### Patch Changes
+
+- 1773ab0: Update `hono` to 4.13.11 or later. A vulnerability had been reported in earlier releases where `serveStatic` decoded the request path a second time and let a request skip middleware on static paths; Crowi does not serve files through `serveStatic`.
+
 ## 2.0.0-alpha.25
 
 ### Minor Changes
