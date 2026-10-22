@@ -47,6 +47,8 @@ export interface PersonalAccessTokenModel extends Model<PersonalAccessTokenDocum
   findActiveByHash(tokenHash: string): Promise<PersonalAccessTokenDocument | null>;
   /** A user's non-revoked tokens, newest first. */
   listByUser(userId: Types.ObjectId): Promise<PersonalAccessTokenDocument[]>;
+  /** Revoke every token the user still holds. */
+  revokeAllByUser(userId: Types.ObjectId): Promise<void>;
 
   TOKEN_PREFIX: string;
 }
@@ -120,6 +122,10 @@ export default (crowi: Crowi) => {
     // Expired tokens stay visible (their past `expiresAt` is surfaced, so
     // the user can see why they no longer work and prune them).
     return PersonalAccessToken.find({ userId, revokedAt: null }).sort({ createdAt: -1 }).exec();
+  };
+
+  schema.statics.revokeAllByUser = async function (userId: Types.ObjectId): Promise<void> {
+    await PersonalAccessToken.updateMany({ userId, revokedAt: null }, { $set: { revokedAt: new Date() } }).exec();
   };
 
   schema.methods.touchLastUsed = async function (this: PersonalAccessTokenDocument): Promise<void> {

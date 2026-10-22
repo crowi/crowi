@@ -1,5 +1,7 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
+import crypto from 'node:crypto';
+
 import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
 import type { UserDocument } from 'src/models/user';
@@ -145,6 +147,79 @@ describe('Routes /api/auth password reset (Hono)', () => {
         .get('/api/me')
         .set({ Authorization: `Bearer ${reset.body.accessToken}` });
       expect(fresh.status).toBe(200);
+    });
+
+    it('revokes OAuth sign-ins and personal access tokens held before the reset', async () => {
+      const user = await createActiveUser('evict-credentials@example.com');
+      const OAuthRefreshToken = crowi.model('OAuthRefreshToken');
+      const PersonalAccessToken = crowi.model('PersonalAccessToken');
+
+      const refresh = OAuthRefreshToken.generateToken();
+      await OAuthRefreshToken.create({
+        tokenHash: refresh.tokenHash,
+        clientId: 'crowi-cli',
+        userId: user._id,
+        scopes: ['pages:read'],
+        expiresAt: new Date(Date.now() + 86_400_000),
+        familyId: crypto.randomUUID(),
+      });
+      const pat = PersonalAccessToken.generateToken();
+      await PersonalAccessToken.create({ tokenHash: pat.tokenHash, userId: user._id, name: 'cli', scopes: ['profile:read'] });
+
+      const patBefore = await request(app)
+        .get('/api/me')
+        .set({ Authorization: `Bearer ${pat.token}` });
+      expect(patBefore.status).toBe(200);
+
+      const token = resetTokenFor(user, 'evict-credentials@example.com');
+      const reset = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-regained-pw' });
+      expect(reset.status).toBe(200);
+
+      const refreshAfter = await request(app)
+        .post('/api/oauth/token')
+        .send({ grant_type: 'refresh_token', refresh_token: refresh.token, client_id: 'crowi-cli' });
+      expect(refreshAfter.status).toBe(400);
+      expect(refreshAfter.body.access_token).toBeUndefined();
+
+      const patAfter = await request(app)
+        .get('/api/me')
+        .set({ Authorization: `Bearer ${pat.token}` });
+      expect(patAfter.status).toBe(401);
+    });
+
+    it('keeps the link usable when revoking credentials fails', async () => {
+      const user = await createActiveUser('evict-retry@example.com');
+      const PersonalAccessToken = crowi.model('PersonalAccessToken');
+      const token = resetTokenFor(user, 'evict-retry@example.com');
+
+      const spy = jest.spyOn(PersonalAccessToken, 'revokeAllByUser').mockRejectedValueOnce(new Error('db down'));
+      const failed = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-regained-pw' });
+      expect(failed.status).toBe(500);
+      spy.mockRestore();
+
+      const retried = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-regained-pw' });
+      expect(retried.status).toBe(200);
+    });
+
+    it('does not revoke anything when an already-used link is replayed', async () => {
+      const user = await createActiveUser('evict-replay@example.com');
+      const PersonalAccessToken = crowi.model('PersonalAccessToken');
+      const token = resetTokenFor(user, 'evict-replay@example.com');
+
+      const first = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-regained-pw' });
+      expect(first.status).toBe(200);
+
+      // A token the owner creates after regaining the account.
+      const pat = PersonalAccessToken.generateToken();
+      await PersonalAccessToken.create({ tokenHash: pat.tokenHash, userId: user._id, name: 'new', scopes: ['profile:read'] });
+
+      const replay = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'attacker-pw' });
+      expect(replay.status).toBe(401);
+
+      const res = await request(app)
+        .get('/api/me')
+        .set({ Authorization: `Bearer ${pat.token}` });
+      expect(res.status).toBe(200);
     });
 
     it('rejects a token minted for an address the account no longer uses', async () => {

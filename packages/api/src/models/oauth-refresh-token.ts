@@ -68,6 +68,8 @@ export interface OAuthRefreshTokenModel extends Model<OAuthRefreshTokenDocument>
    * revocation record first, then bulk-revoke the existing rows.
    */
   revokeFamily(familyId: string, userId: Types.ObjectId): Promise<void>;
+  /** Revoke every sign-in family the user still holds an unrevoked row in. */
+  revokeAllByUser(userId: Types.ObjectId): Promise<void>;
   /**
    * A user's active tip documents (`revokedAt: null`, `rotatedTo: null`,
    * `expiresAt > now`), newest first. `now` is supplied by the caller (not
@@ -173,6 +175,13 @@ export default (crowi: Crowi) => {
     // update below still finds the record and revokes that row itself.
     await crowi.model('OAuthTokenFamilyRevocation').markRevoked(familyId, userId, now);
     await OAuthRefreshToken.updateMany({ familyId, userId, revokedAt: null }, { $set: { revokedAt: now } });
+  };
+
+  schema.statics.revokeAllByUser = async function (userId: Types.ObjectId): Promise<void> {
+    const familyIds: string[] = await OAuthRefreshToken.distinct('familyId', { userId, revokedAt: null, familyId: { $type: 'string', $ne: '' } });
+    for (const familyId of familyIds) {
+      await OAuthRefreshToken.revokeFamily(familyId, userId);
+    }
   };
 
   schema.statics.listActiveByUser = function (userId: Types.ObjectId, now: Date): Promise<OAuthRefreshTokenDocument[]> {

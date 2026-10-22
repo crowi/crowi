@@ -145,6 +145,18 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
           return c.json(INVALID_TOKEN_BODY, 401);
         }
 
+        // OAuth sign-ins and personal access tokens are exempt from
+        // `authVersion`, so the bump below would leave them working for
+        // whoever took the account. Revoke them before the link is consumed:
+        // if this fails the link is still good for a retry. The generation
+        // check keeps an already-used link from revoking anything. An OAuth
+        // access token already issued still lives until it expires.
+        if ((user.passwordResetGeneration ?? 0) !== tokenGeneration) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+        await crowi.model('OAuthRefreshToken').revokeAllByUser(user._id);
+        await crowi.model('PersonalAccessToken').revokeAllByUser(user._id);
+
         // Consume the link: set the new password and move the reset
         // generation past this token in ONE conditional update. The filter
         // still naming the token's generation is what makes the link
