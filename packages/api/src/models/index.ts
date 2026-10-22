@@ -11,6 +11,7 @@ import OAuthAuthorizationCode from './oauth-authorization-code';
 import OAuthClient from './oauth-client';
 import OAuthDeviceCode from './oauth-device-code';
 import OAuthRefreshToken from './oauth-refresh-token';
+import OAuthTokenFamilyRevocation from './oauth-token-family-revocation';
 import Like from './like';
 import Page from './page';
 import PageDeletionRecord from './page-deletion-record';
@@ -63,4 +64,5 @@ export default {
   OAuthAuthorizationCode,
   OAuthDeviceCode,
   OAuthRefreshToken,
+  OAuthTokenFamilyRevocation,
 };

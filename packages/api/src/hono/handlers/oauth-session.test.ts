@@ -8,17 +8,19 @@ import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
 /**
- * Integration tests for `/me/oauth-sessions` (list active OAuth refresh-token rotation-chain tips + revoke a reachable component).
+ * Integration tests for `/me/oauth-sessions` (list active OAuth refresh-token tips + revoke the whole sign-in family).
  *
  * Covers (AC-aligned):
  *  - list metadata, active-tip filtering, clientName resolution + raw-id fallback (AC-2), exact response keys / no secrets (AC-3)
- *  - DELETE revokes the reachable component, subsequent refresh invalid_grant (AC-4), foreign/invalid/unknown id -> 404 (AC-5)
+ *  - DELETE revokes the family, subsequent refresh invalid_grant (AC-4), foreign/invalid/unknown/family-less id -> 404 (AC-5)
  *  - auth boundary matrix: web/PAT/OAuth bearer, cookie-only, no credential, registered/suspended/invited user (AC-10)
  *  - DELETE leaves an already-issued access token usable within its TTL (AC-11)
- *  - clientName resolution failure after revoke still returns 200 with a raw clientId, and does not resurrect the chain (AC-12)
- *  - old (already-rotated) tip id still reaches the chain while its document exists; TTL-deleted before/after the ownership lookup both 404, and a post-ownership-check deletion mid-`revokeChain` leaves the successor active (AC-13)
- *  - concurrent refresh on the SAME predecessor forks into 2 active successors; deleting one never revokes the other (AC-14)
- *  - a single refresh's transient 2-row window (successor committed, predecessor not yet saved) converges to 1 row after completion, and must not be conflated with the AC-14 fork (AC-15)
+ *  - clientName resolution failure after revoke still returns 200 with a raw clientId, and does not resurrect the family (AC-12)
+ *  - old (already-rotated) tip id still reaches the family while its document exists; TTL-deleted before/after the ownership lookup both 404 but a post-lookup deletion still revokes the family (AC-13)
+ *  - concurrent refresh on the SAME predecessor forks into 2 active successors; deleting either revokes both (AC-14)
+ *  - a single refresh's transient 2-row window converges to 1 row (AC-15)
+ *  - a refresh that straddles a DELETE (before the successor insert, before the post-insert check, after it) never leaves a usable token
+ *  - failure injection: record save, bulk update, and retry
  */
 
 const seedActiveUser = async (info: { name: string; username: string; email: string; password: string }) => {
@@ -101,7 +103,10 @@ describe('Routes /api/me/oauth-sessions (Hono)', () => {
   const del = (id: string) => web(request(app).delete(`/api/me/oauth-sessions/${id}`));
 
   /** A raw `OAuthRefreshToken` row for tests that seed rows outside the real grant flow (not this user's own chain). */
-  const createRow = (tokenHash: string, overrides: Partial<{ userId: UserDocument['_id']; clientId: string; expiresAt: Date; revokedAt: Date }> = {}) =>
+  const createRow = (
+    tokenHash: string,
+    overrides: Partial<{ userId: UserDocument['_id']; clientId: string; expiresAt: Date; revokedAt: Date; familyId: string | null }> = {},
+  ) =>
     Refresh().create({
       tokenHash: Refresh().hashToken(tokenHash),
       clientId: overrides.clientId ?? 'crowi-cli',
@@ -109,6 +114,7 @@ describe('Routes /api/me/oauth-sessions (Hono)', () => {
       scopes: ['pages:read'],
       expiresAt: overrides.expiresAt ?? new Date(Date.now() + 86_400_000),
       ...(overrides.revokedAt !== undefined ? { revokedAt: overrides.revokedAt } : {}),
+      ...(overrides.familyId === null ? {} : { familyId: overrides.familyId ?? crypto.randomUUID() }),
     });
 
   const authorize = async (scope = 'pages:read pages:write') => {
@@ -230,7 +236,7 @@ describe('Routes /api/me/oauth-sessions (Hono)', () => {
   });
 
   describe('DELETE /me/oauth-sessions/:id', () => {
-    it('revokes the reachable component; a subsequent refresh of that token is invalid_grant (AC-4)', async () => {
+    it('revokes the family; a subsequent refresh of that token is invalid_grant (AC-4)', async () => {
       const pair = await getInitialPair();
       const res = await list();
       const id = res.body.oauthSessions[0].id as string;
@@ -343,26 +349,20 @@ describe('Routes /api/me/oauth-sessions (Hono)', () => {
       expect(stillGone).toBeNull();
     });
 
-    it('404s (never 200) when the addressed tip is TTL-deleted between the ownership lookup and revokeChain re-querying its origin, and its active successor stays active (AC-13)', async () => {
+    it('404s (never 200) when the addressed tip is TTL-deleted between the ownership lookup and the post-check, but the family is still revoked (AC-13)', async () => {
       const pair = await getInitialPair();
       const originHash = Refresh().hashToken(pair.refresh_token);
       const origin = await Refresh().findOne({ tokenHash: originHash });
       const id = (origin?._id as unknown as { toString(): string }).toString();
 
-      // A prior normal rotation gives the origin an ACTIVE successor before
-      // we race its own document out from under `revokeChain`.
       const rotated = await tokenRequest({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
       expect(rotated.status).toBe(200);
       const successorHash = Refresh().hashToken(rotated.body.refresh_token as string);
 
-      const originalRevokeChain = Refresh().revokeChain.bind(Refresh());
-      const spy = jest.spyOn(Refresh(), 'revokeChain').mockImplementation(async (hash: string) => {
-        if (hash === originHash) {
-          // Simulate the TTL sweep landing between the handler's ownership
-          // lookup and `revokeChain`'s own re-query of this same hash.
-          await Refresh().deleteOne({ tokenHash: originHash });
-        }
-        return originalRevokeChain(hash);
+      const originalRevokeFamily = Refresh().revokeFamily.bind(Refresh());
+      const spy = jest.spyOn(Refresh(), 'revokeFamily').mockImplementation(async (familyId, userId) => {
+        await Refresh().deleteOne({ tokenHash: originHash });
+        return originalRevokeFamily(familyId, userId);
       });
 
       try {
@@ -373,14 +373,19 @@ describe('Routes /api/me/oauth-sessions (Hono)', () => {
         spy.mockRestore();
       }
 
-      // revokeChain's traversal never discovered the rotatedTo link (the
-      // origin row it would have read it from was already gone) — the
-      // successor it should have reached stays active.
       const successor = await Refresh().findOne({ tokenHash: successorHash });
-      expect(successor?.revokedAt).toBeNull();
+      expect(successor?.revokedAt).not.toBeNull();
     });
 
-    it('a concurrent refresh fork produces 2 unlinked active successors; deleting one never revokes the other (AC-14)', async () => {
+    it('404s a family-less (pre-migration) id without side effects', async () => {
+      const legacy = await createRow('crowi_rt_legacy_session', { familyId: null });
+      const res = await del(legacy._id.toString());
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+      expect((await Refresh().findById(legacy._id))?.revokedAt).toBeNull();
+    });
+
+    it('a concurrent refresh fork produces 2 unlinked active successors; deleting one revokes both (AC-14)', async () => {
       const pair = await getInitialPair();
 
       const arrive = twoPartyBarrier();
@@ -418,11 +423,208 @@ describe('Routes /api/me/oauth-sessions (Hono)', () => {
       const delRes = await del(idToDelete);
       expect(delRes.status).toBe(200);
 
-      // The unlinked successor (last-write-wins loser of the `rotatedTo`
-      // race on the shared predecessor) is a SEPARATE component — this
-      // DELETE must not have reached it.
-      const stillActive = await Refresh().findById(otherId);
-      expect(stillActive?.revokedAt).toBeNull();
+      expect((await Refresh().findById(otherId))?.revokedAt).not.toBeNull();
+      for (const r of [refreshA, refreshB]) {
+        const reuse = await tokenRequest({ grant_type: 'refresh_token', refresh_token: r.body.refresh_token, client_id: 'crowi-cli' });
+        expect(reuse.status).toBe(400);
+        expect(reuse.body.error).toBe('invalid_grant');
+      }
+    });
+
+    describe('a refresh that straddles a DELETE', () => {
+      /** Resolves the returned gate's `reached` once the hook fires; the hook then parks until `release()`. */
+      const gate = () => {
+        let markReached: (() => void) | undefined;
+        let release: (() => void) | undefined;
+        const reached = new Promise<void>((resolve) => {
+          markReached = resolve;
+        });
+        const released = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return {
+          reached,
+          release: () => release?.(),
+          park: async () => {
+            markReached?.();
+            await released;
+          },
+        };
+      };
+
+      /** Record every {token, tokenHash} pair `generateToken` hands out, so a test can present the plaintext. */
+      const captureTokens = () => {
+        const original = Refresh().generateToken.bind(Refresh());
+        const minted: { token: string; tokenHash: string }[] = [];
+        const spy = jest.spyOn(Refresh(), 'generateToken').mockImplementation(() => {
+          const pair = original();
+          minted.push(pair);
+          return pair;
+        });
+        return { minted, spy };
+      };
+
+      const expectTokenDead = async (token: string) => {
+        const res = await tokenRequest({ grant_type: 'refresh_token', refresh_token: token, client_id: 'crowi-cli' });
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('invalid_grant');
+      };
+
+      it('DELETE between the predecessor read and the successor insert: the successor is revoked and no pair is returned', async () => {
+        const pair = await getInitialPair();
+        const origin = await Refresh().findOne({ tokenHash: Refresh().hashToken(pair.refresh_token) });
+        const g = gate();
+        const { minted, spy: genSpy } = captureTokens();
+        const original = Refresh().findActiveByHash.bind(Refresh());
+        let first = true;
+        const findSpy = jest.spyOn(Refresh(), 'findActiveByHash').mockImplementation(async (hash: string) => {
+          const result = await original(hash);
+          if (first) {
+            first = false;
+            await g.park();
+          }
+          return result;
+        });
+
+        let refreshRes: request.Response;
+        try {
+          const refreshPromise = Promise.resolve(tokenRequest({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' }));
+          await g.reached;
+          expect(minted).toHaveLength(0);
+          const delRes = await del((origin?._id as unknown as { toString(): string }).toString());
+          expect(delRes.status).toBe(200);
+          expect(minted).toHaveLength(0);
+          g.release();
+          refreshRes = await refreshPromise;
+        } finally {
+          g.release();
+          findSpy.mockRestore();
+          genSpy.mockRestore();
+        }
+
+        expect(refreshRes.status).toBe(400);
+        expect(refreshRes.body.error).toBe('invalid_grant');
+        expect(refreshRes.body.refresh_token).toBeUndefined();
+        expect(refreshRes.body.access_token).toBeUndefined();
+        expect(minted).toHaveLength(1);
+        const successor = await Refresh().findOne({ tokenHash: minted[0].tokenHash });
+        expect(successor?.revokedAt).not.toBeNull();
+        await expectTokenDead(minted[0].token);
+      });
+
+      it('DELETE after the successor insert but before the post-insert record check: the successor is revoked', async () => {
+        const pair = await getInitialPair();
+        const origin = await Refresh().findOne({ tokenHash: Refresh().hashToken(pair.refresh_token) });
+        const Rev = crowi.model('OAuthTokenFamilyRevocation');
+        const g = gate();
+        const { minted, spy: genSpy } = captureTokens();
+        const original = Rev.isRevoked.bind(Rev);
+        let calls = 0;
+        const revSpy = jest.spyOn(Rev, 'isRevoked').mockImplementation(async (familyId, userId) => {
+          calls += 1;
+          // 1st call = refresh entry guard, 2nd = the post-insert check.
+          if (calls === 2) await g.park();
+          return original(familyId, userId);
+        });
+
+        let refreshRes: request.Response;
+        try {
+          const refreshPromise = Promise.resolve(tokenRequest({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' }));
+          await g.reached;
+          expect(minted).toHaveLength(1);
+          expect(await Refresh().exists({ tokenHash: minted[0].tokenHash })).not.toBeNull();
+          const delRes = await del((origin?._id as unknown as { toString(): string }).toString());
+          expect(delRes.status).toBe(200);
+          g.release();
+          refreshRes = await refreshPromise;
+        } finally {
+          g.release();
+          revSpy.mockRestore();
+          genSpy.mockRestore();
+        }
+
+        expect(refreshRes.status).toBe(400);
+        expect(refreshRes.body.error).toBe('invalid_grant');
+        expect(refreshRes.body.refresh_token).toBeUndefined();
+        expect((await Refresh().findOne({ tokenHash: minted[0].tokenHash }))?.revokedAt).not.toBeNull();
+        await expectTokenDead(minted[0].token);
+      });
+
+      it('DELETE after the post-insert check passed: the bulk update revokes the successor even though its response is 200', async () => {
+        const pair = await getInitialPair();
+        const origin = await Refresh().findOne({ tokenHash: Refresh().hashToken(pair.refresh_token) });
+        const Rev = crowi.model('OAuthTokenFamilyRevocation');
+        const g = gate();
+        const original = Rev.isRevoked.bind(Rev);
+        let calls = 0;
+        const revSpy = jest.spyOn(Rev, 'isRevoked').mockImplementation(async (familyId, userId) => {
+          calls += 1;
+          const result = await original(familyId, userId);
+          if (calls === 2) await g.park();
+          return result;
+        });
+
+        let refreshRes: request.Response;
+        try {
+          const refreshPromise = Promise.resolve(tokenRequest({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' }));
+          await g.reached;
+          const delRes = await del((origin?._id as unknown as { toString(): string }).toString());
+          expect(delRes.status).toBe(200);
+          g.release();
+          refreshRes = await refreshPromise;
+        } finally {
+          g.release();
+          revSpy.mockRestore();
+        }
+
+        expect(refreshRes.status).toBe(200);
+        await expectTokenDead(refreshRes.body.refresh_token as string);
+      });
+    });
+
+    describe('failure injection', () => {
+      it('a failed record save returns 500 and never runs the bulk update', async () => {
+        const pair = await getInitialPair();
+        const res = await list();
+        const id = res.body.oauthSessions[0].id as string;
+        const Rev = crowi.model('OAuthTokenFamilyRevocation');
+        const markSpy = jest.spyOn(Rev, 'markRevoked').mockRejectedValue(new Error('injected'));
+        const bulkSpy = jest.spyOn(Refresh(), 'updateMany');
+        try {
+          const delRes = await del(id);
+          expect(delRes.status).toBe(500);
+          expect(bulkSpy).not.toHaveBeenCalled();
+        } finally {
+          markSpy.mockRestore();
+          bulkSpy.mockRestore();
+        }
+        const stillOk = await tokenRequest({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+        expect(stillOk.status).toBe(200);
+      });
+
+      it('a failed bulk update returns 500, keeps the record so the family is unusable, and a retry succeeds', async () => {
+        const pair = await getInitialPair();
+        const res = await list();
+        const id = res.body.oauthSessions[0].id as string;
+        const bulkSpy = jest.spyOn(Refresh(), 'updateMany').mockRejectedValueOnce(new Error('injected') as never);
+        try {
+          const delRes = await del(id);
+          expect(delRes.status).toBe(500);
+        } finally {
+          bulkSpy.mockRestore();
+        }
+
+        const row = await Refresh().findById(id);
+        expect(row?.revokedAt).toBeNull();
+        expect(await crowi.model('OAuthTokenFamilyRevocation').isRevoked(row?.familyId as string, user._id)).toBe(true);
+        const blocked = await tokenRequest({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+        expect(blocked.status).toBe(400);
+        expect(blocked.body.error).toBe('invalid_grant');
+
+        const retry = await del(id);
+        expect(retry.status).toBe(200);
+        expect((await Refresh().findById(id))?.revokedAt).not.toBeNull();
+      });
     });
 
     it('the transient 2-row window of a single ordinary rotation converges to 1 row, and is NOT the AC-14 fork (AC-15)', async () => {

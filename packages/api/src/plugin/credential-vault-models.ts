@@ -25,6 +25,7 @@ export const CREDENTIAL_VAULT_MODEL_NAMES: ReadonlySet<string> = new Set([
   'OAuthAuthorizationCode',
   'OAuthDeviceCode',
   'OAuthRefreshToken',
+  'OAuthTokenFamilyRevocation',
   'Share',
   'ShareAccess',
 ]);

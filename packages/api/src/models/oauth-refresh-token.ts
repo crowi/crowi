@@ -15,10 +15,10 @@ import Crowi from 'src/crowi';
  *
  * Reuse detection (RFC-0010 §Security, PHASE3-Q5): if a *revoked* refresh
  * token is presented again — the hallmark of a stolen-token replay — the
- * whole rotation chain is revoked via `revokeChain`, walking both backward
- * (ancestors) via `findOne({ rotatedTo })` and forward (descendants) via
- * `rotatedTo`. Both the attacker's and the legitimate client's tokens die,
- * forcing a fresh authorization.
+ * whole sign-in family is revoked via `revokeFamily`. Every row minted from
+ * one sign-in shares an immutable `familyId`, so revocation never walks the
+ * `rotatedTo` links. Both the attacker's and the legitimate client's tokens
+ * die, forcing a fresh authorization.
  *
  * Only the SHA-256 hash of the opaque `crowi_rt_…` secret is stored; the
  * `crowi_rt_` prefix lets `POST /oauth/revoke` tell a refresh token from a
@@ -45,18 +45,29 @@ export interface OAuthRefreshTokenDocument extends Document {
    * to `createdAt` rather than backfilling.
    */
   authorizedAt?: Date;
+  /**
+   * Immutable sign-in family id, minted on the first grant and inherited by
+   * every rotation. Optional/nullable only so pre-family rows can still be
+   * read; no schema default (a default would give each legacy row its own
+   * family on every load). Missing, null and '' all mean "no family".
+   */
+  familyId?: string | null;
 }
 
 export interface OAuthRefreshTokenModel extends Model<OAuthRefreshTokenDocument> {
   generateToken(): { token: string; tokenHash: string };
   hashToken(token: string): string;
-  /** Active (= not revoked, not expired) token matching `tokenHash`, or null. */
+  /**
+   * Active (= not revoked, not expired) token matching `tokenHash`, or null.
+   * A row without a family id is revoked on the spot and not returned; a row
+   * whose family has a revocation record is not returned.
+   */
   findActiveByHash(tokenHash: string): Promise<OAuthRefreshTokenDocument | null>;
   /**
-   * Revoke the entire rotation chain a token belongs to (reuse detection).
-   * Walks descendants via `rotatedTo` and ancestors via the reverse link.
+   * Revoke every refresh token of a sign-in family: persist the family
+   * revocation record first, then bulk-revoke the existing rows.
    */
-  revokeChain(tokenHash: string): Promise<void>;
+  revokeFamily(familyId: string, userId: Types.ObjectId): Promise<void>;
   /**
    * A user's active tip documents (`revokedAt: null`, `rotatedTo: null`,
    * `expiresAt > now`), newest first. `now` is supplied by the caller (not
@@ -68,7 +79,7 @@ export interface OAuthRefreshTokenModel extends Model<OAuthRefreshTokenDocument>
   TOKEN_PREFIX: string;
 }
 
-export default (_crowi: Crowi) => {
+export default (crowi: Crowi) => {
   const schema = new Schema<OAuthRefreshTokenDocument, OAuthRefreshTokenModel>({
     tokenHash: {
       type: String,
@@ -112,11 +123,18 @@ export default (_crowi: Crowi) => {
       type: Date,
       required: false,
     },
+    familyId: {
+      type: String,
+      required: false,
+    },
   });
 
   // TTL on `expiresAt` — sweeps long-dead tokens. Active lookups filter
   // `expiresAt > now` so the sweep lag never lets an expired token through.
   schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'oauthRefreshToken_ttl' });
+
+  schema.index({ familyId: 1, userId: 1 }, { name: 'oauthRefreshToken_family_user' });
+  schema.index({ userId: 1, revokedAt: 1, createdAt: -1 }, { name: 'oauthRefreshToken_user_active_created' });
 
   schema.statics.hashToken = function (token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
@@ -127,40 +145,34 @@ export default (_crowi: Crowi) => {
     return { token, tokenHash: OAuthRefreshToken.hashToken(token) };
   };
 
-  schema.statics.findActiveByHash = function (tokenHash: string): Promise<OAuthRefreshTokenDocument | null> {
-    return OAuthRefreshToken.findOne({
+  schema.statics.findActiveByHash = async function (tokenHash: string): Promise<OAuthRefreshTokenDocument | null> {
+    const row = await OAuthRefreshToken.findOne({
       tokenHash,
       revokedAt: null,
       expiresAt: { $gt: new Date() },
-    }).exec();
+    })
+      .read('primary')
+      .exec();
+    if (!row) return null;
+
+    if (!row.familyId) {
+      // Pre-family row: never rotated into a family, never given a new one.
+      await OAuthRefreshToken.updateOne({ _id: row._id, userId: row.userId, revokedAt: null }, { $set: { revokedAt: new Date() } });
+      return null;
+    }
+    if (await crowi.model('OAuthTokenFamilyRevocation').isRevoked(row.familyId, row.userId)) return null;
+    return row;
   };
 
-  schema.statics.revokeChain = async function (tokenHash: string): Promise<void> {
-    const now = new Date();
-    const seen = new Set<string>();
-    // Forward + backward frontier of hashes to revoke.
-    const queue: string[] = [tokenHash];
-
-    while (queue.length > 0) {
-      const hash = queue.shift();
-      if (hash == null || seen.has(hash)) continue;
-      seen.add(hash);
-
-      const node = await OAuthRefreshToken.findOne({ tokenHash: hash }).exec();
-      if (!node) continue;
-
-      // Descendant (the token this one rotated to).
-      if (node.rotatedTo && !seen.has(node.rotatedTo)) {
-        queue.push(node.rotatedTo);
-      }
-      // Ancestor(s) — whoever rotated *into* this hash.
-      const ancestors = await OAuthRefreshToken.find({ rotatedTo: hash }).exec();
-      for (const anc of ancestors) {
-        if (!seen.has(anc.tokenHash)) queue.push(anc.tokenHash);
-      }
+  schema.statics.revokeFamily = async function (familyId: string, userId: Types.ObjectId): Promise<void> {
+    if (typeof familyId !== 'string' || familyId.length === 0) {
+      throw new Error('revokeFamily requires a non-empty familyId');
     }
-
-    await OAuthRefreshToken.updateMany({ tokenHash: { $in: [...seen] }, revokedAt: null }, { revokedAt: now });
+    const now = new Date();
+    // Record first: a refresh that inserts its successor after the bulk
+    // update below still finds the record and revokes that row itself.
+    await crowi.model('OAuthTokenFamilyRevocation').markRevoked(familyId, userId, now);
+    await OAuthRefreshToken.updateMany({ familyId, userId, revokedAt: null }, { $set: { revokedAt: now } });
   };
 
   schema.statics.listActiveByUser = function (userId: Types.ObjectId, now: Date): Promise<OAuthRefreshTokenDocument[]> {
