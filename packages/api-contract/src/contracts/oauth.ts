@@ -2,6 +2,7 @@
  * RFC-0010 Phase 3 — OAuth 2.0 authorization-server endpoint contracts.
  *
  *   POST /oauth/authorize                          — JWT (web session only)
+ *   POST /oauth/authorize/deny                     — JWT (web session only)
  *   POST /oauth/token                              — public (RFC 6749)
  *   POST /oauth/revoke                             — public (RFC 7009)
  *   GET  /.well-known/oauth-authorization-server   — public (RFC 8414)
@@ -20,6 +21,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 
 import { ForbiddenErrorSchema, InternalServerErrorSchema, NotFoundErrorSchema } from '../schemas/common';
 import {
+  AuthorizeDenyRequestSchema,
   AuthorizeRequestSchema,
   AuthorizeResponseSchema,
   ClientInfoResponseSchema,
@@ -56,6 +58,37 @@ export const authorizeRoute = createRoute({
     },
     403: {
       description: 'Authorization codes can only be issued from a web session',
+      content: { 'application/json': { schema: ForbiddenErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const authorizeDenyRoute = createRoute({
+  method: 'post',
+  path: '/oauth/authorize/deny',
+  tags: ['oauth'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Build the access_denied redirect for a user who cancelled the consent screen',
+  request: {
+    body: {
+      content: { 'application/json': { schema: AuthorizeDenyRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Denial accepted; `redirectUri` carries `error=access_denied` + `state`',
+      content: { 'application/json': { schema: AuthorizeResponseSchema } },
+    },
+    400: {
+      description: 'Unknown client or unregistered redirect_uri (RFC 6749 §4.1.2.1: never redirect)',
+      content: { 'application/json': { schema: OAuthErrorSchema } },
+    },
+    403: {
+      description: 'Authorization responses can only be produced from a web session',
       content: { 'application/json': { schema: ForbiddenErrorSchema } },
     },
     500: {
@@ -242,6 +275,7 @@ export const clientInfoRoute = createRoute({
 
 export const oauthRoutes = {
   authorizeRoute,
+  authorizeDenyRoute,
   tokenRoute,
   revokeRoute,
   discoveryRoute,

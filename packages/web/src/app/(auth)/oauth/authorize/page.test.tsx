@@ -12,10 +12,11 @@ import { makeApiResponse, nextNavigationMockModule } from '@/lib/test-utils/mock
  * redirect automatically, while a non-trusted client (`crowi-cli`) is
  * completely unchanged.
  */
-const { searchParamsGet, clientInfoGet, authorizePost } = vi.hoisted(() => ({
+const { searchParamsGet, clientInfoGet, authorizePost, denyPost } = vi.hoisted(() => ({
   searchParamsGet: vi.fn(),
   clientInfoGet: vi.fn(),
   authorizePost: vi.fn(),
+  denyPost: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => nextNavigationMockModule({ push: vi.fn(), searchParamsGet }));
@@ -23,7 +24,7 @@ vi.mock('@/lib/api-client', () => ({
   apiClient: {
     oauth: {
       'client-info': { $get: clientInfoGet },
-      authorize: { $post: authorizePost },
+      authorize: { $post: authorizePost, deny: { $post: denyPost } },
     },
   },
 }));
@@ -71,6 +72,7 @@ beforeEach(() => {
   searchParamsGet.mockReset();
   clientInfoGet.mockReset();
   authorizePost.mockReset();
+  denyPost.mockReset();
   hrefAssignments = [];
   // @ts-expect-error jsdom's window.location can be deleted/replaced for tests.
   delete window.location;
@@ -174,5 +176,60 @@ describe('OAuth authorize page — trusted client skip-consent', () => {
 
     await waitFor(() => expect(approveButton()).toBeInTheDocument());
     expect(authorizePost).not.toHaveBeenCalled();
+  });
+});
+
+describe('OAuth authorize page — deny', () => {
+  const cancelButton = () => screen.getByRole('button', { name: 'キャンセル' });
+  const INVALID = 'この認可リクエストは無効、または情報が不足しています。';
+  const FAILED = '許可に失敗しました。もう一度お試しください。';
+
+  const renderConsent = async (overrides: Record<string, string> = {}) => {
+    setParams({ client_id: 'crowi-cli', ...overrides });
+    clientInfoGet.mockResolvedValue(makeApiResponse(200, { clientId: 'crowi-cli', name: 'Crowi CLI', firstParty: true, trusted: false }));
+    renderPage();
+    await waitFor(() => expect(approveButton()).toBeInTheDocument());
+  };
+
+  it('never navigates to an unregistered redirect_uri when the server rejects the denial (400)', async () => {
+    await renderConsent({ redirect_uri: 'https://evil.example/cb' });
+    denyPost.mockResolvedValue(makeApiResponse(400, { error: 'invalid_request' }));
+
+    fireEvent.click(cancelButton());
+
+    expect(await screen.findByText(INVALID)).toBeInTheDocument();
+    expect(hrefAssignments).toEqual([]);
+  });
+
+  it('navigates only to the server-built redirectUri on 200 and sends client_id / redirect_uri / state', async () => {
+    await renderConsent({ state: 's1' });
+    denyPost.mockResolvedValue(makeApiResponse(200, { redirectUri: 'http://127.0.0.1:51234/callback?error=access_denied&state=s1' }));
+
+    fireEvent.click(cancelButton());
+
+    await waitFor(() => expect(hrefAssignments).toEqual(['http://127.0.0.1:51234/callback?error=access_denied&state=s1']));
+    expect(denyPost).toHaveBeenCalledWith({
+      json: { client_id: 'crowi-cli', redirect_uri: 'http://127.0.0.1:51234/callback', state: 's1' },
+    });
+  });
+
+  it('shows error_failed and does not navigate on a 500', async () => {
+    await renderConsent();
+    denyPost.mockResolvedValue(makeApiResponse(500, {}));
+
+    fireEvent.click(cancelButton());
+
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(hrefAssignments).toEqual([]);
+  });
+
+  it('shows error_failed and does not navigate when the request throws', async () => {
+    await renderConsent();
+    denyPost.mockRejectedValue(new Error('network'));
+
+    fireEvent.click(cancelButton());
+
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(hrefAssignments).toEqual([]);
   });
 });
