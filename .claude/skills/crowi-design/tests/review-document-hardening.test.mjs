@@ -13,7 +13,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
 function fakeAgent(handlers, calls) {
   return async (prompt, opts = {}) => {
-    calls.push({ prompt, label: opts.label || '' })
+    calls.push({ prompt, label: opts.label || '', model: opts.model })
     for (const [prefix, handler] of handlers) {
       if ((opts.label || '').startsWith(prefix)) return typeof handler === 'function' ? handler(prompt, opts) : handler
     }
@@ -165,7 +165,7 @@ test('write loop accumulates preexisting and findings across rounds (not just th
   assert.ok(result.findings.some((f) => f.category === 'preexisting' && f.text === 'p2'))
 })
 
-test('the frontier tier goes to one lens only: the critical red-team lens in the deciding round', async () => {
+test('the frontier tiers run only when escalated, on the critical red-team lens of the deciding round', async () => {
   const tierOf = (calls, label) => (calls.find((c) => c.label === `codex:${label}`)?.prompt.match(/--tier (\w+)/) || [])[1]
   const okRound = [
     ['codex:review_root-cause_1', ok(review('OK'))],
@@ -176,19 +176,27 @@ test('the frontier tier goes to one lens only: the critical red-team lens in the
   ]
   const critical = await run(REVIEW_ONLY_ARGS, okRound)
   assert.equal(critical.result.reviewStats.deadLenses, 0, 'a mislabeled fake would silently kill a lens')
+  assert.ok(!critical.calls.some((c) => /--tier astra/.test(c.prompt)), 'critical alone never reaches the frontier tier')
+  assert.ok(!critical.calls.some((c) => c.model === 'fable'), 'critical alone never reaches the frontier claude model')
+  const escalated = await run({ ...REVIEW_ONLY_ARGS, escalate: true }, okRound)
+  assert.equal(escalated.result.reviewStats.deadLenses, 0)
   assert.deepEqual(
-    critical.calls.filter((c) => /--tier astra/.test(c.prompt)).map((c) => c.label),
+    escalated.calls.filter((c) => /--tier astra/.test(c.prompt)).map((c) => c.label),
     ['codex:review_red-team_1'],
     'a review-only pass is the deciding round',
   )
-  assert.equal(tierOf(critical.calls, 'review_root-cause_1'), 'terra', 'the other lenses keep their tier')
+  assert.deepEqual(
+    escalated.calls.filter((c) => c.model === 'fable').map((c) => c.label),
+    ['review:x:claude-critical#1'],
+  )
+  assert.equal(tierOf(escalated.calls, 'review_root-cause_1'), 'terra', 'the other lenses keep their tier')
   const plain = await run({ ...REVIEW_ONLY_ARGS, critical: false }, okRound)
   assert.equal(plain.result.reviewStats.deadLenses, 0)
   assert.ok(!plain.calls.some((c) => /--tier astra/.test(c.prompt)), 'never without critical')
 })
 
 test('for an RFC the frontier tier follows the critical lens, which is completeness', async () => {
-  const { result, calls } = await run({ ...REVIEW_ONLY_ARGS, outputType: 'rfc' }, [
+  const { result, calls } = await run({ ...REVIEW_ONLY_ARGS, outputType: 'rfc', escalate: true }, [
     ['codex:review_approach_1', ok(review('OK'))],
     ['codex:review_completeness_1', ok(review('OK'))],
     ['codex:review_quality_1', ok(review('OK'))],

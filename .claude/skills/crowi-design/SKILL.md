@@ -58,7 +58,7 @@ main が保持するのは **brief サマリ + ゲート + 最終報告** だけ
 
 各 Codex ステージは `codex-run.sh --tier` で **semantic なモデル tier**(astra=最上位 / sol=最難 /
 terra=一般 / luna=単純)を選ぶ。実 model id と tier 既定
-effort(astra=high / sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。astra は最も高いモデルなので、ステージの既定にはしない。correctness-critical な文書のレビューで、判定を決める round (最後の round か、レビューだけの 1 回) の critical レンズ 1 本 (spec は red-team、RFC は completeness) だけに使う。tier 名は難易度のラベルで model 名ではない(codex は世代ごとに model の名前と格付けを入れ替える)ので、次の世代へは名前の一致ではなく、各 model の用途と費用 (codex のモデル一覧の説明) で対応させる。一覧の `priority` は表示順で、強さの順ではない。
+effort(astra=high / sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。astra は最も高いモデルなので、ステージの既定にもレビューの既定にもしない。使うのは下の「最上位モデルへのエスカレーション」の条件を満たしたときだけである。tier 名は難易度のラベルで model 名ではない(codex は世代ごとに model の名前と格付けを入れ替える)ので、次の世代へは名前の一致ではなく、各 model の用途と費用 (codex のモデル一覧の説明) で対応させる。一覧の `priority` は表示順で、強さの順ではない。
 
 | stage | 主担当 | tier | fallback(fail-open) |
 |---|---|---|---|
@@ -68,14 +68,26 @@ effort(astra=high / sol=high / terra=medium / luna=low)は wrapper に 1 箇所�
 | **収束(ゲート)** | **main**(session) | — | — |
 | 執筆 RFC | **Codex**(workspace-write) | **sol** | general-purpose(session) |
 | 執筆 spec(選択案のコードレベル詳細化) | **Codex**(workspace-write) | **sol** | general-purpose(session / high) |
-| 設計レビュー(spec ×4 / RFC ×3、並列) | **Codex**(read-only) | terra →(最終 attempt)**sol**。critical なら判定 round の critical レンズ 1 本だけ **astra** | general-purpose(session / high) |
-| Claude lens(critical 時のみ +1) | general-purpose(session / high) | — | — |
+| 設計レビュー(spec ×4 / RFC ×3、並列) | **Codex**(read-only) | terra →(最終 attempt)**sol**。`escalate: true` のときだけ、判定 round の critical レンズ 1 本を **astra** | general-purpose(session / high) |
+| Claude lens(critical 時のみ +1) | general-purpose(session / high)。`escalate: true` のときだけ判定 round で **fable** | — | — |
 | 是正(revise) | **Codex** | terra | general-purpose |
 | spec ready 確定 | haiku/low(機械的 validator 実行) | — | — |
 
 **レビューのエスカレーション**: 設計レビューは早期ラウンドは terra、APPROVED/NEEDS_WORK を
 分ける**最終 attempt(`attempt === maxReviewAttempts`)だけ sol** に上げる — terra が弾き
 続ける doc に一度だけ強い判定を当てる(毎ラウンド sol を焚かない)。
+
+### 最上位モデルへのエスカレーション (astra / fable)
+
+**既定の上限は Codex は sol、Claude は opus(session)。** astra (Codex の最上位) と fable (Claude の最上位) は、どの stage・どの round でも自動では使わない。main が Workflow B の args に `escalate: true` を立てたときだけ、判定 round の critical レンズ 1 本 (spec は red-team、RFC は completeness) が Codex は astra、Claude lens は fable で走る。
+
+`escalate: true` を立ててよいのは、sol / opus で回した結果、文書が収束しないと分かったときだけである。
+
+- 同じ文書のレビューで、2 round 続けて mustFix の件数が減らない (`notConverging`)。
+- 前の round で直したはずの指摘が、形を変えて戻ってくる。
+- sol の是正が、レビューの指摘を実コードで裏取りできずに反証と再指摘を往復している。
+
+初回のレビュー、`critical: true` であること、文書が重要であることは、それだけでは理由にならない。立てる前に「sol / opus で解けなかった点」と「最上位モデルに何を判定させるか」をユーザーに 1 行で伝える。同じ考え方は Workflow の外にも当てはまる。調査・是正・デバッグを subagent や `codex-run.sh` に回すときも、既定は sol / opus までにし、それで解けなかったときだけ fable / astra に上げる。
 
 ### critical フラグ(Claude lens の追加基準)
 
@@ -113,7 +125,8 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
    Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
               args: { slug, title, outputType, briefPath, scope,
                       decisions: { approach, answers }, maxReviewAttempts: 2,
-                      critical: <bool> } })   // critical フラグの基準は上記
+                      critical: <bool>,        // critical フラグの基準は上記
+                      escalate: <bool> } })   // 既定 false。最上位モデルへのエスカレーションの条件を満たしたときだけ true
    ```
    **`decisions` の組み立て方** — ここの作り方が、Workflow B が何ラウンドかかるかをほぼ決める:
    - **先頭は「これは何であるか」**。作るものの positive な形を 1 項目目に置く。禁止から始めない。
