@@ -41,7 +41,7 @@ External apps you connected over OAuth — the CLI, the mobile app — are liste
 
 Each row shows the app name, its scopes, when it was authorized, when it last refreshed, and when it expires. **"Last refreshed" is when the app renewed its credentials, not when it last called the API.**
 
-Revoking a row stops every credential that came from the same sign-in from being renewed, including a new credential that a refresh already in progress is about to create. You do not need to revoke rows one by one. **An access token it already holds keeps working until it expires (one hour by default).** To lock an app out immediately, wait out that hour or change your password and sign in again.
+Revoking a row stops every credential that came from the same sign-in from being renewed, including a new credential that a refresh already in progress is about to create. You do not need to revoke rows one by one. **An access token it already holds keeps working until it expires (one hour by default).** Changing your password does not stop an access token that was already issued; to lock the app out completely, wait for it to expire.
 
 - Right after a refresh, the same app may briefly show two rows. Reloading the page collapses it back to one.
 - If the same app refreshed from two places at nearly the same time, rows from the same sign-in can remain until they expire. Revoking any one of them ends the whole sign-in.

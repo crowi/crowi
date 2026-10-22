@@ -69,6 +69,7 @@ crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{
 - `--limit` is 1-100 (default 50) and `--offset` is 0-2147483647 (default 0); both accept plain decimal digits only. An invalid value is rejected with exit code `6` before anything is sent.
 - `--prefix` is a literal, case-sensitive prefix match on the stored path. `/team` matches `/team`, `/team/` and `/teamwork`; `/team/` matches `/team/` and everything under it, but not `/team`. A missing leading `/` is added, and `--prefix /` is the same as no prefix. An empty value is rejected.
 - The list is live. Paging with `--offset` can repeat or skip pages that were updated between calls, and pages with the same update time have no defined order. There is no cursor and no automatic walk over every page.
+- Rows carry no page body: `revision` in `--json` has no `body`, and `{{revision.body}}` in `--template` is empty. Read a body with `crowi get <path>`.
 - `--json` prints the server response unchanged. `--format template` without `--template` reads the same four fields from the raw page, so `lastUpdateUser` is a JSON object there; take the name with `{{lastUpdateUser.username}}`.
 - `--prefix` needs a server that supports `path_prefix`. If the response does not confirm the prefix, nothing is written to stdout and the command exits `7` with `server did not confirm literal prefix filtering; upgrade Crowi and retry`. Without `--prefix` (or with `--prefix /`) it works against older servers too.
 
