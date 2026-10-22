@@ -1,6 +1,7 @@
 import { Document, Model, Schema, Types, model } from 'mongoose';
 
 import type Crowi from 'src/crowi';
+import { isDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 
 /**
  * Permanent record that a refresh-token family was revoked. Refresh rows
@@ -24,8 +25,6 @@ export interface OAuthTokenFamilyRevocationModel extends Model<OAuthTokenFamilyR
 
 /** Deterministic `_id`: one record per (owner, family). UUIDs contain no `:`. */
 export const familyRevocationKey = (familyId: string, userId: Types.ObjectId): string => `${userId.toHexString()}:${familyId}`;
-
-const isDuplicateKeyError = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 11000;
 
 export default (_crowi: Crowi) => {
   const schema = new Schema<OAuthTokenFamilyRevocationDocument, OAuthTokenFamilyRevocationModel>(
