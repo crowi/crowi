@@ -152,6 +152,41 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 2
 fi
 
+# ---- tracing labels --------------------------------------------------------
+# When Codex traces to Langfuse (the tracing plugin's Stop hook reads these),
+# label each call with what made it, so the weekly budget can be broken down
+# by skill stage (the label), tier and caller. project/branch/agmsg use the
+# same tag names as the Claude Code session traces so the two can be joined.
+# Ignored when tracing is off; a value the caller already set is kept.
+if [ -z "${LANGFUSE_CODEX_TAGS:-}" ]; then
+  CR_TAGS="codex,codex-run,label:${LABEL//,/_}"
+  [ -n "$TIER" ] && CR_TAGS="$CR_TAGS,tier:$TIER"
+  # A worktree's own directory name says little; the main checkout names the repo.
+  CR_COMMON="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+  if [ -n "$CR_COMMON" ]; then
+    CR_TAGS="$CR_TAGS,project:$(basename "$(dirname "$CR_COMMON")")"
+    CR_BRANCH="$(git branch --show-current 2>/dev/null)"
+    [ -n "$CR_BRANCH" ] && CR_TAGS="$CR_TAGS,branch:${CR_BRANCH//,/_}"
+  fi
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    CR_LOCK="$(grep -l "^${CLAUDE_CODE_SESSION_ID}\." "$HOME"/.agents/skills/agmsg/run/actas.*.session 2>/dev/null | head -1)"
+    if [ -n "$CR_LOCK" ]; then
+      CR_ROLE="$(basename "$CR_LOCK" .session)"; CR_ROLE="${CR_ROLE#actas.}"
+      CR_TAGS="$CR_TAGS,agmsg:${CR_ROLE/__//}"
+    fi
+  fi
+  export LANGFUSE_CODEX_TAGS="$CR_TAGS"
+fi
+if [ -z "${LANGFUSE_CODEX_METADATA:-}" ]; then
+  LANGFUSE_CODEX_METADATA="$(CR_LABEL="$LABEL" CR_TIER="$TIER" CR_MODEL="$MODEL" CR_EFFORT="$EFFORT" CR_MODE="$MODE" node -e '
+    const e = process.env
+    const m = { codex_run_label: e.CR_LABEL, tier: e.CR_TIER, model: e.CR_MODEL, effort: e.CR_EFFORT, mode: e.CR_MODE,
+      caller_cwd: process.cwd(), claude_session_id: e.CLAUDE_CODE_SESSION_ID,
+      claude_account: (e.CLAUDE_CONFIG_DIR || "").replace(/\/+$/, "").split("/").pop() || ".claude" }
+    for (const k of Object.keys(m)) if (!m[k]) delete m[k]
+    process.stdout.write(JSON.stringify(m))' 2>/dev/null)" && export LANGFUSE_CODEX_METADATA || unset LANGFUSE_CODEX_METADATA
+fi
+
 mkdir -p "$(dirname "$OUT")"
 STDERR_FILE="$OUT.stderr"
 LOG_FILE="$OUT.log"
