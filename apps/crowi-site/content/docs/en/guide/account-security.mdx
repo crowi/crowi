@@ -20,7 +20,7 @@ Changing your password **signs out every other login session on the account**. I
 
 If you forget your password, the login screen can email you a reset link. A reset link expires after **one hour** and works **only once**. It is also bound to the address it was sent to, so if your account's email address changes after the link was sent, the old link stops working — request a new one.
 
-Resetting your password through the emailed link also signs out your other login sessions, and in addition **revokes every authorized app and every personal access token**. If you suspect your account was taken over, a reset locks out connected apps as well. An access token that was already issued still works until it expires (one hour by default).
+Resetting your password through the emailed link signs out your other login sessions and also **revokes every authorized app and every personal access token**. If you suspect your account was taken over, a reset locks out connected apps as well. An access token already issued to an app still works until it expires (one hour by default).
 
 When an administrator resets your password from the admin panel, every session is signed out and any outstanding reset link is invalidated, but authorized apps and personal access tokens are not revoked.
 
