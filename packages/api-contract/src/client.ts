@@ -890,13 +890,14 @@ const adminPageDeletionContractApp = new OpenAPIHono()
 
 /**
  * OAuth 2.0 authorization-server endpoints (RFC-0010 Phase 3) plus the
- * self-service OAuth session list/revoke endpoints — 10 routes. Kept on
+ * self-service OAuth session list/revoke endpoints — 11 routes. Kept on
  * its own chain (rather than extended onto the near-full
  * `appAuthMeUserChain`) to stay well under TS's instantiation-depth
  * ceiling, per the TS2589 mitigation documented in this file's header.
  */
 const oauthContractApp = new OpenAPIHono()
   .openapi(oauthRoutes.authorizeRoute, (c) => c.json(stubAuthorize, 200))
+  .openapi(oauthRoutes.authorizeDenyRoute, (c) => c.json(stubAuthorize, 200))
   .openapi(oauthRoutes.tokenRoute, (c) => c.json(stubToken, 200))
   .openapi(oauthRoutes.revokeRoute, (c) => c.json(stubRevoke, 200))
   .openapi(oauthRoutes.discoveryRoute, (c) => c.json(stubDiscovery, 200))

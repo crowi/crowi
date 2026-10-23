@@ -111,6 +111,63 @@ describe('Routes /api/oauth (Hono)', () => {
     return { code: code as string, verifier };
   };
 
+  const deny = (body: Record<string, unknown>) => request(app).post('/api/oauth/authorize/deny').set('Authorization', `Bearer ${webToken}`).send(body);
+
+  describe('POST /oauth/authorize/deny', () => {
+    it('returns the registered redirect_uri with error=access_denied and state, and no code', async () => {
+      const res = await deny({ client_id: 'crowi-cli', redirect_uri: REDIRECT, state: 'xyz' });
+      expect(res.status).toBe(200);
+      const url = new URL(res.body.redirectUri);
+      expect(url.origin + url.pathname).toBe(REDIRECT);
+      expect(url.searchParams.get('error')).toBe('access_denied');
+      expect(url.searchParams.get('state')).toBe('xyz');
+      expect(url.searchParams.has('code')).toBe(false);
+    });
+
+    it('rejects an unknown client (400 invalid_client)', async () => {
+      const res = await deny({ client_id: 'no-such-client', redirect_uri: REDIRECT });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_client');
+    });
+
+    it('rejects an unregistered redirect_uri without echoing it (400 invalid_request)', async () => {
+      const res = await deny({ client_id: 'crowi-cli', redirect_uri: 'https://evil.example/cb' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_request');
+      expect(JSON.stringify(res.body)).not.toContain('evil.example');
+    });
+
+    it('round-trips a state containing reserved characters, and omits state when not sent', async () => {
+      const state = 'a&b=c d#e/ü';
+      const res = await deny({ client_id: 'crowi-cli', redirect_uri: REDIRECT, state });
+      expect(res.status).toBe(200);
+      expect(new URL(res.body.redirectUri).searchParams.get('state')).toBe(state);
+
+      const noState = await deny({ client_id: 'crowi-cli', redirect_uri: REDIRECT });
+      expect(noState.status).toBe(200);
+      expect(new URL(noState.body.redirectUri).searchParams.has('state')).toBe(false);
+    });
+
+    it('is web-session only (403 for an OAuth bearer, 401 without a bearer)', async () => {
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user, scopes: ['pages:read'], clientId: 'crowi-cli' });
+      const forbidden = await request(app)
+        .post('/api/oauth/authorize/deny')
+        .set('Authorization', `Bearer ${oauthToken}`)
+        .send({ client_id: 'crowi-cli', redirect_uri: REDIRECT });
+      expect(forbidden.status).toBe(403);
+      expect(forbidden.body.error.code).toBe('FORBIDDEN');
+
+      const anon = await request(app).post('/api/oauth/authorize/deny').send({ client_id: 'crowi-cli', redirect_uri: REDIRECT });
+      expect(anon.status).toBe(401);
+    });
+
+    it('creates no authorization code', async () => {
+      const res = await deny({ client_id: 'crowi-cli', redirect_uri: REDIRECT });
+      expect(res.status).toBe(200);
+      expect(await Code().countDocuments({ userId: user._id })).toBe(0);
+    });
+  });
+
   describe('POST /oauth/authorize', () => {
     it('issues an authorization code with state echoed onto the redirect', async () => {
       await authorizeOk();

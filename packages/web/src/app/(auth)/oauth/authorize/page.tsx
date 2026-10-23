@@ -28,8 +28,10 @@ import { ConsentCard } from './consent-card';
  *    renders and waits for the user to click Authorize/Cancel.
  *
  * The server returns the fully-formed callback URL (`redirectUri`) which we
- * navigate to. On denial we bounce back to the registered redirect_uri with
- * `error=access_denied` (RFC 6749).
+ * navigate to. Denial goes through the server too (`POST /oauth/authorize/deny`):
+ * it validates the redirect_uri against the client's registration and builds
+ * the `error=access_denied` URL, so the page only ever navigates to a
+ * server-verified URL and never to the raw query-string `redirect_uri`.
  *
  * Lives under `(auth)`, so an unauthenticated user is redirected to login
  * first and returns here via `continue`.
@@ -97,17 +99,24 @@ function ConsentScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestValid, isTrusted]);
 
-  const handleDeny = () => {
-    // Bounce back to the (untrusted-but-validated-by-the-user) redirect_uri
-    // with the standard denial error. If the URI is unusable we just stay.
-    if (!redirectUri) return;
-    try {
-      const url = new URL(redirectUri);
-      url.searchParams.set('error', 'access_denied');
-      if (state != null) url.searchParams.set('state', state);
-      window.location.href = url.toString();
-    } catch {
+  const handleDeny = async () => {
+    if (clientId === '' || redirectUri === '') {
       setError(m['oauth.consent.error_invalid_request']());
+      return;
+    }
+    setError(null);
+    try {
+      const response = await apiClient.oauth.authorize.deny.$post({
+        json: { client_id: clientId, redirect_uri: redirectUri, ...(state != null ? { state } : {}) },
+      });
+      if (response.status === 200) {
+        const body = await response.json();
+        window.location.href = body.redirectUri;
+        return;
+      }
+      setError(response.status === 400 ? m['oauth.consent.error_invalid_request']() : m['oauth.consent.error_failed']());
+    } catch {
+      setError(m['oauth.consent.error_failed']());
     }
   };
 

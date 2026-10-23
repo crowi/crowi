@@ -9608,6 +9608,116 @@ paths:
                       - message
                 required:
                   - error
+  /oauth/authorize/deny:
+    post:
+      tags:
+        - oauth
+      security:
+        - bearerAuth: []
+      summary: >-
+        Build the access_denied redirect for a user who cancelled the consent
+        screen
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_id:
+                  type: string
+                  minLength: 1
+                redirect_uri:
+                  type: string
+                  minLength: 1
+                state:
+                  type: string
+              required:
+                - client_id
+                - redirect_uri
+      responses:
+        '200':
+          description: >-
+            Denial accepted; `redirectUri` carries `error=access_denied` +
+            `state`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirectUri:
+                    type: string
+                required:
+                  - redirectUri
+        '400':
+          description: >-
+            Unknown client or unregistered redirect_uri (RFC 6749 §4.1.2.1:
+            never redirect)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - invalid_request
+                      - invalid_client
+                      - invalid_grant
+                      - unauthorized_client
+                      - unsupported_grant_type
+                      - invalid_scope
+                      - access_denied
+                      - authorization_pending
+                      - slow_down
+                      - expired_token
+                  error_description:
+                    type: string
+                required:
+                  - error
+        '403':
+          description: Authorization responses can only be produced from a web session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - FORBIDDEN
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
   /oauth/token:
     post:
       tags:

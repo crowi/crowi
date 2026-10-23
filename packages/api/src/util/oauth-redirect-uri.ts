@@ -72,3 +72,20 @@ export function isRedirectUriAllowed(client: Pick<OAuthClientDocument, 'redirect
   // Non-loopback: exact string match against a registered URI.
   return client.redirectUris.includes(requestedUri);
 }
+
+/**
+ * Builds the redirect URL for an authorization response (success or
+ * `access_denied`). Authorization-response parameters are attached here and
+ * nowhere else, so a parameter added to every response (e.g. RFC 9207 `iss`)
+ * is a one-place change.
+ *
+ * The caller must already have a true `isRedirectUriAllowed` result for
+ * `redirectUri` (which guarantees `new URL` succeeds); this does not validate.
+ */
+export function buildAuthorizationResponseUri(redirectUri: string, params: Record<string, string | undefined>): string {
+  const url = new URL(redirectUri);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
