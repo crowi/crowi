@@ -16,7 +16,7 @@ catalog:
   "@types/jest": ^30.0.0
   jest-environment-node: ^30.5.0
   ts-jest: ^29.4.12
-  zod: ^4.4.3
+  zod: ^4.6.7
   "@typescript-eslint/eslint-plugin": 8.71.1
   "@typescript-eslint/parser": 8.71.1
   typescript-eslint: 8.71.1
