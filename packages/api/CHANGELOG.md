@@ -1,5 +1,18 @@
 # @crowi/api
 
+## 2.0.0-alpha.27
+
+### Patch Changes
+
+- 6acd1c6: Update the dependencies zod to 4.6.7 and nodemailer to 10.2.1, and move undici, body-parser and fast-uri to patched releases. These fix advisories in those packages: memory exhaustion in zod when validating oversized constrained collections, recipient parsing errors in nodemailer's address parser, denial of service in body-parser through trailing bytes after a compressed request body, denial of service in undici through excessive content encodings or an unbounded event stream along with a Subresource Integrity bypass, and URI parsing errors in fast-uri.
+- dbebd0a: Cancelling the OAuth consent screen no longer redirects to an unregistered redirect URI; the server now validates the redirect URI and builds the access_denied redirect, and the screen shows an error instead of navigating when the request is invalid.
+- 4506c88: OAuth refresh tokens are now grouped by an immutable per-sign-in family id. Revoking an authorized app (or reuse detection) revokes every refresh token of that sign-in at once, including tokens that fell out of the rotation chain and tokens created by a refresh still in flight, without walking the rotation history. The authorized-apps list also gets a dedicated index. An already-issued access token stays valid until it expires (one hour by default).
+  
+  Upgrade note: on boot, every existing refresh token without a family id is revoked, so existing OAuth clients such as the CLI must sign in once again after upgrading. Stop all old replicas before starting the new version.
+- 15c3ae1: Resetting a password through the emailed link now also revokes the account's OAuth sign-ins (such as the CLI and MCP connections) and its personal access tokens, not only its web sessions. An OAuth access token that was already issued keeps working until it expires (one hour by default).
+- Updated dependencies [dbebd0a]
+  - @crowi/api-contract@2.0.0-alpha.27
+
 ## 2.0.0-alpha.26
 
 ### Patch Changes
