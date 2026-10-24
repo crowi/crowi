@@ -66,29 +66,17 @@ public enum RenderedAstLinkKind: Equatable {
 /// How an `inlineCode` run is drawn — resolved by the hosting view, because
 /// the right answer depends on the type it sits in.
 ///
-/// ## Why there is no background box any more
+/// ## Why the fill is drawn by a renderer, not the run
 ///
 /// A run's `backgroundColor` in an `AttributedString` fills the whole LINE BOX
-/// (full ascent to full descent) and cannot be inset or padded. On a Crowi page
-/// that is not an occasional accent: the content is Japanese prose carrying
-/// several code spans per line (`packages/web`, `revision.renderedAst`, path
-/// fragments), and a run of fills at line-box height against CJK glyphs — which
-/// have no ascenders or descenders and therefore sit well inside that box —
-/// turns a paragraph into horizontal stripes. Plain-Japanese paragraphs read
-/// visibly calmer than code-dense ones on the same screen for no reason other
-/// than this.
-///
-/// So body code is distinguished by TYPE instead of by fill: monospaced, and a
-/// touch smaller than the text around it so it sits level with the CJK rather
-/// than looming over it. It keeps the body's own colour on purpose — a
-/// `mutedForeground` variant was rendered and rejected, because on this content
-/// code IS the substance of the sentence and greying it out turned code-dense
-/// paragraphs into washed-out holes in the page.
-///
-/// The fill is what made the rhythm uneven, and dropping it also fixes the
-/// other half of the problem: a fill cannot look broken when a long token wraps
-/// across a line end if there is no fill (a wrapped `crowi.config.json` in a
-/// heading used to leave two separate half-boxes).
+/// (full ascent to full descent, body leading included) and cannot be inset or
+/// rounded. Against Japanese prose carrying several code spans per line that
+/// turns a paragraph into horizontal stripes. The web's pill (`bg-muted`,
+/// `rounded-md`, `0.85em`) is instead drawn by `RenderedAstInlineCodePillRenderer`
+/// from each code run's own glyph bounds, so it hugs the code and splits
+/// cleanly when a long token wraps across a line end, the way the web's does.
+/// `TextRenderer` is iOS 18+; iOS 17 keeps the type-only distinction
+/// (monospaced, a touch smaller) with no fill.
 public enum RenderedAstInlineCodeStyle: Equatable {
     /// Inline code inside BODY text — explicitly sized at
     /// `CrowiBodyMetrics.inlineCodeSize`, so it sits level with the Japanese
@@ -105,6 +93,42 @@ public enum RenderedAstInlineCodeStyle: Equatable {
         switch self {
         case .body: return .system(size: CrowiBodyMetrics().inlineCodeSize, design: .monospaced)
         case .heading: return nil
+        }
+    }
+}
+
+/// Marks a `Text` slice as inline code for `RenderedAstInlineCodePillRenderer`.
+@available(iOS 18.0, macOS 15.0, *)
+struct RenderedAstInlineCodeRun: TextAttribute {}
+
+/// Draws the web's inline-code pill behind every `RenderedAstInlineCodeRun`.
+@available(iOS 18.0, macOS 15.0, *)
+struct RenderedAstInlineCodePillRenderer: TextRenderer {
+    func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
+        // Every pill first, then every glyph: the horizontal outset reaches
+        // into the neighbouring space and must never paint over its text.
+        for line in layout {
+            for run in line where run[RenderedAstInlineCodeRun.self] != nil {
+                let bounds = run.typographicBounds.rect
+                let rect = bounds.insetBy(dx: -bounds.height * 0.18, dy: -bounds.height * 0.06)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: bounds.height * 0.28), with: .color(CrowiTheme.muted))
+            }
+        }
+        for line in layout {
+            ctx.draw(line)
+        }
+    }
+}
+
+/// Attaches the pill renderer where the OS has `TextRenderer`.
+struct RenderedAstInlineCodePillModifier: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled, #available(iOS 18.0, macOS 15.0, *) {
+            content.textRenderer(RenderedAstInlineCodePillRenderer())
+        } else {
+            content
         }
     }
 }

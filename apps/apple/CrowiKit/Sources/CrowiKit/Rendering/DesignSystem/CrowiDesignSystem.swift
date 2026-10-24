@@ -390,12 +390,11 @@ public enum CrowiTypography {
     public static let bodyMajorHeadingTopPaddingRatio: CGFloat = 0.7
     public static let bodyMinorHeadingTopPaddingRatio: CGFloat = 0.35
 
-    /// An inline `code` run's type size relative to the text around it.
-    /// Monospaced Latin at the same nominal size as CJK reads a step too big
-    /// beside it (wider advances, taller x-height), so it is set slightly
-    /// smaller — enough to sit level with the surrounding line, not enough to
-    /// look like a footnote.
-    public static let bodyInlineCodeSizeRatio: CGFloat = 0.92
+    /// An inline `code` run's type size relative to the text around it — the
+    /// web's `0.85em`. Monospaced Latin at the same nominal size as CJK reads
+    /// a step too big beside it (wider advances, taller x-height), and inside
+    /// the pill it has to leave room for the fill.
+    public static let bodyInlineCodeSizeRatio: CGFloat = 0.85
 }
 
 /// The rendered page BODY's vertical rhythm, resolved for one text size.

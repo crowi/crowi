@@ -100,7 +100,7 @@ final class CrowiBodyTypographyTests: XCTestCase {
             XCTAssertLessThan(metrics.codeBlockLineSpacing, metrics.lineSpacing, "at \(size)pt a code block is as airy as Japanese prose")
             XCTAssertGreaterThan(metrics.codeBlockLineSpacing, 0, "at \(size)pt code-block lines have no leading at all")
             XCTAssertLessThan(metrics.inlineCodeSize, size, "at \(size)pt inline code is not smaller than the text around it")
-            XCTAssertGreaterThan(metrics.inlineCodeSize, size * 0.85, "at \(size)pt inline code has shrunk into a footnote")
+            XCTAssertEqual(metrics.inlineCodeSize, size * 0.85, accuracy: 0.001, "at \(size)pt inline code is not the web's 0.85em")
         }
     }
 
@@ -149,13 +149,13 @@ final class CrowiBodyTypographyTests: XCTestCase {
         )
     }
 
-    // MARK: - Inline code: distinguished by type, never by a fill
+    // MARK: - Inline code: the pill is drawn, never a run fill
 
     /// The striping fix. A run's `backgroundColor` fills the whole line box and
     /// cannot be padded, so on Japanese prose carrying several code spans per
     /// line it turned paragraphs into horizontal stripes — and split into two
     /// half-boxes whenever a long token wrapped. No inline-code run may carry
-    /// one.
+    /// one; the pill comes from `RenderedAstInlineCodePillRenderer` instead.
     func testInlineCodeCarriesNoBackgroundFillInEitherContext() {
         for style in [RenderedAstInlineCodeStyle.body, .heading] {
             let result = RenderedAstInlineRenderer(codeStyle: style).render([
@@ -189,6 +189,16 @@ final class CrowiBodyTypographyTests: XCTestCase {
             "body code must be sized to sit level with the Japanese around it"
         )
         XCTAssertNil(headingRuns.first?.font, "heading code must keep the heading's own size")
+    }
+
+    /// Inline code is drawn with the web's pill; the degrade chips keep their
+    /// own fill and must not get a second one on top.
+    func testOnlyPlainCodeRunsCarryThePill() {
+        let code = RenderedAstInlineRenderer().render([RenderedAstNode(kind: .inlineCode(value: "plugins"))]).attributed
+        let chip = RenderedAstInlineRenderer().render([RenderedAstNode(kind: .html(value: "<iframe>"))]).attributed
+
+        XCTAssertEqual(code.runs.map(RenderedAstInlineTextView.carriesCodePill), [true])
+        XCTAssertFalse(chip.runs.contains(where: RenderedAstInlineTextView.carriesCodePill))
     }
 
     /// The degrade chips are the ONE thing that keeps a fill: `[unavailable]`

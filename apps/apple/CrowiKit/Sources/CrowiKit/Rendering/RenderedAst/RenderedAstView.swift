@@ -400,22 +400,43 @@ struct RenderedAstInlineTextView: View {
             mathIsDark: colorScheme == .dark,
             codeStyle: codeStyle
         ).render(nodes)
-        if let label = result.accessibilityLabel {
-            Self.composedText(result)
-                .accessibilityLabel(Text(label))
-        } else {
-            Self.composedText(result)
+        Group {
+            if let label = result.accessibilityLabel {
+                Self.composedText(result)
+                    .accessibilityLabel(Text(label))
+            } else {
+                Self.composedText(result)
+            }
         }
+        .modifier(RenderedAstInlineCodePillModifier(enabled: codeStyle == .body))
     }
 
     /// Concatenates the pieces into ONE `Text`: attributed runs plus
     /// baseline-aligned inline-math images (Phase 5) — keeping line
     /// wrapping/selection semantics of a single text run.
+    /// Splits the `inlineCode` runs out of `run` so each carries
+    /// `RenderedAstInlineCodeRun`, the marker the pill renderer draws behind.
+    private static func codeMarkedText(_ run: AttributedString) -> Text {
+        guard #available(iOS 18.0, macOS 15.0, *), run.runs.contains(where: carriesCodePill) else { return Text(run) }
+        return run.runs.reduce(Text(verbatim: "")) { composed, piece in
+            let slice = Text(AttributedString(run[piece.range]))
+            return carriesCodePill(piece)
+                ? composed + slice.customAttribute(RenderedAstInlineCodeRun())
+                : composed + slice
+        }
+    }
+
+    /// Code runs get the pill; the degrade chips are code-styled too but keep
+    /// their own line-box fill, which a pill on top would only muddy.
+    static func carriesCodePill(_ run: AttributedString.Runs.Run) -> Bool {
+        run.inlinePresentationIntent?.contains(.code) == true && run.backgroundColor == nil
+    }
+
     static func composedText(_ result: RenderedAstInlineResult) -> Text {
         result.pieces.reduce(Text(verbatim: "")) { composed, piece in
             switch piece {
             case .attributed(let run):
-                return composed + Text(run)
+                return composed + codeMarkedText(run)
             case .math(let run):
                 return composed + Text(Image(platformImage: run.image)).baselineOffset(run.baselineOffset)
             }
@@ -516,9 +537,15 @@ struct RenderedAstListView: View {
     let items: [RenderedAstNode]
     let context: RenderedAstRenderContext
 
-    /// Leading indent per nesting depth — visually equivalent to the old
-    /// marker-column offset (~marker width + 8pt spacing).
-    private static let indentPerDepth: CGFloat = 20
+    /// The marker column plus its gap to the content: 24pt, the web list's
+    /// `pl-6`. Nesting indents by the same amount, so a sub-list's marker
+    /// sits under its parent item's text the way it does on the web.
+    private static let markerColumnWidth: CGFloat = 14
+    private static let markerSpacing: CGFloat = 10
+    private static let indentPerDepth: CGFloat = markerColumnWidth + markerSpacing
+    /// The web list's `marker:text-foreground/40`.
+    private static let markerColor = CrowiTheme.foreground.opacity(0.4)
+
     /// The decoder admits up to ~31 list levels (`maxTreeDepth` 64 / 2 nodes
     /// per level); cap the visual indent so pathological depth can't squeeze
     /// the content column to nothing on a phone width.
@@ -535,7 +562,7 @@ struct RenderedAstListView: View {
                     // values); Dynamic Type is applied here, so a list keeps
                     // the same rhythm as the paragraphs around it at every size.
                     .padding(.top, CGFloat(row.topSpacing) * metrics.dynamicTypeScale)
-                    .padding(.leading, min(CGFloat(row.depth) * Self.indentPerDepth, Self.maxIndent))
+                    .padding(.leading, min(CGFloat(row.depth) * Self.indentPerDepth * metrics.dynamicTypeScale, Self.maxIndent))
             }
         }
     }
@@ -543,9 +570,10 @@ struct RenderedAstListView: View {
     @ViewBuilder
     private func rowView(_ row: RenderedAstListFlattener.Row) -> some View {
         if let marker = row.marker {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            let scale = CrowiBodyMetrics().dynamicTypeScale
+            HStack(alignment: .firstTextBaseline, spacing: Self.markerSpacing * scale) {
                 markerView(marker)
-                    .foregroundStyle(.secondary)
+                    .frame(minWidth: Self.markerColumnWidth * scale, alignment: .trailing)
                     // A continuation chunk (item content AFTER its nested
                     // sub-list) reserves the marker column invisibly so it
                     // aligns with the item's first-row content.
@@ -567,12 +595,22 @@ struct RenderedAstListView: View {
             // same list arrives as null (three-valued contract,
             // `golden-corpus/core-blocks.json`).
             Image(systemName: checked ? "checkmark.square.fill" : "square")
+                .foregroundStyle(.secondary)
                 .accessibilityLabel(checked ? "completed" : "not completed")
         case .ordered(let number):
             Text("\(number).")
                 .monospacedDigit()
+                .foregroundStyle(Self.markerColor)
         case .bullet:
-            Text("•")
+            // A drawn disc, not a `•` glyph: the glyph is about half the
+            // web's `list-disc` marker. A shape has no text baseline, so the
+            // guide hangs its centre at CJK mid-height above the row's.
+            let bodySize = CrowiBodyMetrics().bodyPointSize
+            Circle()
+                .fill(Self.markerColor)
+                .frame(width: bodySize * 0.34, height: bodySize * 0.34)
+                .alignmentGuide(.firstTextBaseline) { d in d.height / 2 + bodySize * 0.36 }
+                .accessibilityHidden(true)
         }
     }
 }
