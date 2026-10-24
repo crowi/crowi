@@ -39,6 +39,7 @@ const NEXT_WARN = [
   'no-css-tags',
   'no-head-element',
   'no-img-element',
+  'no-location-assign-relative-destination',
   'no-page-custom-font',
   'no-styled-jsx-in-document',
   'no-title-in-document-head',
