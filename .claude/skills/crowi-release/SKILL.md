@@ -71,6 +71,18 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
 **ここで必ず止まる。** merge はユーザーの明示指示があった場合のみ
 `gh pr merge <N> --squash`(以降は CI が publish → tag → image → 告知まで自動)。
 
+**材料を出したら、merge を待つ見張りを張る。** ユーザーは GitHub で自分で merge することが多いので、merge の指示が来るのを待つだけにしない:
+
+```bash
+Bash({ command: 'bash .claude/scripts/pr-merge-watch.sh <N>', description: 'Version PR の merge を待つ',
+       run_in_background: true, timeout: 2147483647 })
+```
+
+- `MERGED <sha>` で終わったら、確認を挟まずに続ける: `git pull --ff-only origin main` → `bash .claude/scripts/ci-watch.sh <sha>` を background で動かして Release / Docker を待つ → green なら `git fetch --tags origin` で Release が作った tag を取ってから、モード 2 (verify) を wiki の記録まで行う (取らないと `git describe` が前回の tag を返す)。進めることだけを 1 行で伝え、「merge してよいですか」「verify しますか」とは聞かない。
+- `CLOSED` で終わったら報告して止まる。
+- **merge を求める文を出す前に `gh pr view <N> --json state` を見る。** すでに MERGED なら求めずに上の続きへ進む。
+- CI が red のときは verify に進まず、失敗した run を報告する (再 publish はしない — 鉄則)。
+
 ## モード 2: verify(タグ後 — 成果物は read-only、wiki の記録だけ書く)
 
 対象 tag(既定 = `git describe --tags --abbrev=0 --match 'v*'` on latest main)について:
@@ -114,7 +126,17 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
 
    **index の 1 行 (変更点の列) は 200 文字以内**に収める。表は「自分に関係あるか」を判断して詳細ページへ入るための目次で、説明は詳細ページの仕事である。読者の行動が変わるもの (破壊的変更・再サインイン・セキュリティ) を先に、何が変わるかだけを書き、残りは語を並べる程度に留める。**手順・理由・括弧の補足は書かない** (「古いレプリカを止めてから起動」「Crowi は未使用」などは詳細ページに置く)。依存更新は主なものを 1 つ挙げて「ほか」でまとめる。
 
-   書き込む前に変更点の列だけを `printf '%s' "<変更点>" | wc -m` で数え、200 を超えたら削ってから書く。目安で書くと、詳細ページの内容を持ち込んで毎リリース伸びる。
+   index の行は手で挿入せず、必ず次の script で足す。200 文字を超えると何も書かずに exit 1 になるので、そのときは要約を削ってからやり直す (上限を書いておくだけでは、詳細ページの内容を持ち込んで毎リリース伸びた):
+
+   ```bash
+   crowi -p crowi-team-wiki get /crowi/release/ > <scratch>/index.md
+   node .claude/skills/crowi-release/scripts/add-release-index-row.mjs \
+     --in <scratch>/index.md --out <scratch>/index.new.md \
+     --version v2.0.0-alpha.<N> --page /crowi/release/<YYYY>/<MM>/<DD>/alpha-<N> \
+     --date <YYYY-MM-DD> --summary "<変更点>"
+   diff <scratch>/index.md <scratch>/index.new.md          # 追加 1 行だけであること
+   crowi -p crowi-team-wiki update /crowi/release/ --file <scratch>/index.new.md
+   ```
 
    依存パッケージの脆弱性対応を書くときは主語を取り違えない(`crowi-changesets` の
    「依存パッケージの脆弱性対応の書き方」が正本)。詳細ページと index の 1 行の両方に
