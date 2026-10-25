@@ -34,14 +34,12 @@ RFC の執筆にも同じ規則を適用する。
 
 ## 核心: 2 Workflow + 対話ゲート
 
-設計の収束(案の選択・RFC/spec 判断・open question の解決)は **ユーザーとの対話**で、
-Workflow には追い出せない(背景実行は途中で `AskUserQuestion` を出せない)。だから
-crowi-feature と同じく **人間ゲートを Workflow の外** に置く。
+設計の収束(案の選択・RFC/spec 判断・open question の解決)は main が行い、Workflow には追い出さない(背景実行は途中でユーザーに問えない)。だから crowi-feature と同じく **ゲートを Workflow の外** に置く。ゲートは推奨案で決めて進むのが既定で、ユーザーにしか答えられない点があるときだけ wiki に書いて待つ(§起動フロー 3)。
 
 ```
 /crowi-design <topic>
   └ Workflow A (explore-frame): 調査 ×3 並列 → 設計案 + RFC/spec 判定 → brief 保存 + サマリ返却
-  ── GATE (main + AskUserQuestion): 案 / 出力種別 / open Q を確定 ──
+  ── GATE (main): 案 / 出力種別 / open Q を推奨で確定(ユーザー判断が要る点だけ wiki に書いて待つ) ──
   └ Workflow B (review-document): 執筆 → 敵対的レビュー(spec ×4 / RFC ×3) → 是正ループ → ready 確定
   → main: doc + verdict + 次の一手を報告
 ```
@@ -114,12 +112,11 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
    ```
    返り値 = FRAME(`approaches` / `recommendedOutput` / `openQuestions` / `briefPath` / `scope`)。
    `status: 'FAILED'` なら reason を提示して止める。
-3. **ゲート**: `approaches` を簡潔に提示し、`AskUserQuestion` で確定する(推奨を先頭・末尾に
-   「(推奨)」)。最大 4 問なので優先順に:
-   - どの案で進めるか(options = approaches の name)
-   - RFC か spec か(`outputHint` が指定済みならこの問いは省略。default = `recommendedOutput`)
-   - 主要な open question(残り枠で。各 option に architect の recommendation を先頭表示)
-   - 答えきれない open question は **「open のまま」** として持ち越す(doc に明記される)。
+3. **ゲート**: 案の選択と open question は、architect の recommendation で自分で決めて Workflow B へ進む。決めた内容と理由は最終報告に書く。「どの案にしますか」とユーザーに聞いて止まらない。
+   - RFC か spec か: `outputHint` が指定済みならそれ、無ければ `recommendedOutput`。
+   - 答えの出ない open question は **「open のまま」** として持ち越す(doc に明記される)。
+   - **ユーザーにしか答えられない点**(製品仕様・優先順位・外部事情)があるときだけ止まる。そのときも `AskUserQuestion` に詰めず、wiki の `/crowi/spec/feature-<slug>` に書いて読んでもらう。載せるのは、判断が要る点(番号つき)、各案の利点・欠点と比較、実コードで取り直した現状(行番号つき)、ゲート不要で確定済みの決定、最初の実装スライス、非目標。書き込みは CLAUDE.md の wiki 書き込み手順(ファイル経由・書いたら照合)に従い、「判断 N 件を wiki に書いた」と伝えて回答を待つ。回答が来てから Workflow B を起動する。
+   - **`scope` が large(目安: 800 行・AC 40 件を超えそう)なら、Workflow B の前に leaf へ割る。** 境界は「その部分だけ性質が違うところ」に引く。レビューを回してから割ると、同じ契約を書き直す箇所の伝播漏れで指摘が収束しない。
 4. **Workflow B を起動**:
    ```
    Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
@@ -154,7 +151,7 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
    - **DONE**(verdict APPROVED)→ doc を提示:
      - **spec** → `.feature-state/specs/feature-<slug>.md`(敵対的レビュー済み)。
        次の一手: **`/crowi-feature feature-<slug>`** で実装へ(または `/crowi-kickoff`)。
-       あわせて **「wiki に publish するか」を確認**(一文で可)。publish する場合:
+       **wiki への publish は、ユーザーから依頼があったときだけ行う。** 小さい spec では publish するかも聞かない(作業中の正本は `.feature-state/specs/` で足りる)。scope が large の spec や RFC と並走する spec のときだけ、「じっくり読む用に wiki に publish しますか」と一言添える。publish する場合:
        `crowi_get_page` で `/crowi/spec/feature-<slug>` の存在を確認 → 無ければ
        `crowi_create_page`(body = spec 全文そのまま)、有れば revision_id を取って
        `crowi_update_page`(楽観ロック。409 は再取得して 1 回リトライ)。

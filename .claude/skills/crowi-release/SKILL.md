@@ -89,6 +89,12 @@ Bash({ command: 'bash .claude/scripts/pr-merge-watch.sh <N>', description: 'Vers
 
 1. **CI 完走**: `gh run list --workflow Release --limit 1` と
    `gh run list --workflow Docker --limit 1` が success。
+   **Release がタグ push の拒否で落ちていたら、Release workflow を再実行しない。** タグの指すコミットの `.github/workflows/` がブランチ先端と食い違うと (Version PR の merge と workflow を変える別 PR が同時に入ったとき)、GitHub はその ref 作成に `Workflows: write` を要求して拒否する。npm publish はその前に成功しているので、再実行しても changesets が `published=false` を返し、tag・GitHub Release・Docker がすべて skip される。復旧は手で、ユーザーの承認を得てから次の順に行う (force は使わない):
+   ```bash
+   git push --atomic origin <拒否された tag ...>
+   gh release create <tag> --verify-tag --notes-file <集約ノート>
+   gh workflow run docker.yml -f version=<tag> -f ref=<tag> -f announce=true
+   ```
 2. **npm**: 公開パッケージを列挙して各バージョンを確認。一覧は**ハードコードしない**
    (workspace が正本):
    ```bash

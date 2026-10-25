@@ -157,6 +157,11 @@ pnpm lint                                 # errors=0 必須
 bash .claude/skills/_shared/e2e-gate.sh --cached
 ```
 
+ゲートの結果を退行と判断する前に、次の 2 つを確かめる。どちらも製品のコードは正しいのに壊れて見える形で、merge のたびに踏みうる。
+
+- **型やテストが広範囲に落ちたら、workspace lib の `dist` が merge 前のままでないかを見る。** merge が `src` に export を足した lib (`@crowi/api-contract`・`@crowi/plugin-api`・`@crowi/collab` など) は、ビルドし直すまで `dist` に新しい export が無い。症状は `TS2305: Module '"@crowi/<lib>"' has no exported member ...` や、テストの `Cannot destructure property 'middleware' of 'undefined'`。名指しされた lib を `pnpm --filter <lib> build` してから回し直す。
+- **`Test Suites: N skipped` が出たら `docker ps` で `crowi-test-*` が生きているかを見る。** 専用の test DB / Redis を要求する suite は、コンテナが無いと失敗せずに skip され、exit 0 のまま緑に見える。落ちていれば main worktree から、落ちているサービスだけを名指しして起こす(例 `docker compose up -d crowi-test-mongodb crowi-test-redis`。素の `up -d` は他 project 所有の固定名と衝突する)。
+
 e2e を回すかどうかの判断はこのヘルパー 1 箇所にのみ存在する — ここで `packages/e2e/**` の有無を独自に判定し直さない。`--cached` を渡すのは、この no-commit merge の最中は Step 3.3 の注記どおり `HEAD` がまだ main を指したままで `main..HEAD` が常に空になり使えないため — staged (= merge で取り込む) diff を見るには `--cached` が要る。出力行 (`RUN: <理由>` / `SKIP: <理由>`) をそのまま読み、**`SKIP:` で始まる行を得られたときだけ skip、それ以外 (`RUN:` はもちろん、出力を得られなかった場合も含む) はすべて run** として扱う(ヘルパーの失敗が skip を意味してはならない)。run のときだけ e2e を選択実行して green:
 
 ```bash
