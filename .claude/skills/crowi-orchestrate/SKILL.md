@@ -8,7 +8,8 @@ description: |
   (D) GitHub Dependabot security alerts を確認して新規 advisory のみ報告する、
   (E) 統合 signal の立っていない停滞 worktree を検知して報告する、
   (F) flake-report が起票した flaky-test issue の新規/更新を検知して報告する、
-  の 6 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
+  (G) main の基盤 (skill・hook・workflow・lockfile) の変更を、まだ取り込んでいない worktree の role に知らせる、
+  の 7 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
   commit しない・dep を自動 bump しない・詰まったら ping して待つ。
   キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review, dependabot, security, 停滞, stalled, 統合漏れ, flaky, flake-report, flaky-test
 ---
@@ -35,7 +36,7 @@ skill。単発 (`/crowi-orchestrate`) でも動く。6 系統 (A〜F) を順に�
 
 ```
 Bash({ command: 'pgrep -f "^bash .*orchestrate-watch.sh --until-event" >/dev/null && echo already-running || exec bash .claude/scripts/orchestrate-watch.sh --until-event',
-       description: 'orchestrate watch (A/C/D/E/F lanes)', run_in_background: true })
+       description: 'orchestrate watch (A/C/D/E/F/G lanes)', run_in_background: true })
 ```
 
 終了通知が来たら、出力の各行を下表どおりに処理し、同じコマンドで起動し直す。**Monitor では張らない**: Claude Code 2.1.271 以降の Monitor は最長 30 分で必ず期限切れになり(`persistent` は廃止)、期限切れのたびに何も起きていなくてもモデルを起こす。
@@ -49,6 +50,7 @@ event → 対応(各 lane の実行手順・鉄則は下記の従来定義のま
 | `REVIEW_THRESHOLD: <n> impl commits since <sha>` | C | `/crowi-review <sha>..main` → 完了後 `lastReviewedMainSha` を更新 |
 | `NEW_DEPENDABOT: #<n> <sev> <pkg>` | D | 報告(fix は `/crowi-deps`)。`knownDependabotAlerts` の更新は act 時 |
 | `NEW_FLAKY_ISSUE: #<n> <title>` / `UPDATED_FLAKY_ISSUE: #<n> <title>` | F | 報告のみ(fix は manager 判断で `/crowi-fix`)。`knownFlakyTestIssues` の更新は act 時 |
+| `MAIN_INFRA_CHANGED: <sha> [<areas>] -> <ids>` | G | 列挙された worktree の role に main の取り込みを頼む(下記 G) |
 
 B(spec groom)は分析仕事なので watch に含めない — 単発 `/crowi-orchestrate` で
 on-demand 実行する。
@@ -317,11 +319,33 @@ act 後(報告した後)に `knownFlakyTestIssues` を **現況の open flaky-te
 (`[{number, updatedAt}]`)で常に上書き**する(D の後始末と同じ、open ⇄ known の集合差で
 次回の新規/更新を判定する)。
 
+## G. main の基盤の変更を worktree に配る (行動系)
+
+worktree のセッションは、自分の checkout にある skill・hook・workflow・changeset の設定・lockfile で動く。main でそれらを変えても、worktree が main を取り込むまで届かない。G は、main の新しい commit がそれらに触れたとき、まだその commit を含んでいない worktree を列挙する。
+
+- 対象のパス: `.claude/**`(skills)、`.github/workflows/**`(workflows)、`lefthook.yml`(hooks)、`.changeset/config.json`(changesets)、`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml`(deps)。新しい `.changeset/*.md` はリリースノートなので対象外。
+- 最初の 1 回は現在の main を起点にするだけで、過去の commit は報告しない。
+
+### 対応
+
+1. event に並んだ id ごとに、`.feature-state/orchestrate-state.json` の `mainSyncHold`(id の配列)を見る。含まれる id には送らない。最終 QA の途中など、取り込むと困る worktree をユーザーの指示で入れておく。
+2. 送る前に、送る id と送らない id (理由つき) を 1 行で manager の報告に出す。確認は待たない。
+3. 送る id それぞれの role に agmsg で送る。role は kickoff と同じく spec id:
+
+```bash
+~/.agents/skills/agmsg/scripts/send.sh crowi manager <id> \
+  "main の <sha> が <areas> を変えました (<commit の subject>)。ひと段落したら main を取り込み、変わった手順に合わせてください。取り込みが作業の途中で困る場合は manager に返信してください。"
+```
+
+- 同じ worktree に複数の commit が続いたら 1 通にまとめる (commit を列挙する)。
+- worktree のセッションが動いていない (role が agmsg に居ない) ときは送らずに、報告にその id を書く。
+- worktree の作業そのものには割り込まない。取り込む時機は worktree 側が決める。
+
 ## 出力
 
 - A で何かが起きた (integrate した / 詰まった / stale signal)、B で新規に ready / stale /
   化石 task が出た、C で review を実行した (指摘あり)、D で新規 advisory が出た、
-  E で停滞の出入りがあった、または F で flaky-test issue の新規/更新があった場合のみ、
+  E で停滞の出入りがあった、F で flaky-test issue の新規/更新があった、または G で main の取り込みを頼んだ場合のみ、
   簡潔に報告。
 - **staleness warnings**(B の `WARN:`)はそれ単独では出力条件にしない。`WARN:` は再 ground されるまで毎回の validation で出続けるので、条件に含めると orchestrate が毎 tick 報告し続け、「新規イベントのみ / 変化なし」の契約を壊す。B が ready / stale を新規報告するときに、その spec id の `WARN:` があれば**添えて**出す(spec id ごとにグループ化した raw `WARN:` 行)。
 - どれも変化なしなら「変化なし」一言で終える (毎 tick の冗長な列挙はしない)。

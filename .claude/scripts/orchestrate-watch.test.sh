@@ -18,7 +18,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/git-test-env.sh"
 SCRIPT="$HERE/orchestrate-watch.sh"
 
-REQUIRED_TOOLS="git jq date sed grep basename dirname sleep"
+REQUIRED_TOOLS="git jq date sed grep basename dirname sleep sort paste"
 
 for c in $REQUIRED_TOOLS bash; do
   command -v "$c" >/dev/null 2>&1 || { echo "SKIP: required tool not found: $c"; exit 0; }
@@ -194,6 +194,40 @@ if kill -0 "$UNTIL_PID" 2>/dev/null; then
   ok "--until-event keeps watching while nothing new happens"
 else
   fail "--until-event exited with nothing new to report: $(cat "$UNTIL_OUT")"
+fi
+
+# ---------------------------------------------------------------------------
+section "lane G: main commits that change shared infrastructure"
+# main_commit <path> — one commit on main that touches <path>.
+main_commit() {
+  mkdir -p "$ROOT/$(dirname "$1")"
+  echo "$RANDOM" >>"$ROOT/$1"
+  git -C "$ROOT" add "$1"
+  git -C "$ROOT" commit -q -m "touch $1"
+}
+main_commit .claude/skills/demo/SKILL.md
+OUT="$(run_once)"
+echo "$OUT" | grep -q '^MAIN_INFRA_CHANGED: [0-9a-f]* \[skills\] ->.* legacy-stale' \
+  && ok "a skill change on main names the worktrees that lack it" \
+  || fail "MAIN_INFRA_CHANGED for the skill commit was not emitted: $OUT"
+OUT="$(run_once)"
+echo "$OUT" | grep -q '^MAIN_INFRA_CHANGED: ' \
+  && fail "a restarted watcher re-emitted MAIN_INFRA_CHANGED" \
+  || ok "a restarted watcher does not report the same infrastructure commit again"
+main_commit .changeset/some-fix.md
+OUT="$(run_once)"
+echo "$OUT" | grep -q '^MAIN_INFRA_CHANGED: ' \
+  && fail "a new release note (.changeset/*.md) was reported as infrastructure" \
+  || ok "a new release note is not reported as infrastructure"
+git -C "$WORK/legacy-stale" merge -q --no-edit main >/dev/null 2>&1
+main_commit packages/demo/package.json
+OUT="$(run_once)"
+if echo "$OUT" | grep -q '^MAIN_INFRA_CHANGED: [0-9a-f]* \[deps\] ->'; then
+  echo "$OUT" | grep '^MAIN_INFRA_CHANGED: ' | grep -q ' legacy-stale' \
+    && ok "deps change reported (legacy-stale lacks it again after the new commit)" \
+    || fail "legacy-stale should be listed: it merged main before the deps commit"
+else
+  fail "a package.json change on main should be reported as deps: $OUT"
 fi
 
 echo
