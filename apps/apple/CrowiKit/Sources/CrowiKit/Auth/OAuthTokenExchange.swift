@@ -13,6 +13,17 @@ enum OAuthTokenExchange {
     enum ExchangeError: Error, Equatable {
         case httpError(status: Int, body: String)
         case malformedResponse
+
+        /// The server refused the grant itself (RFC 6749 §5.2 `invalid_grant`):
+        /// revoked, expired, already rotated away, or its user deactivated.
+        /// Retrying cannot change that answer, unlike a 5xx or a lost
+        /// connection, which say nothing about the credential.
+        var isGrantRejected: Bool {
+            guard case .httpError(let status, let body) = self, status == 400,
+                let json = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any]
+            else { return false }
+            return json["error"] as? String == "invalid_grant"
+        }
     }
 
     /// `application/x-www-form-urlencoded`, RFC 6749 §4.1.3 / §6.

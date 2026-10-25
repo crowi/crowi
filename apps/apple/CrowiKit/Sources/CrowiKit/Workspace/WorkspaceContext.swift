@@ -73,8 +73,12 @@ public struct WorkspaceContext: Sendable {
     /// `RefreshCoordinator` — the seam a future per-workspace generated API
     /// `Client` (`feature-ios-phase1-read`) composes with, never a
     /// coordinator built for a different workspace.
-    public func makeAuthenticatingMiddleware(urlSession: URLSession = .shared) -> AuthenticatingMiddleware {
-        AuthenticatingMiddleware(coordinator: makeRefreshCoordinator(urlSession: urlSession))
+    ///
+    /// - Parameter coordinator: the session's shared coordinator. Two
+    ///   coordinators over one Keychain item present the same refresh token
+    ///   concurrently, and the server answers the loser with `invalid_grant`.
+    public func makeAuthenticatingMiddleware(urlSession: URLSession = .shared, coordinator: RefreshCoordinator? = nil) -> AuthenticatingMiddleware {
+        AuthenticatingMiddleware(coordinator: coordinator ?? makeRefreshCoordinator(urlSession: urlSession))
     }
 
     /// This workspace's own `ModelContainer` (§7.1) — a distinct on-disk
@@ -123,10 +127,10 @@ public struct WorkspaceContext: Sendable {
     /// invisible in production (the parameter defaults to `.shared` anyway)
     /// but meant a test-injected mock session never saw the actual API
     /// requests, only the token refreshes.
-    public func makeAPIClient(urlSession: URLSession = .shared) -> AuthenticatedAPIClient {
+    public func makeAPIClient(urlSession: URLSession = .shared, coordinator: RefreshCoordinator? = nil) -> AuthenticatedAPIClient {
         AuthenticatedAPIClient(
             apiBaseURL: apiBaseURL,
-            middleware: makeAuthenticatingMiddleware(urlSession: urlSession),
+            middleware: makeAuthenticatingMiddleware(urlSession: urlSession, coordinator: coordinator),
             transport: URLSessionTransport(configuration: .init(session: urlSession))
         )
     }
@@ -154,11 +158,12 @@ public struct WorkspaceContext: Sendable {
     public func makeImageCache(
         urlSession: URLSession = .shared,
         imageSessionConfiguration: URLSessionConfiguration = .ephemeral,
-        confidential: Bool = false
+        confidential: Bool = false,
+        coordinator: RefreshCoordinator? = nil
     ) -> WorkspaceImageDiskCache {
         WorkspaceImageDiskCache(
             loader: makeImageLoader(sessionConfiguration: imageSessionConfiguration),
-            coordinator: makeRefreshCoordinator(urlSession: urlSession),
+            coordinator: coordinator ?? makeRefreshCoordinator(urlSession: urlSession),
             cacheDirectory: imagesCacheDirectory,
             confidential: confidential
         )

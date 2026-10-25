@@ -40,8 +40,11 @@ public final class WorkspaceSession: ObservableObject {
     /// it makes will fail before reaching the network — the screens must
     /// offer a way back in rather than each reporting its own load failure.
     ///
-    /// The case this exists for is not a normal expiry (a refresh token
-    /// outlives any session): it is the Keychain ITEM becoming unreachable.
+    /// Two causes reach it. The server refusing the refresh token (revoked,
+    /// expired, a password reset) removes the credential
+    /// (`RefreshCoordinator.credentialRejectedNotification`), and this flips
+    /// at once; a server that is merely unreachable never does. The other is
+    /// the Keychain ITEM becoming unreachable.
     /// Items are stored under an access group derived from the signing Team
     /// ID, so re-signing the app under a different team — moving from a
     /// personal team to the organization's, say — orphans every stored
@@ -49,9 +52,9 @@ public final class WorkspaceSession: ObservableObject {
     /// intact. The result reads as "the app is broken": every workspace is
     /// listed, none of them load.
     ///
-    /// Checked at activation and foreground rather than on each request:
-    /// a signing change only takes effect across a relaunch, and both of
-    /// those run on the way in.
+    /// The Keychain case is checked at activation and foreground rather than
+    /// on each request: a signing change only takes effect across a
+    /// relaunch, and both of those run on the way in.
     @Published public private(set) var needsSignIn = false
 
     /// - Parameter urlSession: overridden only by tests (`WorkspaceSessionTests`)
@@ -62,12 +65,32 @@ public final class WorkspaceSession: ObservableObject {
     public init(context: WorkspaceContext, models: [any PersistentModel.Type], schemaVersion: Int, urlSession: URLSession = .shared) throws {
         self.context = context
         self.appInfoCache = context.makeAppInfoCache(urlSession: urlSession)
-        let apiClient = context.makeAPIClient(urlSession: urlSession)
+        // ONE coordinator behind both the JSON client and the image cache:
+        // two would race the same refresh token, and the server refuses the
+        // loser with the same `invalid_grant` a revoked sign-in gets.
+        let coordinator = context.makeRefreshCoordinator(urlSession: urlSession)
+        let apiClient = context.makeAPIClient(urlSession: urlSession, coordinator: coordinator)
         self.apiClient = apiClient
         self.notificationsPoller = NotificationsPoller(client: apiClient)
-        self.imageCache = context.makeImageCache(urlSession: urlSession)
+        self.imageCache = context.makeImageCache(urlSession: urlSession, coordinator: coordinator)
         self.modelContainer = try context.makeModelContainer(models: models, schemaVersion: schemaVersion)
+        credentialRejectedObserver = NotificationCenter.default.addObserver(
+            forName: RefreshCoordinator.credentialRejectedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self, workspaceId = context.id] notification in
+            guard notification.object as? String == workspaceId else { return }
+            MainActor.assumeIsolated { self?.refreshCredentialState() }
+        }
     }
+
+    deinit {
+        if let credentialRejectedObserver {
+            NotificationCenter.default.removeObserver(credentialRejectedObserver)
+        }
+    }
+
+    private nonisolated(unsafe) var credentialRejectedObserver: (any NSObjectProtocol)?
 
     /// The shared, `@MainActor`-bound context every read screen writes its
     /// cache upserts through — SwiftData's own recommended default context

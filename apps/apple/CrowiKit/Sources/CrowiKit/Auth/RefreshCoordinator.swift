@@ -62,7 +62,16 @@ public actor RefreshCoordinator {
 
     public enum RefreshError: Error, Equatable {
         case noStoredRefreshToken
+        /// The token endpoint refused the stored refresh token, and the
+        /// credential has been removed: only signing in again can recover.
+        case credentialRejected
     }
+
+    /// Posted (on `NotificationCenter.default`, `object` = the workspace id)
+    /// when a refresh is refused and this workspace's credential is removed,
+    /// so the session can offer sign-in at once instead of waiting for the
+    /// next foreground.
+    public static let credentialRejectedNotification = Notification.Name("CrowiKit.RefreshCoordinator.credentialRejected")
 
     /// Returns a currently-valid access token: the cached one if it is not
     /// within `proactiveRefreshWindow` of `expiresAt`, otherwise a freshly
@@ -138,16 +147,38 @@ public actor RefreshCoordinator {
             throw RefreshError.noStoredRefreshToken
         }
         let tokenEndpoint = try await tokenEndpointProvider()
-        let pair = try await OAuthTokenExchange.exchange(
-            fields: [
-                ("grant_type", "refresh_token"),
-                ("refresh_token", stored.refreshToken),
-                ("client_id", clientID),
-            ],
-            at: tokenEndpoint,
-            urlSession: urlSession
-        )
+        let pair: StoredTokenPair
+        do {
+            pair = try await OAuthTokenExchange.exchange(
+                fields: [
+                    ("grant_type", "refresh_token"),
+                    ("refresh_token", stored.refreshToken),
+                    ("client_id", clientID),
+                ],
+                at: tokenEndpoint,
+                urlSession: urlSession
+            )
+        } catch let error as OAuthTokenExchange.ExchangeError where error.isGrantRejected {
+            return try adoptRotatedOrDiscard(rejectedRefreshToken: stored.refreshToken)
+        }
         try tokenStore.save(pair, forWorkspace: workspaceId)
         return pair
+    }
+
+    /// Only a refusal of the token that is STILL stored means the sign-in is
+    /// gone. The server also answers `invalid_grant` to the loser of two
+    /// refreshes racing on one token, and by the time that answer lands the
+    /// winner may already have stored its successor; that successor is
+    /// valid, so it is adopted instead of discarding a working sign-in.
+    /// Anything other than `invalid_grant` (a 5xx, a dropped connection, a
+    /// discovery failure) never reaches here: an unreachable server must not
+    /// sign anyone out.
+    private func adoptRotatedOrDiscard(rejectedRefreshToken: String) throws -> StoredTokenPair {
+        if let current = try tokenStore.load(forWorkspace: workspaceId), current.refreshToken != rejectedRefreshToken {
+            return current
+        }
+        try tokenStore.delete(forWorkspace: workspaceId)
+        NotificationCenter.default.post(name: Self.credentialRejectedNotification, object: workspaceId)
+        throw RefreshError.credentialRejected
     }
 }

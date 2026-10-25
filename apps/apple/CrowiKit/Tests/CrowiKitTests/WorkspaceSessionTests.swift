@@ -28,7 +28,11 @@ final class WorkspaceSessionTests: XCTestCase {
     /// + `containerBaseDirectory` used, so a caller can independently locate
     /// `WorkspaceModelContainerFactory.storeDirectory` on disk (needed by
     /// `testActivatedEscalatesTheModelContainerStoreDirectoryProtectionWhenConfidential`).
-    private func makeSession(appInfoBodies: [Data], tokenStore: InMemoryTokenStore = InMemoryTokenStore()) throws -> (session: WorkspaceSession, workspaceId: String, containerBaseDirectory: URL) {
+    private func makeSession(
+        appInfoBodies: [Data],
+        tokenStore: InMemoryTokenStore = InMemoryTokenStore(),
+        tokens: StoredTokenPair = StoredTokenPair(accessToken: "at", refreshToken: "rt", expiresAt: Date().addingTimeInterval(3600))
+    ) throws -> (session: WorkspaceSession, workspaceId: String, containerBaseDirectory: URL) {
         let containerBaseDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = WorkspaceStore(
             indexStore: WorkspaceIndexStore(defaults: UserDefaults(suiteName: "wiki.crowi.ios.tests.\(UUID().uuidString)")!, key: "index"),
@@ -39,7 +43,7 @@ final class WorkspaceSessionTests: XCTestCase {
             AddWorkspaceFlow.Onboarded(
                 workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!),
                 displayTitle: "wiki",
-                tokens: StoredTokenPair(accessToken: "at", refreshToken: "rt", expiresAt: Date().addingTimeInterval(3600))
+                tokens: tokens
             )
         )
         let context = try XCTUnwrap(store.context(for: workspace))
@@ -96,6 +100,58 @@ final class WorkspaceSessionTests: XCTestCase {
         try await session.signedIn(with: StoredTokenPair(accessToken: "at2", refreshToken: "rt2", expiresAt: Date().addingTimeInterval(3600)))
         XCTAssertFalse(session.needsSignIn)
         XCTAssertEqual(try tokenStore.load(forWorkspace: workspaceId)?.accessToken, "at2")
+    }
+
+    /// Answers discovery and the token endpoint (with `tokenStatus` /
+    /// `tokenBody`); every other request is a 404.
+    private func installTokenEndpointHandler(tokenStatus: Int, tokenBody: String) {
+        MockURLProtocol.requestHandler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/.well-known/oauth-authorization-server") {
+                let discovery = """
+                { "issuer": "https://wiki.example.com", "authorization_endpoint": "https://wiki.example.com/oauth/authorize",
+                  "token_endpoint": "https://wiki.example.com/api/oauth/token", "revocation_endpoint": "https://wiki.example.com/api/oauth/revoke" }
+                """
+                return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(discovery.utf8))
+            }
+            if path.hasSuffix("/oauth/token") {
+                return (HTTPURLResponse(url: request.url!, statusCode: tokenStatus, httpVersion: nil, headerFields: nil)!, Data(tokenBody.utf8))
+            }
+            return (HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
+        }
+    }
+
+    private static let expiredTokens = StoredTokenPair(accessToken: "at", refreshToken: "rt", expiresAt: Date().addingTimeInterval(-60))
+
+    /// A refresh the server refuses (revoked, expired, a password reset) ends
+    /// the sign-in, and the workspace asks for a new one straight away rather
+    /// than leaving every screen to report its own load failure.
+    func testARefusedRefreshAsksForSignIn() async throws {
+        let tokenStore = InMemoryTokenStore()
+        let (session, workspaceId, _) = try makeSession(appInfoBodies: [], tokenStore: tokenStore, tokens: Self.expiredTokens)
+        installTokenEndpointHandler(tokenStatus: 400, tokenBody: #"{"error":"invalid_grant"}"#)
+
+        await session.refreshUnreadNotificationCount()
+        for _ in 0..<100 where !session.needsSignIn {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertTrue(session.needsSignIn)
+        XCTAssertNil(try tokenStore.load(forWorkspace: workspaceId))
+    }
+
+    /// A server that is down says nothing about the credential: the workspace
+    /// stays signed in, and the next request simply tries again.
+    func testAnUnavailableServerKeepsTheWorkspaceSignedIn() async throws {
+        let tokenStore = InMemoryTokenStore()
+        let (session, workspaceId, _) = try makeSession(appInfoBodies: [], tokenStore: tokenStore, tokens: Self.expiredTokens)
+        installTokenEndpointHandler(tokenStatus: 503, tokenBody: "Service Unavailable")
+
+        await session.refreshUnreadNotificationCount()
+        await session.foregrounded()
+
+        XCTAssertFalse(session.needsSignIn)
+        XCTAssertEqual(try tokenStore.load(forWorkspace: workspaceId), Self.expiredTokens)
     }
 
     /// The exact scenario the spec's CI-fixed capability-gate test names:
