@@ -188,7 +188,7 @@ bash "$WT/.claude/scripts/task-state.sh" queue set-current "<id>"
    send-keys してはいけない** — Claude Code はその選択を `~/.claude/settings.json` の
    `model` に保存し、**全プロジェクトの新規セッション**がそのモデルで起動するようになる
    (2026-09-16 に実測。kickoff 2 本目の worktree が Sonnet で起動して発覚した)。
-4. **agmsg の受信を自分宛だけに絞る**。`watch.sh` は role 名を渡さないと
+4. **agmsg の受信を自分宛だけに絞る**。受信は role 名を渡さないと
    **そのプロジェクトに登録された全 (team, agent) ペア**を購読するので、既定のままだと
    worktree セッションに manager⇄planner のやり取りまで流れ込む(実測。impl セッションが
    自分宛でない版数の議論を読まされ、そのぶんのトークンと注意を払っていた)。role 名は
@@ -211,7 +211,7 @@ sleep 3
 
 ```bash
 tmux send-keys -t "<claude の pane_id>" \
-  "crowi-kickoff からの指示です。/crowi-feature <id> を実行してください。COMMITTED まで完走したら /crowi-complete-feature、中断・引き継ぎ時は /crowi-handoff を実行。push は禁止(ユーザー指示待ち)。"
+  "crowi-kickoff からの指示です。まず ~/.dotfiles/bin/agmsg-wait <id> を Bash の run_in_background: true・timeout: 2147483647 で起動してください (Monitor は使わない。新着で終了したら対応する前に同じコマンドで起動し直す)。次に /crowi-feature <id> を実行してください。COMMITTED まで完走したら /crowi-complete-feature、中断・引き継ぎ時は /crowi-handoff を実行。push は禁止(ユーザー指示待ち)。"
 sleep 1
 tmux send-keys -t "<claude の pane_id>" Enter
 ```
@@ -232,6 +232,7 @@ tmux send-keys -t "<claude の pane_id>" Enter
 ```
 cd <worktree-abs-path> && claude
 → 最初に: /agmsg actas <id>        (受信を自分宛に絞る。省くと他 role 宛まで流れ込む)
+→ 続けて: ~/.dotfiles/bin/agmsg-wait <id> を background Bash (timeout 2147483647) で起動 (Monitor は使わない)
 → 次に:   /crowi-feature <id>
 → 完了時: /crowi-complete-feature / 中断時: /crowi-handoff
 ```
