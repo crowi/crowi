@@ -22,6 +22,9 @@
 # outputs glob (see next.config.ts).
 /.next-e2e/
 /.next-e2e-prod/
+# crowi-qa owned instances (NEXT_DIST_DIR=.next-qa-<run-id>); a run that
+# dies before cleanup leaves the directory behind.
+/.next-qa-*/
 
 # production
 /build

@@ -35,7 +35,11 @@ feature-crowi-qa.md` が正本設計で、本ファイルはそれを実行手�
   - `packages/**` の製品コードを変更しない。QA の結果バグが見つかった場合、
     直すかどうかは fix-or-drop の対象だが、直す作業自体は呼び出し文脈
     (人間 / `integrate-worktree` / `crowi-release`) が行う。
-  - QA 用テストアカウントを自動登録しない (事前に用意された認証情報を要求する)。
+  - 常設の dev インスタンス (ambient、共有 DB・`isolateDb: true` を問わない)
+    には QA 用アカウントを自動登録しない (一般ユーザーは人が一度だけ用意する。
+    §5)。run 自身が起動して捨てる所有インスタンス (§2 の判断、§6.4.2 /
+    §14) では run がアカウントを作ってよい。固定アカウントの値は
+    `fixtures/qa-accounts.json` にあり、`.env` は読まない。
 - **git push をしない** (証跡はすべて `.reviews/qa/` のローカル state。commit も
   しない — `.reviews/` は既存の gitignore 規約でカバーされる)。
 
@@ -225,15 +229,26 @@ read-only な導出をする): 以下のいずれかに一致すれば「ロー�
 どちらにも一致しない `--url` (社内ステージング・本番相当ドメイン等) は
 **非ローカル**と判定する。
 
-非ローカル判定の `--url` は、mutation を伴うチャーター (#3・#4・#5・#9、
-認証チャーターの mutating サブフロー) と `--prod-build` を
+非ローカル判定の `--url` は、mutation を伴うチャーター (#3・#4・#5・#9) と
+`--prod-build` を
 
 ```
 blocked: destructive charter refused on non-local --url (pass --i-understand-destructive to override)
 ```
 
 としてスキップする。`--i-understand-destructive` を明示した場合のみ実行する
-(縮退実行や既定 override はしない)。読み取り専用チャーター (認証の
+(縮退実行や既定 override はしない)。
+
+`--url` (ローカル・非ローカルを問わず) では、管理設定チャーター (#8) と §4.2 の
+mutating サブフローは所有インスタンスを起動元にできる worktree が無いため
+
+```
+blocked: admin charter requires an owned instance
+blocked: mutating auth subflow requires an owned instance
+```
+
+としてスキップする。`--i-understand-destructive` はこの blocked を解除しない
+(override が解除するのは #3・#4・#5・#9 と `--prod-build` だけ)。読み取り専用チャーター (認証の
 login/logout/session 遷移のみ・検索・通知一覧表示・collab の疎通確認のみ) は
 `--url` のホスト制限を受けない。
 
@@ -245,14 +260,14 @@ login/logout/session 遷移のみ・検索・通知一覧表示・collab の疎�
 
 | # | charter | 既存 E2E カバレッジ (サブフロー単位) | 対応パス (交差判定用) |
 |---|---|---|---|
-| 1 | 認証 (§3 で shared-DB 読み取り専用 / isolated-DB mutating の 2 層に分離) | partial: login/logout/session 遷移は `auth-state.spec.ts` がカバー (shared DB・読み取り専用)。installer 経由の admin 作成は `onboarding.setup.ts` が UI 経由で一度だけ通す happy path のみ。oauth / password reset / activation / email change は未カバー | `packages/api/src/hono/middleware/auth.ts`, `packages/api/src/hono/handlers/{tokenAuth,oauth,passwordReset,activation,emailChange,me,installer}.ts`, `packages/web/src/app/(public)/**`, `packages/web/src/app/(auth)/oauth/**`, `packages/web/src/lib/{use-auth,api-client}.ts` |
+| 1 | 認証 (§4 で ambient dev の読み取り専用 / 所有インスタンスの mutating の 2 層に分離。mutating は §2 の所有インスタンスのみ) | partial: login/logout/session 遷移は `auth-state.spec.ts` がカバー (shared DB・読み取り専用)。installer 経由の admin 作成は `onboarding.setup.ts` が UI 経由で一度だけ通す happy path のみ。oauth / password reset / activation / email change は未カバー | `packages/api/src/hono/middleware/auth.ts`, `packages/api/src/hono/handlers/{tokenAuth,oauth,passwordReset,activation,emailChange,me,installer}.ts`, `packages/web/src/app/(public)/**`, `packages/web/src/app/(auth)/oauth/**`, `packages/web/src/lib/{use-auth,api-client}.ts` |
 | 2 | collab (+ presence) | partial: 2 窓間 edit propagation は `collab.spec.ts` がカバー。presence (viewer 一覧・indicator) は未カバー | `packages/api/src/collab/**`, `packages/api/src/presence/**`, `packages/api/src/hono/handlers/{page-collab,presence}.ts`, `packages/web/src/components/editor/**`, `packages/web/src/lib/{use-collab-document,use-presence,resolve-ws-url}.ts` |
 | 3 | ページ CRUD・rename・trash | partial: `onboarding.setup.ts` は API 経由 (`createPageViaApi`) で 1 ページを seed するのみ。UI 経由の CRUD/rename/trash は未保護 | `packages/api/src/hono/handlers/{page,backlink,page-portalize-twin}.ts`, `packages/api/src/models/{page,revision,backlink}.ts`, `packages/api-contract/src/contracts/page.ts`, `packages/web/src/app/(auth)/[[...slug]]`, `packages/web/src/app/(auth)/trash`, `packages/web/src/lib/{use-page,use-page-mutations,use-page-list,use-page-children}.ts` |
 | 4 | エディタ save・draft | なし | `packages/api/src/hono/handlers/{draft,revision,page-preview}.ts`, `packages/api-contract/src/contracts/page-preview.ts`, `packages/web/src/app/(auth)/%5Fedit`, `packages/web/src/components/editor/**`, `packages/web/src/lib/{use-drafts,use-page-revisions}.ts` |
 | 5 | コメント | なし | `packages/api/src/hono/handlers/comment.ts`, `packages/api/src/models/comment.ts`, `packages/api-contract/src/contracts/comment.ts`, `packages/web/src/lib/use-page-comments.ts`, `packages/web/src/components/page-comments/**` |
 | 6 | 検索 | なし | `packages/api/src/hono/handlers/search.ts`, `packages/api-contract/src/contracts/search.ts`, `packages/web/src/app/(auth)/%5Fsearch`, `packages/web/src/lib/use-search.ts`, `packages/plugin-search-*` |
 | 7 | 通知 | なし | `packages/api/src/notifications/**`, `packages/api/src/hono/handlers/notification.ts`, `packages/api-contract/src/contracts/notification.ts`, `packages/web/src/app/(auth)/%5Fnotifications`, `packages/web/src/lib/{use-notifications,use-notifications-socket,resolve-ws-url}.ts` |
-| 8 | 管理設定 (§3 で既定 read-only) | partial: `onboarding.setup.ts` が mail SMTP 送信元アドレス保存・ユーザー招待・招待受諾をカバー。セキュリティ設定・プラグイン設定 (mail 以外)・crypto 等は未保護 | `packages/api/src/hono/handlers/admin/**`, `packages/api-contract/src/contracts/admin/**`, `packages/web/src/app/(admin)/**` |
+| 8 | 管理設定 (所有インスタンスでのみ実行。ambient dev・`--url` では blocked — §7) | partial: `onboarding.setup.ts` が mail SMTP 送信元アドレス保存・ユーザー招待・招待受諾をカバー。セキュリティ設定・プラグイン設定 (mail 以外)・crypto 等は未保護 | `packages/api/src/hono/handlers/admin/**`, `packages/api-contract/src/contracts/admin/**`, `packages/web/src/app/(admin)/**` |
 | 9 | 添付・アップロード | なし | `packages/api/src/hono/handlers/attachment*.ts`, `packages/api/src/models/attachment.ts`, `packages/api-contract/src/contracts/attachment.ts`, `packages/web/src/app/(auth)/%5Fattachments`, `packages/web/src/lib/{use-attachments,use-attachment-usage}.ts` |
 
 ### 横断 fanout パス (複数チャーターへ OR 条件で交差)
@@ -331,34 +346,46 @@ charter 単位のデフォルトバジェット:
 
 ## §4. 認証 charter (#1) の 2 層構成
 
-### 4.1 shared-DB 読み取り専用サブフロー (既定・どの target でも実行可)
+### 4.1 ambient dev 読み取り専用サブフロー (既定・どの target でも実行可)
 
 login / logout / session 遷移 (同一タブ切替・別タブ logout 伝搬・reload
-保持)。環境変数 `CROWI_QA_USER_EMAIL` / `CROWI_QA_USER_PASSWORD` で受け取る
-既存アカウントを使う。
+保持)。`fixtures/qa-accounts.json` の `user` を `cat` して得た email /
+password をそのまま使う (`.env` は読まない)。
 
-### 4.2 isolated-DB 限定 mutating サブフロー
+### 4.2 所有インスタンス限定 mutating サブフロー
 
 対象: `POST /auth/register`・`POST /auth/activate`・`POST
 /auth/reset-password`・`PUT /me` の email 変更申請 + `POST
-/auth/confirm-email-change`・`POST /installer/createAdmin`・oauth
-authorize/device consent (いずれも User / Config / OAuth トークンレコードを
-書き換える)。
+/auth/confirm-email-change`・oauth authorize/device consent (いずれも User /
+OAuth トークンレコードを書き換える)。`POST /installer/createAdmin` は対象
+一覧に含めない — 所有インスタンスの provisioning (§6.4.2 / §14.4) が毎回
+呼ぶので、provisioning が成功した時点で happy path は通っている。
 
-- **既定 (共有 dev DB) では実行しない**。共有 dev DB のユーザーレコードや
-  installer 済み状態を書き換えると復元できない。
-- **isolated DB (`dev.local.json` で `isolateDb: true` を宣言した
-  worktree、または `--prod-build` の per-run DB) でのみ実行してよい**。
-  それ以外 (§1.7 の非ローカル `--url` を含む) では
+- **所有インスタンス (§5 で定義する、run 自身が起動して run 終了時に DB ごと
+  捨てる QA 専有インスタンス (§6.4.2) と `--prod-build` の per-run
+  インスタンス (§14)) でのみ実行する**。ambient dev インスタンス
+  (共有 DB・`isolateDb: true` を問わない) と `--url` (§1.7) では
 
   ```
-  blocked: mutating auth subflow requires isolated DB
+  blocked: mutating auth subflow requires an owned instance
   ```
 
   としてこれらのサブフローだけをスキップし、読み取り専用サブフロー (4.1) は
-  通常どおり実行する。isolated DB 側の資格情報は `CROWI_QA_ISOLATED_ADMIN_EMAIL`
-  / `CROWI_QA_ISOLATED_ADMIN_PASSWORD` で受け取る (自動登録はしない — 未設定
-  なら `blocked: no credentials (isolated DB)` としてスキップ)。
+  通常どおり実行する。`--i-understand-destructive` でも解除しない。
+  所有インスタンスの起動に失敗したときは
+  `blocked: qa-owned instance failed to start (<reason>)`。
+- **対象ユーザー**: email 変更と password reset は、**同じ run が
+  `POST /auth/register` → `POST /auth/activate` で作ったユーザーに対して
+  だけ**かける。`fixtures/qa-accounts.json` の固定管理者には実行しない
+  (書き換えると同じ run の後続 — 管理設定チャーター・`seed-fixtures.mjs` の
+  ログイン・§14.6 のスモーク — が固定値でログインできなくなる)。所有
+  インスタンスの新しい DB は登録モードが既定の `Open` なので、登録モードを
+  変える必要は無い。
+- **メール設定**: 所有インスタンスの provisioning がメール設定 (SMTP host /
+  port と送信元アドレス) を入れる (§6.4.2 手順 4)。その PUT のどちらかが
+  2xx 以外なら、これらのサブフローだけを
+  `blocked: mail provisioning failed (<reason>)` としてスキップし、他の
+  チャーターは続行する。
 - **Mailpit の稼働チェックが前提条件**: password reset の forgot-password
   は mail を fire-and-forget して常に 200 を返す・register の activation
   mail・email change の確認 mail はいずれも mail 内 token リンクを踏まないと
@@ -377,21 +404,43 @@ authorize/device consent (いずれも User / Config / OAuth トークンレコ�
   パターンへの正規表現マッチ」手法)。捕捉した token / リンクは §12 の
   redaction 対象に含める (生の値をログ・notes に残さない)。
 
-## §5. 認証情報の前提 (自動登録はしない)
+## §5. 認証情報の前提 (自動登録は ambient dev に対してのみ禁止)
 
-`crowi-qa` は対象 dev DB に既存ユーザー/管理者の認証情報が用意されている
-ことを前提にする。環境変数で受け取り、未設定の場合は **該当 charter だけ**
-`blocked: no credentials` として次に進む (全体を止めない):
+固定のアカウント情報は **`.claude/skills/crowi-qa/fixtures/qa-accounts.json`
+の 1 箇所**にだけ置く (一般ユーザー `user`・管理者 `admin`・所有インスタンス
+のメール設定 `mail`)。値は秘密ではない QA 用のものなので、`cat` して得た値を
+そのまま渡す。この SKILL.md の本文に値を書き写さない。**`.env` も環境変数も
+読まない** (環境変数による資格情報の受け渡しは廃止済みで、上書き機構も無い)。
 
-| 環境変数 | 用途 |
+| 用途 | 参照 |
 |---|---|
-| `CROWI_QA_USER_EMAIL` / `CROWI_QA_USER_PASSWORD` | 一般ユーザー (auth 読み取り専用サブフロー・collab・ページ CRUD 等) |
-| `CROWI_QA_ADMIN_EMAIL` / `CROWI_QA_ADMIN_PASSWORD` | 管理設定 charter (#8、read-only 確認用) |
-| `CROWI_QA_ISOLATED_ADMIN_EMAIL` / `CROWI_QA_ISOLATED_ADMIN_PASSWORD` | isolated DB (`isolateDb: true` worktree) 限定の mutating サブフロー用。この worktree でまだ資格情報が無ければ人間が一度だけ installer/register を回して用意する |
+| ambient dev の一般ユーザー (auth 読み取り専用サブフロー・collab・ページ CRUD 等) | `user` |
+| 所有インスタンスの管理者 (管理設定 charter・`seed-fixtures.mjs`・§14.6 スモーク) | `admin` |
+| 所有インスタンスの provisioning で入れる SMTP / 送信元アドレス | `mail` |
 
-多くの worktree は既定で main と DB を共有しており (`readDevLocalConfig` が
-返す `isolateDb` は既定 `false`)、テストアカウントの自動作成は共有 dev
-データを汚すリスクがある — したがって **どのケースでも自動登録はしない**。
+**自動登録の規則** (理由に合わせて範囲を切る):
+
+- **ambient dev インスタンス (共有 DB・`isolateDb: true` を問わない) では
+  自動登録しない**。その DB は run より長く生き、tailscale から到達でき、
+  共有 dev データを汚す。`user` のアカウントが無ければ、そのチャーターだけ
+  `blocked: no account (create it once — see §5)` として次に進む (全体を
+  止めない)。
+- **所有インスタンスでは run がアカウントを作ってよい**。所有インスタンスとは、
+  run 自身が起動し run 終了時に DB ごと捨てるもので、QA 専有インスタンス
+  (§6.4.2) と `--prod-build` の per-run インスタンス (§14) の 2 つだけを指す。
+  管理者は installer で、一般ユーザーは `POST /auth/register` →
+  `POST /auth/activate` で作る。`isolateDb: true` の worktree は所有
+  インスタンスに含めない (その DB は run より長く生きる)。その worktree の
+  コードを管理者で検証したいときは、worktree を target にすれば、そこから
+  QA 専有インスタンスが起動する。
+- **既知パスワードの管理者は所有インスタンスの外に作らない。**
+
+**ambient dev で一般ユーザーを一度だけ用意する手順** (人が行う): 対象 dev
+インスタンスの `/register` 画面 (または招待) で、`fixtures/qa-accounts.json`
+の `user` の email / username / name / password のとおりにアカウントを作る。
+一般ユーザーなので権限はページの読み書きに留まる。tailscale 経由で第三者が
+使えるが、同じ第三者は登録そのものもできる (dev の登録モード次第) ので、
+新しい到達手段は増えない。
 
 ## §6. run id・ページ作成 path prefix・cleanup
 
@@ -479,27 +528,34 @@ table・backlink・検索結果・コメント・grant 可視性のように、�
 | 検索結果 (新規保存したページがヒットするかの確認) | `api-fixture` (503 short-circuit + readiness polling 必須。6.4.4 参照) | `browser-editor` へフォールバック | 実際のページ保存と検索側副作用が必要。per-run DB は search 未設定が既定なので 503 → 即 blocked が通常パス |
 | 検索の grant フィルタリング (非 owner に非表示になることの確認) | `browser` (api-fixture 化しない) | 変更なし | 第二 identity が必要で今回のスコープ外 |
 | コメント (#5) | `api-fixture` (同一 run が作った fixture ページに対してのみ) | `browser-editor` へフォールバック | コメント作成はセットアップ、UI 表示が検証対象 |
-| 管理設定 (#8) | 既定 `browser` または `read-only` (§7) | 変更なし | ambient 共有 DB での config mutation は §7 で禁止 |
+| 管理設定 (#8) | `browser` (QA 専有インスタンス。`--prod-build` run では §14 のインスタンス。§7) | `blocked: qa-owned instance failed to start (<reason>)` (ambient dev へフォールバックしない) | 管理者は所有インスタンスにだけ作る (§5)。ambient dev・`--url` では実行しない |
 | 添付・アップロード (#9) | アップロード操作自体の検証は `browser`。既存ファイルの表示確認のみなら対応する API があれば `api-fixture` (対応する attachment API が今回未検証のため、現状は `browser` のまま) | 変更なし | アップロード操作自体が検証対象になり得る |
 
-認証チャーター (#1) は既存の §4.1/§4.2 の 2 層構成をそのまま維持し、この
-表の対象に含めない (すでに read-only/isolated-mutating の分離ルールが
-あるため)。
+認証チャーター (#1) は §4.1/§4.2 の 2 層構成に従い、この表の対象に含めない。
+§4.2 の mutating サブフローは専有インスタンスを使い (`--prod-build` run
+では §14 のインスタンス)、§4.1 の読み取り専用サブフローは従来どおり
+ambient dev に対して実行する。
 
 #### 6.4.2 QA 専有インスタンス: 書き込み先を「判定」せず「所有」する
 
-`api-fixture` セットアップのチャーターが 1 つでも run に含まれる場合、run
-は最初に一度だけ **QA 専有インスタンス**を起動する。mutating なフィクスチャ
-書き込みは常にこの専有インスタンスに対してのみ行い、**ambient dev インスタ
-ンス (共有 DB・isolated DB を問わず) には一切 mutating な書き込みをしない**。
+`api-fixture` セットアップのチャーター・管理設定チャーター (#8)・§4.2 の
+mutating サブフローのいずれかが run に含まれる場合、run は最初に一度だけ
+**QA 専有インスタンス**を起動する (target が `--url` のときは #8 と §4.2 の
+ために起動しない — §1.7)。mutating なフィクスチャ書き込みは常にこの専有
+インスタンスに対してのみ行い、**ambient dev インスタンス (共有 DB・isolated
+DB を問わず) には一切 mutating な書き込みをしない**。
 書き込み先の安全性は「環境の分類・判定」ではなく「自分で名前を決めて自分で
 起動した」というコンストラクションで保証する — §14.3-§14.7 の
 `--prod-build` 用インスタンスと同じ発想の dev 版であり、機構は流用する
 (新設しない)。
 
-- **起動は run につき最大 1 回**: 複数の `api-fixture` チャーターが専有
-  インスタンス 1 本を共有する。`api-fixture` チャーターが 1 つも無い run
-  では起動しない (既存挙動に回帰なし)。
+- **起動は run につき最大 1 回**: 起動条件を満たす複数のチャーター・
+  サブフローが専有インスタンス 1 本を共有する。起動条件を満たすものが 1 つも
+  無い run では起動しない。
+- **起点ディレクトリ**: 専有インスタンスは §1 で解決した **target worktree**
+  のディレクトリを起点に起動する (api は `<target worktree>/apps/
+  crowi-runner`、web は `<target worktree>/packages/web`)。検証したいのは
+  target のコードであり、`crowi-qa` を起動したディレクトリのコードではない。
 - **`--prod-build` との関係**: `--prod-build` run では §14 のインスタンス
   がそのまま seeding 対象になる。専有インスタンスを二重起動しない。
 - **DB 名**: `crowi_qa_dev_<run-id>` (§14.3 の `crowi_qa_prod_<run-id>` と
@@ -514,7 +570,7 @@ table・backlink・検索結果・コメント・grant 可視性のように、�
   run 終了時に落とすだけなので、素の `tsx` でよい):
 
   ```bash
-  cd apps/crowi-runner
+  cd <target worktree>/apps/crowi-runner
   env -u MONGOLAB_URI -u MONGODB_URI -u MONGOHQ_URL \
     MONGO_URI="mongodb://localhost/crowi_qa_dev_<run-id>" \
     NODE_ENV=development PORT=<apiPort> \
@@ -523,34 +579,65 @@ table・backlink・検索結果・コメント・grant 可視性のように、�
       ../../packages/api/src/app.ts
   ```
 
+  (`--env-file-if-exists=../../.env` は api プロセスが自分で読むもので、
+  エージェントが値を出力する経路ではない。)
+
   `--env-file-if-exists` で読む repo-root `.env` に `MONGO_URI` が定義され
   ていても、Node の `--env-file` はプロセスに **既に設定済みの** 環境変数を
   ファイルの値で上書きしない (Node の仕様) ため、上記の明示 `MONGO_URI` が
-  優先される。web は `packages/web` を cwd に `next dev` を起動し、
+  優先される。web は `<target worktree>/packages/web` を cwd に `next dev` を起動し、
   `PORT_WEB=<webPort>` / `CROWI_API_URL=http://localhost:<apiPort>` を渡す
-  (`scripts/dev.mjs` が `pnpm dev` に注入するのと同じ変数)。前段の同一
-  オリジン proxy は `scripts/dev-caddy.mjs` の `startNodeProxyFallback()`
-  を流用する (§14.5 と同じ — dev-port registry には登録しない使い捨て
-  ポートを OS プローブで都度選ぶ)。unset が信頼できない場合は §14.3 と同じ
-  く fail-closed で `blocked: conflicting Mongo env var present — cannot
-  guarantee isolation` として起動しない。起動後は接続先 DB 名をログで確認
-  してから provisioning に進む。
+  (`scripts/dev.mjs` が `pnpm dev` に注入するのと同じ変数)。さらに
+  **`NEXT_DIST_DIR=.next-qa-<run-id>` を渡す**: `next dev` は `<distDir>/dev`
+  に排他ロックを取るので、同じ worktree で `pnpm dev` が動いていると (target
+  の解決はその稼働を前提にする) 2 本目が同じ `.next` を指して殺される。
+  run id ごとに分けるのは、同じ worktree への 2 本の run が同時に走っても
+  ロックを取り合わないため (`packages/e2e` が `.next-e2e` で `pnpm dev` と
+  共存しているのと同じ仕組み)。`.next-qa-*` は git / lint / 型検査の対象外
+  (`packages/web/.gitignore` / `biome.json` / `eslint.config.mjs` /
+  `tsconfig.json`)。前段の同一オリジン proxy は `scripts/dev-caddy.mjs` の
+  `startNodeProxyFallback()` を流用する (§14.5 と同じ — dev-port registry
+  には登録しない使い捨てポートを OS プローブで都度選ぶ)。**`listenHost:
+  '127.0.0.1'` を渡す** (省略すると `0.0.0.0` で待ち受け、tailscale から
+  既知パスワードの管理者へ届く)。**残る露出**: api は待受アドレスを指定せず
+  listen し、`next dev` も全インターフェースで待ち受けるので、run の間は OS が
+  選んだ使い捨てポートを知っていれば api / web に直接届く。これは受け入れる
+  (run の間だけ存在し、ポートは run ごとに変わり、終了時に DB ごと消える)。
+  unset が信頼できない場合は §14.3 と同じく fail-closed で `blocked:
+  conflicting Mongo env var present — cannot guarantee isolation` として
+  起動しない。起動後は接続先 DB 名をログで確認してから provisioning に進む。
 - **provisioning**: §14.4 と同一手順の dev 版。`GET
   <一時 proxy>/api/installer` で `installer_required` を確認し、`POST
-  /installer/createAdmin` を run 専用の固定資格情報 (実運用の秘密情報では
-  ない固定値。例 `crowi-qa-fixture@example.com` / 固定パスワード —
-  `packages/e2e/src/config.ts` の `e2eUsers.admin` と同じ発想) で呼ぶ。
+  /installer/createAdmin` を `fixtures/qa-accounts.json` の `admin` (実運用の
+  秘密情報ではない固定値。`cat` して得た値をそのまま渡す) で呼ぶ。
   `already_installed` が返る想定外のケースは同じ資格情報でログインを試し、
-  失敗すれば `blocked: qa DB in unexpected state` で打ち切る。
-- **後始末**: §14.7 と同一機構。成否によらず api/web/proxy プロセスを終了
-  し、`crowi_qa_dev_<run-id>` を drop する。drop 失敗時は `summary.md` に
-  残留 DB 名を明記する。
+  失敗すれば `blocked: qa DB in unexpected state` で打ち切る。続けて
+  **メール設定を入れる** (新しい DB にはメール設定が無く、SMTP host が空だと
+  送信が例外になるため §4.2 のメールを伴うサブフローが完了しない):
+  1. `admin` で `POST /api/auth/login` し access token を得る
+     (`createAdmin` の応答は token を返さない)。
+  2. `PUT /api/admin/plugins/config?name=@crowi/plugin-mail-smtp` に
+     `{ "values": { "host": <`mail.host`>, "port": <`mail.port`> } }`。
+  3. `PUT /api/admin/mail` に `{ "from": <`mail.from`> }`。
+
+  これは **provisioning の手順であり、管理設定 charter (#8) の操作ではない**
+  (§12 の規則は charter が検証対象として何を操作するかの規則で、run が自分で
+  作った DB を使える状態にする手順は含まない)。どちらかの PUT が 2xx 以外
+  なら §4.2 のサブフローだけ `blocked: mail provisioning failed (<reason>)`
+  とし、他のチャーターは続行する。
+- **後始末**: §14.7 と同一機構。run の全チャーターの終了後に (成否によらず)
+  api/web/proxy プロセスを終了し、`crowi_qa_dev_<run-id>` を drop し、
+  `packages/web/.next-qa-<run-id>` を削除する。`--prod-build` run では §14 の
+  インスタンスを同じ時点 (全チャーターの終了後) に落とす。drop 失敗時は
+  `summary.md` に残留 DB 名を明記する。
 - **フォールバック**: 専有インスタンスの起動に失敗した場合 (ポート確保
   不可・Mongo 不達等) は `blocked: qa-owned instance failed to start
   (<reason>)` とし、該当 `api-fixture` チャーターは従来の browser-editor
   セットアップ (ambient dev 上でエディタ手打ち) へフォールバックする —
   検証能力自体は後退しない。ambient dev への mutating write はこの
-  フォールバックでも従来の境界 (§4.2・§5・§7) に従う。
+  フォールバックでも従来の境界 (§4.2・§5・§7) に従う。**フォールバックは
+  `api-fixture` チャーターだけのもの**で、#8 と §4.2 の mutating サブフローは
+  起動失敗時に同じ blocked とし、ambient dev へはフォールバックしない。
 
 #### 6.4.3 `seed-fixtures.mjs` の使い方
 
@@ -565,8 +652,8 @@ node .claude/skills/crowi-qa/scripts/seed-fixtures.mjs \
   --proxy-url http://127.0.0.1:<一時 proxy port> \
   --run-id <run-id> \
   --charter <table|grant|backlink|search|comment> \
-  --email crowi-qa-fixture@example.com \
-  --password <6.4.2 で provisioning した固定パスワード> \
+  --email <fixtures/qa-accounts.json の admin.email> \
+  --password <fixtures/qa-accounts.json の admin.password> \
   --manifest-path .reviews/qa/<run-id>/created.json
 ```
 
@@ -616,18 +703,28 @@ readiness polling が `blocked: ...` に分類されたことを示す — こ�
   のみ**コメントを追加する。readiness polling は不要 (コメント作成は
   同期的)。
 
-## §7. 管理設定 charter (#8) は既定で read-only
+## §7. 管理設定 charter (#8) は所有インスタンスでのみ実行する
+
+管理設定 charter は **所有インスタンス (§5、QA 専有インスタンス §6.4.2 /
+`--prod-build` の §14 インスタンス) でのみ実行する**。ambient dev インスタンス
+(共有 DB・`isolateDb: true` を問わない) と `--url` では
+
+```
+blocked: admin charter requires an owned instance
+```
+
+としてこの charter だけをスキップする (`--i-understand-destructive` でも解除
+しない)。管理者は所有インスタンスの provisioning で `fixtures/qa-accounts.json`
+の `admin` を installer で作ったもので、ambient dev には既知パスワードの
+管理者を作らない。
 
 セキュリティ設定は Config を永続変更し (`packages/api/src/hono/handlers/
 admin/security.ts`)、crypto カードの再暗号化は sensitive config の値を
 書き換える (`packages/web/src/components/admin/crypto-status-card.tsx`,
 `packages/web/src/lib/use-admin-crypto.ts`, `packages/api/src/hono/
-handlers/adminCrypto.ts`)。共有 dev DB (既定) ではこれらのグローバル設定を
-**実際に変更しない** — 画面表示・入力バリデーション・保存前 confirm
-ダイアログの確認までを行い、実際の保存 / 再暗号化ボタンは押さない。
-
-Config を実際に変更する検証は、`dev.local.json` で `isolateDb: true` を
-宣言した worktree に対してのみ実施してよい。
+handlers/adminCrypto.ts`)。ambient dev ではこの charter 自体を実行しないので read-only 方針は維持される。
+所有インスタンスは run 限りで捨てられるため、Config を実際に変更する検証は
+所有インスタンスに対してのみ実施してよい。
 
 ## §8. 証跡モデル
 
@@ -835,7 +932,7 @@ offload (§13) より前に**必ず適用する — 生の値が一度でもデ�
   する。管理設定チャーターは既存のプラグイン設定値を **変更しない**
   (フォームの到達・表示確認までに留め、実際の値の入力・保存は行わない —
   更新 API は送信された値をそのまま Config へ書き込むため誤操作が本番
-  相当の設定を汚す)。
+  相当の設定を汚す)。所有インスタンスの provisioning のメール設定 (§6.4.2) はこの対象外。
 - スクリーンショットに上記の値やトークンが写る操作は撮影前に該当
   フィールドをマスク (blur/hide) してから撮影する。
 - `.claude/scripts/codex-run.sh` へのログオフロード (§13) は **redaction
@@ -973,19 +1070,20 @@ blocked: conflicting Mongo env var present (MONGOLAB_URI/MONGODB_URI/MONGOHQ_URL
 ### 14.4 DB ライフサイクル (provisioning)
 
 この DB は当該 run の `--prod-build` が排他的に所有し、他 run・人間の dev
-セッションとは共有しない使い捨て DB である。§5 の「テストアカウントの
-自動作成はしない」は共有 dev DB を汚さないための方針であり、この専有 DB
-には適用しない — 以下の手順で自己完結的に provisioning する:
+セッションとは共有しない使い捨て DB である。所有インスタンスでは run が
+アカウントを作ってよい (§5 の自動登録の規則) — 以下の手順で自己完結的に
+provisioning する:
 
 1. 起動後、`GET <一時 proxy>/api/installer` で状態を確認する。新規の
    per-run DB なので通常は常に `installer_required` になる。
-2. `installer_required` の場合: `POST /installer/createAdmin` を、この run
-   専用の固定資格情報 (実運用の秘密情報ではない。`packages/e2e/src/
-   config.ts` の `e2eUsers.admin` と同じ発想の固定値、例
-   `crowi-qa-prodbuild@example.com` / 固定パスワード) で呼び、管理者を
-   作成する。
+2. `installer_required` の場合: `POST /installer/createAdmin` を
+   `fixtures/qa-accounts.json` の `admin` (実運用の秘密情報ではない固定値。
+   QA 専有インスタンス §6.4.2 と同じ 1 件) で呼び、管理者を作成する。
+   続けて §6.4.2 provisioning と同じ手順でメール設定 (`admin` でログイン →
+   SMTP host / port → 送信元アドレス) を入れる。これは provisioning の手順で
+   あり、管理設定 charter の操作ではない。
 3. `already_installed` が返る場合 (直前 run の drop が失敗して DB が残存
-   した等、想定外のケース): 手順 2 と同一の固定資格情報でログインを試す。
+   した等、想定外のケース): 手順 2 と同一の `admin` でログインを試す。
    成功すればそのまま再利用してよい。失敗する場合は DB が想定外の状態に
    あるとみなし、
 
@@ -1010,18 +1108,20 @@ blocked: conflicting Mongo env var present (MONGOLAB_URI/MONGODB_URI/MONGOHQ_URL
 オリジンで前段する (自己ホスト本番の推奨トポロジを模す)。この一時 proxy は
 dev-port registry には一切登録しない (実行中の worktree の anchor と
 衝突しない、使い捨てのポートを都度 OS プローブで選ぶ)。
+**`listenHost: '127.0.0.1'` を渡す** (省略すると `0.0.0.0` で待ち受け、
+tailscale から既知パスワードの管理者へ届く)。残る露出は §6.4.2 と同じ。
 
 ### 14.6 スモーク
 
 この一時 proxy (`http://127.0.0.1:<proxyPort>`) 経由で以下の URL に順に
 アクセスし、いずれも 200 応答 (エディタは HTML 200 かつエディタ本体の
-マウント確認) とコンソールエラー無しを確認する。ログイン画面は 14.4 の
-固定管理者資格情報で実際にログインし、それ以降のホーム/管理/エディタは
+マウント確認) とコンソールエラー無しを確認する。ログイン画面は
+`fixtures/qa-accounts.json` の `admin` で実際にログインし、それ以降のホーム/管理/エディタは
 同一セッションのまま到達確認する:
 
 | # | 画面 | URL |
 |---|---|---|
-| 1 | ログイン | `<proxy>/login` (固定管理者資格情報でログインまで行う) |
+| 1 | ログイン | `<proxy>/login` (`admin` でログインまで行う) |
 | 2 | ホーム | `<proxy>/` |
 | 3 | 管理 | `<proxy>/admin` |
 | 4 | エディタ | `<proxy>/_edit?page_id=<14.4 手順 4 で作成した page id>` |
@@ -1036,8 +1136,10 @@ unverified の理由を列挙する)。
 
 ### 14.7 後始末
 
-成否によらず api / web / proxy プロセスを必ず終了する (残存プロセスを
-残さない)。DB は run 専用の使い捨てなので、**成否によらず smoke 終了時に
+**run の全チャーターの終了後に (成否によらず)** api / web / proxy
+プロセスを必ず終了する (残存プロセスを残さない)。スモークの後も、同じ
+インスタンスを管理設定チャーターと §4.2 が使うため、スモーク終了時には
+落とさない。DB は run 専用の使い捨てなので、**同じ時点で
 `crowi_qa_prod_<run-id>` を drop する** (次回 run は新しい run id で新しい
 DB を provisioning するため、固定資格情報を次回のために残す必要はない)。
 drop に失敗した場合は `summary.md` に残留 DB 名を明記する (運用側が手動で
@@ -1071,8 +1173,6 @@ pre-flight はこの verdict をそのまま Go/No-Go 材料に転記する。
 - `packages/e2e/src/mailpit.ts` — `waitForLatestMessageTo` /
   `extractInviteLink` (Mailpit HTTP API からのメール取得 + 正規表現マッチ
   による token リンク捕捉手法)。
-- `packages/e2e/src/config.ts` — `e2eUsers` (固定資格情報の命名パターン。
-  `--prod-build` 用の固定 QA 資格情報の命名で流用)。
 - `.claude/agents/feature-planner.md:84-90` — クリティカルフロー表
   (9 charter 展開の唯一の正本 — 表そのものは拡張しない)。
 - `.claude/scripts/codex-run.sh` — 既存の offload wrapper (新規スクリプトを
@@ -1083,11 +1183,15 @@ pre-flight はこの verdict をそのまま Go/No-Go 材料に転記する。
 - **git push をしない**。証跡は `.reviews/qa/` に置く (commit しない)。
 - **registry を書き込まない** (`allocateAnchor` を呼ばない)。新しい
   worktree のアンカーを推測で採番しない。
-- **QA 用の認証情報は環境変数で受け取る**。未設定時は該当 charter だけ
-  `blocked: no credentials`。自動でテストアカウントを登録しない。
+- **QA 用の固定アカウントは `fixtures/qa-accounts.json` から読む**。`.env`
+  も環境変数も読まない。ambient dev に `user` のアカウントが無ければ該当
+  charter だけ `blocked: no account (create it once — see §5)`。ambient dev
+  には自動登録しない (所有インスタンスでは run が作ってよい)。既知パスワードの
+  管理者は所有インスタンスの外に作らない。
 - **findings は fix-or-drop**。退避先は存在しない (全 skill 共通方針)。
 - **共有 dev DB では破壊的操作を行わない**。mutation を伴う認証サブフロー・
-  管理設定の実変更は isolated DB (または `--prod-build` の per-run DB)
-  限定。
+  管理設定チャーターは所有インスタンス (QA 専有インスタンスまたは
+  `--prod-build` の per-run インスタンス) 限定。ambient dev と `--url` では
+  `blocked: ... requires an owned instance`。
 - **chrome-devtools MCP → claude-in-chrome → blocked** の優先順位を守り、
   縮退実行はしない。

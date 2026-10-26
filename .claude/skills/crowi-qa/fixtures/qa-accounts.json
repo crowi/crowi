@@ -1,0 +1,20 @@
+{
+  "_note": "These are NOT secrets. They are throwaway QA accounts for crowi-qa: the user is a regular account on the ambient dev instance, and the admin/mail values are used only on instances a crowi-qa run starts itself and discards (DB included) at the end of the run. Never put a real credential, token or key in this file.",
+  "user": {
+    "email": "crowi-qa-user@example.com",
+    "username": "crowiqauser",
+    "name": "Crowi QA User",
+    "password": "crowi-qa-user-password"
+  },
+  "admin": {
+    "email": "crowi-qa-admin@example.com",
+    "username": "crowiqaadmin",
+    "name": "Crowi QA Admin",
+    "password": "crowi-qa-admin-password"
+  },
+  "mail": {
+    "host": "localhost",
+    "port": 1025,
+    "from": "crowi-qa@example.com"
+  }
+}
