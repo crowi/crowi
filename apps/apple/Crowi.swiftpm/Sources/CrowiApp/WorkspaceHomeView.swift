@@ -51,7 +51,7 @@ struct WorkspaceHomeView: View {
     var body: some View {
         Group {
             if let session = holder.session {
-                SessionCredentialGate(session: session) { content(session: session) }
+                SessionCredentialGate(session: session, onShowSwitcher: onShowSwitcher) { content(session: session) }
                     .confidentialBanner(session.confidential)
                     .task { await session.activated() }
                     // §11 — the foreground notifications poll loop lives in a
@@ -197,13 +197,28 @@ struct WorkspaceHomeView: View {
 /// it failing separately (`WorkspaceSignInAgainView`). Observes the session
 /// for the same reason `SessionNotificationBell` does — the holder publishes
 /// when the session is REPLACED, not when its own values change.
+///
+/// The screen keeps the switcher in the same leading slot every other root
+/// has: it replaces the whole shell, so without it a refused workspace
+/// becomes a dead end the reader can only leave by signing out of it.
 private struct SessionCredentialGate<Content: View>: View {
     @ObservedObject var session: WorkspaceSession
+    let onShowSwitcher: () -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         if session.needsSignIn {
-            WorkspaceSignInAgainView(session: session)
+            NavigationStack {
+                WorkspaceSignInAgainView(session: session)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            CrowiWorkspaceIconButton(
+                                workspaceName: session.context.workspace.displayTitle,
+                                action: onShowSwitcher
+                            )
+                        }
+                    }
+            }
         } else {
             content()
         }
