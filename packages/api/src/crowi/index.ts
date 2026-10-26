@@ -234,10 +234,10 @@ class Crowi {
    * `trackSideEffect` adds the promise here and removes it on settle;
    * `drainSideEffects` awaits the set until it is empty.
    *
-   * Production never calls `drainSideEffects`, so tracking is the only
-   * runtime cost on the request path (a Set add/delete per side effect) and
-   * the drain primitive is a no-op there. The test harness drains before
-   * disconnecting Mongo so settling writes do not race the close.
+   * Tracking costs a Set add/delete per side effect on the request path.
+   * `drainSideEffects` is awaited (with a deadline) by the shutdown path in
+   * `util/server-lifecycle.ts`, and by the test harness before disconnecting
+   * Mongo so settling writes do not race the close.
    */
   private inFlightSideEffects = new Set<Promise<unknown>>();
 
@@ -420,7 +420,8 @@ class Crowi {
    * 'activated' → user-page creation → page events → backlink/watch/
    * mention), and those are tracked too. Resolves once the set is empty.
    *
-   * Production never calls this — it is the test-teardown drain hook.
+   * Called by the shutdown path (`util/server-lifecycle.ts`, under a
+   * deadline) and by the test-teardown drain hook.
    */
   async drainSideEffects(): Promise<void> {
     while (this.inFlightSideEffects.size > 0) {
