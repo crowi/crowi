@@ -9,6 +9,7 @@ import { imageAffordanceExtension } from './image-affordance-extension';
 import { linkCardAffordanceExtension } from './link-card-affordance-extension';
 import { listKeymap } from './list-keymap';
 import { pasteHandler } from './paste-handler';
+import { rawSpaceLinkExtension } from './raw-space-link-extension';
 
 export interface BuildExtensionsProps {
   readonly?: boolean;
@@ -126,6 +127,9 @@ export interface BuildExtensionsProps {
  *    Phase 3 — gated on `linkCardEnabled` (default `true`) so a
  *    disabled `security:linkCardEnabled` admin toggle also suppresses
  *    the editor's own `@[card](url)` conversion affordance.
+ *  - `rawSpaceLinkExtension()` — mark decorations for raw-space links the
+ *    renderer recovers but the CommonMark parser does not; built-in, no
+ *    opt-out, ordering vs the affordances above is immaterial.
  *  - `extraExtensions` last so caller-supplied extensions win on
  *    precedence ties (CodeMirror layers later extensions on top).
  */
@@ -165,6 +169,8 @@ export function buildExtensions(props: BuildExtensionsProps): Extension[] {
     // `dropHandler`'s pattern, so there's no bare-mount case it needs
     // to be excluded from).
     imageAffordanceExtension(),
+    // Colours `[label](/path with spaces)` as a link, matching what the renderer recovers; always on, including read-only.
+    rawSpaceLinkExtension(),
     // Link-card conversion affordance (bare URL <-> `@[card](url)`) —
     // same "always on, read-only-aware on its own" pattern as
     // `imageAffordanceExtension()` immediately above, now gated on the

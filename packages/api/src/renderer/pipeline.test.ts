@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Code, Html, Root } from 'mdast';
 import type { CodeBlockRenderer, EmbedRenderer, PluginLogger, UrlInlineExpansionRule } from '@crowi/plugin-api';
 import { crowi } from 'src/test/setup';
@@ -1190,5 +1192,17 @@ describe('break-normalization (feature-renderer-break-normalization)', () => {
       expect(nodes).toHaveLength(1);
       expect(nodes[0].data).toBeUndefined();
     });
+  });
+});
+
+// The editor's highlighting runs the same corpus through its own parser (packages/web raw-space-link-extension.test.ts).
+describe('raw-space link corpus parity with the editor', () => {
+  const corpus: Array<{ name: string; markdown: string; destinations: string[] }> = JSON.parse(
+    readFileSync(path.resolve(__dirname, '../../../api-contract/src/util/__fixtures__/raw-space-link-corpus.json'), 'utf8'),
+  );
+
+  it.each(corpus.map((row) => [row.name, row] as const))('%s', async (_name, row) => {
+    const { metadata } = await runCore(row.markdown);
+    expect(metadata.rawSpaceLinks).toEqual(row.destinations);
   });
 });

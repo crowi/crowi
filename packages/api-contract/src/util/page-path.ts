@@ -92,3 +92,46 @@ export function decodePagePathFromUrl(urlPath: string): string {
 export function decodeRouteParamSegment(segment: string): string {
   return segment.replace(/\+/g, ' ');
 }
+
+/** One `[label](/destination)` candidate found by `scanRawSpaceLinkGrammar`. */
+export interface RawSpaceLinkMatch {
+  /** Index in the scanned string where the match (`[`) starts. */
+  start: number;
+  /** Index (exclusive) just after the closing `)`. */
+  end: number;
+  label: string;
+  destination: string;
+}
+
+/**
+ * Lists `[label](/destination)` candidates left to right, non-overlapping.
+ * The label has no `[` / `]` / newline; the destination starts with `/` and
+ * has no `(` / `)` / newline. The bounds keep a pathological run of unmatched
+ * brackets from a runaway scan. This is the single definition shared by the
+ * renderer (which turns accepted candidates into links) and the editor (which
+ * colours them), so the two cannot drift apart.
+ */
+export function scanRawSpaceLinkGrammar(source: string): RawSpaceLinkMatch[] {
+  const out: RawSpaceLinkMatch[] = [];
+  for (const m of source.matchAll(/\[([^[\]\n]{1,512})\]\((\/[^()\n]{1,2048})\)/g)) {
+    out.push({ start: m.index, end: m.index + m[0].length, label: m[1], destination: m[2] });
+  }
+  return out;
+}
+
+/**
+ * Whether a candidate is a raw-space link that should be recovered as a link.
+ * `source` is the string the candidate was scanned from (the renderer passes
+ * the de-escaped text value). `raw` is the same candidate located in the
+ * original markdown, needed only to see a backslash that parsing already
+ * removed from `source`; omit it when no original text is available.
+ */
+export function isRawSpaceLinkRecoverable(source: string, match: RawSpaceLinkMatch, raw?: { source: string; start: number }): boolean {
+  // `![alt](/a b)` fails to parse as an image for the same reason it fails as a link.
+  if (match.start > 0 && source[match.start - 1] === '!') return false;
+  if (!match.destination.includes(' ')) return false;
+  // A `"` looks like a title continuation; leave it rather than guess a wrong URL.
+  if (match.destination.includes('"')) return false;
+  if (raw && raw.start > 0 && raw.source[raw.start - 1] === '\\') return false;
+  return true;
+}

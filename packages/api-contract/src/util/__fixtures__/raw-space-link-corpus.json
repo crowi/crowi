@@ -1,0 +1,129 @@
+[
+  {
+    "name": "plain",
+    "markdown": "[a](/x y)",
+    "destinations": [
+      "/x y"
+    ]
+  },
+  {
+    "name": "two-in-line",
+    "markdown": "[a](/x y) and [b](/p q)",
+    "destinations": [
+      "/x y",
+      "/p q"
+    ]
+  },
+  {
+    "name": "image",
+    "markdown": "![a](/x y)",
+    "destinations": []
+  },
+  {
+    "name": "escaped-open",
+    "markdown": "\\[a](/x y)",
+    "destinations": []
+  },
+  {
+    "name": "escaped-both",
+    "markdown": "\\[a\\](/x y)",
+    "destinations": []
+  },
+  {
+    "name": "title-like",
+    "markdown": "[a](/x y \"t\")",
+    "destinations": []
+  },
+  {
+    "name": "relative",
+    "markdown": "[a](x y)",
+    "destinations": []
+  },
+  {
+    "name": "no-close",
+    "markdown": "[a](/x y",
+    "destinations": []
+  },
+  {
+    "name": "percent",
+    "markdown": "[a](/x%20y)",
+    "destinations": []
+  },
+  {
+    "name": "plus",
+    "markdown": "[a](/x+y)",
+    "destinations": []
+  },
+  {
+    "name": "angle",
+    "markdown": "[a](</x y>)",
+    "destinations": []
+  },
+  {
+    "name": "inline-code",
+    "markdown": "`[a](/x y)`",
+    "destinations": []
+  },
+  {
+    "name": "fenced-code",
+    "markdown": "```\n[a](/x y)\n```",
+    "destinations": []
+  },
+  {
+    "name": "indented-code",
+    "markdown": "    [a](/x y)",
+    "destinations": []
+  },
+  {
+    "name": "html-block",
+    "markdown": "<div>\n[a](/x y)\n</div>",
+    "destinations": []
+  },
+  {
+    "name": "inline-html-around",
+    "markdown": "<span>[a](/x y)</span>",
+    "destinations": [
+      "/x y"
+    ]
+  },
+  {
+    "name": "emphasis-in-label",
+    "markdown": "[*a*](/x y)",
+    "destinations": []
+  },
+  {
+    "name": "escape-in-label",
+    "markdown": "[a\\*b](/x y)",
+    "destinations": [
+      "/x y"
+    ]
+  },
+  {
+    "name": "entity-in-label",
+    "markdown": "[a&amp;b](/x y)",
+    "destinations": [
+      "/x y"
+    ]
+  },
+  {
+    "name": "blockquote",
+    "markdown": "> [a](/x y)",
+    "destinations": [
+      "/x y"
+    ]
+  },
+  {
+    "name": "list-item",
+    "markdown": "- [a](/x y)",
+    "destinations": [
+      "/x y"
+    ]
+  },
+  {
+    "name": "heading",
+    "markdown": "## [a](/x y)",
+    "destinations": [
+      "/x y"
+    ]
+  }
+]
