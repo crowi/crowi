@@ -30,6 +30,7 @@ Bash({ command: 'pgrep -f "^bash .*manager-watch.sh" >/dev/null && echo already-
    - `.feature-state/kickoff-chain.json` — 直列チェーンの継続待ちがあるか。
    - `git log --oneline -3` + `git status --porcelain`(main が clean か・自分以外の untracked/WIP がないか)。
 5. ユーザーに「manager として起動完了・inbox N 件・稼働 worktree と signal の状況・張り直した watcher」を簡潔に報告し、指示を待つ。
+   - **報告の末尾に、判断待ちの一覧を毎回付けない。** 判断待ちは、生じたときに 1 回だけ、何を決めるか・選択肢・推奨を書いて示す。以後は、状態が変わったときと聞かれたときだけ出す。
 
 ## 役割契約(このセッションが守ること)
 
