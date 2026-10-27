@@ -280,6 +280,39 @@ Caddy、無ければ依存ゼロの node フォールバック。ルーティン
 
 dev では `CROWI_API_URL` も `NEXT_PUBLIC_*` も不要です。
 
+## ヘルスチェックと停止
+
+api は、オーケストレータやロードバランサ向けに認証不要の確認口を 2 つ持ちます。本文は `{"status":"ok"}` か `{"status":"unavailable"}` だけで、どの依存先が落ちたかなどの内部情報は返しません。
+
+| パス | 意味 | 200 を返す条件 |
+| --- | --- | --- |
+| `/healthz` | 生きているか (liveness) | プロセスが HTTP に応答できる限り常に 200 |
+| `/readyz` | 受け付けてよいか (readiness) | DB に繋がっていて、停止処理に入っていないときだけ 200。それ以外は 503 |
+
+`/readyz` は Redis の接続状態を見ません (Redis が落ちても crowi は縮退して動き続けるため)。リバースプロキシ経由では `/api/healthz` / `/api/readyz` でも届きます。外に公開したくない場合は proxy で塞いでください (オーケストレータは api のポートを直接叩くので影響しません)。
+
+Kubernetes の例:
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 3000 }
+readinessProbe:
+  httpGet: { path: /readyz, port: 3000 }
+```
+
+公式 Docker イメージには `/healthz` を叩く `HEALTHCHECK` が入っており、`docker ps` に `healthy` / `unhealthy` が出ます。DB 障害でコンテナを入れ替えても直らないため、`HEALTHCHECK` は `/readyz` ではなく `/healthz` を見ます。
+
+SIGTERM / SIGINT を受けた api は、`/readyz` を 503 にし、新しい接続を受けなくなり、処理中の HTTP リクエストと、保存の後に裏で走る処理 (検索インデックスの更新や通知) が終わるのを、合図から合計で最長 8 秒待ってから終了します。猶予は固定で、環境変数では変えられません。`docker stop` の既定 (10 秒) に収まりますが、`stop_grace_period` / `terminationGracePeriodSeconds` は 10 秒以上にしておいてください。
+
+Kubernetes でエンドポイントからの除外が遅れる場合は、`preStop` で数秒待たせます。
+
+```yaml
+lifecycle:
+  preStop:
+    exec:
+      command: ["sleep", "5"]
+```
+
 ## まとめ
 
 | 構成 | ブラウザ → api HTTP | ブラウザ → api WS | インライン画像 / ファイル | api 先変更に再ビルド? |

@@ -50,6 +50,7 @@ import { registerDraftRoutes } from './handlers/draft';
 import { registerEmailChangeRoutes } from './handlers/email-change';
 import { registerFederatedAuthRoutes } from './handlers/federated-auth';
 import { registerFederatedRegistrationRoutes } from './handlers/federated-registration';
+import { registerHealthRoutes } from './handlers/health';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerMeRoutes } from './handlers/me';
@@ -141,6 +142,8 @@ const mountPluginRoutes = (app: ReturnType<typeof createHonoApp>, crowi: Crowi):
  */
 export const buildHonoApp = (crowi: Crowi) => {
   const base = createHonoApp();
+  // Registered before any middleware so probes answer without request-ID / request-log / CORS work on every poll.
+  registerHealthRoutes(base, crowi);
   // RFC-0025 §9 Phase 2 — canonical request ID + request-scope ALS.
   // Installed FIRST, outermost of every other app-wide middleware: every
   // module-logger record produced downstream (security headers, CORS,
