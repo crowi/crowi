@@ -95,8 +95,10 @@ function printPage(body: GetPageResponse, _profile: Profile, globals: GlobalOpti
       contentType,
       body: text,
     },
-    // Human mode: the body alone, so `crowi get <path> > file.md` works.
-    () => text,
+    // Human mode: the body alone, so `crowi get <path> > file.md` round-trips.
+    // `render` appends one `\n`, so drop the body's own final one to avoid a
+    // doubled blank line; a body without a trailing newline still gets one.
+    () => (text.endsWith('\n') ? text.slice(0, -1) : text),
     globals,
   );
 }
