@@ -32,8 +32,9 @@ description: crowi コマンドのサブコマンド・フラグ・終了コー�
 | `completion <shell>` | シェル補完スクリプトを出力する | — | — |
 | `open <path-or-id>` | ブラウザでページを開く | `--print` | — |
 | `search <query>` | 全文検索する | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
-| `get <path-or-id>` (別名 `cat`) | ページ本文を標準出力へ書き出す | `--revision <id>` | `pages:read` |
+| `get <path-or-id>` (別名 `cat`) | ページ本文を保存されたとおりに標準出力へ書き出す (本文が改行で終わらないときだけ改行を 1 つ足す) | `--revision <id>` | `pages:read` |
 | `ls [path]` | パス配下の子ページを一覧する | `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `diff <path-or-id>` | ページの最新の本文とローカルのファイルを比べる。末尾の改行の数は無視し、違えば unified diff を出して `1` で終わる | `-f, --file <path>` | `pages:read` |
 | `recent` | 最近更新されたページを新しい順に一覧する | `--prefix <path>` / `--limit <n>` / `--offset <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
 | `create <path>` | ページを作成する | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` / `--type <kind>` | `pages:write` |
 | `edit <path>` | エディタで対話編集する (artifact ページでも使え、`.html` の一時ファイルを開く) | `--editor <bin>` / `--force` | `pages:write` |
@@ -92,7 +93,7 @@ crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{
 | コード | 意味 |
 | --- | --- |
 | `0` | 成功 |
-| `1` | 一般エラー / 通信失敗 |
+| `1` | 一般エラー / 通信失敗 (`diff` ではページとファイルが異なる) |
 | `2` | 未サインイン (`crowi login` が必要) |
 | `3` | スコープ不足 (`--scope` を足して再ログインする) |
 | `4` | 対象が存在しない |
