@@ -1,5 +1,15 @@
 # @crowi/api
 
+## 2.0.0-alpha.28
+
+### Minor Changes
+
+- 5616565: Add unauthenticated `/healthz` (liveness) and `/readyz` (readiness: DB connected and not shutting down) endpoints, a `HEALTHCHECK` in the official Docker image, and make SIGTERM/SIGINT stop accepting connections and wait up to 8 seconds for in-flight HTTP requests and post-save background work (search index updates, notifications) before exiting.
+
+### Patch Changes
+
+- @crowi/api-contract@2.0.0-alpha.28
+
 ## 2.0.0-alpha.27
 
 ### Patch Changes
