@@ -11,6 +11,7 @@ import { registerBookmark } from './commands/bookmark';
 import { registerComment } from './commands/comment';
 import { registerCompletion } from './commands/completion';
 import { registerCreate } from './commands/create';
+import { registerDiff } from './commands/diff';
 import { registerEdit } from './commands/edit';
 import { registerCat, registerGet } from './commands/get';
 import { registerLogin } from './commands/login';
@@ -163,6 +164,7 @@ export function createProgram(): Command {
   registerCat(program);
   registerLs(program);
   registerRecent(program);
+  registerDiff(program);
 
   // Write commands (Stage 5): create / edit / update / mv / rm.
   registerCreate(program);
