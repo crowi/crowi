@@ -46,14 +46,26 @@ winname="${br%/impl}"
 model_args=()
 [ -n "${GW_CLAUDE_MODEL:-}" ] && model_args=(--model "$GW_CLAUDE_MODEL")
 
+# A worktree's .feature-state/specs and tasks are symlinks into the main
+# worktree's .feature-state. Claude Code checks a symlink's target against the
+# allowed directories, so without this every spec/task read or write from the
+# worktree session stops for approval. Keyed on the main side only, because
+# the symlinks may be created after Claude starts.
+main="$(git -C "$wt" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+add_dir_args=()
+if [ -n "$main" ] && [ "$wt" != "$main" ] && [ -d "$main/.feature-state" ]; then
+  add_dir_args=(--add-dir "$main/.feature-state")
+fi
+
 # Hand tmux the argv directly instead of a command string: a string is run
 # through a shell, so a quote inside any value (a model name here) would end
 # the quoting and the rest would be read as shell syntax.
 if [ "${GW_TMUX_CLAUDE_DRYRUN:-0}" = "1" ]; then
   printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q' "$wt" "$winname" "$name" "$name"
   [ -n "${GW_CLAUDE_MODEL:-}" ] && printf ' --model %q' "$GW_CLAUDE_MODEL"
+  [ "${#add_dir_args[@]}" -gt 0 ] && printf ' --add-dir %q' "$main/.feature-state"
   printf '\n'
   exit 0
 fi
 
-exec tmux new-window -c "$wt" -n "$winname" -- claude --remote-control "$name" --name "$name" "${model_args[@]}"
+exec tmux new-window -c "$wt" -n "$winname" -- claude --remote-control "$name" --name "$name" "${model_args[@]}" "${add_dir_args[@]}"
