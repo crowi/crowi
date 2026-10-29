@@ -159,6 +159,7 @@ Bash({ command: 'bash .claude/scripts/pr-merge-watch.sh <N>', description: 'Vers
    image の再ビルドは `docker.yml` の workflow_dispatch — 実行は人間の判断)。
    ただし **wiki の記録だけは verify が書いてよい**(read-only の例外)。成果物ではなく
    記録なので、再 publish のような不可逆な操作を伴わないため。
+7. **Discord の一言コメントを作る。** 成果物がすべて揃っていたら、報告の最後に `/crowi-release-discord-nits <tag>` を実行し、生成したテキストを報告に添える。CI の告知のスレッドに人が貼るための文面なので、投稿はしない。揃っていない成果物があるときは作らない (告知の前提が崩れているため)。
 
 ## 鉄則
 
