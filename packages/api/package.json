@@ -57,7 +57,7 @@
     "@hocuspocus/extension-redis": "^4.0.0",
     "@hocuspocus/server": "^4.0.0",
     "@hono/mcp": "catalog:",
-    "@hono/node-server": "^2.0.11",
+    "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.4.0",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "^0.10.16",
