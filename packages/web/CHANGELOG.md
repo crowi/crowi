@@ -1,5 +1,12 @@
 # @crowi/web
 
+## 2.0.0-alpha.28
+
+### Patch Changes
+
+- cdfac96: The editor now colours `[label](/path with spaces)` as a link under the same conditions the preview turns it into one, instead of showing the destination as plain text.
+- @crowi/api-contract@2.0.0-alpha.28
+
 ## 2.0.0-alpha.27
 
 ### Patch Changes

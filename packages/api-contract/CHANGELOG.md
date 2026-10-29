@@ -1,5 +1,9 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.28
+
+No changes in this release.
+
 ## 2.0.0-alpha.27
 
 ### Patch Changes
