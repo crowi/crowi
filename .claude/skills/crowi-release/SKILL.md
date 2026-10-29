@@ -71,12 +71,30 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
 **ここで必ず止まる。** merge はユーザーの明示指示があった場合のみ
 `gh pr merge <N> --squash`(以降は CI が publish → tag → image → 告知まで自動)。
 
+**材料を出したら、merge を待つ見張りを張る。** ユーザーは GitHub で自分で merge することが多いので、merge の指示が来るのを待つだけにしない:
+
+```bash
+Bash({ command: 'bash .claude/scripts/pr-merge-watch.sh <N>', description: 'Version PR の merge を待つ',
+       run_in_background: true, timeout: 2147483647 })
+```
+
+- `MERGED <sha>` で終わったら、確認を挟まずに続ける: `git pull --ff-only origin main` → `bash .claude/scripts/ci-watch.sh <sha>` を background で動かして Release / Docker を待つ → green なら `git fetch --tags origin` で Release が作った tag を取ってから、モード 2 (verify) を wiki の記録まで行う (取らないと `git describe` が前回の tag を返す)。進めることだけを 1 行で伝え、「merge してよいですか」「verify しますか」とは聞かない。
+- `CLOSED` で終わったら報告して止まる。
+- **merge を求める文を出す前に `gh pr view <N> --json state` を見る。** すでに MERGED なら求めずに上の続きへ進む。
+- CI が red のときは verify に進まず、失敗した run を報告する (再 publish はしない — 鉄則)。
+
 ## モード 2: verify(タグ後 — 成果物は read-only、wiki の記録だけ書く)
 
 対象 tag(既定 = `git describe --tags --abbrev=0 --match 'v*'` on latest main)について:
 
 1. **CI 完走**: `gh run list --workflow Release --limit 1` と
    `gh run list --workflow Docker --limit 1` が success。
+   **Release がタグ push の拒否で落ちていたら、Release workflow を再実行しない。** タグの指すコミットの `.github/workflows/` がブランチ先端と食い違うと (Version PR の merge と workflow を変える別 PR が同時に入ったとき)、GitHub はその ref 作成に `Workflows: write` を要求して拒否する。npm publish はその前に成功しているので、再実行しても changesets が `published=false` を返し、tag・GitHub Release・Docker がすべて skip される。復旧は手で、ユーザーの承認を得てから次の順に行う (force は使わない):
+   ```bash
+   git push --atomic origin <拒否された tag ...>
+   gh release create <tag> --verify-tag --notes-file <集約ノート>
+   gh workflow run docker.yml -f version=<tag> -f ref=<tag> -f announce=true
+   ```
 2. **npm**: 公開パッケージを列挙して各バージョンを確認。一覧は**ハードコードしない**
    (workspace が正本):
    ```bash
@@ -112,11 +130,19 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
    採ると日付が 1 日ずれることがある。書式は既存ページに合わせる(詳細ページは「前の
    リリースからの変更点」+ 立場ごとの対応要否の表から始める。index は 1 行要約)。
 
-   **index の 1 行は 300 文字程度まで**に収める。表は「自分に関係あるか」を判断して詳細
-   ページへ入るための目次で、説明は詳細ページの仕事である。破壊的変更・停止窓・
-   セキュリティのように読者の行動が変わるものを先に書き、残りは語を並べる程度に留める
-   (2026-09-21 に是正: 500 → 540 → 911 → 1047 → 1291 文字と毎リリース伸び、表として
-   読めなくなっていた)。
+   **index の 1 行 (変更点の列) は 200 文字以内**に収める。表は「自分に関係あるか」を判断して詳細ページへ入るための目次で、説明は詳細ページの仕事である。読者の行動が変わるもの (破壊的変更・再サインイン・セキュリティ) を先に、何が変わるかだけを書き、残りは語を並べる程度に留める。**手順・理由・括弧の補足は書かない** (「古いレプリカを止めてから起動」「Crowi は未使用」などは詳細ページに置く)。依存更新は主なものを 1 つ挙げて「ほか」でまとめる。
+
+   index の行は手で挿入せず、必ず次の script で足す。200 文字を超えると何も書かずに exit 1 になるので、そのときは要約を削ってからやり直す (上限を書いておくだけでは、詳細ページの内容を持ち込んで毎リリース伸びた):
+
+   ```bash
+   crowi -p crowi-team-wiki get /crowi/release/ > <scratch>/index.md
+   node .claude/skills/crowi-release/scripts/add-release-index-row.mjs \
+     --in <scratch>/index.md --out <scratch>/index.new.md \
+     --version v2.0.0-alpha.<N> --page /crowi/release/<YYYY>/<MM>/<DD>/alpha-<N> \
+     --date <YYYY-MM-DD> --summary "<変更点>"
+   diff <scratch>/index.md <scratch>/index.new.md          # 追加 1 行だけであること
+   crowi -p crowi-team-wiki update /crowi/release/ --file <scratch>/index.new.md
+   ```
 
    依存パッケージの脆弱性対応を書くときは主語を取り違えない(`crowi-changesets` の
    「依存パッケージの脆弱性対応の書き方」が正本)。詳細ページと index の 1 行の両方に
@@ -133,6 +159,7 @@ prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instructio
    image の再ビルドは `docker.yml` の workflow_dispatch — 実行は人間の判断)。
    ただし **wiki の記録だけは verify が書いてよい**(read-only の例外)。成果物ではなく
    記録なので、再 publish のような不可逆な操作を伴わないため。
+7. **Discord の一言コメントを作る。** 成果物がすべて揃っていたら、報告の最後に `/crowi-release-discord-nits <tag>` を実行し、生成したテキストを報告に添える。CI の告知のスレッドに人が貼るための文面なので、投稿はしない。揃っていない成果物があるときは作らない (告知の前提が崩れているため)。
 
 ## 鉄則
 

@@ -304,6 +304,39 @@ front proxy. **`:4304` is the canonical dev entry point**:
 
 No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
 
+## Health checks and shutdown
+
+The api exposes two unauthenticated probe endpoints for orchestrators and load balancers. The body is only `{"status":"ok"}` or `{"status":"unavailable"}`; no internal detail such as which dependency failed is returned.
+
+| Path | Meaning | Returns 200 when |
+| --- | --- | --- |
+| `/healthz` | Is it alive (liveness) | Always, as long as the process can answer HTTP |
+| `/readyz` | May it take traffic (readiness) | Only when connected to the DB and not shutting down; otherwise 503 |
+
+`/readyz` does not look at Redis (crowi keeps running in a degraded mode without it). Behind a reverse proxy they are also reachable as `/api/healthz` / `/api/readyz`. To keep them off the public internet, block them at the proxy (orchestrators hit the api port directly, so they are unaffected).
+
+Kubernetes example:
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 3000 }
+readinessProbe:
+  httpGet: { path: /readyz, port: 3000 }
+```
+
+The official Docker image ships a `HEALTHCHECK` that calls `/healthz`, so `docker ps` shows `healthy` / `unhealthy`. It targets `/healthz` rather than `/readyz` because replacing containers does not fix a database outage.
+
+On SIGTERM / SIGINT the api makes `/readyz` return 503, stops accepting new connections, and waits for in-flight HTTP requests and the work that runs after a save (search index updates, notifications) for at most 8 seconds in total from the signal before exiting. The grace period is fixed and cannot be changed by an environment variable. It fits within the `docker stop` default (10 seconds), but keep `stop_grace_period` / `terminationGracePeriodSeconds` at 10 seconds or more.
+
+If endpoint removal lags in Kubernetes, delay shutdown with a `preStop` sleep of a few seconds.
+
+```yaml
+lifecycle:
+  preStop:
+    exec:
+      command: ["sleep", "5"]
+```
+
 ## Summary
 
 | Topology | Browser → api HTTP | Browser → api WS | Inline images / files | Rebuild to change api host? |

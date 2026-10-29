@@ -12,7 +12,8 @@ import Crowi from 'src/crowi';
 import { formatBootFailureReason, formatFailMarker } from 'src/util/boot-reporter';
 import { createLogRecord } from 'src/util/logger';
 import { writeFatal } from 'src/util/logger-sink';
-import { createShutdownHandler, installProcessFatalHandlers } from 'src/util/process-boundary';
+import { installProcessFatalHandlers } from 'src/util/process-boundary';
+import { createServerLifecycle } from 'src/util/server-lifecycle';
 
 // load .env
 dotenv.config();
@@ -50,13 +51,13 @@ function createCrowiOrExit(): Crowi {
 
 const crowi = createCrowiOrExit();
 
-// Graceful shutdown on SIGINT/SIGTERM — see `createShutdownHandler` in `util/process-boundary.ts`.
-const shutdown = createShutdownHandler(crowi);
+// Graceful shutdown on SIGINT/SIGTERM — see `createServerLifecycle` in `util/server-lifecycle.ts`.
+const lifecycle = createServerLifecycle(crowi);
 process.on('SIGINT', () => {
-  void shutdown('SIGINT');
+  void lifecycle.onSignal('SIGINT');
 });
 process.on('SIGTERM', () => {
-  void shutdown('SIGTERM');
+  void lifecycle.onSignal('SIGTERM');
 });
 
-crowi.init().then(crowi.start).catch(crowi.exitOnError);
+crowi.init().then(crowi.start).then(lifecycle.attach).catch(crowi.exitOnError);

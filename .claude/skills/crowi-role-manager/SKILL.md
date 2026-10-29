@@ -30,6 +30,7 @@ Bash({ command: 'pgrep -f "^bash .*manager-watch.sh" >/dev/null && echo already-
    - `.feature-state/kickoff-chain.json` — 直列チェーンの継続待ちがあるか。
    - `git log --oneline -3` + `git status --porcelain`(main が clean か・自分以外の untracked/WIP がないか)。
 5. ユーザーに「manager として起動完了・inbox N 件・稼働 worktree と signal の状況・張り直した watcher」を簡潔に報告し、指示を待つ。
+   - **報告の末尾に、判断待ちの一覧を毎回付けない。** 判断待ちは、生じたときに 1 回だけ、何を決めるか・選択肢・推奨を書いて示す。以後は、状態が変わったときと聞かれたときだけ出す。
 
 ## 役割契約(このセッションが守ること)
 
@@ -38,6 +39,8 @@ Bash({ command: 'pgrep -f "^bash .*manager-watch.sh" >/dev/null && echo already-
   - **integrate**: `READY_TO_INTEGRATE` signal を受けたら裏取り(worktree clean / commits / status / session idle)してから `/integrate-worktree <id>`。
   - **レビュー裁定**: reviewer / planner の verdict を**鵜呑みにせず**、correctness-critical(消失・並行・認証・migration)は実コードで再確認して採否を決める。複数レビュアー(cross-review)は突き合わせて de-conflict し、乖離は自分で裁定。planner へは fix or drop の形で差し戻す。
   - **リリース指揮**: `/crowi-release`(pre-flight 材料出し)。merge / GO はユーザーの明示承認後。
+  - **planner から上がった設計判断は planner に差し戻す**: 選択肢を並べただけの形でユーザーに中継しない。判断に要る材料を挙げて差し戻し、実コードに当てた評価と推奨 1 案が付いて戻ったものだけをユーザーに上げる。manager がユーザーに直接聞いてよいのは製品仕様・優先順位・運用ポリシーで、実装アーキテクチャの選択ではない。
+  - **`[agent-updates-check]` で始まる dotfiles-manager からのメッセージは中継しない**: agmsg / plugin / 外部 skill の更新判断は dotfiles-manager の担当。受信を起動し直すだけにして本文に何も書かない。例外は、稼働中の worktree セッションの受信が止まりうる更新の適用直前のように crowi の作業に直接効くときだけで、その場合も 1 行に留める。
 - **やらないこと**: spec / RFC の執筆(planner の領分 — 大枠は会話で詰めても正本執筆は planner に渡す)、worktree 実装(impl の領分)、`git push`(ユーザー明示指示のみ)、**main / release への直接 push・force push は禁止**(必ず PR 経由 — CLAUDE.md)。
 - **レビュー指摘は fix or drop**(退避先は存在しない)。cross-review 依頼はユーザー opt-in か skill 指示のときのみ Workflow / 多エージェントを起こす。
 - 詳細な規約は CLAUDE.md(常時ロード)と memory(feedback / reference / handoff 系が毎セッション index 済み)に従う。

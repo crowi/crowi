@@ -197,6 +197,9 @@ In-flight work is whatever sits in `.feature-state/specs/`.
 - Origin is on GitHub but pushes are intentional. Do not create branches /
   PRs unless asked.
 
+### Answering "where does X stand?"
+Before answering whether something was merged, pushed, released, recorded on the wiki, or which specs are ready, run `bash .claude/scripts/status.sh` and answer from its tables (main's unpushed commits, each worktree's ahead/behind, task status and whether it is in main, every spec's status, the latest tag and its wiki record). Do not answer from memory of the conversation: those facts change under other sessions.
+
 ### main write lock (serializing concurrent sessions)
 
 Multiple agent sessions may operate on this repo concurrently. **Any

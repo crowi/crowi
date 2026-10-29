@@ -32,8 +32,9 @@ The scope names are the ones in the catalog on [HTTP API](./api). The default lo
 | `completion <shell>` | Print a shell completion script | — | — |
 | `open <path-or-id>` | Open a page in the browser | `--print` | — |
 | `search <query>` | Run a full-text search | `--tree <path>` / `--type <type>` / `--page <n>` / `--limit <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
-| `get <path-or-id>` (alias `cat`) | Write a page body to stdout | `--revision <id>` | `pages:read` |
+| `get <path-or-id>` (alias `cat`) | Write a page body to stdout exactly as stored (a newline is added only if the body does not end with one) | `--revision <id>` | `pages:read` |
 | `ls [path]` | List the child pages under a path | `--format <mode>` / `--template <tpl>` | `pages:read` |
+| `diff <path-or-id>` | Compare a page's latest body with a local file; prints a unified diff and exits `1` when they differ, ignoring trailing newlines | `-f, --file <path>` | `pages:read` |
 | `recent` | List recently updated pages, newest first | `--prefix <path>` / `--limit <n>` / `--offset <n>` / `--format <mode>` / `--template <tpl>` | `pages:read` |
 | `create <path>` | Create a page | `-m, --message <text>` / `-f, --file <path>` / `--stdin` / `--editor <bin>` / `--grant <n>` / `--type <kind>` | `pages:write` |
 | `edit <path>` | Edit interactively in your editor (works on artifact pages too — opens an `.html` temp file) | `--editor <bin>` / `--force` | `pages:write` |
@@ -92,7 +93,7 @@ crowi recent --template '{{path}}\t{{updatedAt}}\t{{lastUpdateUser.username}}\t{
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
-| `1` | General error / transport failure |
+| `1` | General error / transport failure (also `diff`: page and file differ) |
 | `2` | Not signed in (`crowi login` needed) |
 | `3` | Insufficient scope (re-login adding `--scope`) |
 | `4` | Target does not exist |

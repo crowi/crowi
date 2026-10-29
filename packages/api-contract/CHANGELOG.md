@@ -1,5 +1,15 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.28
+
+No changes in this release.
+
+## 2.0.0-alpha.27
+
+### Patch Changes
+
+- dbebd0a: Cancelling the OAuth consent screen no longer redirects to an unregistered redirect URI; the server now validates the redirect URI and builds the access_denied redirect, and the screen shows an error instead of navigating when the request is invalid.
+
 ## 2.0.0-alpha.26
 
 ### Patch Changes

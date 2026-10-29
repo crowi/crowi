@@ -107,8 +107,12 @@ profile: <alias>`, see [Errors & exit codes](#errors--exit-codes)).
 ## Commands
 
 Auth / lifecycle: `login`, `logout`, `whoami`, `profiles`. Read: `search`,
-`get` (alias `cat`), `ls`, `recent`. Write: `create`, `edit`, `update`, `mv`, `rm`.
+`get` (alias `cat`), `diff`, `ls`, `recent`. Write: `create`, `edit`, `update`, `mv`, `rm`.
 Phase 2 (need extra scopes): `comment`, `attach`, `bookmark`, `watch`, `open`.
+
+### Comparing a page with a file (`diff`)
+
+`crowi diff <path-or-id> --file <file> [--json]` compares the page's latest body with a local file. Differences in the number of trailing newlines are ignored; everything else (trailing spaces, CRLF vs LF) counts. It prints nothing and exits `0` when they match, and prints a unified diff to stdout and exits `1` when they differ (stderr gets `crowi: page and file differ`). `--json` emits `{ identical, path, pageId, revisionId, file, diff }`. A missing page exits `4`, an unreadable file `6`. Requires `pages:read`. `crowi get` writes the body as stored, so a file saved with `crowi get <path> > file` compares equal.
 
 ### Recently updated pages (`recent`)
 

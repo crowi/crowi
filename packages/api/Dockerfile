@@ -161,6 +161,12 @@ USER node
 
 EXPOSE 3000
 
+# Liveness only (/healthz): a DB outage must not mark every container
+# unhealthy, since replacing them would not fix the database. The image has no
+# curl/wget, so use Node's built-in fetch.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+
 # Direct `node` invocation avoids PID 1 / signal-handling issues that arise
 # when going through `npm start` -> shell -> node. The api dist lives under the
 # runner project's node_modules; running it with WORKDIR=/app means

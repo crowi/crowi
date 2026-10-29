@@ -1,6 +1,6 @@
 {
   "name": "@crowi/cli",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "End-user CLI (`crowi`) for Crowi 2.0. Talks to a Crowi server over HTTP using OAuth (RFC-0010 / RFC-0012); read + write + search + edit your wiki from the terminal.",
   "repository": {
     "type": "git",
@@ -40,6 +40,7 @@
   "dependencies": {
     "@crowi/api-contract": "workspace:^",
     "commander": "^12.1.0",
+    "diff": "^9.0.0",
     "open": "^10.1.0",
     "zod": "catalog:"
   },

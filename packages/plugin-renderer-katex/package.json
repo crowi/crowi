@@ -33,7 +33,7 @@
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
     "jiti": "^2.7.0",
-    "katex": "^0.16.11",
+    "katex": "^0.18.11",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {

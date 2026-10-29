@@ -262,6 +262,7 @@ interface EntryCrowiDouble {
   notificationsAttachment: unknown;
   init: jest.Mock;
   start: jest.Mock;
+  drainSideEffects: jest.Mock;
   exitOnError: jest.Mock;
 }
 
@@ -306,6 +307,7 @@ function isolateEntryHarness(initBehavior: EntryInitBehavior): EntryHarness {
       notificationsAttachment: null,
       init: jest.fn(),
       start: jest.fn(),
+      drainSideEffects: jest.fn(async () => {}),
       exitOnError: jest.fn(),
     };
 

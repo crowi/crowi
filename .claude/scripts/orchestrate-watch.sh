@@ -15,6 +15,7 @@
 #   NEW_DEPENDABOT: #<num> <severity> <package>       (lane D — act: report; /crowi-deps is the fixer)
 #   NEW_FLAKY_ISSUE: #<num> <title>                   (lane F — act: report only; fix is /crowi-fix)
 #   UPDATED_FLAKY_ISSUE: #<num> <title>               (lane F — act: report only; fix is /crowi-fix)
+#   MAIN_INFRA_CHANGED: <sha> [<areas>] -> <ids>      (lane G — act: ask those worktree roles to merge main)
 #
 # The lane state files (.feature-state/orchestrate-state.json) are only READ
 # here; the model updates them when it acts on an event (keeps the existing
@@ -56,7 +57,7 @@ case "${1:-}" in
   --until-event) UNTIL_EVENT=1 ;;
 esac
 
-seen_ready="" seen_stall="" seen_review="" seen_dep="" seen_flake=""
+seen_ready="" seen_stall="" seen_review="" seen_dep="" seen_flake="" infra_base=""
 flake_baseline_seeded=0
 has() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
@@ -70,11 +71,24 @@ if [ -f "$SEEN_FILE" ]; then
       dep) seen_dep="$seen_dep $key" ;;
       flake) seen_flake="$seen_flake $key" ;;
       flake-seeded) flake_baseline_seeded=1 ;;
+      infra-base) infra_base="$key" ;;
     esac
   done <"$SEEN_FILE"
 fi
 remember() { mkdir -p "$(dirname "$SEEN_FILE")" && echo "$1 $2" >>"$SEEN_FILE"; }
 emitted=0
+# Changed paths on stdin -> comma-separated areas a worktree must merge main
+# for. A new `.changeset/*.md` is a release note, not infrastructure.
+infra_areas() {
+  sed -n \
+    -e 's|^\.claude/.*|skills|p' \
+    -e 's|^\.github/workflows/.*|workflows|p' \
+    -e 's|^lefthook\.yml$|hooks|p' \
+    -e 's|^\.changeset/config\.json$|changesets|p' \
+    -e 's|^\(.*/\)\{0,1\}package\.json$|deps|p' \
+    -e 's|^pnpm-lock\.yaml$|deps|p' \
+    -e 's|^pnpm-workspace\.yaml$|deps|p' | sort -u | paste -sd, -
+}
 emit() { echo "$1"; emitted=1; }
 
 pass=0
@@ -213,6 +227,39 @@ EOF
     # see every pre-existing open issue as unseen and misreport it as
     # NEW_FLAKY_ISSUE (the exact recovery-path false positive this guard
     # exists to prevent).
+  fi
+
+  # ---- lane G: main commits that change shared infrastructure -------------
+  # Worktree sessions run the skills, hooks, workflows, changeset config and
+  # lockfile of their own checkout, so such a change on main does not reach a
+  # running worktree until it merges main. Report each such commit with the
+  # worktrees that do not contain it yet. The cursor (`infra-base`, last line
+  # wins) starts at the current main head, so history before the first pass is
+  # never reported; a main that no longer contains the cursor (reset)
+  # re-baselines silently.
+  mainhead="$(git -C "$ROOT" rev-parse main 2>/dev/null)"
+  if [ -n "$mainhead" ]; then
+    if [ -z "$infra_base" ] || ! git -C "$ROOT" merge-base --is-ancestor "$infra_base" "$mainhead" 2>/dev/null; then
+      infra_base="$mainhead"; remember infra-base "$mainhead"
+    elif [ "$infra_base" != "$mainhead" ]; then
+      while read -r sha; do
+        [ -n "$sha" ] || continue
+        areas="$(git -C "$ROOT" show --name-only --format= "$sha" 2>/dev/null | infra_areas)"
+        [ -n "$areas" ] || continue
+        behind=""
+        while read -r wt; do
+          [ -n "$wt" ] && [ "$wt" != "$ROOT" ] || continue
+          git -C "$wt" merge-base --is-ancestor "$sha" HEAD 2>/dev/null && continue
+          id="$(basename "$wt")"; behind="$behind ${id#crowi-}"
+        done <<WORKTREES
+$(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+WORKTREES
+        [ -n "$behind" ] && emit "MAIN_INFRA_CHANGED: ${sha:0:9} [$areas] ->$behind"
+      done <<COMMITS
+$(git -C "$ROOT" rev-list --reverse "$infra_base..$mainhead" 2>/dev/null)
+COMMITS
+      infra_base="$mainhead"; remember infra-base "$mainhead"
+    fi
   fi
 
   [ "$ONCE" = 1 ] && exit 0
