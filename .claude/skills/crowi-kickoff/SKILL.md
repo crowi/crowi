@@ -156,6 +156,7 @@ git pull --ff-only origin main      # origin が進んでいれば取り込む
 git push origin HEAD:main           # 未 push の commit があれば送る
 ```
 
+- 3 つのコマンドは `&&` でつながず、パイプも付けず、1 回の Bash の呼び出しに 1 コマンドずつ実行する (allow の判定を 1 コマンドずつ確実に通すため)。
 - `pull --ff-only` が失敗したら、merge も rebase もせずに中止して報告する。
 - push が拒否されたら、`--force` を使わずに中止して報告する。
 - 直列チェーンで integrate-worktree が次の spec を kickoff するときも同じ手順を通る。
