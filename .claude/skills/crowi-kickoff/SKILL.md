@@ -109,7 +109,7 @@ description: |
 - **main worktree で実行していること**(`git worktree list` の先頭パスと
   `git rev-parse --show-toplevel` が一致)。worktree 内からの実行は中止
   (「kickoff は main セッションから」)。main が dirty でも kickoff 自体は可
-  (worktree を切るだけで main を触らない)。
+  (main に対して行うのは Step 3.5 の取り込みと送信だけで、作業ツリーの変更には触らない)。
 
 ### Step 2: implementation-ready 判定(orchestrate B と同一基準)
 
@@ -143,6 +143,22 @@ planner fallback で実装できるが、安価なモデルへ設計判断を残
 - `.feature-state/tasks/<id>.json` が存在し status が
   `PLANNED / IN_PROGRESS / REVIEW / NEEDS_WORK / READY_TO_INTEGRATE` なら中止(進行中 or 統合待ち)。
   `COMMITTED` / `INTEGRATED` の化石なら警告つきで続行可(再着手のケース)。
+
+### Step 3.5: main を origin と揃える (取り込みと送信)
+
+worktree を切る直前に、main を origin から取り込み、未 push の commit を送る。古い main から切ると古い土台で実装が始まり、未 push の commit は worktree から出した PR の差分に混ざるため。
+
+**どちらもユーザーに確かめずに行う。** kickoff を頼まれたことが、この push の指示を含む (鉄則の「push しない」の例外はこの手順だけ)。main の git の状態を変えるので、main write lock を取ってから行い、終わったら (中止したときも) 外す。
+
+```bash
+git fetch origin
+git pull --ff-only origin main      # origin が進んでいれば取り込む
+git push origin HEAD:main           # 未 push の commit があれば送る
+```
+
+- `pull --ff-only` が失敗したら、merge も rebase もせずに中止して報告する。
+- push が拒否されたら、`--force` を使わずに中止して報告する。
+- 直列チェーンで integrate-worktree が次の spec を kickoff するときも同じ手順を通る。
 
 ### Step 4: worktree 作成 + queue 初期化
 
@@ -265,7 +281,7 @@ WARN: referenced path changed but grounded symbol lines are identical: <path> (s
 
 ## 鉄則
 
-- **push しない** / **spec を書き換えない** / **not ready を勝手に ready 扱いしない**
+- **push しない** (例外は Step 3.5 の main の送信だけ) / **spec を書き換えない** / **not ready を勝手に ready 扱いしない**
 - worktree は gw 経由のみ(`git worktree add/remove` 直呼び禁止)
 - 投入する指示は**最初の 1 通のみ**。以後 worktree セッションの作業に割り込まない
   (進捗の把握は orchestrate A/E と agmsg 側に任せる)
