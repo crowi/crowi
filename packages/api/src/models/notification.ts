@@ -183,9 +183,11 @@ export default (crowi: Crowi) => {
     return Notification.deleteMany({ activities: { $size: 0 } });
   };
 
+  // Clears the row highlight as well as the badge: a dot left on every row
+  // after "mark all read" reads as the action having failed.
   notificationSchema.statics.read = async function (user) {
-    const query = { user, status: STATUS_UNREAD };
-    const parameters = { status: STATUS_UNOPENED };
+    const query = { user, status: { $in: [STATUS_UNREAD, STATUS_UNOPENED] } };
+    const parameters = { status: STATUS_OPENED };
 
     const result = await Notification.updateMany(query, parameters);
     // Emit even when `modifiedCount === 0` — the realtime invalidation

@@ -143,8 +143,8 @@ public final class WorkspaceSession: ObservableObject {
         unreadNotificationCount = count
     }
 
-    /// `POST /notifications/read` (UNREAD → UNOPENED in bulk — the badge
-    /// zeroes; rows keep their unopened highlight, web parity) followed by a
+    /// `POST /notifications/read` (every row → OPENED in bulk — the badge
+    /// zeroes and the row dots clear) followed by a
     /// badge re-poll. Returns whether the server acknowledged the write.
     @discardableResult
     public func markAllNotificationsRead() async -> Bool {

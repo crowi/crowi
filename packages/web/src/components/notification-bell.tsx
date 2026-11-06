@@ -69,6 +69,9 @@ export function NotificationBell() {
 
   const notifications = listData?.notifications ?? [];
   const hasUnread = unreadCount > 0;
+  // A row can show the unopened dot without counting toward the badge (an
+  // UNOPENED row), and mark-all-read clears those too.
+  const canMarkAllAsRead = hasUnread || notifications.some(isUnopenedNotification);
   const badgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
 
   const handleOpenNotification = async (notification: Notification) => {
@@ -130,7 +133,7 @@ export function NotificationBell() {
           <button
             type="button"
             onClick={handleMarkAllAsRead}
-            disabled={!hasUnread || markAllAsRead.isPending}
+            disabled={!canMarkAllAsRead || markAllAsRead.isPending}
             className="text-xs text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             {m['notifications.mark_all_read']()}

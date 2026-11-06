@@ -3,7 +3,7 @@
  * `@hono/zod-openapi` route definitions. Four endpoints:
  *
  *   GET  /notifications            — paginated list for the current user
- *   POST /notifications/read       — mark all UNREAD as UNOPENED
+ *   POST /notifications/read       — mark all UNREAD / UNOPENED as OPENED
  *   POST /notifications/{id}/open  — open one notification (set OPENED)
  *   GET  /notifications/status     — unread count for the current user
  *
@@ -74,7 +74,7 @@ export const markAllAsReadRoute = createRoute({
   summary: 'Mark all unread notifications of the current user as read',
   responses: {
     200: {
-      description: 'All UNREAD notifications transitioned to UNOPENED',
+      description: 'All UNREAD and UNOPENED notifications transitioned to OPENED',
       content: { 'application/json': { schema: MarkAllAsReadResponseSchema } },
     },
     401: {

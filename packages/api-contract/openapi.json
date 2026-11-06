@@ -48486,7 +48486,7 @@
         "summary": "Mark all unread notifications of the current user as read",
         "responses": {
           "200": {
-            "description": "All UNREAD notifications transitioned to UNOPENED",
+            "description": "All UNREAD and UNOPENED notifications transitioned to OPENED",
             "content": {
               "application/json": {
                 "schema": {

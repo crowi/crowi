@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMarkAllAsRead, useNotificationsInfinite, useOpenNotification, useUnreadCount } from '@/lib/use-notifications';
+import { isUnopenedNotification } from '@/lib/notification-format';
 import { resolveNotificationHref } from '@/lib/notification-href';
 import { scrollToSectionWhenReady, SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import { NotificationActionEnum } from '@crowi/api-contract';
@@ -22,7 +23,7 @@ const PAGE_SIZE = 20;
  *
  * - Uses useInfiniteQuery to accumulate pages (matches the user bookmarks UI).
  * - Header has a "すべて既読にする" button which is disabled when there are
- *   no unopened notifications.
+ *   no unread or unopened notifications.
  * - Each item, on click, transitions the notification to OPENED and navigates
  *   to the target page (mirrors the dropdown bell behavior).
  */
@@ -35,7 +36,9 @@ export function NotificationList() {
   const openNotification = useOpenNotification();
 
   const allNotifications: Notification[] = data?.pages.flatMap((page) => page.notifications) ?? [];
-  const hasUnread = unreadCount > 0;
+  // A row can show the unopened dot without counting toward the badge (an
+  // UNOPENED row), and mark-all-read clears those too.
+  const canMarkAllAsRead = unreadCount > 0 || allNotifications.some(isUnopenedNotification);
 
   const handleOpenNotification = async (notification: Notification) => {
     try {
@@ -68,7 +71,7 @@ export function NotificationList() {
           <Bell className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">{m['notifications.title']()}</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={handleMarkAllAsRead} disabled={!hasUnread || markAllAsRead.isPending}>
+        <Button variant="outline" size="sm" onClick={handleMarkAllAsRead} disabled={!canMarkAllAsRead || markAllAsRead.isPending}>
           {markAllAsRead.isPending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin mr-2" />

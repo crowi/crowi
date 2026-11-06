@@ -257,7 +257,7 @@ final class NotificationsPollerTests: XCTestCase {
         try await NotificationsAPI.markAllRead(using: client)
 
         let after = try await poller.pollOnce()
-        XCTAssertEqual(after, 0, "mark-all-read (UNREAD→UNOPENED in bulk) must zero the badge on the very next poll")
+        XCTAssertEqual(after, 0, "mark-all-read must zero the badge on the very next poll")
         let latest = await poller.latestUnreadCount
         XCTAssertEqual(latest, 0)
     }

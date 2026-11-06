@@ -145,7 +145,7 @@ export function useNotificationsInfinite(limit: number = 20) {
 }
 
 /**
- * Hook to mark all UNREAD notifications of the current user as read (UNOPENED).
+ * Hook to mark every not-yet-opened notification of the current user as OPENED.
  * On success, invalidates both the unread count and the notification list.
  */
 export function useMarkAllAsRead() {

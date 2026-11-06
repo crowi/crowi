@@ -186,11 +186,13 @@ describe('Routes /api/notifications (Hono)', () => {
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
-    it('transitions all UNREAD notifications of the current user to UNOPENED and returns { ok: true }', async () => {
+    it('opens every not-yet-opened notification of the current user and returns { ok: true }', async () => {
       const page1 = await createPageViaApi(recipientToken, `${PATH_PREFIX}r1`, '# r1');
       const page2 = await createPageViaApi(recipientToken, `${PATH_PREFIX}r2`, '# r2');
+      const page3 = await createPageViaApi(recipientToken, `${PATH_PREFIX}r3`, '# r3');
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page1._id, status: 'UNREAD' });
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page2._id, status: 'UNREAD' });
+      await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page3._id, status: 'UNOPENED' });
       await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page1._id, status: 'UNREAD' });
 
       const res = await request(app).post('/api/notifications/read').set(authHeaders(recipientToken));
@@ -200,8 +202,10 @@ describe('Routes /api/notifications (Hono)', () => {
       const Notification = crowi.model('Notification');
       const stillUnread = await Notification.countDocuments({ user: recipient._id, status: 'UNREAD' });
       expect(stillUnread).toBe(0);
-      const unopened = await Notification.countDocuments({ user: recipient._id, status: 'UNOPENED' });
-      expect(unopened).toBe(2);
+      const stillUnopened = await Notification.countDocuments({ user: recipient._id, status: 'UNOPENED' });
+      expect(stillUnopened).toBe(0);
+      const opened = await Notification.countDocuments({ user: recipient._id, status: 'OPENED' });
+      expect(opened).toBe(3);
 
       const otherUnread = await Notification.countDocuments({ user: actor._id, status: 'UNREAD' });
       expect(otherUnread).toBe(1);

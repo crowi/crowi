@@ -7,9 +7,8 @@ import SwiftUI
 ///   - rows for all four wired actions (COMMENT / LIKE / MENTION / UPDATE) —
 ///     first action-user avatar (through the workspace's authenticated image
 ///     cache, §6.1), the actor / verb / page hierarchy, relative time, and
-///     the unopened dot (`UNREAD`/`UNOPENED` — web parity: mark-all-read
-///     zeroes the BADGE but keeps the row highlight, which only opening
-///     clears);
+///     the unopened dot (`UNREAD`/`UNOPENED`, cleared by opening the row or
+///     by mark-all-read);
 ///   - tap = TWO actions (the §11 design): fire the single-shot open POST
 ///     (optimistic row update; a failure never blocks — the
 ///     `EngagementActions` loose-write discipline via
@@ -20,7 +19,7 @@ import SwiftUI
 ///   - swipe a row to mark it read WITHOUT opening it — the same single-shot
 ///     POST, which is what makes a list of things you have already seen
 ///     elsewhere clearable;
-///   - mark-all-read in the title row (UNREAD → UNOPENED in bulk);
+///   - mark-all-read in the title row (every row → OPENED in bulk);
 ///   - offset pager as an explicit "Load more" row (`pager.next` from the
 ///     wire; the web uses an infinite query — a visible button is the
 ///     simpler native equivalent and an accepted implementation judgment);
@@ -214,8 +213,8 @@ struct NotificationsView: View {
         isMarkingAllRead = true
         defer { isMarkingAllRead = false }
         await session.markAllNotificationsRead()
-        // Re-fetch so the rows show their server truth (UNREAD → UNOPENED:
-        // the dots stay, the badge — refreshed inside the session call —
+        // Re-fetch so the rows show their server truth (every row OPENED:
+        // the dots clear, the badge — refreshed inside the session call —
         // zeroes).
         await reload()
     }

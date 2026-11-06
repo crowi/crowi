@@ -7,7 +7,7 @@ import Foundation
 ///
 ///   GET  /notifications            — paginated list (newest first)
 ///   GET  /notifications/status     — unread count (= UNREAD rows) for the badge
-///   POST /notifications/read       — mark-all-read: UNREAD → UNOPENED in bulk
+///   POST /notifications/read       — mark-all-read: UNREAD / UNOPENED → OPENED in bulk
 ///                                    (the badge zeroes; rows keep their
 ///                                    unopened highlight — web parity)
 ///   POST /notifications/{id}/open  — open ONE notification (status → OPENED),
@@ -109,8 +109,8 @@ public struct NotificationLenient: Sendable, Equatable, Identifiable {
     public var isNavigable: Bool { targetPath != nil }
 
     /// Mirror of the web's `isUnopenedNotification` — the row highlight/dot.
-    /// UNREAD: never seen in any list; UNOPENED: seen (mark-all-read) but
-    /// not opened. An unknown/missing status shows no highlight, same as the
+    /// UNREAD: never seen in any list; UNOPENED: seen but not opened (a
+    /// status older servers set on mark-all-read). An unknown/missing status shows no highlight, same as the
     /// web's exact-match check.
     public var isUnopened: Bool { status == "UNREAD" || status == "UNOPENED" }
 
@@ -197,9 +197,9 @@ public struct ListNotificationsResponseLenient: Sendable, Equatable {
 /// be asserted; the App target's manifest imports `AppleProductTypes`, which
 /// the bare `swift` CLI running the tests cannot parse.
 public enum NotificationsSummary {
-    /// - Parameter unopenedCount: rows still showing a dot — deliberately the
-    ///   UNOPENED count the list itself paints, not the badge's UNREAD count,
-    ///   which mark-all-read zeroes while the dots stay.
+    /// - Parameter unopenedCount: rows still showing a dot — the count the
+    ///   list itself paints, not the badge's UNREAD count, which leaves out
+    ///   UNOPENED rows.
     public static func subtitle(unopenedCount: Int) -> String {
         guard unopenedCount > 0 else {
             // The swipe hint goes with it: there is nothing left to swipe.
@@ -253,7 +253,7 @@ public enum NotificationsAPI {
         return try NotificationsStatusLenient.decode(data).count
     }
 
-    /// `POST /notifications/read` — bulk UNREAD → UNOPENED. The `{ ok: true }`
+    /// `POST /notifications/read` — bulk UNREAD / UNOPENED → OPENED. The `{ ok: true }`
     /// body carries nothing beyond the status, so a 2xx IS the success
     /// signal.
     public static func markAllRead(using client: AuthenticatedAPIClient) async throws {

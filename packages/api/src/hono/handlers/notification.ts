@@ -6,7 +6,7 @@
  * `/notifications/*`:
  *
  *   GET  /notifications            — paginated list (newest first)
- *   POST /notifications/read       — mark all UNREAD as UNOPENED
+ *   POST /notifications/read       — mark all UNREAD / UNOPENED as OPENED
  *   GET  /notifications/status     — unread count
  *   POST /notifications/:id/open   — set status=OPENED
  *

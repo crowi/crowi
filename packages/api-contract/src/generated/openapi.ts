@@ -16593,7 +16593,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description All UNREAD notifications transitioned to UNOPENED */
+                /** @description All UNREAD and UNOPENED notifications transitioned to OPENED */
                 200: {
                     headers: {
                         [name: string]: unknown;
