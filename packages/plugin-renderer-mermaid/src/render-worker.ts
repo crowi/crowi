@@ -28,6 +28,7 @@
 // so this works in both modes — same convention Phase 0's
 // `__fixtures__/spike-worker.ts` uses for the same reason.
 import { installMermaidDomEnv } from './dom-env.ts';
+import { MERMAID_INIT_CONFIG } from './mermaid-config.ts';
 import { installDenyByDefaultNetworkBoundary } from './network-boundary.ts';
 import type { RenderRequestMessage, RenderResponseMessage } from './worker-protocol.ts';
 
@@ -35,33 +36,6 @@ interface MermaidApi {
   initialize: (config: Record<string, unknown>) => void;
   render: (id: string, source: string) => Promise<{ svg: string }>;
 }
-
-/**
- * spec §1 layer 1 — the host-forced Mermaid config, applied exactly
- * once at worker startup and never overridable per-call (§1: "呼び出し
- * ごとの引数では変更できない"). Mirrors Phase 0's
- * `__fixtures__/spike-worker.ts` config, which is what the compatibility
- * gates (§8) were actually validated against.
- *
- * `gantt.useWidth` (regression fix): the Gantt renderer reads
- * `elem.parentElement.offsetWidth` to size the chart
- * (`ganttDiagram-*.mjs`'s `draw()`), falling back to `1200` only when
- * that read is `undefined` — but jsdom's `offsetWidth` (no real layout
- * engine) always returns `0`, not `undefined`, so that fallback never
- * fires and every Gantt chart gets laid out against a 0px budget,
- * producing a negative-width/zero-`viewBox` SVG that fails to render.
- * `useWidth` is Mermaid's own documented escape hatch for exactly this
- * ("no real container to measure") case — set it to the same `1200`
- * Mermaid's own fallback intended.
- */
-const MERMAID_INIT_CONFIG = {
-  startOnLoad: false,
-  securityLevel: 'strict',
-  htmlLabels: false,
-  flowchart: { htmlLabels: false },
-  gantt: { useWidth: 1200 },
-  theme: 'base',
-} as const;
 
 async function main(): Promise<void> {
   // Order matters, both ways (spec §10): the DOM env must be installed

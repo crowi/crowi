@@ -239,3 +239,19 @@ describe('MermaidRenderPool', () => {
     }
   }, 30_000);
 });
+
+describe('MermaidRenderPool — look (Mermaid 12 default would be neo)', () => {
+  it('renders flowchart nodes with data-look="classic" and never "neo"', async () => {
+    const pool = new MermaidRenderPool({ poolSize: 1 });
+    try {
+      const svg = await pool.render('flowchart TD; A-->B');
+      // The embedded stylesheet always mentions `[data-look="neo"]` selectors, so
+      // only attributes on actual elements (inside a tag) are inspected.
+      const looks = [...svg.matchAll(/<[a-zA-Z][^<>]*?\sdata-look="([^"]*)"/g)].map((m) => m[1]);
+      expect(looks).toContain('classic');
+      expect(looks).not.toContain('neo');
+    } finally {
+      await pool.shutdown();
+    }
+  }, 30_000);
+});

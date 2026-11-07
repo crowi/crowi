@@ -61,6 +61,8 @@ async function main(): Promise<void> {
     flowchart: { htmlLabels: false },
     gantt: { useWidth: 1200 },
     theme: 'base',
+    layout: 'dagre',
+    look: 'classic',
   });
 
   process.on('message', async (msg: RenderRequestMessage) => {
