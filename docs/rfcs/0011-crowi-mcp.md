@@ -186,8 +186,10 @@ MCP client (Claude Desktop / Code)
   per-request** (no long-lived session map). This matches Crowi's per-request
   JWT model and keeps multi-instance deployments trivial (no sticky sessions).
 - **Mount**: `app.all('/mcp', handler)` under `createMcpAuth` (PAT Bearer
-  only — see §5.1). Both `POST` (JSON-RPC calls) and `GET` (SSE stream, if
-  used) are handled by the transport.
+  only — see §5.1). `POST` (JSON-RPC calls) and `DELETE` are handled by the
+  transport; `GET` / `HEAD` answer 405 (`Allow: POST, DELETE`) and no
+  server-to-client listening stream is offered, since a stateless server has
+  nothing to send on it.
 - **Per-request server**: `buildMcpServer(c)` registers the static tool set but
   closes over the request's auth (the forwarded bearer / `c`), so tool
   dispatch uses the caller's identity.

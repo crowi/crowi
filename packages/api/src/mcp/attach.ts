@@ -19,6 +19,10 @@
  * per-request JWT model and needs no sticky sessions for multi-instance
  * deployments (RFC-0011 §4). A fresh `McpServer` + transport per request
  * binds that request's identity (the forwarded bearer).
+ *
+ * No server-to-client listening stream is offered: `GET` / `HEAD` answer 405.
+ * A stateless server has nothing to push on it, and a held-open SSE response
+ * keeps accumulating memory for as long as the client stays connected.
  */
 
 import { StreamableHTTPTransport } from '@hono/mcp';
@@ -50,6 +54,7 @@ const RATE_WINDOW_MS = 60_000;
  */
 const JSONRPC_RATE_LIMITED = -32000;
 const JSONRPC_AUTH_REQUIRED = -32001;
+const JSONRPC_METHOD_NOT_ALLOWED = -32000;
 
 /** A bare JSON-RPC error envelope (`id: null` — pre-dispatch, no request id). */
 const jsonRpcError = (code: number, message: string) => ({ jsonrpc: '2.0' as const, error: { code, message }, id: null });
@@ -90,6 +95,10 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
 
   // The MCP route itself: a fresh server + transport per request.
   app.all('/mcp', async (c) => {
+    // Hono routes HEAD through the GET handler, so the method seen here may be either.
+    if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+      return c.json(jsonRpcError(JSONRPC_METHOD_NOT_ALLOWED, 'Method not allowed.'), 405, { Allow: 'POST, DELETE' });
+    }
     const authorization = c.req.header('authorization');
     if (!authorization) {
       // `createMcpAuth` never accepts a cookie (feature-auth-cookie-fallback-scope
