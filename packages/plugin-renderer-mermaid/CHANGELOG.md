@@ -1,5 +1,11 @@
 # @crowi/plugin-renderer-mermaid
 
+## 0.1.0-alpha.9
+
+### Patch Changes
+
+- d3e5313: Mermaid diagrams are now rendered with Mermaid 12. The layout engine and look are pinned, so the placement and colors of existing diagrams do not change.
+
 ## 0.1.0-alpha.8
 
 ### Patch Changes

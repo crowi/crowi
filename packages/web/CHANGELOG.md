@@ -1,5 +1,11 @@
 # @crowi/web
 
+## 2.0.0-alpha.29
+
+### Patch Changes
+
+- @crowi/api-contract@2.0.0-alpha.29
+
 ## 2.0.0-alpha.28
 
 ### Patch Changes
