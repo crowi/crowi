@@ -1,5 +1,13 @@
 # @crowi/api
 
+## 2.0.0-alpha.29
+
+### Patch Changes
+
+- ae06895: Updated dependencies that had reported vulnerabilities: `@hono/node-server` to 2.1.5 (static-file middleware bypass; Crowi does not use its `serveStatic`), `katex` to 0.18.11 (prototype pollution bypassing trust restrictions), and the transitive `qs` to 6.17.1 (DoS in `stringify` with `arrayFormat: 'comma'`, which Crowi does not call).
+- fd4e160: The MCP endpoint now answers `GET` with 405 instead of opening the server-to-client stream, so the listening stream that MCP clients keep open no longer makes the api's memory grow over time.
+- @crowi/api-contract@2.0.0-alpha.29
+
 ## 2.0.0-alpha.28
 
 ### Minor Changes
