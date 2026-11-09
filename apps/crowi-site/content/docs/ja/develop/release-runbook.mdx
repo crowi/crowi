@@ -168,6 +168,7 @@ Docker image は npm 各パッケージの版とは **独立した「Crowi デ�
   - **web image**: `crowi/crowi-web:2.0.0-alpha.N`（不変）+ 移動タグ `:alpha`。Next.js
     レンダラ専用 image で full/slim の区別はなく **単一 image**。`packages/web/Dockerfile`
     から `docker.yml` の `build-web` job が api image と並行に multi-arch でビルド・push します。
+  - **unstable**: `:unstable` / `:unstable-slim` / `crowi-web:unstable`（移動）と `:unstable-<短い sha>`（不変）。リリースとは別に、CI を通った main の commit ごとに `docker-unstable.yml` が linux/amd64 だけでビルドします。バージョン付きのタグ・`alpha`・`latest` には触れません。
   - **prerelease は `latest` を奪いません**。`latest` / `latest-slim` が v2 を指すのは
     stable 以降です（下記 channel 切替を参照）。
 - **自己記述。** image には OCI ラベル `org.crowi.bundle` でバンドルした各 `@crowi/*` の版が

@@ -18,6 +18,8 @@ This page runs Crowi from the published Docker images. Nothing is built locally:
 
 Tags are the per-release version (for example `2.0.0-alpha.17`) plus the channel tag `alpha`, which moves for as long as the prereleases run. **Pin a version in production.** `latest` starts moving once a stable release exists.
 
+The `unstable` tag is for trying main ahead of a release. It is rebuilt for every main commit that passes the tests, and each commit also keeps its own `unstable-<first 7 characters of the commit>` tag. It is not a release, so it runs database migrations that no release has shipped yet: a database that has run `unstable` cannot go back to an older release. It is built for linux/amd64 only.
+
 <Callout type="info">
   To load a plugin the images do not bundle, or to pin your own driver set, build an image from your own runner project instead — see [Self-hosting (your own runner project)](./self-hosting).
 </Callout>

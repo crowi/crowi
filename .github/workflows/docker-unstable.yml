@@ -1,0 +1,165 @@
+name: Docker (unstable)
+
+# Build + push images of every main commit that passed CI, for deployments that
+# dogfood main ahead of a release:
+#   - crowi/crowi:unstable, crowi/crowi:unstable-slim
+#   - crowi/crowi-web:unstable
+#   - plus an immutable `unstable-<short sha>` (and `-slim`) per commit, so such
+#     a deployment can roll back to the previous commit's image.
+# Release tags (`<version>`, `alpha`, `latest`) are never touched here; they
+# stay with docker.yml. Tag rule: scripts/release-tags.mjs (unstableTagsFor).
+#
+# Only linux/amd64 is built: this runs on every push, and the arm64 build goes
+# through QEMU emulation, which would multiply the build time.
+#
+# Trigger: CI completing on a push to main, only when it succeeded — a commit
+# whose tests fail never becomes `unstable`. A push that touches only docs does
+# not run CI, so it builds nothing (its code is identical to the previous image).
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit sha on main to build (default: the current main head). Its CI is not checked.'
+        required: false
+
+# A newer push supersedes a build still in progress.
+concurrency:
+  group: docker-unstable
+  cancel-in-progress: true
+
+env:
+  IMAGE: crowi/crowi
+  WEB_IMAGE: crowi/crowi-web
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      should-build: ${{ steps.resolve.outputs.should-build }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      # CI runs of two quick pushes can finish out of order. Without this check
+      # the older commit's build could land last and move `unstable` backwards,
+      # so build only when this is the newest CI run on main; a newer run builds
+      # its own commit once it succeeds.
+      - name: Resolve the commit to build
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            SHA="${INPUT_REF:-$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)}"
+            SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA" --jq .sha)"
+          else
+            SHA="$RUN_HEAD_SHA"
+            NEWEST="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=1" --jq '.workflow_runs[0].head_sha')"
+            if [ "$NEWEST" != "$SHA" ]; then
+              echo "A newer CI run on main exists ($NEWEST); skipping the build of $SHA."
+              echo "should-build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "should-build=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: crowi/crowi
+            variant: full
+            file: packages/api/Dockerfile
+            build-args: ''
+          - image: crowi/crowi
+            variant: slim
+            file: packages/api/Dockerfile
+            build-args: |
+              RUNNER_APP=@crowi/runner-app-slim
+              RUNNER_APP_DIR=apps/crowi-runner-slim
+          - image: crowi/crowi-web
+            variant: web
+            file: packages/web/Dockerfile
+            build-args: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+
+      # crowi-web has no slim split, so it takes the unsuffixed (full) tags.
+      - name: Compute image tags
+        id: tags
+        env:
+          IMAGE: ${{ matrix.image }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          VARIANT: ${{ matrix.variant == 'slim' && 'slim' || 'full' }}
+        run: |
+          {
+            echo 'tags<<EOF'
+            node scripts/release-tags.mjs --image "$IMAGE" --unstable-sha "$SHA" --variant "$VARIANT"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Derive OCI labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ matrix.image }}
+          tags: type=raw,value=unstable
+          labels: |
+            org.opencontainers.image.title=Crowi (${{ matrix.variant }}, unstable)
+            org.opencontainers.image.description=Crowi Markdown wiki — ${{ matrix.variant }} image built from main (unstable)
+            org.opencontainers.image.version=unstable
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.sha }}
+            org.crowi.variant=${{ matrix.variant }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Its own cache scope: sharing docker.yml's would let these amd64-only
+      # builds evict the release builds' arm64 layers.
+      - name: Build and push (${{ matrix.variant }}, amd64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64
+          push: true
+          build-args: ${{ matrix.build-args }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docker-unstable-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=docker-unstable-${{ matrix.variant }}

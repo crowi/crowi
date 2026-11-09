@@ -177,6 +177,7 @@ each npm package's version.
     tag. This is the Next.js renderer image — a **single image** with no full/slim
     split — built multi-arch from `packages/web/Dockerfile` by `docker.yml`'s
     `build-web` job, in parallel with the api images.
+  - **unstable**: `:unstable` / `:unstable-slim` / `crowi-web:unstable` (moving) and `:unstable-<short sha>` (immutable). Separately from releases, `docker-unstable.yml` builds them for linux/amd64 only from every main commit that passed CI. They never touch the versioned tags, `alpha` or `latest`.
   - **Prereleases do not take `latest`.** `latest` / `latest-slim` point to v2 only
     from stable onward (see channel switching below).
 - **Self-describing.** The image embeds the version of each bundled `@crowi/*`

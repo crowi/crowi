@@ -79,6 +79,18 @@ export const tagsFor = (version, variant) => {
 // what docker/build-push-action wants in its `tags:` input.
 export const imageRefsFor = (image, version, variant) => tagsFor(version, variant).map((t) => `${image}:${t}`)
 
+// Tags for a build of a main commit that is not a release (docker-unstable.yml):
+// the moving `unstable` tag plus an immutable `unstable-<short sha>` so a
+// deployment tracking `unstable` can roll back to the previous commit's image.
+// They never carry a version, so they cannot collide with any release tag.
+export const unstableTagsFor = (sha, variant) => {
+  if (!/^[0-9a-f]{7,40}$/.test(sha)) throw new Error(`release-tags: invalid commit sha '${sha}'`)
+  const suffix = variant === 'slim' ? '-slim' : ''
+  return [`unstable${suffix}`, `unstable-${sha.slice(0, 7)}${suffix}`]
+}
+
+export const unstableImageRefsFor = (image, sha, variant) => unstableTagsFor(sha, variant).map((t) => `${image}:${t}`)
+
 // --- CLI -------------------------------------------------------------------
 // `node scripts/release-tags.mjs --image crowi/crowi --dist-version v2.0.0-alpha.2 --variant full`
 // prints the newline-joined fully-qualified image refs (the format
@@ -92,14 +104,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const image = opt('--image', 'crowi/crowi')
   const distVersion = opt('--dist-version', null)
+  const unstableSha = opt('--unstable-sha', null)
   const variant = opt('--variant', 'full')
-  if (!distVersion) {
-    console.error('release-tags: --dist-version <v...> is required in CLI mode')
+  if (!distVersion === !unstableSha) {
+    console.error('release-tags: exactly one of --dist-version <v...> or --unstable-sha <sha> is required in CLI mode')
     process.exit(1)
   }
   if (variant !== 'full' && variant !== 'slim') {
     console.error(`release-tags: unknown --variant '${variant}' (expected full | slim)`)
     process.exit(1)
   }
-  process.stdout.write(`${imageRefsFor(image, distVersion, variant).join('\n')}\n`)
+  const refs = distVersion
+    ? imageRefsFor(image, distVersion, variant)
+    : unstableImageRefsFor(image, unstableSha, variant)
+  process.stdout.write(`${refs.join('\n')}\n`)
 }

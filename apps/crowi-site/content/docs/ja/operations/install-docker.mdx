@@ -18,6 +18,8 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 タグはリリースごとのバージョン (`2.0.0-alpha.17` など) と、プレリリースの間だけ動くチャネルタグ `alpha` があります。**本番では必ずバージョンを固定してください。** 安定版が出ると `latest` が動き始めます。
 
+リリース前の main を試すための `unstable` タグもあります。テストを通った main の commit ごとに作り直し、commit ごとの `unstable-<commit の先頭 7 文字>` も残ります。リリースではないので、まだリリースしていないデータベースの移行も実行されます。一度 `unstable` で動かしたデータベースは、それより古いリリースに戻せません。linux/amd64 だけで作っています。
+
 <Callout type="info">
   同梱されないプラグインを読み込みたい場合や、ドライバの組み合わせを自分で決めたい場合は、[セルフホスティング (自前の runner プロジェクト)](./self-hosting) で自前の runner プロジェクトをイメージ化します。
 </Callout>
