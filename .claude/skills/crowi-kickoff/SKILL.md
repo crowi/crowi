@@ -3,7 +3,7 @@ name: crowi-kickoff
 description: |
   承認済み spec から worktree 実装開始までを 1 コマンド化。ready 判定 → gw start
   (hook が tmux window + claude セッションを自動起動) → queue 初期化 → その window に
-  実装指示を send-keys で投入。main worktree で実行する。not ready な spec は欠落を
+  実装指示を tmux-submit で投入。main worktree で実行する。not ready な spec は欠落を
   列挙して中止する。
   キーワード: kickoff, 着手, 実装開始, worktree 開始, start, spec 着手
 ---
@@ -56,7 +56,7 @@ description: |
      `{ "currentTask": null }` で seed(worktree ローカル)
   2. `.gw/tmux-claude.sh` で `tmux new-window -n <window 名>` に **claude セッションを自動起動**
   を実行する。**したがって kickoff がセッションを spawn する必要はない** —
-  gw が開いた window に指示を send-keys で投入するだけでよい
+  gw が開いた window に指示を tmux-submit で送るだけでよい
   (agmsg spawn で別セッションを立てると二重になる。やらない)。
   - **起動フラグ・hook は crowi の project-local `.gwrc`(repo root・gitignore 済み)で
     override**している。hook スクリプトは **`./.gw/`(repo-local・home 非依存)** に置き、
@@ -182,7 +182,7 @@ WT="../crowi-<id>"
 bash "$WT/.claude/scripts/task-state.sh" queue set-current "<id>"
 ```
 
-### Step 5: 実装指示の投入(gw が開いた window へ send-keys)
+### Step 5: 実装指示の投入(gw が開いた window へ tmux-submit で送る)
 
 1. window を特定: **`pane_current_path` が worktree 配下にある window** を探す
    (window 名ではなくパスで引く — 名前は表示上の都合でいつでも変わりうるが、
@@ -213,34 +213,25 @@ bash "$WT/.claude/scripts/task-state.sh" queue set-current "<id>"
    role かを一意にする)。`actas` は未登録なら join も行うので事前の join は要らない:
 
 ```bash
-tmux send-keys -t "<claude の pane_id>" "/agmsg actas <id>"
-sleep 1
-tmux send-keys -t "<claude の pane_id>" Enter
-sleep 3
+printf '%s\n' "/agmsg actas <id>" > <scratch>/kickoff-actas.txt
+~/.dotfiles/bin/tmux-submit "<claude の pane_id>" <scratch>/kickoff-actas.txt
 ```
 
    投入した role は **worktree セッション自身が終端で drop する**
    (`/crowi-complete-feature` か `/crowi-handoff`)。`actas` の排他ロックは
    セッション ID に紐づくので、main 側から外して回ることはできない。
 
-5. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
-   **平文で書き、行頭を `/` にしない**):
+5. 指示を投入する。actas の送信が `SUBMITTED` を返してから送る。slash メニューの誤発火を避けるため
+   **平文で書き、行頭を `/` にしない**:
 
 ```bash
-tmux send-keys -t "<claude の pane_id>" \
-  "crowi-kickoff からの指示です。まず ~/.dotfiles/bin/agmsg-wait <id> を Bash の run_in_background: true・timeout: 2147483647 で起動してください (Monitor は使わない。新着で終了したら対応する前に同じコマンドで起動し直す)。次に /crowi-feature <id> を実行してください。COMMITTED まで完走したら /crowi-complete-feature、中断・引き継ぎ時は /crowi-handoff を実行。push は禁止(ユーザー指示待ち)。"
-sleep 1
-tmux send-keys -t "<claude の pane_id>" Enter
+cat > <scratch>/kickoff-instruction.txt <<'MSG'
+crowi-kickoff からの指示です。まず `~/.agents/skills/agmsg/scripts/actas-claim.sh "$(pwd)" claude-code <id> "$CLAUDE_CODE_SESSION_ID"` を実行し、出力に delivery=native があれば agmsg の新着はそのまま届くので、何も起動しないでください。無いときだけ ~/.dotfiles/bin/agmsg-wait <id> を Bash の run_in_background: true・timeout: 2147483647 で起動してください (Monitor は使わない。新着で終了したら対応する前に同じコマンドで起動し直す)。次に /crowi-feature <id> を実行してください。COMMITTED まで完走したら /crowi-complete-feature、中断・引き継ぎ時は /crowi-handoff を実行。push は禁止(ユーザー指示待ち)。
+MSG
+~/.dotfiles/bin/tmux-submit "<claude の pane_id>" <scratch>/kickoff-instruction.txt
 ```
 
-**送信確認(必須)**: セッション初期化直後は Enter が入力欄に届かず、指示文が
-**未送信のまま入力欄に残る**ことがある(実例 2026-07-19: redis-docs-page が
-1 時間 0 commit — capture-pane で入力欄に指示が残っているのを発見)。Enter の
-2-3 秒後に `tmux capture-pane -t <pane_id> -p | tail -8` で入力欄(`❯` 行)が
-**空になっている**ことを確認し、指示文が残っていれば **Enter を 1 回だけ再送**
-して再確認する。それでも残る場合は追いパンチせず「投入したが未送信の可能性」
-として報告する(このリトライは初回指示の配送完了であり、鉄則の「指示は 1 通
-のみ」の例外ではない — 新しい内容は送らない)。
+**送信確認(必須)**: 本文と Enter を send-keys で直接打たない (貼り付けの処理が終わる前に届いた Enter は改行として扱われ、指示が入力欄に残ったまま止まる)。`SUBMITTED` が出たときだけ送ったと報告する。それ以外が出たら同じ本文を送り直さず、出力と `tmux capture-pane -p -t <pane_id> | tail -8` の画面を報告する。
 
 6. **fallback**: tmux 環境でない / window が見つからない / 60 秒待っても claude が
    起動しない → 投入せず、手動手順を表示して終わる(中止ではない — worktree は
@@ -249,7 +240,7 @@ tmux send-keys -t "<claude の pane_id>" Enter
 ```
 cd <worktree-abs-path> && claude
 → 最初に: /agmsg actas <id>        (受信を自分宛に絞る。省くと他 role 宛まで流れ込む)
-→ 続けて: ~/.dotfiles/bin/agmsg-wait <id> を background Bash (timeout 2147483647) で起動 (Monitor は使わない)
+→ 続けて: actas-claim.sh で delivery=native を確かめ、出ないときだけ ~/.dotfiles/bin/agmsg-wait <id> を background Bash (timeout 2147483647) で起動 (Monitor は使わない)
 → 次に:   /crowi-feature <id>
 → 完了時: /crowi-complete-feature / 中断時: /crowi-handoff
 ```
@@ -298,7 +289,7 @@ WARN: referenced path changed but grounded symbol lines are identical: <path> (s
 | symbol 外の変更だけが起きた(共有ファイルへの無関係な追加など) | `WARN:` は出るが exit 0。着手は止めない。Step 6 の staleness warnings に転記する |
 | gw start 失敗(同名 branch 残骸等) | gw のエラーを提示して中止。`-f` 系は使わずユーザーに委ねる |
 | claude 起動待ち timeout | 手動手順を表示(worktree は残す) |
-| send-keys 後に反応が無い | 追いパンチしない。報告に「投入したが未確認」と書き、ユーザーに window 確認を促す |
+| `tmux-submit` が `SUBMITTED` 以外を返した | 本文と Enter を send-keys で直接打たない (貼り付けの処理が終わる前に届いた Enter は改行として扱われ、指示が入力欄に残ったまま止まる)。`SUBMITTED` が出たときだけ送ったと報告する。それ以外が出たら同じ本文を送り直さず、出力と `tmux capture-pane -p -t <pane_id> \| tail -8` の画面を報告する。 |
 | spec が umbrella(他 spec をフェーズとして参照する形式) | kickoff の手順自体は変わらない(通常どおり `/crowi-feature <id>` を投入)。umbrella は spec_contract の値に関わらず crowi-feature SKILL 側で needsPlanner=true に倒される(v2 fast path はどの spec からも sub-spec phases を機械導出できないため)。feature-planner が `phases:` の sub-spec 群から実装順序 / `extraGates` / `longLived` 相当を task state へ seed する。 |
 
 ## crowi-feature / complete-feature との関係
