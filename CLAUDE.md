@@ -194,6 +194,7 @@ In-flight work is whatever sits in `.feature-state/specs/`.
 ### main-direct commit strategy
 - All work commits to **main directly**. No PR / no per-feature branch by default.
 - `git push` waits for explicit user instruction (see `~/.claude/CLAUDE.md`).
+- Once the user has said to push a piece of work, a later commit that continues that same work (for example, another fix for alerts on the same dependency that arrived after the push) is pushed without asking again. Commits for unrelated work still wait for an instruction.
 - Origin is on GitHub but pushes are intentional. Do not create branches /
   PRs unless asked.
 
