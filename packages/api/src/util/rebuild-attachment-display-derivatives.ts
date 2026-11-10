@@ -441,7 +441,7 @@ async function runCursorMode<TStats extends { interrupted: boolean }>(
   processItem: (doc: AttachmentDocument) => Promise<void>,
 ): Promise<TStats> {
   const Attachment = crowi.model('Attachment');
-  const cursor = Attachment.find(filter, projection).sort({ _id: 1 }).cursor();
+  const cursor = Attachment.find(filter).select(projection).sort({ _id: 1 }).cursor();
 
   const { interrupted } = await forEachBounded(
     cursor,
@@ -630,7 +630,7 @@ async function runGcMode(crowi: Crowi, opts: AttachmentDisplayDerivativesTaskOpt
   // as an orphan.
   const Attachment = crowi.model('Attachment');
   const referenced = new Set<string>();
-  const refCursor = Attachment.find({ 'derivatives.display.mode': 'resized' }, { 'derivatives.display.filePath': 1 }).cursor();
+  const refCursor = Attachment.find({ 'derivatives.display.mode': 'resized' }).select({ 'derivatives.display.filePath': 1 }).cursor();
   for await (const doc of refCursor) {
     const key = (doc as AttachmentDocument).derivatives?.display?.filePath;
     if (key) referenced.add(key);

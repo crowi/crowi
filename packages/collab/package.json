@@ -21,7 +21,7 @@
     "@crowi/api-contract": "workspace:^",
     "@hocuspocus/server": "^4.0.0",
     "debug": "^4.4.3",
-    "mongoose": "^9.7.3",
+    "mongoose": "^9.12.1",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.8"
   },

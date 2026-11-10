@@ -202,13 +202,28 @@ module.exports = {
             useESM: false,
           },
         ],
+        // The mongodb driver (>= 7.6) loads its default `os` adapter with a
+        // dynamic `import('os')`. Inside jest's vm context that throws
+        // `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG` (no
+        // `--experimental-vm-modules`, see the faker note above), the driver
+        // swallows the rejection into an empty client metadata document, and
+        // mongod refuses every handshake with "Missing required sub-document
+        // 'driver'". Down-compiling this one file turns the import into a
+        // `require('os')`.
+        '.+/mongodb/lib/runtime_adapters\\.js$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+            useESM: false,
+          },
+        ],
       },
       // The leading `.*` in the lookahead alternatives is load-bearing under
       // pnpm: the real path is `node_modules/.pnpm/@faker-js+faker@<v>/
       // node_modules/@faker-js/faker/...`, so the `@faker-js/` segment sits
       // after the SECOND `node_modules/`, and a pattern anchored to the first
       // would still ignore the file.
-      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+|.*@faker-js/.+))'],
+      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+|.*@faker-js/.+|.*mongodb/lib/runtime_adapters\\.js$))'],
     },
     {
       displayName: 'unit',
