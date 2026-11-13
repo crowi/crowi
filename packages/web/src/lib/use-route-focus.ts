@@ -11,6 +11,18 @@ import { decodePagePathFromUrl } from './page-path';
  */
 export const MAIN_CONTENT_ID = 'main-content';
 
+/** Moves focus to the `<main>` landmark without scrolling. */
+export function focusMainContent(): void {
+  document.getElementById(MAIN_CONTENT_ID)?.focus({ preventScroll: true });
+}
+
+/** Connected, not inert, and rendered: a control focus can legitimately rest on. */
+export function isFocusTarget(el: Element | null): el is HTMLElement {
+  if (!(el instanceof HTMLElement) || !el.isConnected || el === document.body) return false;
+  if (el.closest('[inert]')) return false;
+  return el.checkVisibility?.({ visibilityProperty: true }) ?? true;
+}
+
 /** The focus frame both shell layouts draw on that landmark: inset and faint, see the (auth) layout. */
 export const MAIN_FOCUS_FRAME_CLASSNAME = 'focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/40';
 

@@ -6,7 +6,8 @@ import { useLayoutEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useWideViewport, WIDE_VIEWPORT_QUERY } from '@/lib/use-wide-viewport';
 import { cn } from '@/lib/utils';
-import { focusMainContent, useReadingWidth } from './reading-width-provider';
+import { focusMainContent } from '@/lib/use-route-focus';
+import { useReadingWidth } from './reading-width-provider';
 
 /** Switches between the standard and the full reading width; the header and the compact bar share one state. */
 export function ReadingWidthToggle({ compact = false }: { compact?: boolean }) {

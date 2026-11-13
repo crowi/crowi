@@ -973,20 +973,20 @@
       padding-left: 2.5rem;
       padding-right: 1rem;
     }
-    & .crowi-reading-app-row .crowi-reading-sidebar-trigger {
-      position: static;
-      margin-right: 0;
+    & .crowi-reading-app-row .crowi-reading-sidebar-trigger,
+    & .crowi-reading-compact-row,
+    & .crowi-reading-leading-controls {
       translate: 0 0;
       --tw-translate-x: 0;
       --tw-translate-y: 0;
       transform: none;
     }
+    & .crowi-reading-app-row .crowi-reading-sidebar-trigger {
+      position: static;
+      margin-right: 0;
+    }
     & .crowi-reading-compact-row {
       max-width: none;
-      translate: 0 0;
-      --tw-translate-x: 0;
-      --tw-translate-y: 0;
-      transform: none;
       padding-left: 2.5rem;
       padding-right: 1rem;
     }
@@ -995,10 +995,6 @@
       top: auto;
       right: auto;
       margin-right: 0;
-      translate: 0 0;
-      --tw-translate-x: 0;
-      --tw-translate-y: 0;
-      transform: none;
     }
   }
 }

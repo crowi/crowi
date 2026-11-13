@@ -27,7 +27,8 @@ import { MetaChipRow } from './meta-chip-row';
 import { MobilePresenceCard } from './mobile-presence-card';
 import { PageActionsMenu } from './page-actions-menu';
 import { PageTocMenu } from './page-toc-menu';
-import { focusMainContent, isFocusTarget, useReadingWidth } from './reading-width-provider';
+import { focusMainContent, isFocusTarget } from '@/lib/use-route-focus';
+import { useReadingWidth } from './reading-width-provider';
 import { ReadingWidthToggle } from './reading-width-toggle';
 import { WatchButton } from './watch-button';
 
@@ -319,7 +320,7 @@ export function PageHeader({
               <LinkSharePopover page={page} forceClose={compact} />
             </span>
           )}
-          {readingWidthEnabled && showHeaderCopy && (
+          {showHeaderCopy && (
             <span className="hidden md:inline-flex">
               <CopyPageMarkdownButton key={page._id} page={page} />
             </span>

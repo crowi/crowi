@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react';
-import { MAIN_CONTENT_ID } from '@/lib/use-route-focus';
+import { focusMainContent, isFocusTarget } from '@/lib/use-route-focus';
 import { READING_WIDTH_ATTRIBUTE, READING_WIDTH_STORAGE_KEY, type ReadingWidth, parseReadingWidth } from '@/lib/reading-width';
 
 export interface ReadingWidthContextValue {
@@ -13,18 +13,6 @@ const ReadingWidthContext = createContext<ReadingWidthContextValue>({ preference
 
 export function useReadingWidth(): ReadingWidthContextValue {
   return useContext(ReadingWidthContext);
-}
-
-/** Moves focus to the `<main>` landmark without scrolling. */
-export function focusMainContent(): void {
-  document.getElementById(MAIN_CONTENT_ID)?.focus({ preventScroll: true });
-}
-
-/** Connected, not inert, and rendered: a control focus can legitimately rest on. */
-export function isFocusTarget(el: Element | null): el is HTMLElement {
-  if (!(el instanceof HTMLElement) || !el.isConnected || el === document.body) return false;
-  if (el.closest('[inert]')) return false;
-  return el.checkVisibility?.({ visibilityProperty: true }) ?? true;
 }
 
 // Elements the width change can hide; focus left on one would be stranded.

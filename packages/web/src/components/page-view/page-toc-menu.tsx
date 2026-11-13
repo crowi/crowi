@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useForceCloseable } from '@/lib/use-force-closeable';
 import { cn } from '@/lib/utils';
 import { TocList } from './page-toc';
-import { focusMainContent, isFocusTarget } from './reading-width-provider';
+import { focusMainContent, isFocusTarget } from '@/lib/use-route-focus';
 
 interface PageTocMenuProps {
   toc: TocEntryResponse[];
