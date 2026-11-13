@@ -4,7 +4,7 @@ import { m } from '@paraglide/messages.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pageKeys } from '@/lib/page-query-keys';
 import { makeApiResponse } from '@/lib/test-utils/mocks';
@@ -33,6 +33,8 @@ import type { UsePresenceOptions } from '@/lib/use-presence';
  */
 
 const { usePresence } = vi.hoisted(() => ({ usePresence: vi.fn() }));
+// Lifecycle counters: a re-render is allowed, a remount / reconnect is not.
+const lifecycle = vi.hoisted(() => ({ contentMounts: 0, contentUnmounts: 0, presenceSetups: 0, presenceCleanups: 0 }));
 const { getPage, getRevision } = vi.hoisted(() => ({ getPage: vi.fn(), getRevision: vi.fn() }));
 const { useAuth } = vi.hoisted(() => ({ useAuth: vi.fn() }));
 const { usePageChildren } = vi.hoisted(() => ({ usePageChildren: vi.fn() }));
@@ -59,13 +61,22 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerPush, replac
 
 vi.mock('./page-header', () => ({ PageHeader: () => createElement('div', { 'data-testid': 'page-header-stub' }) }));
 vi.mock('./page-content', () => ({
-  PageContent: ({ page }: { page: PageWithRevision }) => createElement('div', { 'data-testid': 'page-content-stub' }, page.revision?.body),
+  PageContent: ({ page }: { page: PageWithRevision }) => {
+    useEffect(() => {
+      lifecycle.contentMounts += 1;
+      return () => {
+        lifecycle.contentUnmounts += 1;
+      };
+    }, []);
+    return createElement('div', { 'data-testid': 'page-content-stub' }, page.revision?.body);
+  },
 }));
 vi.mock('./backlink-list', () => ({ BacklinkList: () => createElement('div', { 'data-testid': 'backlink-list-stub' }) }));
 vi.mock('./attachment-list', () => ({ AttachmentList: () => createElement('div', { 'data-testid': 'attachment-list-stub' }) }));
 vi.mock('@/components/page-comments', () => ({ PageComments: () => createElement('div', { 'data-testid': 'page-comments-stub' }) }));
 
 import { PageView } from './page-view';
+import { ReadingWidthProvider, useReadingWidth } from './reading-width-provider';
 
 function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   const merged = {
@@ -174,8 +185,20 @@ beforeEach(() => {
   pageUpdatedSeqRef = { current: 0 };
   selfUserId = 'me';
   presenceOptions = undefined;
-  usePresence.mockImplementation((_pageId: string | null, options?: UsePresenceOptions) => {
+  lifecycle.contentMounts = 0;
+  lifecycle.contentUnmounts = 0;
+  lifecycle.presenceSetups = 0;
+  lifecycle.presenceCleanups = 0;
+  usePresence.mockImplementation((pageId: string | null, options?: UsePresenceOptions) => {
     presenceOptions = options;
+    // Stands in for the real hook's connect/disconnect effect, keyed on the page.
+    // biome-ignore lint/correctness/useHookAtTopLevel: a mock invoked unconditionally during PageView's render
+    useEffect(() => {
+      lifecycle.presenceSetups += 1;
+      return () => {
+        lifecycle.presenceCleanups += 1;
+      };
+    }, [pageId]);
     return { viewers: [], selfUserId, status: 'connected', pageUpdatedSeq: pageUpdatedSeqRef };
   });
   useAuth.mockReturnValue({ isAuthenticated: true });
@@ -771,5 +794,72 @@ describe('reconnect barrier missing -> periodic backstop recovers (AC5, AC27)', 
     expect(getPage).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('page-content-stub').textContent).toBe(updatedWhileBarrierMissing.revision.body);
     expect(bannerKind()).toBe('showing-latest');
+  });
+});
+
+describe('reading width change (R-8)', () => {
+  function WidthButton() {
+    const { preference, setPreference } = useReadingWidth();
+    return createElement('button', { type: 'button', onClick: () => setPreference(preference === 'full' ? 'standard' : 'full') }, 'switch-width');
+  }
+
+  function renderWithWidthSwitch(page: PageWithRevision, path = page.path) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+    queryClient.setQueryData(pageKeys.detail({ path, revision_id: undefined }), { page, notFound: false, notGranted: false });
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client: queryClient }, children);
+    return render(createElement(ReadingWidthProvider, null, createElement(PageView, { path }), createElement(WidthButton)), { wrapper });
+  }
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-reading-width');
+    window.localStorage.clear();
+  });
+
+  async function switchWidth() {
+    fireEvent.click(screen.getByRole('button', { name: 'switch-width' }));
+    await flush();
+  }
+
+  it('keeps the body node, the page query and the presence connection while the width changes', async () => {
+    renderWithWidthSwitch(makePage());
+    await flush();
+    expect(document.querySelector('[data-reading-width-scope="page"]')).not.toBeNull();
+
+    const body = screen.getByTestId('page-content-stub');
+    const fetches = getPage.mock.calls.length;
+    const { contentMounts, contentUnmounts, presenceSetups, presenceCleanups } = lifecycle;
+
+    await switchWidth();
+    await switchWidth();
+
+    expect(document.documentElement.getAttribute('data-reading-width')).toBe('standard');
+    expect(screen.getByTestId('page-content-stub')).toBe(body);
+    expect(getPage.mock.calls.length).toBe(fetches);
+    expect(getRevision).not.toHaveBeenCalled();
+    expect(lifecycle).toEqual({ contentMounts, contentUnmounts, presenceSetups, presenceCleanups });
+    expect(screen.getAllByTestId('page-content-stub')).toHaveLength(1);
+  });
+
+  it('keeps the revision being read while the width changes', async () => {
+    const page = makePage();
+    renderWithWidthSwitch(page);
+    emitPageUpdated({ type: 'page-updated', pageId: page._id, revisionId: 'rev-2', editorUserId: 'bob', editorDisplayName: 'Bob' });
+    getRevision.mockResolvedValueOnce(okResponse({ revision: { ...page.revision, _id: 'rev-2', createdAt: '2026-05-02T00:00:00.000Z', author: null } }));
+    await flush(300);
+    fireEvent.click(screen.getByRole('button', { name: m['page.live_sync_read_previous']() }));
+    expect(bannerKind()).toBe('showing-old');
+
+    const body = screen.getByTestId('page-content-stub');
+    const bodyText = body.textContent;
+    const requests = getPage.mock.calls.length + getRevision.mock.calls.length;
+    const { contentMounts, contentUnmounts, presenceSetups, presenceCleanups } = lifecycle;
+
+    await switchWidth();
+
+    expect(bannerKind()).toBe('showing-old');
+    expect(screen.getByTestId('page-content-stub')).toBe(body);
+    expect(screen.getByTestId('page-content-stub').textContent).toBe(bodyText);
+    expect(getPage.mock.calls.length + getRevision.mock.calls.length).toBe(requests);
+    expect(lifecycle).toEqual({ contentMounts, contentUnmounts, presenceSetups, presenceCleanups });
   });
 });

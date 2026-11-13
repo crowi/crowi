@@ -13,6 +13,7 @@ export function PageSidebar({ path }: { path: string }) {
   return (
     <aside
       aria-label="Page navigation"
+      data-reading-left-rail=""
       // The tree finds this element to keep the current node in view; the
       // rail, not the window, is what scrolls.
       {...{ [SIDEBAR_SCROLLER_ATTR]: '' }}

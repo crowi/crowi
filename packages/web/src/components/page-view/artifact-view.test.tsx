@@ -50,6 +50,7 @@ import { resolveArtifactNavigation } from '@/lib/artifact-navigation';
 import { installParentInputClock, resetParentInputClockForTest } from '@/lib/parent-input-clock';
 import { ArtifactUrlUnavailableFailure } from '@/lib/use-artifact-url';
 import { ArtifactView } from './artifact-view';
+import { ReadingWidthProvider, useReadingWidth } from './reading-width-provider';
 
 const ARTIFACT_ORIGIN = 'https://artifacts.example.net';
 const ENABLED_APP_INFO = makeAppInfo({ artifactDelivery: { enabled: true, origin: ARTIFACT_ORIGIN } });
@@ -1150,5 +1151,57 @@ describe('ArtifactView page links', () => {
       expect(routerPush).not.toHaveBeenCalled();
       expect(chip()).toBeNull();
     });
+  });
+});
+
+describe('ArtifactView — reading width change (R-8)', () => {
+  function WidthButton() {
+    const { preference, setPreference } = useReadingWidth();
+    return createElement('button', { type: 'button', onClick: () => setPreference(preference === 'full' ? 'standard' : 'full') }, 'switch-width');
+  }
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-reading-width');
+    window.localStorage.clear();
+  });
+
+  async function renderRunning() {
+    mockAppInfo({ data: ENABLED_APP_INFO });
+    const mutateAsync = mockMint(vi.fn().mockResolvedValue(mintSuccess(`${ARTIFACT_ORIGIN}/api/artifact/p1/r1?t=tok`)));
+    render(createElement(ReadingWidthProvider, null, createElement(ArtifactView, { page: makePage() }), createElement(WidthButton)));
+    await flush();
+    const frame = document.querySelector('iframe') as HTMLIFrameElement;
+    expect(frame).not.toBeNull();
+    return { frame, mutateAsync, src: frame.getAttribute('src') };
+  }
+
+  it('keeps the launched frame (same node, same src) and mints nothing more when the width changes', async () => {
+    const { frame, mutateAsync, src } = await renderRunning();
+    const switchWidth = () => fireEvent.click(screen.getByRole('button', { name: 'switch-width' }));
+
+    switchWidth();
+    await flush();
+    expect(document.documentElement.getAttribute('data-reading-width')).toBe('full');
+    switchWidth();
+    await flush();
+
+    expect(document.querySelectorAll('iframe')).toHaveLength(1);
+    expect(document.querySelector('iframe')).toBe(frame);
+    expect(frame.getAttribute('src')).toBe(src);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('is independent of the maximized state, which survives a width change', async () => {
+    const { frame, mutateAsync } = await renderRunning();
+    fireEvent.click(screen.getByRole('button', { name: m['page.artifact.maximize']() }));
+    expect(screen.getByRole('dialog').contains(frame)).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'switch-width' }));
+    await flush();
+
+    expect(screen.getByRole('dialog').contains(frame)).toBe(true);
+    expect(document.querySelector('iframe')).toBe(frame);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: m['page.artifact.restore']() })).toBeTruthy();
   });
 });

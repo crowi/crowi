@@ -932,3 +932,107 @@
 .crowi-alert-body > :last-child {
   margin-bottom: 0;
 }
+
+/* ── Full-width reading mode ─────────────────────────────────────────────
+ * `data-reading-width` on <html> is the stored preference (set by the head
+ * bootstrap before first paint); `data-reading-width-scope="page"` is emitted
+ * only by a page view that opted in (`PageTocColumns readingWidthEnabled`).
+ * Both together, at 768px and up, switch the shell below to a single column
+ * that takes the whole viewport. These rules are deliberately NOT in a
+ * cascade layer: unlayered declarations beat every Tailwind utility
+ * (`max-w-*`, `lg:absolute`, `min-[1440px]:…`) the same elements carry, so
+ * no breakpoint-specific utility can win back a width this mode removed.
+ * The left padding (2.5rem) holds the heading-link copy button, which hangs
+ * 28px left of the text.
+ */
+@media screen and (min-width: 768px) {
+  html[data-reading-width="full"] .crowi-reading-shell:has([data-reading-width-scope="page"]) {
+    & [data-reading-left-rail],
+    & [data-reading-width-scope="page"] > [data-reading-spacer],
+    & [data-reading-width-scope="page"] > [data-reading-right-rail] {
+      display: none;
+    }
+    & [data-reading-width-scope="page"] {
+      width: auto;
+      margin-inline: -1rem;
+      gap: 0;
+      padding-left: 2.5rem;
+      padding-right: 1rem;
+    }
+    & [data-reading-width-scope="page"] > [data-reading-content] {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+    }
+    & .crowi-reading-main {
+      max-width: none;
+    }
+    & .crowi-reading-app-row {
+      max-width: none;
+      left: 0;
+      padding-left: 2.5rem;
+      padding-right: 1rem;
+    }
+    & .crowi-reading-app-row .crowi-reading-sidebar-trigger {
+      position: static;
+      margin-right: 0;
+      translate: 0 0;
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      transform: none;
+    }
+    & .crowi-reading-compact-row {
+      max-width: none;
+      translate: 0 0;
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      transform: none;
+      padding-left: 2.5rem;
+      padding-right: 1rem;
+    }
+    & .crowi-reading-leading-controls {
+      position: static;
+      top: auto;
+      right: auto;
+      margin-right: 0;
+      translate: 0 0;
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      transform: none;
+    }
+  }
+}
+
+/* Print: the same layout whatever the preference. Only a shell that holds an
+ * opted-in page is touched, so other screens keep their own print rules. */
+@media print {
+  .crowi-reading-shell:has([data-reading-width-scope="page"]) {
+    & [data-reading-left-rail],
+    & [data-reading-width-scope="page"] > [data-reading-spacer],
+    & [data-reading-width-scope="page"] > [data-reading-right-rail],
+    & [data-reading-toc-control],
+    & [data-reading-width-toggle],
+    & [data-reading-compact-header] {
+      display: none;
+    }
+    & [data-reading-width-scope="page"] {
+      width: 100%;
+      margin-inline: 0;
+      gap: 0;
+      padding-inline: 0;
+    }
+    & [data-reading-width-scope="page"] > [data-reading-content],
+    & .crowi-reading-main,
+    & .crowi-reading-app-row {
+      max-width: none;
+    }
+    & .crowi-reading-app-row {
+      left: 0;
+    }
+    /* While compact the measured header is only `invisible`, not removed;
+     * the title must still print. */
+    & [data-reading-expanded-header] {
+      visibility: visible;
+    }
+  }
+}

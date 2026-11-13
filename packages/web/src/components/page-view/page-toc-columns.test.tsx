@@ -41,4 +41,37 @@ describe('PageTocColumns', () => {
     expect(shell()?.children).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'copy' })).toBeNull();
   });
+
+  // The portal listing shares this component, so the full-width mode is opt-in.
+  it('is not a reading-width scope unless the host opts in', () => {
+    render(
+      <PageTocColumns toc={TOC} activeTocId={null}>
+        <p>body</p>
+      </PageTocColumns>,
+    );
+
+    expect(document.querySelector('[data-reading-width-scope]')).toBeNull();
+    // The structural markers are still there for the shared column.
+    expect(document.querySelector('[data-reading-spacer]')).not.toBeNull();
+    expect(document.querySelector('[data-reading-right-rail]')).not.toBeNull();
+    expect(document.querySelector('[data-reading-content]')).not.toBeNull();
+  });
+
+  it.each([false, true])('marks an opted-in shell and keeps the children in place (wide=%s)', (wide) => {
+    render(
+      <PageTocColumns toc={TOC} activeTocId={null} railActions={<button type="button">copy</button>} wide={wide} readingWidthEnabled>
+        <p>body</p>
+      </PageTocColumns>,
+    );
+
+    const scope = document.querySelector('[data-reading-width-scope="page"]');
+    expect(scope).toBe(shell());
+    expect(scope?.getAttribute('data-toc-columns')).toBe(wide ? 'wide' : '');
+    const content = scope?.querySelector('[data-reading-content]');
+    expect(content).toBe(contentColumn());
+    expect(content?.className).toContain(wide ? 'min-[1280px]:max-w-[var(--shell-pair)]' : 'max-w-[var(--shell-content)]');
+    expect(scope?.querySelector('[data-reading-spacer]')).not.toBeNull();
+    expect(!!scope?.querySelector('[data-reading-right-rail]')).toBe(!wide);
+    expect(scope?.children).toHaveLength(wide ? 2 : 3);
+  });
 });

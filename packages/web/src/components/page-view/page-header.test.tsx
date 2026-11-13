@@ -7,6 +7,7 @@ import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GrantChip } from '@/components/grant-chip';
 import { matchMediaImpl } from '@/lib/test-utils/mocks';
+import { READING_WIDTH_ATTRIBUTE } from '@/lib/reading-width';
 import { WIDE_VIEWPORT_QUERY } from '@/lib/use-wide-viewport';
 
 // PageHeader composes a tree of data-driven children. Mock every leaf
@@ -38,6 +39,7 @@ vi.mock('@/lib/use-seen', () => ({ useSeenUsers }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 
 import { PageHeader } from './page-header';
+import { ReadingWidthProvider, useReadingWidth } from './reading-width-provider';
 
 function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   return {
@@ -678,5 +680,239 @@ describe('PageHeader — placeholder inert / tab exclusion', () => {
     useStickyHeader.mockReturnValue({ compact: true });
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
     expect(screen.getByTestId('sticky-header-placeholder')).toHaveAttribute('inert');
+  });
+});
+
+describe('PageHeader — reading width', () => {
+  const RAIL_QUERY = '(min-width: 1280px)';
+  const EXPAND = m['page.reading_width_expand']();
+  const RESTORE = m['page.reading_width_restore']();
+  const COPY = m['page.action_copy_markdown']();
+
+  /** A desktop viewport; `rail` adds the 1280px right-rail breakpoint. */
+  function mockViewport({ rail }: { rail: boolean }) {
+    vi.spyOn(window, 'matchMedia').mockImplementation(matchMediaImpl((query) => query === WIDE_VIEWPORT_QUERY || (rail && query === RAIL_QUERY)));
+  }
+
+  function renderWithWidth(ui: ReactElement) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, createElement(ReadingWidthProvider, null, children));
+    return render(ui, { wrapper });
+  }
+
+  const normalToggle = () => document.querySelector<HTMLElement>('[data-reading-expanded-header] [data-reading-width-toggle]');
+  const compactToggle = () => document.querySelector<HTMLElement>('[data-reading-compact-header] [data-reading-width-toggle]');
+  const tocControl = () => document.querySelector('[data-reading-toc-control]');
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    document.documentElement.removeAttribute(READING_WIDTH_ATTRIBUTE);
+    mockViewport({ rail: true });
+  });
+  afterEach(() => {
+    document.documentElement.removeAttribute(READING_WIDTH_ATTRIBUTE);
+    window.localStorage.clear();
+    document.getElementById('main-content')?.remove();
+  });
+
+  it('draws no toggle for a header that did not opt in', () => {
+    renderWithWidth(<PageHeader page={makePage()} sticky showActions />);
+    expect(document.querySelector('[data-reading-width-toggle]')).toBeNull();
+  });
+
+  it('the expanded and the compact toggle share one pressed state and one name', () => {
+    useStickyHeader.mockReturnValue({ compact: false });
+    const { rerender } = renderWithWidth(<PageHeader page={makePage()} sticky showActions readingWidthEnabled />);
+    expect(normalToggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(normalToggle()).toHaveAccessibleName(EXPAND);
+    expect(normalToggle()).toHaveAttribute('title', EXPAND);
+
+    fireEvent.click(normalToggle() as HTMLElement);
+    expect(normalToggle()).toHaveAttribute('aria-pressed', 'true');
+    expect(normalToggle()).toHaveAccessibleName(RESTORE);
+    expect(document.documentElement.getAttribute(READING_WIDTH_ATTRIBUTE)).toBe('full');
+    expect(window.localStorage.getItem('crowi:reading-width:v1')).toBe('full');
+
+    useStickyHeader.mockReturnValue({ compact: true });
+    rerender(<PageHeader page={makePage()} sticky showActions readingWidthEnabled />);
+    expect(compactToggle()).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(compactToggle() as HTMLElement);
+    expect(compactToggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(normalToggle()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('puts the toggle after the share link and before the page menu, and after edit in the compact bar', () => {
+    renderWithWidth(<PageHeader page={makePage()} sticky showActions onEdit={() => {}} readingWidthEnabled />);
+    const link = screen.getAllByLabelText('リンクを共有')[0];
+    const more = screen.getAllByLabelText('その他のアクション').at(-1) as HTMLElement;
+    const toggle = normalToggle() as HTMLElement;
+    expect(link.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(toggle.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    cleanup();
+    mockCompact();
+    renderWithWidth(<PageHeader page={makePage()} sticky showActions onEdit={() => {}} readingWidthEnabled />);
+    const edit = within(screen.getByTestId('page-header-compact')).getByLabelText(m['page.action_edit']());
+    const compactMore = within(screen.getByTestId('page-header-compact')).getByLabelText('その他のアクション');
+    expect(edit.compareDocumentPosition(compactToggle() as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((compactToggle() as HTMLElement).compareDocumentPosition(compactMore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('is offered for a draft, without edit rights and without the page menu', () => {
+    renderWithWidth(<PageHeader page={makePage({ status: 'draft' } as Partial<PageWithRevision>)} readingWidthEnabled />);
+    expect(normalToggle()).not.toBeNull();
+  });
+
+  describe('table of contents', () => {
+    it('is reachable at the full width and gone at the standard width once the rail is back', () => {
+      renderWithWidth(<PageHeader page={makePage()} sticky showActions toc={makeToc()} readingWidthEnabled />);
+      // Standard at >= 1280: the right rail shows the TOC, so no popover.
+      expect(tocControl()).not.toBeNull();
+      expect(screen.queryByLabelText('目次')).toBeNull();
+
+      fireEvent.click(normalToggle() as HTMLElement);
+      expect(screen.getByLabelText('目次')).toBeTruthy();
+      expect(tocControl()?.className).not.toContain('min-[1280px]:hidden');
+    });
+
+    it('keeps the popover available below the rail breakpoint at the standard width', () => {
+      mockViewport({ rail: false });
+      renderWithWidth(<PageHeader page={makePage()} sticky showActions toc={makeToc()} readingWidthEnabled />);
+      expect(screen.getByLabelText('目次')).toBeTruthy();
+    });
+
+    it('draws no TOC control for fewer than two headings', () => {
+      window.localStorage.setItem('crowi:reading-width:v1', 'full');
+      document.documentElement.setAttribute(READING_WIDTH_ATTRIBUTE, 'full');
+      for (const toc of [[], makeToc().slice(0, 1)]) {
+        const { unmount } = renderWithWidth(<PageHeader page={makePage()} sticky showActions toc={toc} readingWidthEnabled />);
+        expect(tocControl()).toBeNull();
+        unmount();
+      }
+    });
+
+    it('leaves a host that did not opt in with its existing rule', () => {
+      renderWithWidth(<PageHeader page={makePage()} sticky showActions toc={makeToc()} />);
+      expect(screen.getByLabelText('目次')).toBeTruthy();
+      expect(tocControl()?.className).toContain('min-[1280px]:hidden');
+    });
+
+    it('closes an open popover on a width change and does not reopen it when the width comes back', () => {
+      document.documentElement.setAttribute(READING_WIDTH_ATTRIBUTE, 'full');
+      renderWithWidth(<PageHeader page={makePage()} sticky showActions toc={makeToc()} readingWidthEnabled />);
+      fireEvent.click(screen.getByLabelText('目次'));
+      expect(screen.getByText('Intro')).toBeTruthy();
+
+      fireEvent.click(normalToggle() as HTMLElement);
+      expect(screen.queryByText('Intro')).toBeNull();
+      fireEvent.click(normalToggle() as HTMLElement);
+      expect(screen.queryByText('Intro')).toBeNull();
+      expect(screen.getByLabelText('目次')).toBeTruthy();
+    });
+  });
+
+  describe('Markdown copy for a past revision', () => {
+    let writeText: ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      document.documentElement.setAttribute(READING_WIDTH_ATTRIBUTE, 'full');
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    it('offers a dedicated header button at full width that copies the displayed body', async () => {
+      const page = makePage({ revision: { ...makePage().revision, body: 'OLD BODY' } as PageWithRevision['revision'] });
+      renderWithWidth(<PageHeader page={page} readingWidthEnabled />);
+
+      const button = screen.getByRole('button', { name: COPY });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(writeText).toHaveBeenCalledWith('OLD BODY');
+    });
+
+    it.each([
+      ['the current version (showActions)', { showActions: true }, {}],
+      ['an empty body', { showActions: false }, { revision: { ...makePage().revision, body: '' } }],
+      ['an artifact', { showActions: false }, { revision: { ...makePage().revision, contentType: 'artifact' } }],
+    ])('has no dedicated button for %s', (_label, props, pageOverrides) => {
+      renderWithWidth(<PageHeader page={makePage(pageOverrides as Partial<PageWithRevision>)} {...props} readingWidthEnabled />);
+      expect(screen.queryByRole('button', { name: COPY })).toBeNull();
+    });
+
+    it('has no dedicated button at the standard width, where the right rail owns it', () => {
+      document.documentElement.setAttribute(READING_WIDTH_ATTRIBUTE, 'standard');
+      renderWithWidth(<PageHeader page={makePage()} readingWidthEnabled />);
+      expect(screen.queryByRole('button', { name: COPY })).toBeNull();
+    });
+
+    it('has no dedicated button for a host that did not opt in', () => {
+      renderWithWidth(<PageHeader page={makePage()} />);
+      expect(screen.queryByRole('button', { name: COPY })).toBeNull();
+    });
+  });
+
+  describe('compact bar disappearing after a width change', () => {
+    function WidthSwitch() {
+      const { setPreference } = useReadingWidth();
+      return (
+        <button type="button" data-testid="external-switch" onClick={() => setPreference('full')}>
+          switch
+        </button>
+      );
+    }
+
+    function addMain() {
+      const main = document.createElement('main');
+      main.id = 'main-content';
+      main.tabIndex = -1;
+      document.body.appendChild(main);
+    }
+
+    it('hands focus from the compact toggle to the normal toggle', () => {
+      mockCompact();
+      const { rerender } = renderWithWidth(<PageHeader page={makePage()} sticky showActions readingWidthEnabled />);
+      act(() => (compactToggle() as HTMLElement).focus());
+      fireEvent.click(compactToggle() as HTMLElement);
+
+      useStickyHeader.mockReturnValue({ compact: false });
+      rerender(<PageHeader page={makePage()} sticky showActions readingWidthEnabled />);
+
+      expect(document.activeElement).toBe(normalToggle());
+    });
+
+    it('falls back to <main> when there is no normal toggle', () => {
+      addMain();
+      mockCompact();
+      // A fresh element per render: an identical one would let React skip the re-render.
+      const ui = () => (
+        <>
+          <PageHeader page={makePage()} sticky showActions />
+          <WidthSwitch />
+        </>
+      );
+      const { rerender } = renderWithWidth(ui());
+      act(() => screen.getByLabelText('ページ上部へスクロール').focus());
+      fireEvent.click(screen.getByTestId('external-switch'));
+
+      useStickyHeader.mockReturnValue({ compact: false });
+      rerender(ui());
+
+      expect(document.activeElement).toBe(document.getElementById('main-content'));
+    });
+
+    it('does not move focus when the bar goes away without a width change', () => {
+      mockCompact();
+      const { rerender } = renderWithWidth(<PageHeader page={makePage()} sticky showActions readingWidthEnabled />);
+      act(() => screen.getByLabelText('ページ上部へスクロール').focus());
+
+      useStickyHeader.mockReturnValue({ compact: false });
+      rerender(<PageHeader page={makePage()} sticky showActions readingWidthEnabled />);
+
+      expect(document.activeElement).not.toBe(normalToggle());
+    });
   });
 });
