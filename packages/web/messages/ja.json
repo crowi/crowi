@@ -1056,6 +1056,8 @@
   "page.presence_popover_title": "このページを閲覧中",
   "page.presence_sheet_title": "このページを閲覧中",
   "page.presence_you": "(あなた)",
+  "page.reading_width_expand": "全幅で読む",
+  "page.reading_width_restore": "標準幅に戻す",
   "page.redirecting": "{path} にリダイレクト中...",
   "page.rename.cancel": "キャンセル",
   "page.rename.conflict_title": "編集が競合しました",

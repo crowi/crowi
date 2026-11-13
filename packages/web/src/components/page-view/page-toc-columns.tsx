@@ -53,6 +53,7 @@ export function PageTocColumns({
   activeTocId,
   railActions,
   wide = false,
+  readingWidthEnabled = false,
   children,
 }: {
   toc: TocEntryResponse[];
@@ -60,15 +61,26 @@ export function PageTocColumns({
   /** Page-level controls pinned under the TOC (see this file's header). */
   railActions?: React.ReactNode;
   wide?: boolean;
+  /**
+   * Opt in to the full-width reading mode (see `globals.css`, `crowi-reading-*`).
+   * Off by default so a shared column (the portal listing) is never widened.
+   */
+  readingWidthEnabled?: boolean;
   children: React.ReactNode;
 }) {
   const hasToc = toc.length >= 2;
   return (
-    <div data-toc-columns={wide ? 'wide' : ''} className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-[var(--shell-gap)] px-4">
-      <div aria-hidden className="hidden w-[var(--shell-rail)] shrink-0 min-[1440px]:block" />
-      <div className={cn('w-full min-w-0 max-w-[var(--shell-content)]', wide && 'min-[1280px]:max-w-[var(--shell-pair)]')}>{children}</div>
+    <div
+      data-toc-columns={wide ? 'wide' : ''}
+      data-reading-width-scope={readingWidthEnabled ? 'page' : undefined}
+      className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-[var(--shell-gap)] px-4"
+    >
+      <div aria-hidden data-reading-spacer="" className="hidden w-[var(--shell-rail)] shrink-0 min-[1440px]:block" />
+      <div data-reading-content="" className={cn('w-full min-w-0 max-w-[var(--shell-content)]', wide && 'min-[1280px]:max-w-[var(--shell-pair)]')}>
+        {children}
+      </div>
       {!wide && (
-        <div className="hidden w-[var(--shell-rail)] shrink-0 min-[1280px]:block">
+        <div data-reading-right-rail="" className="hidden w-[var(--shell-rail)] shrink-0 min-[1280px]:block">
           <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col gap-3">
             {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
             {railActions}

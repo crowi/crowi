@@ -4,7 +4,7 @@ import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { ArrowUp, Edit2, LayoutFreeform } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { GrantChip } from '@/components/grant-chip';
 import { KindTag } from '@/components/kind-tag';
@@ -15,9 +15,11 @@ import { useAuth } from '@/lib/use-auth';
 import type { UsePresenceResult } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
 import { SidebarFlyoutTrigger } from '@/components/page-sidebar/sidebar-flyout';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { useWideViewport } from '@/lib/use-wide-viewport';
 import { cn } from '@/lib/utils';
 import { BookmarkButton } from './bookmark-button';
+import { CopyPageMarkdownButton } from './copy-page-markdown-button';
 import { LikeButton } from './like-button';
 import { LinkSharePopover } from './link-share-popover';
 import { LivePresenceRow } from './live-presence-row';
@@ -25,6 +27,8 @@ import { MetaChipRow } from './meta-chip-row';
 import { MobilePresenceCard } from './mobile-presence-card';
 import { PageActionsMenu } from './page-actions-menu';
 import { PageTocMenu } from './page-toc-menu';
+import { focusMainContent, isFocusTarget, useReadingWidth } from './reading-width-provider';
+import { ReadingWidthToggle } from './reading-width-toggle';
 import { WatchButton } from './watch-button';
 
 interface PageHeaderProps {
@@ -80,6 +84,12 @@ interface PageHeaderProps {
    */
   toc?: TocEntryResponse[];
   activeTocId?: string | null;
+  /**
+   * The page sits in a `PageTocColumns` that opted in to the full-width
+   * reading mode: the width toggle is drawn and the TOC / copy affordances
+   * follow the applied width. Off for every other host.
+   */
+  readingWidthEnabled?: boolean;
 }
 
 function getPageTitle(path: string): string {
@@ -99,8 +109,10 @@ export function PageHeader({
   toc = [],
   activeTocId = null,
   presence,
+  readingWidthEnabled = false,
 }: PageHeaderProps) {
   const { isAuthenticated } = useAuth();
+  const { preference } = useReadingWidth();
 
   // feature-mobile-presence-card — the header's mobile and desktop
   // presence surfaces are DIFFERENT DOM (not one tree styled two ways),
@@ -108,6 +120,11 @@ export function PageHeader({
   // merely `display: none` — below 768px. So the split is a real
   // conditional render keyed off a live `md`-breakpoint subscription.
   const isWide = useWideViewport();
+  // The right rail (TOC + copy) is back from 1280 whenever the full width is
+  // not the applied layout; the header TOC popover then has nothing to add.
+  const hasRail = useMediaQuery('(min-width: 1280px)');
+  // The full width only applies from 768 up (see `globals.css`).
+  const fullApplied = readingWidthEnabled && preference === 'full' && isWide;
 
   // feature-mobile-presence-card — `true` while the mobile presence
   // card's self-only collapse animation is in flight. Freezes
@@ -148,6 +165,7 @@ export function PageHeader({
   // does not itself relocate focus (only blurs it), so this is required,
   // not cosmetic.
   const scrollTopButtonRef = useRef<HTMLButtonElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!compact) return;
     const active = typeof document !== 'undefined' ? document.activeElement : null;
@@ -157,6 +175,39 @@ export function PageHeader({
     // Both refs are `useRef` objects with a stable identity, so `compact`
     // is the only dependency that can actually re-run this.
   }, [compact, measureRef]);
+
+  // Reverse handoff: a width change re-measures the expanded header and can
+  // drop the compact bar in the same breath, deleting the control the reader
+  // just used. The ref callback's cleanup runs before the node leaves the
+  // DOM, which is the last moment `activeElement` still points inside it.
+  const compactHadFocusRef = useRef(false);
+  const compactBarRef = useCallback((node: HTMLDivElement | null) => {
+    if (node === null) return;
+    return () => {
+      if (node.contains(document.activeElement)) compactHadFocusRef.current = true;
+    };
+  }, []);
+  // Only an unmount that follows a width change is handed over; un-compacting
+  // by scrolling back up (e.g. after the scroll-to-top button) is not.
+  const widthChangedRecentlyRef = useRef(false);
+  const previousPreferenceRef = useRef(preference);
+  useLayoutEffect(() => {
+    if (previousPreferenceRef.current === preference) return;
+    previousPreferenceRef.current = preference;
+    widthChangedRecentlyRef.current = true;
+    const timer = window.setTimeout(() => {
+      widthChangedRecentlyRef.current = false;
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [preference]);
+  useLayoutEffect(() => {
+    if (compact || !compactHadFocusRef.current) return;
+    compactHadFocusRef.current = false;
+    if (!widthChangedRecentlyRef.current) return;
+    const toggle = headerRef.current?.querySelector<HTMLElement>('[data-reading-expanded-header] [data-reading-width-toggle]');
+    if (isFocusTarget(toggle ?? null)) toggle?.focus({ preventScroll: true });
+    else focusMainContent();
+  }, [compact]);
 
   // `presence` is supplied by the PageView (single hoisted `usePresence`
   // call → one shared `/presence` WebSocket for the expanded + compact
@@ -209,10 +260,21 @@ export function PageHeader({
   // every time it appears and so never carries stale open state.
   const renderTocMenu = (compactSize: boolean, forceCloseMenu = false) =>
     toc.length >= 2 && (
-      <span className="min-[1280px]:hidden">
-        <PageTocMenu toc={toc} activeId={activeTocId} compact={compactSize} forceClose={forceCloseMenu} />
+      <span data-reading-toc-control="" className={cn(!fullApplied && 'min-[1280px]:hidden')}>
+        <PageTocMenu
+          // A width change recreates just this popover, closed.
+          key={readingWidthEnabled ? preference : undefined}
+          toc={toc}
+          activeId={activeTocId}
+          compact={compactSize}
+          forceClose={forceCloseMenu}
+          available={!readingWidthEnabled || fullApplied || !hasRail}
+        />
       </span>
     );
+  // The rail's copy button is gone in the full width; a past revision has no
+  // dotmenu (`showActions` false), so the header carries the copy action.
+  const showHeaderCopy = fullApplied && !showActions && !isArtifact && (page.revision?.body ?? '').length > 0;
   // One expanded-subtree instance (its own `open` state) — it lands in
   // EITHER the wide presence+TOC row or the narrow TOC-only row, never
   // both: those two are mutually exclusive by `isWide` below, not by CSS.
@@ -257,6 +319,12 @@ export function PageHeader({
               <LinkSharePopover page={page} forceClose={compact} />
             </span>
           )}
+          {readingWidthEnabled && showHeaderCopy && (
+            <span className="hidden md:inline-flex">
+              <CopyPageMarkdownButton key={page._id} page={page} />
+            </span>
+          )}
+          {readingWidthEnabled && <ReadingWidthToggle />}
           {editButton && <span className="md:hidden">{editButton}</span>}
           {showActions && (
             <>
@@ -356,13 +424,15 @@ export function PageHeader({
   if (!sticky) {
     return (
       <header data-compact="false">
-        <div ref={measureRef}>{expandedHeader}</div>
+        <div ref={measureRef} data-reading-expanded-header="">
+          {expandedHeader}
+        </div>
       </header>
     );
   }
 
   return (
-    <header data-compact={compact}>
+    <header ref={headerRef} data-compact={compact}>
       {/*
         Measurement wrapper. ALWAYS in normal flow at natural width, so
         the ResizeObserver always sees the true expanded height `H`.
@@ -388,7 +458,14 @@ export function PageHeader({
         portal to `document.body`, outside this subtree) — that is what
         each owner's own `forceClose={compact}` prop above handles.
       */}
-      <div ref={measureRef} data-testid="sticky-header-placeholder" aria-hidden={compact} inert={compact} className={cn(compact && 'invisible')}>
+      <div
+        ref={measureRef}
+        data-testid="sticky-header-placeholder"
+        data-reading-expanded-header=""
+        aria-hidden={compact}
+        inert={compact}
+        className={cn(compact && 'invisible')}
+      >
         {expandedHeader}
       </div>
 
@@ -403,7 +480,9 @@ export function PageHeader({
           at compact size. */}
       {compact && (
         <div
+          ref={compactBarRef}
           data-testid="page-header-compact"
+          data-reading-compact-header=""
           className={cn(
             'fixed inset-x-0 top-0 z-30 h-[60px] bg-background shadow-header dark:shadow-none dark:border-b dark:border-border',
             'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
@@ -428,7 +507,7 @@ export function PageHeader({
             // dead-centre until 1440, then the left spacer pushes it right by
             // half a rail-plus-gap.
             className={cn(
-              'mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4',
+              'crowi-reading-compact-row mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4',
               wide
                 ? 'min-[1280px]:max-w-[calc(var(--shell-pair)+2rem)] min-[1440px]:translate-x-[var(--shell-rail-shift)]'
                 : 'min-[1280px]:max-[1439px]:-translate-x-[var(--shell-rail-shift)]',
@@ -444,8 +523,8 @@ export function PageHeader({
                   too narrow to hang anything in without pushing it off the
                   left edge, so the group rejoins the flow and the title
                   gives up the width instead. */}
-              <div className="flex shrink-0 items-center lg:absolute lg:top-1/2 lg:right-full lg:mr-2 lg:-translate-y-1/2">
-                <SidebarFlyoutTrigger compact />
+              <div className="crowi-reading-leading-controls flex shrink-0 items-center lg:absolute lg:top-1/2 lg:right-full lg:mr-2 lg:-translate-y-1/2">
+                <SidebarFlyoutTrigger compact className="crowi-reading-sidebar-trigger" />
                 <button
                   ref={scrollTopButtonRef}
                   type="button"
@@ -460,6 +539,7 @@ export function PageHeader({
               <div className="flex items-center gap-1 shrink-0">
                 {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
                 {editIconButton}
+                {readingWidthEnabled && <ReadingWidthToggle compact />}
                 {showActions && <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />}
               </div>
             </div>

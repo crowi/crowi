@@ -1056,6 +1056,8 @@
   "page.presence_popover_title": "Viewing this page",
   "page.presence_sheet_title": "Viewing this page",
   "page.presence_you": "(you)",
+  "page.reading_width_expand": "Read at full width",
+  "page.reading_width_restore": "Restore standard width",
   "page.redirecting": "Redirecting to {path}...",
   "page.rename.cancel": "Cancel",
   "page.rename.conflict_title": "Edit conflict",

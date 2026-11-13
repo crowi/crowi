@@ -35,6 +35,9 @@ export function useTocScrollSpy(toc: TocEntryResponse[]): string | null {
 
     type Cached = { id: string; top: number };
     let offsets: Cached[] = [];
+    let rafId: number | null = null;
+    // Heading offsets only need re-reading after a layout change, not per scroll.
+    let needsMeasure = false;
 
     const measure = () => {
       offsets = toc
@@ -46,7 +49,6 @@ export function useTocScrollSpy(toc: TocEntryResponse[]): string | null {
     };
 
     const compute = () => {
-      rafId = null;
       if (offsets.length === 0) return;
 
       const scrollY = window.scrollY + SCROLL_SPY_OFFSET_PX;
@@ -62,21 +64,49 @@ export function useTocScrollSpy(toc: TocEntryResponse[]): string | null {
       }
     };
 
-    let rafId: number | null = null;
-    const onScroll = () => {
-      if (rafId === null) rafId = requestAnimationFrame(compute);
+    // scroll, resize and column-width changes all land here, so a burst of
+    // them costs one frame (and at most one re-measure).
+    const flush = () => {
+      rafId = null;
+      if (needsMeasure) {
+        needsMeasure = false;
+        measure();
+      }
+      compute();
     };
-    const onResize = () => {
-      measure();
-      onScroll();
+    const schedule = (remeasure: boolean) => {
+      if (remeasure) needsMeasure = true;
+      if (rafId === null) rafId = requestAnimationFrame(flush);
     };
+    const onScroll = () => schedule(false);
+    const onResize = () => schedule(true);
 
     measure();
     compute();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize);
 
+    // Switching the reading width moves headings without any window resize;
+    // watch the column the headings live in and re-measure on a width change
+    // only (a height-only change is the body growing, not headings moving).
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      const firstHeading = offsets.length > 0 ? document.getElementById(offsets[0].id) : null;
+      const column = firstHeading?.closest('[data-reading-content]');
+      if (column) {
+        let lastWidth: number | null = null;
+        observer = new ResizeObserver((entries) => {
+          const width = entries[entries.length - 1]?.contentRect.width;
+          if (width === undefined || width === lastWidth) return;
+          lastWidth = width;
+          schedule(true);
+        });
+        observer.observe(column);
+      }
+    }
+
     return () => {
+      observer?.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);

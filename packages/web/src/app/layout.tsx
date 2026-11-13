@@ -6,6 +6,7 @@ import { InstallerGate } from '@/components/installer-gate';
 import { LocaleBridge } from '@/components/locale-bridge';
 import { Providers } from '@/lib/providers';
 import { publicRuntimeEnvScript } from '@/lib/public-runtime-env';
+import { readingWidthBootstrapScript } from '@/lib/reading-width';
 import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
 import './globals.css';
 
@@ -69,6 +70,11 @@ export default async function RootLayout({
             explicit <head> (metadata + font className handle it). */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted operator env; `<` is escaped in publicRuntimeEnvScript */}
         <script dangerouslySetInnerHTML={{ __html: publicRuntimeEnvScript() }} />
+        {/* Reading-width bootstrap: a SYNCHRONOUS script (not `next/script`) so the
+            stored width is on <html> before the body paints. It only writes
+            `data-reading-width`, which the <html> suppressHydrationWarning covers. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: fixed script; the stored value is only compared with a literal */}
+        <script dangerouslySetInnerHTML={{ __html: readingWidthBootstrapScript() }} />
       </head>
       {/* suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, …)
           inject attributes like `cz-shortcut-listen` onto <body> before React

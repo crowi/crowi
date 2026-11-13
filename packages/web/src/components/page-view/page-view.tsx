@@ -792,7 +792,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
     return (
       // RFC-0020 — an artifact has nothing for the TOC rail, so the whole
       // page column takes the rail's width.
-      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={railActions} wide={isArtifact}>
+      <PageTocColumns toc={toc} activeTocId={activeTocId} railActions={railActions} wide={isArtifact} readingWidthEnabled>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
         <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
@@ -806,6 +806,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
             toc={toc}
             activeTocId={activeTocId}
             presence={presence}
+            readingWidthEnabled
           />
           {showRestrictedShareBanner && <RestrictedShareBanner pageId={page._id} />}
           {showPortalizeBanner && (

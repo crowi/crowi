@@ -3,11 +3,13 @@
 import type { TocEntryResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { ChevronDown, List } from 'lucide-react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useForceCloseable } from '@/lib/use-force-closeable';
 import { cn } from '@/lib/utils';
 import { TocList } from './page-toc';
+import { focusMainContent, isFocusTarget } from './reading-width-provider';
 
 interface PageTocMenuProps {
   toc: TocEntryResponse[];
@@ -27,6 +29,12 @@ interface PageTocMenuProps {
    * ancestor already goes `inert`.
    */
   forceClose?: boolean;
+  /**
+   * `false` renders nothing and keeps the popover closed (the reading-width
+   * mode shows the right rail again, so the popover has no reason to exist).
+   * Defaults to `true`.
+   */
+  available?: boolean;
 }
 
 /**
@@ -36,15 +44,17 @@ interface PageTocMenuProps {
  * mobile so the table of contents stays reachable at every width below
  * the rail breakpoint. Returns null below 2 entries (nothing to show).
  */
-export function PageTocMenu({ toc, activeId, compact = false, forceClose = false }: PageTocMenuProps) {
-  const [open, setOpen] = useForceCloseable(forceClose);
+export function PageTocMenu({ toc, activeId, compact = false, forceClose = false, available = true }: PageTocMenuProps) {
+  const [open, setOpen] = useForceCloseable(forceClose || !available);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  if (toc.length < 2) return null;
+  if (toc.length < 2 || !available) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="ghost"
           size="sm"
           className={cn('shrink-0 text-muted-foreground hover:text-foreground', compact ? 'h-6 gap-0.5 px-1.5 text-xs' : 'h-7 gap-1 px-2')}
@@ -55,7 +65,24 @@ export function PageTocMenu({ toc, activeId, compact = false, forceClose = false
           <ChevronDown className={cn('opacity-60', compact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="max-h-[70vh] w-72 overflow-y-auto">
+      <PopoverContent
+        align="end"
+        className="max-h-[70vh] w-72 overflow-y-auto"
+        onCloseAutoFocus={(event) => {
+          const active = document.activeElement;
+          const content = event.target instanceof Node ? event.target : null;
+          // Focus already moved to another live control: keep it there.
+          if (isFocusTarget(active) && active !== triggerRef.current && !content?.contains(active)) {
+            event.preventDefault();
+            return;
+          }
+          // The trigger is gone, hidden or inert: returning focus to it would strand it.
+          if (!isFocusTarget(triggerRef.current) || forceClose) {
+            event.preventDefault();
+            focusMainContent();
+          }
+        }}
+      >
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{m['page.toc_heading']()}</div>
         {/* Close the popover on navigation so the jump target isn't hidden behind it. */}
         <TocList toc={toc} activeId={activeId} onNavigate={() => setOpen(false)} />
