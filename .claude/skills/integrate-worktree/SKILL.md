@@ -348,6 +348,8 @@ tmux list-panes -a -F '#{window_id}|#{pane_id}|#{pane_current_path}|#{pane_curre
 - **(c) エージェント CLI session アイドル**: `2.x.x` かつ title 先頭が **`✳` (アスタリスク)** →
   プロンプト待ちで安全に kill 可能。**そのまま kill 候補**。
 
+判定は `pane_current_command` と pane title だけで行い、`capture-pane` で見た入力欄の文字を理由に止めない。アイドルの Claude Code は、次に打ちそうな文 (「push して」など) を入力欄に薄い文字で出す。これは補完の候補で、ユーザーが打った未送信の入力ではない。閉じても失われる入力は無い。
+
 `pane_current_command` が `2.x.x` の判定は実用的な heuristic。エージェント CLI (Claude Code / Codex) のバージョン
 文字列が常に `<major>.<minor>.<patch>` で始まる前提に依存するので、将来検出が壊れたら
 title 文字 (`✳` vs ブレイル) のみで判定するように退避してよい。
