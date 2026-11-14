@@ -1,5 +1,15 @@
 # @crowi/api
 
+## 2.0.0-alpha.30
+
+### Patch Changes
+
+- d810545: Updated hono to 4.13.18, which fixes vulnerabilities reported in hono: the default router could skip wildcard middleware for some route sets and for paths containing an encoded line terminator, `mount()` could forward a path that bypassed middleware scoped inside the mount prefix, `validator('form')` skipped validation for some `multipart/form-data` requests, `csrf()` did not check hyperlink-auditing requests, and the `css` helper did not escape a closing tag split across an interpolated value. Crowi uses the default router, so the first applied; it does not use `mount()`, the form validator, `csrf()` or the `css` helper, so the others were not reached.
+- 46ae2be: Updated @hono/node-server to 2.1.8, which fixes vulnerabilities reported in @hono/node-server: a backslash in the request path was read as a path separator, so a request could reach a path that a reverse proxy's path-based rules did not apply to (such requests are now rejected with `400 Bad Request`), and a connection reset during an asynchronous WebSocket upgrade could crash the process. Crowi handles its WebSocket upgrades itself rather than through @hono/node-server, so the second was not reached.
+- 1f30089: Updated mongoose to 9.12.1, which fixes vulnerabilities reported in mongoose: prototype pollution through `Schema.prototype.virtual()`, inherited properties being walked when hydrating, setting and merging documents, discriminator key values that match inherited properties bypassing schema casting, and `sanitizeFilter` not being applied to `countDocuments` or when set on a connection. Crowi does not enable `sanitizeFilter`, so the last two were not reached.
+- Updated dependencies [d810545]
+  - @crowi/api-contract@2.0.0-alpha.30
+
 ## 2.0.0-alpha.29
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @crowi/web
 
+## 2.0.0-alpha.30
+
+### Minor Changes
+
+- cdfd5ae: Added a button to the page header that switches a page between the standard width and a full-width reading mode, which hides the side navigation and the table of contents column and lets the body use the whole window, useful for tables with many columns. The choice is stored in the browser, so it carries over across pages and reloads.
+
+### Patch Changes
+
+- 980edb0: Updated Next.js to 16.4.5, which fixes vulnerabilities reported in Next.js (cache disclosure and poisoning around `use cache`, an SVG rejection bypass in image optimization, response injection when forwarding fetched responses, and an HttpOnly cookie exposure on Edge runtime routes).
+- Updated dependencies [d810545]
+  - @crowi/api-contract@2.0.0-alpha.30
+
 ## 2.0.0-alpha.29
 
 ### Patch Changes
