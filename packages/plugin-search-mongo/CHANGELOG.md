@@ -1,5 +1,11 @@
 # @crowi/plugin-search-mongo
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- 1f30089: Updated mongoose to 9.12.1, which fixes vulnerabilities reported in mongoose: prototype pollution through `Schema.prototype.virtual()`, inherited properties being walked when hydrating, setting and merging documents, discriminator key values that match inherited properties bypassing schema casting, and `sanitizeFilter` not being applied to `countDocuments` or when set on a connection. Crowi does not enable `sanitizeFilter`, so the last two were not reached.
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes
