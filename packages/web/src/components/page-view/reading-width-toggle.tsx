@@ -1,7 +1,7 @@
 'use client';
 
 import { m } from '@paraglide/messages.js';
-import { ArrowLeftRight } from 'lucide-react';
+import { Expand, Minimize } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useWideViewport, WIDE_VIEWPORT_QUERY } from '@/lib/use-wide-viewport';
@@ -47,7 +47,7 @@ export function ReadingWidthToggle({ compact = false }: { compact?: boolean }) {
       }}
       className={cn('shrink-0 text-muted-foreground hover:text-foreground max-md:hidden print:hidden', isFull && 'bg-accent text-foreground')}
     >
-      <ArrowLeftRight className="h-4 w-4" />
+      {isFull ? <Minimize className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
     </Button>
   );
 }
