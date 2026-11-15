@@ -133,6 +133,7 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 - queryKey は `xxxKeys = { all, detail(id) }` factory パターン
 - 設定フォームは `createAdminSettingsHooks` factory を再利用 (該当時)
 - Tailwind v4 + shadcn/ui、Crowi テーマ変数を使う
+- HTML・CSS・ブラウザの JS を書く前に、`modern-web-guidance` skill の手順で guide を引く。プロジェクトの方針や既存の共通部品と食い違うときはプロジェクトに従う。
 
 ### 文言 (i18n)
 - 新規文言は `messages/{ja,en}.json` の該当 namespace に追加

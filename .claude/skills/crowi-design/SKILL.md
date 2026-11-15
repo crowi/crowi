@@ -243,6 +243,7 @@ correctness-critical 用なので `critical: true` 固定で本 Workflow を呼�
   model アサイン・レビューループはコードに集約され、「予告して turn を締める」失敗は起きない。
 - **main 直コミット運用**(RFC のみ・レビュー後)。`git push` は明示指示まで行わない。
 - crowi commit に `Co-Authored-By` trailer は付けない。
+- HTML・CSS・ブラウザの JS を含む spec を書く前に、`modern-web-guidance` skill の手順で guide を引く。プロジェクトの方針や既存の共通部品と食い違うときはプロジェクトに従う。
 - **この skill は Claude(Workflow ランタイム)専用**。Codex は `codex-run.sh` 経由で
   「ステージとして呼ばれる側」(research digest / architect / RFC writer / reviewer)。
   Codex セッションでこの skill を直接実行しようとしない。

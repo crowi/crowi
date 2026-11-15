@@ -135,6 +135,7 @@ context 完備の task 定義を作成する。
 - Hono ルートは `authenticatedRouter` 配下で `jwtAuth` 自動適用、CSRF 不要
 - 新契約は `pnpm --filter @crowi/api-contract build` 必須 (implementer が走らせる)
 - main 直コミット運用 (config.json `commitStrategy: main-direct`)
+- HTML・CSS・ブラウザの JS を扱う task を計画する前に、`modern-web-guidance` skill の手順で guide を引く。プロジェクトの方針や既存の共通部品と食い違うときはプロジェクトに従う。
 
 ## 分析対象ディレクトリ
 

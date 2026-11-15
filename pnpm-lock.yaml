@@ -102,6 +102,9 @@ importers:
       lefthook:
         specifier: ^2.1.6
         version: 2.1.6
+      modern-web-guidance:
+        specifier: 1.0.0
+        version: 1.0.0
       turbo:
         specifier: ^2.9.16
         version: 2.9.16
@@ -8598,6 +8601,11 @@ packages:
 
   mlly@1.7.4:
     resolution: {integrity: sha512-qmdSIPC4bDJXgZTCR7XosJiNKySV7O215tsPtDN9iEO/7q/76b/ijtgRu/+epFXSJhijtTCCGp3DWS549P3xKw==}
+
+  modern-web-guidance@1.0.0:
+    resolution: {integrity: sha512-vafIZwC8AS6QjM2yyoflZbnc7n3/TVOMLbEMRdPTwcFy0f9/Tq8s5rJQ8UIqRt2KPl9ixravyaMR4nTGuUrcmg==}
+    engines: {node: '>=22.0.0', vscode: ^1.90.0}
+    hasBin: true
 
   mongodb-connection-string-url@3.0.2:
     resolution: {integrity: sha512-rMO7CGo/9BFwyZABcKAWL8UJwH/Kc2x0g72uhDWzG48URRax5TCIcJ7Rc3RZqffZzO/Gwff/jyKwCU9TN8gehA==}
@@ -19157,6 +19165,8 @@ snapshots:
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.1
+
+  modern-web-guidance@1.0.0: {}
 
   mongodb-connection-string-url@3.0.2:
     dependencies:

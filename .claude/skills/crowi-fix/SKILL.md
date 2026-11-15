@@ -40,6 +40,7 @@ description: |
 ### Step 3: 修正 + ゲート
 
 - 最小 diff。関係ないリファクタを混ぜない。
+- HTML・CSS・ブラウザの JS を直す前に、`modern-web-guidance` skill の手順で guide を引く。プロジェクトの方針や既存の共通部品と食い違うときはプロジェクトに従う。
 - ゲート: `pnpm --filter @crowi/api type-check`(web を触ったら +web)/
   該当テスト(Step 1 のテスト含む)/ `pnpm lint`(errors=0)/
   契約を触ったら `pnpm --filter @crowi/api-contract build` + `pnpm check:openapi`。

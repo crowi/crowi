@@ -69,6 +69,7 @@
     "@typescript-eslint/parser": "catalog:",
     "eslint": "catalog:",
     "lefthook": "^2.1.6",
+    "modern-web-guidance": "1.0.0",
     "turbo": "^2.9.16"
   }
 }

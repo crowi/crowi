@@ -168,6 +168,7 @@ crowi-orchestrate C と同じルール:
 - codex は必ず `.claude/scripts/codex-run.sh` 経由で呼ぶ (レビューは read-only で完結。
   `--full-auto` / `--dangerously-bypass-approvals-and-sandbox` は使わない)。
 - Codex に破壊的操作 (delete / force-push / reset) を渡さない。
+- HTML・CSS・ブラウザの JS の変更をレビューするときは、先に `modern-web-guidance` skill の手順で guide を引く (Codex に渡す prompt にも同じ指示を書く)。プロジェクトの方針や既存の共通部品と食い違うときはプロジェクトに従う。
 - 修正は現在の作業ツリーに **順次** 適用 (並列 subagent で同一ツリーを編集しない)。
   ファンアウトが要るレベルなら worktree を切る運用 (整合は integrate-worktree) に回す。
 - main dirty 時は commit しない。push は常にユーザー指示待ち。

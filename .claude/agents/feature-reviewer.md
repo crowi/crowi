@@ -31,6 +31,7 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
 - implementer は必須チェック (type-check / test / lint / format) を全部通している
 - simplify フェーズで reuse / quality / efficiency は整理済み
 - レビュアーの役割は **設計・契約・AC・セキュリティ** の確認
+- HTML・CSS・ブラウザの JS の変更をレビューする前に、`modern-web-guidance` skill の手順で guide を引く。プロジェクトの方針や既存の共通部品と食い違うときはプロジェクトに従う。
 
 ## レビュー観点
 
