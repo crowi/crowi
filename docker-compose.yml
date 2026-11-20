@@ -18,7 +18,7 @@
 #
 # The infra services keep no host paths: data lives in named volumes and the
 # TLS fixture is baked into a small image. That keeps them working when
-# DOCKER_CONTEXT points at a remote engine, which cannot see this checkout
+# the Docker context points at a remote engine, which cannot see this checkout
 # (only `build:` contexts are sent over). The `app` profile still mounts
 # files from the checkout and needs a local engine.
 # Single source for the pinned Redis engine image (feature-redis-8-upgrade
