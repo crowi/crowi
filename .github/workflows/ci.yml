@@ -164,7 +164,8 @@ jobs:
         # new cert-generation mechanism. Unlike `mongo`/`redis`/
         # `crowi-test-redis` above, this can't be a `services:` entry:
         # GitHub Actions starts `services:` containers BEFORE `actions/
-        # checkout`, so they can't mount a repo file — this step runs as a
+        # checkout`, so they can't build an image from repo files (the cert
+        # pair is baked into the fixture image) — this step runs as a
         # normal job step, after checkout, instead. TLS-only port, no ACL
         # (`--tls-auth-clients no` — no CA cert needed since we don't verify
         # client certs; the smoke client connects with `rejectUnauthorized:

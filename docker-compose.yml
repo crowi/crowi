@@ -15,6 +15,12 @@
 # `crowi.config.json` in. To override driver selection without a rebuild, the
 # api service re-mounts `apps/crowi-runner/crowi.config.json` at
 # /app/crowi.config.json (operator-controlled).
+#
+# The infra services keep no host paths: data lives in named volumes and the
+# TLS fixture is baked into a small image. That keeps them working when
+# DOCKER_CONTEXT points at a remote engine, which cannot see this checkout
+# (only `build:` contexts are sent over). The `app` profile still mounts
+# files from the checkout and needs a local engine.
 # Single source for the pinned Redis engine image (feature-redis-8-upgrade
 # Phase 1). Keep in sync with ci.yml's `REDIS_IMAGE` — the one cross-file
 # sync point; the three services below alias this anchor.
@@ -26,7 +32,7 @@ services:
     container_name: crowi-mongodb
     restart: unless-stopped
     volumes:
-      - ./data/mongodb:/data/db
+      - crowi-mongodb-data:/data/db
     ports:
       - 27017:27017
 
@@ -102,12 +108,23 @@ services:
   # chain" scope documented in the spec. Only the boot/TLS handshake smoke
   # (Phase 2, consumer #8) uses this — Config smoke uses `crowi-test-redis`
   # above instead.
+  #
+  # The cert pair is copied into the image instead of bind-mounted. The key is
+  # 0600 in the checkout and the server runs as the `redis` user, so it is
+  # made world-readable in the image (a test-only self-signed key).
   crowi-test-redis-tls:
-    image: *crowi-redis-image
+    build:
+      context: ./packages/api/src/util/__fixtures__/tls
+      args:
+        REDIS_IMAGE: *crowi-redis-image
+      dockerfile_inline: |
+        ARG REDIS_IMAGE
+        FROM $${REDIS_IMAGE}
+        COPY --chmod=0444 localhost-cert.pem localhost-key.pem /tls/
+        RUN chmod 0555 /tls
+    image: crowi-test-redis-tls:dev
     container_name: crowi-test-redis-tls
     restart: unless-stopped
-    volumes:
-      - ./packages/api/src/util/__fixtures__/tls:/tls:ro
     ports:
       - 6381:6381
     command: >-
@@ -136,13 +153,9 @@ services:
       # ~85% full. Disable so a tight disk doesn't surprise developers.
       - cluster.routing.allocation.disk.threshold_enabled=false
     volumes:
-      - ./data/elasticsearch:/usr/share/elasticsearch/data
+      - crowi-elasticsearch-data:/usr/share/elasticsearch/data
     ports:
       - 9200:9200
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
 
   # Local mail catcher. Captures everything sent by @crowi/plugin-mail-smtp
   # so you can inspect the rendered email (from / subject / body / headers)
@@ -258,3 +271,7 @@ services:
       # Host 4302 -> Caddy :80. 4302 is Crowi's canonical web port (matches the
       # `pnpm dev` web port); the browser hits this single origin.
       - "4302:80"
+
+volumes:
+  crowi-mongodb-data:
+  crowi-elasticsearch-data:
