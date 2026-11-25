@@ -1,4 +1,5 @@
 import { GRANT_PUBLIC } from './constants-grant';
+import { extractHtmlPreview, type HtmlPreview } from './html-preview';
 import { markdownToMrkdwn } from './mrkdwn';
 
 /**
@@ -32,6 +33,8 @@ export interface ResolvedPage {
   grant: number;
   /** Revision body markdown (public pages only need it). */
   body: string | null;
+  /** Storage format of the current revision; `'artifact'` means an HTML page. */
+  contentType: 'markdown' | 'artifact';
   /** Page `updatedAt` epoch millis, or null when unknown. */
   updatedAtMs: number | null;
 }
@@ -84,6 +87,10 @@ export function buildUnfurlAttachment(url: string, page: ResolvedPage, baseUrl: 
     };
   }
 
+  if (page.contentType === 'artifact') {
+    return buildHtmlAttachment(url, page);
+  }
+
   const attachment: SlackUnfurlAttachment = {
     title: pageTitle(page.path),
     title_link: url,
@@ -101,6 +108,39 @@ export function buildUnfurlAttachment(url: string, page: ResolvedPage, baseUrl: 
   }
 
   return attachment;
+}
+
+/**
+ * Card for an HTML (artifact) page. The extracted text is plain text, not
+ * Slack markup, so `mrkdwn_in` is omitted and only `& < >` are escaped. On
+ * any extraction failure the card shrinks to title + footer; it never falls
+ * back to treating the HTML as Markdown.
+ */
+function buildHtmlAttachment(url: string, page: ResolvedPage): SlackUnfurlAttachment {
+  let preview: HtmlPreview = { title: null, description: null, text: null };
+  try {
+    preview = extractHtmlPreview(page.body ?? '');
+  } catch {
+    // keep the empty preview
+  }
+
+  const attachment: SlackUnfurlAttachment = {
+    title: preview.title ? escapeSlackText(preview.title) : pageTitle(page.path),
+    title_link: url,
+    footer: `${pageBreadcrumb(page.path)} · HTML page`,
+  };
+  const text = preview.description ?? preview.text;
+  if (text) {
+    attachment.text = escapeSlackText(text);
+  }
+  if (page.updatedAtMs != null) {
+    attachment.ts = String(Math.floor(page.updatedAtMs / 1000));
+  }
+  return attachment;
+}
+
+function escapeSlackText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**

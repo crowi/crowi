@@ -6,7 +6,8 @@ import { verifySlackSignature } from './signature';
 import { buildManifest, eventsRequestUrl, unfurlDomain } from './manifest';
 import { EXCERPT_MAX_CHARS, buildUnfurlAttachment, type ResolvedPage } from './unfurl';
 import { extractPagePaths, isPageIdPath, pageIdFromPath } from './link-parse';
-import { handleSlackEvent, type SlackPluginConfig } from './events';
+import { handleSlackEvent, resolvePage, type SlackPluginConfig } from './events';
+import * as htmlPreview from './html-preview';
 
 const SIGNING_SECRET = 'test-signing-secret';
 const BASE_URL = 'https://wiki.example.com';
@@ -187,6 +188,7 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
       path: '/team/handbook/onboarding',
       grant: 1,
       body: 'Welcome to the team. This page covers onboarding.',
+      contentType: 'markdown',
       updatedAtMs: 1_700_000_000_000,
     };
     const att = buildUnfurlAttachment(url, page);
@@ -198,7 +200,7 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
   });
 
   it('truncates a long body to an excerpt with an ellipsis', () => {
-    const page: ResolvedPage = { path: '/long', grant: 1, body: 'x'.repeat(EXCERPT_MAX_CHARS + 500), updatedAtMs: null };
+    const page: ResolvedPage = { path: '/long', grant: 1, body: 'x'.repeat(EXCERPT_MAX_CHARS + 500), contentType: 'markdown', updatedAtMs: null };
     const att = buildUnfurlAttachment(url, page);
     expect(att.text?.endsWith('…')).toBe(true);
     expect((att.text ?? '').length).toBeLessThanOrEqual(EXCERPT_MAX_CHARS + 1);
@@ -209,7 +211,7 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
     // <https://…|docs> token straddles EXCERPT_MAX_CHARS so truncation
     // lands inside the token.
     const body = `${'a'.repeat(EXCERPT_MAX_CHARS - 15)} [docs](https://example.com/very/long/path/here)`;
-    const att = buildUnfurlAttachment(url, { path: '/long', grant: 1, body, updatedAtMs: null });
+    const att = buildUnfurlAttachment(url, { path: '/long', grant: 1, body, contentType: 'markdown', updatedAtMs: null });
     expect(att.text?.endsWith('…')).toBe(true);
     // No dangling, never-closed `<` left at the tail of the excerpt.
     expect(att.text).not.toMatch(/<[^>]*$/);
@@ -220,6 +222,7 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
       path: '/team/handbook/onboarding',
       grant: 1,
       body: '# Onboarding\n\nSee the [handbook](/team/handbook).',
+      contentType: 'markdown',
       updatedAtMs: null,
     };
     const att = buildUnfurlAttachment(url, page, 'https://wiki.example.com');
@@ -230,12 +233,12 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
   });
 
   it('omits the text field when the body converts to only whitespace', () => {
-    const att = buildUnfurlAttachment(url, { path: '/blank', grant: 1, body: '   \n\n   ', updatedAtMs: null });
+    const att = buildUnfurlAttachment(url, { path: '/blank', grant: 1, body: '   \n\n   ', contentType: 'markdown', updatedAtMs: null });
     expect(att.text).toBeUndefined();
   });
 
   it('emits a minimal 🔒 restricted card for a non-public page (no body)', () => {
-    const page: ResolvedPage = { path: '/secret/notes', grant: 2, body: 'top secret contents', updatedAtMs: 1_700_000_000_000 };
+    const page: ResolvedPage = { path: '/secret/notes', grant: 2, body: 'top secret contents', contentType: 'markdown', updatedAtMs: 1_700_000_000_000 };
     const att = buildUnfurlAttachment(url, page);
     expect(att.title).toContain('Restricted');
     expect(att.text).not.toContain('top secret contents');
@@ -248,7 +251,7 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
 
   it('treats GRANT_OWNER / GRANT_SPECIFIED as non-public too', () => {
     for (const grant of [3, 4]) {
-      const att = buildUnfurlAttachment(url, { path: '/p', grant, body: 'private', updatedAtMs: null });
+      const att = buildUnfurlAttachment(url, { path: '/p', grant, body: 'private', contentType: 'markdown', updatedAtMs: null });
       expect(att.title).toContain('Restricted');
     }
   });
@@ -324,5 +327,83 @@ describe('handleSlackEvent — dispatcher', () => {
     });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true });
+  });
+});
+
+describe('buildUnfurlAttachment — HTML (artifact) page', () => {
+  const url = 'https://wiki.example.com/team/report';
+  const html = (head: string, body: string) => `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
+  const page = (body: string, grant = 1): ResolvedPage => ({ path: '/team/report', grant, body, contentType: 'artifact', updatedAtMs: 1_700_000_000_000 });
+
+  it('uses <title> as title, falling back to the path tail', () => {
+    expect(buildUnfurlAttachment(url, page(html('<title> My  Report </title>', '<p>x</p>'))).title).toBe('My Report');
+    expect(buildUnfurlAttachment(url, page(html('', '<p>x</p>'))).title).toBe('report');
+  });
+
+  it('prefers the meta description over visible text', () => {
+    const att = buildUnfurlAttachment(url, page(html('<meta name="description" content="Short summary">', '<p>Body words</p>')));
+    expect(att.text).toBe('Short summary');
+  });
+
+  it('uses visible text without CSS or tag names when there is no description', () => {
+    const att = buildUnfurlAttachment(url, page(html('<style>.a{color:red}</style>', '<h1>A</h1><p>B</p>')));
+    expect(att.text).toBe('A B');
+  });
+
+  it('escapes & < > in title and text, and does not cut an escape in half', () => {
+    const att = buildUnfurlAttachment(url, page(html('<title>a &lt; b</title>', '<p>a &lt; b &amp; c &gt; d</p>')));
+    expect(att.title).toBe('a &lt; b');
+    expect(att.text).toBe('a &lt; b &amp; c &gt; d');
+    const long = buildUnfurlAttachment(url, page(html('', `<p>${'a'.repeat(299)}&amp;bbb</p>`)));
+    expect(long.text).toBe(`${'a'.repeat(299)}&amp;…`);
+    expect(att.mrkdwn_in).toBeUndefined();
+  });
+
+  it('sets footer with HTML page marker and ts', () => {
+    const att = buildUnfurlAttachment(url, page(html('', '<p>x</p>')));
+    expect(att.footer).toBe('/team/report · HTML page');
+    expect(att.ts).toBe('1700000000');
+  });
+
+  it('shows only the lock card for non-public HTML pages', () => {
+    for (const grant of [2, 3, 4]) {
+      const att = buildUnfurlAttachment('https://wiki.example.com/abc123', page(html('<title>Secret Title</title>', '<p>hidden</p>'), grant));
+      expect(att.title).toContain('Restricted');
+      const json = JSON.stringify(att);
+      expect(json).not.toContain('/team/report');
+      expect(json).not.toContain('Secret Title');
+      expect(json).not.toContain('hidden');
+    }
+  });
+
+  it('degrades to a text-less card when extraction throws, never emitting raw HTML', () => {
+    const spy = jest.spyOn(htmlPreview, 'extractHtmlPreview').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    try {
+      const att = buildUnfurlAttachment(url, page(html('<title>T</title>', '<p>x</p>')));
+      expect(att.title).toBe('report');
+      expect(att.text).toBeUndefined();
+      expect(att.footer).toBe('/team/report · HTML page');
+      expect(JSON.stringify(att)).not.toContain('<');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('resolvePage — contentType (R-1)', () => {
+  const ctxFor = (revision: unknown) =>
+    ({
+      model: () => ({
+        findOne: () => ({ populate: () => ({ lean: async () => ({ path: '/p', grant: 1, updatedAt: null, revision }) }) }),
+      }),
+    }) as unknown as PluginContext;
+
+  it('maps only artifact to artifact', async () => {
+    expect((await resolvePage(ctxFor({ body: 'x', contentType: 'artifact' }), '/p'))?.contentType).toBe('artifact');
+    expect((await resolvePage(ctxFor({ body: 'x', contentType: 'markdown' }), '/p'))?.contentType).toBe('markdown');
+    expect((await resolvePage(ctxFor({ body: 'x' }), '/p'))?.contentType).toBe('markdown');
+    expect((await resolvePage(ctxFor(null), '/p'))?.contentType).toBe('markdown');
   });
 });

@@ -1192,6 +1192,12 @@ importers:
       '@slack/web-api':
         specifier: ^7.17.0
         version: 7.17.0
+      jiti:
+        specifier: ^2.7.0
+        version: 2.7.0
+      parse5:
+        specifier: 8.0.1
+        version: 8.0.1
     devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*

@@ -158,7 +158,7 @@ interface PageLeanDoc {
   path: string;
   grant: number;
   updatedAt?: Date | string | null;
-  revision?: { body?: string | null } | null;
+  revision?: { body?: string | null; contentType?: string | null } | null;
 }
 
 interface PageModelLike {
@@ -172,7 +172,7 @@ interface PageModelLike {
  * it into `ResolvedPage`. The revision is populated so the public-page
  * branch can build an excerpt. Returns null when the page does not exist.
  */
-async function resolvePage(ctx: PluginContext, path: string): Promise<ResolvedPage | null> {
+export async function resolvePage(ctx: PluginContext, path: string): Promise<ResolvedPage | null> {
   const Page = ctx.model('Page') as PageModelLike;
   const filter = isPageIdPath(path) ? { _id: pageIdFromPath(path) } : { path };
   const doc = await Page.findOne(filter).populate('revision').lean();
@@ -184,6 +184,7 @@ async function resolvePage(ctx: PluginContext, path: string): Promise<ResolvedPa
     path: doc.path,
     grant: doc.grant,
     body: doc.revision?.body ?? null,
+    contentType: doc.revision?.contentType === 'artifact' ? 'artifact' : 'markdown',
     updatedAtMs: updatedAt ? updatedAt.getTime() : null,
   };
 }
