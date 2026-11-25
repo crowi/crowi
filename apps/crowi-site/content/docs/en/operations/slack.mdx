@@ -6,7 +6,7 @@ description: Unfurl Crowi page links shared in Slack into rich previews
 Enabling `@crowi/plugin-slack` makes Crowi page URLs **unfurl** (render a
 rich preview) when shared in Slack. Public pages expand into a card with
 the title, excerpt, breadcrumb, and last-updated time; non-public pages
-expand into a minimal card with their contents hidden. Unfurling is all the
+expand into a minimal card with their contents hidden. For [Artifact pages](../guide/artifacts), the card uses the page's `<title>` and shows its `<meta name="description">`, or the start of its visible text when there is none, in place of the excerpt. Unfurling is all the
 Slack integration does today — it does not forward notifications to Slack.
 
 ## How it works

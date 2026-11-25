@@ -6,7 +6,7 @@ description: Crowi のページリンクを Slack で unfurl (リッチプレビ
 `@crowi/plugin-slack` を有効にすると、Crowi のページ URL を Slack に貼った
 ときに unfurl (リッチプレビュー) されるようになります。公開ページは
 タイトル・抜粋・パンくず・更新日時のカードに、非公開ページは内容を伏せた
-最小カードに展開されます。現在の Slack 連携でできるのは、この unfurl だけです
+最小カードに展開されます。[artifact ページ](../guide/artifacts) では、抜粋の代わりに `<meta name="description">` の内容を、無ければ画面に出る文字の先頭を表示し、タイトルには HTML の `<title>` を使います。現在の Slack 連携でできるのは、この unfurl だけです
 (Slack への通知転送はまだありません)。
 
 ## 仕組み
