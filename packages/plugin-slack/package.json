@@ -35,7 +35,9 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
-    "@slack/web-api": "^7.17.0"
+    "@slack/web-api": "^7.17.0",
+    "jiti": "^2.7.0",
+    "parse5": "8.0.1"
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
