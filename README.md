@@ -221,6 +221,19 @@ Write your own by depending on `@crowi/plugin-api`, exporting a default
 `CrowiPlugin`, and adding the package name to your runner's
 `crowi.config.json`.
 
+## Sponsors
+
+Crowi is developed and maintained independently. If Crowi helps you or your
+team, please consider supporting its development via
+[GitHub Sponsors](https://github.com/sponsors/sotarok). Sponsorship directly
+funds maintenance, security fixes, and the v2 roadmap.
+
+<p align="center">
+  <a href="https://github.com/sponsors/sotarok">
+    <img src="https://img.shields.io/badge/Sponsor-Crowi-ea4aaa?logo=githubsponsors&logoColor=white" alt="Sponsor Crowi">
+  </a>
+</p>
+
 ## License
 
 The MIT License (MIT). See [`LICENSE`](./LICENSE).
