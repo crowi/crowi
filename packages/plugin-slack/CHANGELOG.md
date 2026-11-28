@@ -1,5 +1,11 @@
 # @crowi/plugin-slack
 
+## 0.1.0-alpha.8
+
+### Patch Changes
+
+- e1a5c87: Slack link previews of HTML pages now show the page's `<title>` and its meta description or the start of its visible text, instead of raw HTML and CSS.
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes
